@@ -14,6 +14,9 @@ module Control.Monad.Conc.Class where
 
 import Prelude hiding (take)
 
+import Control.Concurrent (forkIO)
+import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, takeMVar, tryTakeMVar)
+import Control.Monad (void)
 import Data.Maybe (maybe)
 
 -- | @ConcFuture@ is the monad-conc alternative of 'ParFuture'. It
@@ -37,6 +40,14 @@ class Monad m => ConcFuture future m | m -> future where
   -- > spawnP = spawn . return
   spawnP :: a -> m (future a)
   spawnP = spawn . return
+
+instance ConcFuture MVar IO where
+  spawn ma = do
+    mvar <- newEmptyMVar
+    void . forkIO $ ma >>= putMVar mvar
+    return mvar
+
+  get = readMVar
 
 -- | @ConcCVar@ builds on futures by allowing `CVar`s which threads
 -- can read from and write to, possibly multiple times. This is the
@@ -75,3 +86,10 @@ class ConcFuture cvar m => ConcCVar cvar m | m -> cvar where
   -- (and emptying the `CVar`) if there was something there, otherwise
   -- returning `Nothing`.
   tryTake :: cvar a -> m (Maybe a)
+
+instance ConcCVar MVar IO where
+  fork    = void . forkIO
+  new     = newEmptyMVar
+  put     = putMVar
+  take    = takeMVar
+  tryTake = tryTakeMVar
