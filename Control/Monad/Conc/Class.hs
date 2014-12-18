@@ -23,8 +23,6 @@ import Data.Maybe (maybe)
 -- abstracts Conc monads which support futures. In itself, this is not
 -- enough to implement nondeterminism, however the class is provided
 -- to remove the 'NFData' constraints imposed by 'ParFuture'.
---
--- A minimal implementation consists of 'spawn' and 'get'.
 class Monad m => ConcFuture future m | m -> future where
   -- | Create a concurrent computation for the provided action, and
   -- return a future which can be used to query the result.
@@ -34,12 +32,6 @@ class Monad m => ConcFuture future m | m -> future where
   -- it. This does not \"remove\" the value from the future, multiple
   -- 'get's are possible, unlike 'takeMVar' for example.
   get :: future a -> m a
-
-  -- | Spawn a concurrent pure (non-monadic) computation.
-  --
-  -- > spawnP = spawn . return
-  spawnP :: a -> m (future a)
-  spawnP = spawn . return
 
 instance ConcFuture MVar IO where
   spawn ma = do
