@@ -25,6 +25,8 @@ module Control.Monad.Conc.Fixed
   , Scheduler
   , randomSched
   , randomSchedNP
+  , roundRobinSched
+  , roundRobinSchedNP
   ) where
 
 import Prelude hiding (take)
@@ -177,9 +179,27 @@ randomSched g _ threads = (threads !! choice, g') where
 -- thread. That is, if the last thread scheduled is still runnable,
 -- run that, otherwise schedule randomly.
 randomSchedNP :: RandomGen g => Scheduler g
-randomSchedNP g last threads
-  | last `elem` threads = (last, g)
-  | otherwise = randomSched g last threads
+randomSchedNP = makeNP randomSched
+
+-- | A round-robin scheduler which, at every step, schedules the
+-- thread with the 'ThreadId'.
+roundRobinSched :: Scheduler ()
+roundRobinSched _ last threads
+  | last >= maximum threads = (minimum threads, ())
+  | otherwise = (minimum $ filter (<=last) threads, ())
+
+-- | A round-robin scheduler which doesn't pre-empt the running
+-- thread.
+roundRobinSchedNP :: Scheduler ()
+roundRobinSchedNP = makeNP roundRobinSched
+
+-- | Turn a potentially pre-emptive scheduler into a non-preemptive
+-- one.
+makeNP :: Scheduler s -> Scheduler s
+makeNP sched = newsched where
+  newsched s last threads
+    | last `elem` threads = (last, s)
+    | otherwise = sched s last threads
 
 -------------------- Internal stuff --------------------
 
