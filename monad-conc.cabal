@@ -21,7 +21,7 @@ library
                      , Control.Monad.Conc.Fixed
   -- other-modules:       
   -- other-extensions:    
-  build-depends:       base >=4.6 && <4.7
+  build-depends:       base >=4.6 && <5
                      , containers
                      , mtl
                      , random
