@@ -179,7 +179,7 @@ randomSchedNP :: RandomGen g => Scheduler g
 randomSchedNP = makeNP randomSched
 
 -- | A round-robin scheduler which, at every step, schedules the
--- thread with the 'ThreadId'.
+-- thread with the next 'ThreadId'.
 roundRobinSched :: Scheduler ()
 roundRobinSched _ last threads
   | last >= maximum threads = (minimum threads, ())
