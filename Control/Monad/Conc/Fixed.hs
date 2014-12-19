@@ -8,6 +8,7 @@ module Control.Monad.Conc.Fixed
     Conc
   , ThreadId
   , runConc
+  , runConc'
   , liftIO
   , spawn
   , fork
@@ -154,11 +155,17 @@ type Scheduler s = s -> ThreadId -> [ThreadId] -> (ThreadId, s)
 -- state, returning `Just result` if it terminates, and `Nothing` if a
 -- deadlock is detected.
 runConc :: Scheduler s -> s -> Conc a -> IO (Maybe a)
-runConc sched s ma = do
+runConc sched s ma = fst <$> runConc' sched s ma
+
+-- | variant of 'runConc' which returns the final state of the
+-- scheduler.
+runConc' :: Scheduler s -> s -> Conc a -> IO (Maybe a, s)
+runConc' sched s ma = do
   mvar <- newEmptyMVar
   let (C c) = ma >>= liftIO . putMVar mvar . Just
-  runThreads (negate 1) sched s (M.fromList [(0, (runCont c $ const Stop, Nothing))]) mvar
-  takeMVar mvar
+  s' <- runThreads (negate 1) sched s (M.fromList [(0, (runCont c $ const Stop, Nothing))]) mvar
+  out <- takeMVar mvar
+  return (out, s')
 
 -- | A simple random scheduler which, at every step, picks a random
 -- thread to run.
@@ -181,11 +188,11 @@ randomSchedNP g last threads
 data Block = WaitFull | WaitEmpty
 
 -- | Run a collection of threads, until there are no threads left.
-runThreads :: ThreadId -> Scheduler s -> s -> Map ThreadId (Action, Maybe Block) -> MVar (Maybe a) -> IO ()
+runThreads :: ThreadId -> Scheduler s -> s -> Map ThreadId (Action, Maybe Block) -> MVar (Maybe a) -> IO s
 runThreads last sched s threads mvar
-  | M.null threads   = return ()
-  | blocked          = putStrLn "Attempted to run a blocked thread, assuming deadlock."     >> putMVar mvar Nothing
-  | isNothing thread = putStrLn "Attempted to run a nonexistant thread, assuming deadlock." >> putMVar mvar Nothing
+  | M.null threads   = return s
+  | blocked          = putStrLn "Attempted to run a blocked thread, assuming deadlock."     >> putMVar mvar Nothing >> return s
+  | isNothing thread = putStrLn "Attempted to run a nonexistant thread, assuming deadlock." >> putMVar mvar Nothing >> return s
   | otherwise = do
     threads <- runThread (fst $ fromJust thread, chosen) threads
     runThreads chosen sched s' threads mvar
