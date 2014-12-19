@@ -35,9 +35,9 @@ class Monad m => ConcFuture future m | m -> future where
 
 instance ConcFuture MVar IO where
   spawn ma = do
-    mvar <- newEmptyMVar
-    void . forkIO $ ma >>= putMVar mvar
-    return mvar
+    cvar <- new
+    fork $ ma >>= put cvar
+    return cvar
 
   get = readMVar
 
