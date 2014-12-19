@@ -9,20 +9,30 @@ module Control.Monad.Conc.Fixed
   , ThreadId
   , Scheduler
   , runConc
+  , liftIO
+  , spawn
+  , fork
 
   -- * Communication: CVars
   , CVar
+  , new
+  , put
+  , get
+  , take
+  , tryTake
   ) where
+
+import Prelude hiding (take)
 
 import Control.Applicative (Applicative(..), (<$>))
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar)
 import Control.Monad.Cont (Cont, cont, runCont)
-import Control.Monad.Conc.Class
-import Control.Monad.IO.Class
 import Data.Map (Map)
 import Data.Maybe (fromJust, isNothing, isJust)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef, modifyIORef')
 
+import qualified Control.Monad.Conc.Class as C
+import qualified Control.Monad.IO.Class as IO
 import qualified Data.Map as M
 
 -- | Scheduling is done in terms of a trace of 'Action's. Blocking can
@@ -41,14 +51,21 @@ data Action =
 -- | The @Conc@ monad itself. Under the hood, this uses continuations
 -- so it's able to interrupt and resume a monadic computation at any
 -- point where a primitive is used.
---
--- Caution! Blocking on the action of another thread in the 'liftIO'
--- method of the 'MonadIO' instance cannot be detected! So if you
--- perform some potentially blocking action in a 'liftIO' the entire
--- collection of threads may deadlock! You should therefore keep 'IO'
--- blocks small, and only perform blocking operations with the
--- supplied primitives, insofar as possible.
 newtype Conc a = C (Cont Action a) deriving (Functor, Applicative, Monad)
+
+instance IO.MonadIO Conc where
+  liftIO = liftIO
+
+instance C.ConcFuture CVar Conc where
+  spawn = spawn
+  get   = get
+
+instance C.ConcCVar CVar Conc where
+  fork    = fork
+  new     = new
+  put     = put
+  take    = take
+  tryTake = tryTake
 
 -- | The concurrent variable type used with the 'Conc'
 -- monad. Internally, these are implemented as 'IORef's, but they are
@@ -63,30 +80,52 @@ newtype Conc a = C (Cont Action a) deriving (Functor, Applicative, Monad)
 -- mutation), not just the ones blocked on this particular @CVar@.
 newtype CVar a = V (IORef (Maybe a)) deriving Eq
 
-instance MonadIO Conc where
-  liftIO ma = C $ cont lifted where
-    lifted c = Lift $ c <$> ma
+-- | Lift an 'IO' action into the 'Conc' monad.
+--
+-- Caution! Blocking on the action of another thread in @liftIO@
+-- cannot be detected! So if you perform some potentially blocking
+-- action in a 'liftIO' the entire collection of threads may deadlock!
+-- You should therefore keep 'IO' blocks small, and only perform
+-- blocking operations with the supplied primitives, insofar as
+-- possible.
+liftIO :: IO a -> Conc a
+liftIO ma = C $ cont lifted where
+  lifted c = Lift $ c <$> ma
 
-instance ConcFuture CVar Conc where
-  spawn ma = do
-    cvar <- new
-    fork $ ma >>= put cvar
-    return cvar
+-- | Run the provided computation concurrently, returning the result.
+spawn :: Conc a -> Conc (CVar a)
+spawn ma = do
+  cvar <- new
+  fork $ ma >>= put cvar
+  return cvar
 
-  get cvar = C $ cont $ Get cvar
+-- | Block on a 'CVar' until it is full, then read from it (without
+-- emptying).
+get :: CVar a -> Conc a
+get cvar = C $ cont $ Get cvar
 
-instance ConcCVar CVar Conc where
-  fork (C ma) = C $ cont $ \c -> Fork (runCont ma $ const Stop) $ c ()
+-- | Run the provided computation concurrently.
+fork :: Conc () -> Conc ()
+fork (C ma) = C $ cont $ \c -> Fork (runCont ma $ const Stop) $ c ()
 
-  new = liftIO $ do
-    ioref <- newIORef Nothing
-    return $ V ioref
+-- | Create a new empty 'CVar'.
+new :: Conc (CVar a)
+new = liftIO $ do
+  ioref <- newIORef Nothing
+  return $ V ioref
 
-  put cvar a = C $ cont $ \c -> Put cvar a $ c ()
+-- | Block on a 'CVar' until it is empty, then write to it.
+put :: CVar a -> a -> Conc ()
+put cvar a = C $ cont $ \c -> Put cvar a $ c ()
 
-  take cvar = C $ cont $ Take cvar
+-- | Block on a 'CVar' until it is full, then read from it (with
+-- emptying).
+take :: CVar a -> Conc a
+take cvar = C $ cont $ Take cvar
 
-  tryTake cvar = C $ cont $ TryTake cvar
+-- | Read a value from a 'CVar' if there is one, without blocking.
+tryTake :: CVar a -> Conc (Maybe a)
+tryTake cvar = C $ cont $ TryTake cvar
 
 -- | Every thread has a unique identitifer. These are implemented as
 -- integers, but you shouldn't assume they are necessarily contiguous.
