@@ -6,7 +6,6 @@
 module Control.Monad.Conc.Fixed
   ( -- * The Conc Monad
     Conc
-  , ThreadId
   , runConc
   , runConc'
   , liftIO
@@ -23,6 +22,7 @@ module Control.Monad.Conc.Fixed
 
   -- * Scheduling
   , Scheduler
+  , ThreadId
   , randomSched
   , randomSchedNP
   , roundRobinSched
@@ -139,18 +139,15 @@ tryTake cvar = C $ cont $ TryTake cvar
 -- integers, but you shouldn't assume they are necessarily contiguous.
 type ThreadId = Int
 
--- | A @Scheduler@ maintains some internal state, `s`, takes the ID of
--- the last thread scheduled, and the list of unblocked thread IDs. It
--- produces a thread ID to schedule, and a new state.
+-- | A @Scheduler@ maintains some internal state, `s`, takes the
+-- 'ThreadId' of the last thread scheduled, and the list of runnable
+-- threads (which will never be empty). It produces a 'ThreadId' to
+-- schedule, and a new state.
 --
--- Note: The last thread to run may no longer be runnable, so it's not
--- safe to just run the same thread all the time.
---
--- Note also: In order to prevent deadlock, the 'Conc' runtime will
--- assume that a deadlock situation has arisen if the scheduler
--- attempts to (a) schedule a blocked thread, or (b) schedule a
--- nonexistant thread. In either of those cases, the computation will
--- be halted.
+-- Note: In order to prevent deadlock, the 'Conc' runtime will assume
+-- that a deadlock situation has arisen if the scheduler attempts to
+-- (a) schedule a blocked thread, or (b) schedule a nonexistant
+-- thread. In either of those cases, the computation will be halted.
 type Scheduler s = s -> ThreadId -> [ThreadId] -> (ThreadId, s)
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
@@ -211,16 +208,18 @@ data Block = WaitFull | WaitEmpty
 runThreads :: ThreadId -> Scheduler s -> s -> Map ThreadId (Action, Maybe Block) -> MVar (Maybe a) -> IO s
 runThreads last sched s threads mvar
   | M.null threads   = return s
-  | blocked          = putStrLn "Attempted to run a blocked thread, assuming deadlock."     >> putMVar mvar Nothing >> return s
+  | M.null runnable  = putMVar mvar Nothing >> return s
+  | isBlocked        = putStrLn "Attempted to run a blocked thread, assuming deadlock."     >> putMVar mvar Nothing >> return s
   | isNothing thread = putStrLn "Attempted to run a nonexistant thread, assuming deadlock." >> putMVar mvar Nothing >> return s
   | otherwise = do
     threads <- runThread (fst $ fromJust thread, chosen) threads
     runThreads chosen sched s' threads mvar
 
   where
-    (chosen, s') = if last == -1 then (0, s) else sched s last $ M.keys $ M.filter (isNothing . snd) threads
+    (chosen, s') = if last == -1 then (0, s) else sched s last $ M.keys runnable
+    runnable     = M.filter (isNothing . snd) threads
     thread       = M.lookup chosen threads
-    blocked      = isJust . snd . fromJust $ M.lookup chosen threads
+    isBlocked    = isJust . snd . fromJust $ M.lookup chosen threads
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
