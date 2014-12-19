@@ -7,7 +7,6 @@ module Control.Monad.Conc.Fixed
   ( -- * The Conc Monad
     Conc
   , ThreadId
-  , Scheduler
   , runConc
   , liftIO
   , spawn
@@ -20,6 +19,11 @@ module Control.Monad.Conc.Fixed
   , get
   , take
   , tryTake
+
+  -- * Scheduling
+  , Scheduler
+  , randomSched
+  , randomSchedNP
   ) where
 
 import Prelude hiding (take)
@@ -30,6 +34,7 @@ import Control.Monad.Cont (Cont, cont, runCont)
 import Data.Map (Map)
 import Data.Maybe (fromJust, isNothing, isJust)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef, modifyIORef')
+import System.Random (RandomGen, randomR)
 
 import qualified Control.Monad.Conc.Class as C
 import qualified Control.Monad.IO.Class as IO
@@ -154,6 +159,20 @@ runConc sched s ma = do
   let (C c) = ma >>= liftIO . putMVar mvar . Just
   runThreads (negate 1) sched s (M.fromList [(0, (runCont c $ const Stop, Nothing))]) mvar
   takeMVar mvar
+
+-- | A simple random scheduler which, at every step, picks a random
+-- thread to run.
+randomSched :: RandomGen g => Scheduler g
+randomSched g _ threads = (threads !! choice, g') where
+  (choice, g') = randomR (0, length threads) g
+
+-- | A random scheduler which doesn't pre-empt the running
+-- thread. That is, if the last thread scheduled is still runnable,
+-- run that, otherwise schedule randomly.
+randomSchedNP :: RandomGen g => Scheduler g
+randomSchedNP g last threads
+  | last `elem` threads = (last, g)
+  | otherwise = randomSched g last threads
 
 -------------------- Internal stuff --------------------
 

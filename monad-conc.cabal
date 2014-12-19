@@ -24,6 +24,7 @@ library
   build-depends:       base >=4.6 && <4.7
                      , containers
                      , mtl
+                     , random
                      , transformers
   -- hs-source-dirs:      
   default-language:    Haskell2010
