@@ -33,10 +33,10 @@ module Control.Monad.Conc.Fixed
 import Prelude hiding (take)
 
 import Control.Applicative (Applicative(..), (<$>))
-import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar)
+import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar, tryTakeMVar)
 import Control.Monad.Cont (Cont, cont, runCont)
 import Data.Map (Map)
-import Data.Maybe (fromJust, isNothing, isJust)
+import Data.Maybe (fromJust, fromMaybe, isNothing, isJust)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef, modifyIORef')
 import System.Random (RandomGen, randomR)
 
@@ -185,7 +185,7 @@ runConc' sched s ma = do
 -- thread to run.
 randomSched :: RandomGen g => Scheduler g
 randomSched g _ threads = (threads !! choice, g') where
-  (choice, g') = randomR (0, length threads) g
+  (choice, g') = randomR (0, length threads - 1) g
 
 -- | A random scheduler which doesn't pre-empt the running
 -- thread. That is, if the last thread scheduled is still runnable,
@@ -223,7 +223,13 @@ data Block = WaitFull | WaitEmpty
 runThreads :: ThreadId -> Scheduler s -> s -> Map ThreadId (Action, Maybe Block) -> MVar (Maybe a) -> IO s
 runThreads last sched s threads mvar
   | M.null threads   = return s
-  | M.null runnable  = putMVar mvar Nothing >> return s
+  | M.null runnable  = do
+    -- If we're here, it's possible the main thread has terminated
+    -- successfully, in which case we DON'T have a deadlock.
+    val <- fromMaybe Nothing <$> tryTakeMVar mvar
+    putMVar mvar val
+    return s
+
   | isBlocked        = putStrLn "Attempted to run a blocked thread, assuming deadlock."     >> putMVar mvar Nothing >> return s
   | isNothing thread = putStrLn "Attempted to run a nonexistant thread, assuming deadlock." >> putMVar mvar Nothing >> return s
   | otherwise = do
