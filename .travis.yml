@@ -1,8 +1,1 @@
 language: haskell
-
-install:
-  - cabal install --only-dependencies
-
-script:
-  - cabal configure
-  - cabal build
