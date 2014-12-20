@@ -33,7 +33,7 @@ module Control.Monad.Conc.Fixed
 import Prelude hiding (take)
 
 import Control.Applicative (Applicative(..), (<$>))
-import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar, tryTakeMVar)
+import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar)
 import Control.Monad.Cont (Cont, cont, runCont)
 import Data.Map (Map)
 import Data.Maybe (fromJust, fromMaybe, isNothing, isJust)
@@ -220,25 +220,22 @@ data Block = WaitFull ThreadId | WaitEmpty ThreadId deriving Eq
 -- A thread is represented as a tuple of (next action, is blocked).
 runThreads :: ThreadId -> Scheduler s -> s -> Map ThreadId (Action, Bool) -> MVar (Maybe a) -> IO s
 runThreads last sched s threads mvar
-  | M.null threads   = return s
-  | M.null runnable  = do
-    -- If we're here, it's possible the main thread has terminated
-    -- successfully, in which case we DON'T have a deadlock.
-    val <- fromMaybe Nothing <$> tryTakeMVar mvar
-    putMVar mvar val
-    return s
-
-  | isBlocked        = putStrLn "Attempted to run a blocked thread, assuming deadlock."     >> putMVar mvar Nothing >> return s
-  | isNothing thread = putStrLn "Attempted to run a nonexistant thread, assuming deadlock." >> putMVar mvar Nothing >> return s
+  | isTerminated  = return s
+  | isDeadlocked  = putMVar mvar Nothing >> return s
+  | isBlocked     = putStrLn "Attempted to run a blocked thread, assuming deadlock."     >> putMVar mvar Nothing >> return s
+  | isNonexistant = putStrLn "Attempted to run a nonexistant thread, assuming deadlock." >> putMVar mvar Nothing >> return s
   | otherwise = do
-    threads <- runThread (fst $ fromJust thread, chosen) threads
-    runThreads chosen sched s' threads mvar
+    threads' <- runThread (fst $ fromJust thread, chosen) threads
+    runThreads chosen sched s' threads' mvar
 
   where
-    (chosen, s') = if last == -1 then (0, s) else sched s last $ M.keys runnable
-    runnable     = M.filter (not . snd) threads
-    thread       = M.lookup chosen threads
-    isBlocked    = snd . fromJust $ M.lookup chosen threads
+    (chosen, s')  = if last == -1 then (0, s) else sched s last $ M.keys runnable
+    runnable      = M.filter (not . snd) threads
+    thread        = M.lookup chosen threads
+    isBlocked     = snd . fromJust $ M.lookup chosen threads
+    isNonexistant = isNothing thread
+    isTerminated  = 0 `notElem` M.keys threads
+    isDeadlocked  = M.null runnable
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
