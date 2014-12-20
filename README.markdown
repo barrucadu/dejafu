@@ -11,6 +11,9 @@ nondeterministic concurrency, with an interface very much in the
 spirit of `Par`, but slightly more relaxed. Specifically, `Conc`'s
 `IVar` equivalent, `CVar`s, can be written to multiple times.
 
+The documentation of the latest developmental version is
+[available online][docs].
+
 Contributing
 ------------
 
@@ -22,3 +25,4 @@ or email (mike@barrucadu.co.uk).
 [build-status]: https://travis-ci.org/barrucadu/monad-conc.svg?branch=master
 [build-log]:    https://travis-ci.org/barrucadu/monad-conc
 [abstract-par]: https://hackage.haskell.org/package/abstract-par/docs/Control-Monad-Par-Class.html
+[docs]:         https://barrucadu.github.io/monad-conc
