@@ -1,6 +1,7 @@
 {-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE RankNTypes                 #-}
 
 -- | Concurrent monads with a fixed scheduler.
 module Control.Monad.Conc.Fixed
@@ -49,26 +50,31 @@ import qualified Data.Map as M
 -- derived from `new`, `fork` and `put`.
 data Action =
     Fork Action Action
-  | forall a. Put     (CVar a) a Action
-  | forall a. Get     (CVar a) (a -> Action)
-  | forall a. Take    (CVar a) (a -> Action)
-  | forall a. TryTake (CVar a) (Maybe a -> Action)
+  | forall t a. Put     (CVar t a) a Action
+  | forall t a. Get     (CVar t a) (a -> Action)
+  | forall t a. Take    (CVar t a) (a -> Action)
+  | forall t a. TryTake (CVar t a) (Maybe a -> Action)
   | Lift (IO Action)
   | Stop
 
 -- | The @Conc@ monad itself. Under the hood, this uses continuations
 -- so it's able to interrupt and resume a monadic computation at any
 -- point where a primitive is used.
-newtype Conc a = C (Cont Action a) deriving (Functor, Applicative, Monad)
+--
+-- This uses the same universally-quantified indexing state trick as
+-- used by 'ST' and 'STRef's to prevent mutable references from
+-- leaking out of the monad. See 'runConc' for an example of what this
+-- means.
+newtype Conc t a = C (Cont (Action) a) deriving (Functor, Applicative, Monad)
 
-instance IO.MonadIO Conc where
+instance IO.MonadIO (Conc t) where
   liftIO = liftIO
 
-instance C.ConcFuture CVar Conc where
+instance C.ConcFuture (CVar t) (Conc t) where
   spawn = spawn
   get   = get
 
-instance C.ConcCVar CVar Conc where
+instance C.ConcCVar (CVar t) (Conc t) where
   fork    = fork
   new     = new
   put     = put
@@ -86,7 +92,7 @@ instance C.ConcCVar CVar Conc where
 -- the moment, mutating a @CVar@ wakes up /all/ threads blocking in an
 -- appropriate way (i.e., on read or write, depending on the
 -- mutation), not just the ones blocked on this particular @CVar@.
-newtype CVar a = V (IORef (Maybe a)) deriving Eq
+newtype CVar t a = V (IORef (Maybe a)) deriving Eq
 
 -- | Lift an 'IO' action into the 'Conc' monad.
 --
@@ -96,12 +102,12 @@ newtype CVar a = V (IORef (Maybe a)) deriving Eq
 -- You should therefore keep 'IO' blocks small, and only perform
 -- blocking operations with the supplied primitives, insofar as
 -- possible.
-liftIO :: IO a -> Conc a
+liftIO :: IO a -> Conc t a
 liftIO ma = C $ cont lifted where
   lifted c = Lift $ c <$> ma
 
 -- | Run the provided computation concurrently, returning the result.
-spawn :: Conc a -> Conc (CVar a)
+spawn :: Conc t a -> Conc t (CVar t a)
 spawn ma = do
   cvar <- new
   fork $ ma >>= put cvar
@@ -109,30 +115,30 @@ spawn ma = do
 
 -- | Block on a 'CVar' until it is full, then read from it (without
 -- emptying).
-get :: CVar a -> Conc a
+get :: CVar t a -> Conc t a
 get cvar = C $ cont $ Get cvar
 
 -- | Run the provided computation concurrently.
-fork :: Conc () -> Conc ()
+fork :: Conc t () -> Conc t ()
 fork (C ma) = C $ cont $ \c -> Fork (runCont ma $ const Stop) $ c ()
 
 -- | Create a new empty 'CVar'.
-new :: Conc (CVar a)
+new :: Conc t (CVar t a)
 new = liftIO $ do
   ioref <- newIORef Nothing
   return $ V ioref
 
 -- | Block on a 'CVar' until it is empty, then write to it.
-put :: CVar a -> a -> Conc ()
+put :: CVar t a -> a -> Conc t ()
 put cvar a = C $ cont $ \c -> Put cvar a $ c ()
 
 -- | Block on a 'CVar' until it is full, then read from it (with
 -- emptying).
-take :: CVar a -> Conc a
+take :: CVar t a -> Conc t a
 take cvar = C $ cont $ Take cvar
 
 -- | Read a value from a 'CVar' if there is one, without blocking.
-tryTake :: CVar a -> Conc (Maybe a)
+tryTake :: CVar t a -> Conc t (Maybe a)
 tryTake cvar = C $ cont $ TryTake cvar
 
 -- | Every thread has a unique identitifer. These are implemented as
@@ -153,12 +159,21 @@ type Scheduler s = s -> ThreadId -> [ThreadId] -> (ThreadId, s)
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning `Just result` if it terminates, and `Nothing` if a
 -- deadlock is detected.
-runConc :: Scheduler s -> s -> Conc a -> IO (Maybe a)
+--
+-- Note how the `t` in 'Conc' is universally quantified, what this
+-- means in practice is that you can't do something like this:
+--
+-- > runConc (\s _ (x:_) -> (x, s)) () $ new >>= return
+--
+-- So 'CVar's cannot leak out of the 'Conc' computation. If this is
+-- making your head hurt, check out the \"How `runST` works\" section
+-- of <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
+runConc :: Scheduler s -> s -> (forall t. Conc t a) -> IO (Maybe a)
 runConc sched s ma = fst <$> runConc' sched s ma
 
 -- | variant of 'runConc' which returns the final state of the
 -- scheduler.
-runConc' :: Scheduler s -> s -> Conc a -> IO (Maybe a, s)
+runConc' :: Scheduler s -> s -> (forall t. Conc t a) -> IO (Maybe a, s)
 runConc' sched s ma = do
   mvar <- newEmptyMVar
   let (C c) = ma >>= liftIO . putMVar mvar . Just
