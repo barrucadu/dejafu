@@ -37,7 +37,13 @@ module Control.Monad.Conc.SCT
  , Trace
  , Decision(..)
  , runSCT
+
+ -- * Schedulers
  , sctRandom
+ , sctRandomNP
+
+ -- * Utilities
+ , toSCT
  , showTrace
  ) where
 
@@ -83,9 +89,18 @@ runSCT sched s runs c = runSCT' s runs where
 
 -- | A simple pre-emptive random scheduler.
 sctRandom :: RandomGen g => SCTScheduler g
-sctRandom (g, log) last threads = (tid, (g', log ++ [(decision, alters)])) where
-  (choice, g') = randomR (0, length threads - 1) g
-  tid = threads !! choice
+sctRandom = toSCT randomSched
+
+-- | A random scheduler with no pre-emption.
+sctRandomNP :: RandomGen g => SCTScheduler g
+sctRandomNP = toSCT randomSchedNP
+
+-- | Convert a 'Scheduler' to an 'SCTScheduler' by recording the
+-- trace.
+toSCT :: Scheduler s -> SCTScheduler s
+toSCT sched (s, log) last threads = (tid, (s', log ++ [(decision, alters)])) where
+  (tid, s') = sched s last threads
+
   decision | tid == last         = Continue
            | last `elem` threads = SwitchTo tid
            | otherwise           = Start tid
