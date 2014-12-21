@@ -34,6 +34,7 @@
 module Control.Monad.Conc.SCT
  ( -- *Systematic Concurrency Testing
    SCTScheduler
+ , Trace
  , Decision(..)
  , runSCT
  , sctRandom
@@ -44,8 +45,13 @@ import Control.Monad.Conc.Fixed
 import System.Random (RandomGen, randomR)
 
 -- | An @SCTScheduler@ is like a regular 'Scheduler', except it builds
--- a log of scheduling decisions made.
-type SCTScheduler s = Scheduler (s, [Decision])
+-- a trace of scheduling decisions made.
+type SCTScheduler s = Scheduler (s, Trace)
+
+-- | A @Trace@ is just a list of all the decisions that were made,
+-- with the alternative decisions that could have been made at each
+-- step.
+type Trace = [(Decision, [Decision])]
 
 -- | Scheduling decisions are based on the state of the running
 -- program, and so we can capture some of that state in recording what
@@ -67,26 +73,30 @@ data Decision =
 -- The initial state for each run is the final state of the last run,
 -- so it is important that the scheduler actually maintain some
 -- internal state, or all the results will be identical.
-runSCT :: SCTScheduler s -> s -> Int -> (forall t. Conc t a) -> IO [(Maybe a, [Decision])]
+runSCT :: SCTScheduler s -> s -> Int -> (forall t. Conc t a) -> IO [(Maybe a, Trace)]
 runSCT sched s runs c = runSCT' s runs where
   runSCT' _ 0 = return []
   runSCT' s n = do
-    (res, (s', log)) <- runConc' sched (s, [Start 0]) c
+    (res, (s', log)) <- runConc' sched (s, [(Start 0, [])]) c
     rest <- runSCT' s' $ n - 1
     return $ (res, log) : rest
 
 -- | A simple pre-emptive random scheduler.
 sctRandom :: RandomGen g => SCTScheduler g
-sctRandom (g, log) last threads = (tid, (g', log ++ [decision])) where
+sctRandom (g, log) last threads = (tid, (g', log ++ [(decision, alters)])) where
   (choice, g') = randomR (0, length threads - 1) g
   tid = threads !! choice
   decision | tid == last         = Continue
            | last `elem` threads = SwitchTo tid
            | otherwise           = Start tid
 
+  alters | tid == last         = map SwitchTo $ filter (/=last) threads
+         | last `elem` threads = Continue : map SwitchTo (filter (\t -> t /= last && t /= tid) threads)
+         | otherwise           = map Start $ filter (/=tid) threads
+
 -- | Pretty-print a scheduler trace.
-showTrace :: [Decision] -> String
-showTrace = trace "" 0 where
+showTrace :: Trace -> String
+showTrace = trace "" 0 . map fst where
     trace log num (Start tid:ds)    = thread log num ++ trace ("S" ++ show tid) 1 ds
     trace log num (Continue:ds)     = trace log (num + 1) ds
     trace log num (SwitchTo tid:ds) = thread log num ++ trace ("P" ++ show tid) 1 ds
