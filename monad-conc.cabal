@@ -18,6 +18,7 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Control.Monad.Conc.Class
+                     , Control.Monad.Conc.CVar
                      , Control.Monad.Conc.Fixed
                      , Control.Monad.Conc.SCT
   -- other-modules:       

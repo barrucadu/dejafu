@@ -8,16 +8,15 @@
 -- update the shared variable, and release the locks. The main thread
 -- waits for them both to terminate, and returns the final result.
 --
--- > bad :: Conc t Int
+-- > bad :: ConcCVar (cvar t) (m t) => m t Int
 -- > bad = do
 -- >   a <- newEmptyCVar
 -- >   b <- newEmptyCVar
 -- > 
--- >   c <- newEmptyCVar
--- >   putCVar c 0
+-- >   c <- newCVar 0
 -- > 
--- >   j1 <- spawn $ putCVar a () >> putCVar b () >> takeCVar c >>= putCVar c . succ >> takeCVar b >> takeCVar a
--- >   j2 <- spawn $ putCVar b () >> putCVar a () >> takeCVar c >>= putCVar c . pred >> takeCVar a >> takeCVar b
+-- >   j1 <- spawn $ lock a >> lock b >> modifyCVar_ c (return . succ) >> unlock b >> unlock a
+-- >   j2 <- spawn $ lock b >> lock a >> modifyCVar_ c (return . pred) >> unlock a >> unlock b
 -- > 
 -- >   takeCVar j1
 -- >   takeCVar j2
@@ -66,4 +65,3 @@ sctRandom :: RandomGen g => SCTScheduler g
 sctRandom (g, log) _ threads = (tid, (g', log ++ [tid])) where
   (choice, g') = randomR (0, length threads - 1) g
   tid = threads !! choice
-
