@@ -35,8 +35,8 @@ import Control.Applicative (Applicative(..), (<$>))
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar)
 import Control.Monad.Cont (Cont, cont, runCont)
 import Data.Map (Map)
-import Data.Maybe (fromJust, fromMaybe, isNothing, isJust)
-import Data.IORef (IORef, newIORef, readIORef, writeIORef, modifyIORef')
+import Data.Maybe (fromJust, isNothing)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import System.Random (RandomGen, randomR)
 
 import qualified Control.Monad.Conc.Class as C
@@ -197,9 +197,9 @@ randomSchedNP = makeNP randomSched
 -- | A round-robin scheduler which, at every step, schedules the
 -- thread with the next 'ThreadId'.
 roundRobinSched :: Scheduler ()
-roundRobinSched _ last threads
-  | last >= maximum threads = (minimum threads, ())
-  | otherwise = (minimum $ filter (>last) threads, ())
+roundRobinSched _ prior threads
+  | prior >= maximum threads = (minimum threads, ())
+  | otherwise = (minimum $ filter (>prior) threads, ())
 
 -- | A round-robin scheduler which doesn't pre-empt the running
 -- thread.
@@ -210,9 +210,9 @@ roundRobinSchedNP = makeNP roundRobinSched
 -- one.
 makeNP :: Scheduler s -> Scheduler s
 makeNP sched = newsched where
-  newsched s last threads
-    | last `elem` threads = (last, s)
-    | otherwise = sched s last threads
+  newsched s prior threads
+    | prior `elem` threads = (prior, s)
+    | otherwise = sched s prior threads
 
 -------------------- Internal stuff --------------------
 
@@ -224,7 +224,7 @@ data Block = WaitFull ThreadId | WaitEmpty ThreadId deriving Eq
 --
 -- A thread is represented as a tuple of (next action, is blocked).
 runThreads :: ThreadId -> Scheduler s -> s -> Map ThreadId (Action, Bool) -> MVar (Maybe a) -> IO s
-runThreads last sched s threads mvar
+runThreads prior sched s threads mvar
   | isTerminated  = return s
   | isDeadlocked  = putMVar mvar Nothing >> return s
   | isBlocked     = putStrLn "Attempted to run a blocked thread, assuming deadlock."     >> putMVar mvar Nothing >> return s
@@ -234,7 +234,7 @@ runThreads last sched s threads mvar
     runThreads chosen sched s' threads' mvar
 
   where
-    (chosen, s')  = if last == -1 then (0, s) else sched s last $ M.keys runnable
+    (chosen, s')  = if prior == -1 then (0, s) else sched s prior $ M.keys runnable
     runnable      = M.filter (not . snd) threads
     thread        = M.lookup chosen threads
     isBlocked     = snd . fromJust $ M.lookup chosen threads
@@ -313,13 +313,13 @@ kill = M.delete
 
 -- | Wake every thread blocked on a 'CVar' read.
 wake :: Ord k => CVar t v -> (k -> Block) -> Map k (a, Bool) -> IO (Map k (a, Bool))
-wake (V ref) typ = fmap M.fromList . mapM wake . M.toList where
-  wake a@(tid, (act, True)) = do
-    let block = typ tid
+wake (V ref) typ = fmap M.fromList . mapM wake' . M.toList where
+  wake' a@(tid, (act, True)) = do
+    let blck = typ tid
     (val, blocks) <- readIORef ref
 
-    if block `elem` blocks
-    then writeIORef ref (val, filter (/= block) blocks) >> return (tid, (act, False))
+    if blck `elem` blocks
+    then writeIORef ref (val, filter (/= blck) blocks) >> return (tid, (act, False))
     else return a
 
-  wake a = return a
+  wake' a = return a

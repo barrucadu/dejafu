@@ -15,7 +15,6 @@ module Control.Monad.Conc.Class where
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
 import Control.Monad (void)
-import Data.Maybe (maybe)
 
 -- | @ConcFuture@ is the monad-conc alternative of 'ParFuture'. It
 -- abstracts Conc monads which support futures. In itself, this is not

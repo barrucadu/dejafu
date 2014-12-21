@@ -23,7 +23,7 @@ module Control.Monad.Conc.CVar
  , unlock
  ) where
 
-import Control.Monad (liftM, void)
+import Control.Monad (liftM)
 import Control.Monad.Conc.Class
 
 -- | Create a new @CVar@ containing a value.
