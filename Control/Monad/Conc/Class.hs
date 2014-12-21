@@ -13,7 +13,7 @@
 module Control.Monad.Conc.Class where
 
 import Control.Concurrent (forkIO)
-import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, takeMVar, tryTakeMVar)
+import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
 import Control.Monad (void)
 import Data.Maybe (maybe)
 
@@ -45,8 +45,11 @@ instance ConcFuture MVar IO where
 -- multiple times to the same `IVar`, which removes the possibility of
 -- data races.
 --
--- A minimal implementation consists of 'fork', 'newCVar', 'putCVar',
--- and 'tryTakeCVar'.
+-- A minimal implementation consists of 'fork', 'newCVar',
+-- 'tryPutCVar', and 'tryTakeCVar'. The default implementations of
+-- 'takeCVar' and 'putCVar', however, are very inefficient, and should
+-- probably always be overridden to make use of
+-- implementation-specific blocking functionality.
 class ConcFuture cvar m => ConcCVar cvar m | m -> cvar where
   -- | Forks a computation to happen concurrently. Communication may
   -- happen over `CVar`s.
@@ -58,17 +61,21 @@ class ConcFuture cvar m => ConcCVar cvar m | m -> cvar where
   -- | Put a value into a `CVar`. If there is already a value there,
   -- this will block until that value has been 'take'n, at which point
   -- the value will be stored.
+  --
+  -- > putCVar cvar a = tryPutCVar cvar a >>= \b -> if b then return () else putCVar cvar a
   putCVar :: cvar a -> a -> m ()
+  putCVar cvar a = tryPutCVar cvar a >>= \b -> if b then return () else putCVar cvar a
+
+  -- | Attempt to put a value in a `CVar`, returning `True` (and
+  -- filling the `CVar`) if there was nothing there, otherwise
+  -- returning `False`
+  tryPutCVar :: cvar a -> a -> m Bool
 
   -- | Take a value from a `CVar`. This \"empties\" the `CVar`,
   -- allowing a new value to be 'put' in. This will block if there is
   -- no value in the `CVar` already, until one has been 'put'.
   --
-  -- > take cvar = tryTake cvar >>= maybe (take cvar) return
-  --
-  -- The default implementation is very inefficient, and so should
-  -- probably be always overridden to use some implementation-specific
-  -- blocking functionality.
+  -- > takeCVar cvar = tryTakeCVar cvar >>= maybe (takeCVar cvar) return
   takeCVar :: cvar a -> m a
   takeCVar cvar = tryTakeCVar cvar >>= maybe (takeCVar cvar) return
 
@@ -81,5 +88,6 @@ instance ConcCVar MVar IO where
   fork         = void . forkIO
   newEmptyCVar = newEmptyMVar
   putCVar      = putMVar
+  tryPutCVar   = tryPutMVar
   takeCVar     = takeMVar
   tryTakeCVar  = tryTakeMVar

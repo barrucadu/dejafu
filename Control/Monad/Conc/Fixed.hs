@@ -17,6 +17,7 @@ module Control.Monad.Conc.Fixed
   , CVar
   , newEmptyCVar
   , putCVar
+  , tryPutCVar
   , readCVar
   , takeCVar
   , tryTakeCVar
@@ -49,6 +50,7 @@ import qualified Data.Map as M
 data Action =
     Fork Action Action
   | forall t a. Put     (CVar t a) a Action
+  | forall t a. TryPut  (CVar t a) a (Bool -> Action)
   | forall t a. Get     (CVar t a) (a -> Action)
   | forall t a. Take    (CVar t a) (a -> Action)
   | forall t a. TryTake (CVar t a) (Maybe a -> Action)
@@ -76,6 +78,7 @@ instance C.ConcCVar (CVar t) (Conc t) where
   fork         = fork
   newEmptyCVar = newEmptyCVar
   putCVar      = putCVar
+  tryPutCVar   = tryPutCVar
   takeCVar     = takeCVar
   tryTakeCVar  = tryTakeCVar
 
@@ -125,6 +128,10 @@ newEmptyCVar = liftIO $ do
 -- | Block on a 'CVar' until it is empty, then write to it.
 putCVar :: CVar t a -> a -> Conc t ()
 putCVar cvar a = C $ cont $ \c -> Put cvar a $ c ()
+
+-- | Put a value into a 'CVar' if there isn't one, without blocking.
+tryPutCVar :: CVar t a -> a -> Conc t Bool
+tryPutCVar cvar a = C $ cont $ TryPut cvar a
 
 -- | Block on a 'CVar' until it is full, then read from it (with
 -- emptying).
@@ -248,6 +255,15 @@ runThread (Put v a c, i) threads = do
     Nothing -> do
       writeIORef ref (Just a, blocks)
       goto c i <$> wake v WaitFull threads
+
+runThread (TryPut v a c, i) threads = do
+  let (V ref) = v
+  (val, blocks) <- readIORef ref
+  case val of
+    Just _  -> return $ goto (c False) i threads
+    Nothing -> do
+      writeIORef ref (Just a, blocks)
+      goto (c True) i <$> wake v WaitFull threads
 
 runThread (Get v c, i) threads = do
   let (V ref) = v
