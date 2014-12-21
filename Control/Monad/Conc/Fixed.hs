@@ -199,7 +199,7 @@ randomSchedNP = makeNP randomSched
 roundRobinSched :: Scheduler ()
 roundRobinSched _ last threads
   | last >= maximum threads = (minimum threads, ())
-  | otherwise = (minimum $ filter (<=last) threads, ())
+  | otherwise = (minimum $ filter (>last) threads, ())
 
 -- | A round-robin scheduler which doesn't pre-empt the running
 -- thread.
