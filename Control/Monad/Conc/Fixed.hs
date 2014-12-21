@@ -15,11 +15,11 @@ module Control.Monad.Conc.Fixed
 
   -- * Communication: CVars
   , CVar
-  , new
-  , put
-  , get
-  , take
-  , tryTake
+  , newEmptyCVar
+  , putCVar
+  , readCVar
+  , takeCVar
+  , tryTakeCVar
 
   -- * Scheduling
   , Scheduler
@@ -29,8 +29,6 @@ module Control.Monad.Conc.Fixed
   , roundRobinSched
   , roundRobinSchedNP
   ) where
-
-import Prelude hiding (take)
 
 import Control.Applicative (Applicative(..), (<$>))
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar)
@@ -71,15 +69,15 @@ instance IO.MonadIO (Conc t) where
   liftIO = liftIO
 
 instance C.ConcFuture (CVar t) (Conc t) where
-  spawn = spawn
-  get   = get
+  spawn    = spawn
+  readCVar = readCVar
 
 instance C.ConcCVar (CVar t) (Conc t) where
-  fork    = fork
-  new     = new
-  put     = put
-  take    = take
-  tryTake = tryTake
+  fork         = fork
+  newEmptyCVar = newEmptyCVar
+  putCVar      = putCVar
+  takeCVar     = takeCVar
+  tryTakeCVar  = tryTakeCVar
 
 -- | The concurrent variable type used with the 'Conc'
 -- monad. Internally, these are implemented as 'IORef's, but they are
@@ -105,37 +103,37 @@ liftIO ma = C $ cont lifted where
 -- | Run the provided computation concurrently, returning the result.
 spawn :: Conc t a -> Conc t (CVar t a)
 spawn ma = do
-  cvar <- new
-  fork $ ma >>= put cvar
+  cvar <- newEmptyCVar
+  fork $ ma >>= putCVar cvar
   return cvar
 
 -- | Block on a 'CVar' until it is full, then read from it (without
 -- emptying).
-get :: CVar t a -> Conc t a
-get cvar = C $ cont $ Get cvar
+readCVar :: CVar t a -> Conc t a
+readCVar cvar = C $ cont $ Get cvar
 
 -- | Run the provided computation concurrently.
 fork :: Conc t () -> Conc t ()
 fork (C ma) = C $ cont $ \c -> Fork (runCont ma $ const Stop) $ c ()
 
 -- | Create a new empty 'CVar'.
-new :: Conc t (CVar t a)
-new = liftIO $ do
+newEmptyCVar :: Conc t (CVar t a)
+newEmptyCVar = liftIO $ do
   ioref <- newIORef (Nothing, [])
   return $ V ioref
 
 -- | Block on a 'CVar' until it is empty, then write to it.
-put :: CVar t a -> a -> Conc t ()
-put cvar a = C $ cont $ \c -> Put cvar a $ c ()
+putCVar :: CVar t a -> a -> Conc t ()
+putCVar cvar a = C $ cont $ \c -> Put cvar a $ c ()
 
 -- | Block on a 'CVar' until it is full, then read from it (with
 -- emptying).
-take :: CVar t a -> Conc t a
-take cvar = C $ cont $ Take cvar
+takeCVar :: CVar t a -> Conc t a
+takeCVar cvar = C $ cont $ Take cvar
 
 -- | Read a value from a 'CVar' if there is one, without blocking.
-tryTake :: CVar t a -> Conc t (Maybe a)
-tryTake cvar = C $ cont $ TryTake cvar
+tryTakeCVar :: CVar t a -> Conc t (Maybe a)
+tryTakeCVar cvar = C $ cont $ TryTake cvar
 
 -- | Every thread has a unique identitifer. These are implemented as
 -- integers, but you shouldn't assume they are necessarily contiguous.

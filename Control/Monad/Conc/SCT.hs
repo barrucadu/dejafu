@@ -10,19 +10,19 @@
 --
 -- > bad :: Conc t Int
 -- > bad = do
--- >   a <- new
--- >   b <- new
+-- >   a <- newEmptyCVar
+-- >   b <- newEmptyCVar
 -- > 
--- >   c <- new
--- >   put c 0
+-- >   c <- newEmptyCVar
+-- >   putCVar c 0
 -- > 
--- >   j1 <- spawn $ put a () >> put b () >> take c >>= put c . succ >> take b >> take a
--- >   j2 <- spawn $ put b () >> put a () >> take c >>= put c . pred >> take a >> take b
+-- >   j1 <- spawn $ putCVar a () >> putCVar b () >> takeCVar c >>= putCVar c . succ >> takeCVar b >> takeCVar a
+-- >   j2 <- spawn $ putCVar b () >> putCVar a () >> takeCVar c >>= putCVar c . pred >> takeCVar a >> takeCVar b
 -- > 
--- >   take j1
--- >   take j2
+-- >   takeCVar j1
+-- >   takeCVar j2
 -- > 
--- >   take c
+-- >   takeCVar c
 --
 -- The correct result is 0, as it starts out as 0 and is incremented
 -- and decremented by threads 1 and 2, respectively. However, note the
@@ -38,8 +38,6 @@ module Control.Monad.Conc.SCT
  , runSCT
  , sctRandom
  ) where
-
-import Prelude hiding (take)
 
 import Control.Monad.Conc.Fixed
 import System.Random (RandomGen, randomR)
