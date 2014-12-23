@@ -65,7 +65,7 @@ data Action =
 -- used by 'ST' and 'STRef's to prevent mutable references from
 -- leaking out of the monad. See 'runConc' for an example of what this
 -- means.
-newtype Conc t a = C (Cont (Action) a) deriving (Functor, Applicative, Monad)
+newtype Conc t a = C (Cont Action a) deriving (Functor, Applicative, Monad)
 
 instance IO.MonadIO (Conc t) where
   liftIO = liftIO

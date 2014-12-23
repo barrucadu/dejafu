@@ -14,7 +14,7 @@ module Control.Monad.Conc.Class where
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
-import Control.Monad (void)
+import Control.Monad (unless, void)
 
 -- | @ConcFuture@ is the monad-conc alternative of 'ParFuture'. It
 -- abstracts Conc monads which support futures. In itself, this is not
@@ -61,9 +61,9 @@ class ConcFuture cvar m => ConcCVar cvar m | m -> cvar where
   -- this will block until that value has been 'take'n, at which point
   -- the value will be stored.
   --
-  -- > putCVar cvar a = tryPutCVar cvar a >>= \b -> if b then return () else putCVar cvar a
+  -- > putCVar cvar a = tryPutCVar cvar a >>= \b -> unless b $ putCVar cvar a
   putCVar :: cvar a -> a -> m ()
-  putCVar cvar a = tryPutCVar cvar a >>= \b -> if b then return () else putCVar cvar a
+  putCVar cvar a = tryPutCVar cvar a >>= \b -> unless b $ putCVar cvar a
 
   -- | Attempt to put a value in a `CVar`, returning `True` (and
   -- filling the `CVar`) if there was nothing there, otherwise
