@@ -5,7 +5,7 @@ import Control.Applicative ((<$>))
 import Control.Monad.Conc.Fixed (Conc)
 import Control.Monad.Conc.SCT (runSCT, sctRandom)
 import Data.List (group, sort)
-import Data.Maybe (isNothing)
+import Data.Maybe (isJust, isNothing)
 import System.Random (mkStdGen)
 
 -- Couldn't get Cabal's detailed tests to work, hence this approach.
@@ -24,6 +24,13 @@ testDeadlockFree = testPred predicate where
     [] -> Pass
     ds -> Fail $ "Found " ++ show (length ds) ++ "/" ++ show (length xs) ++ " deadlocking schedules."
 
+-- | Test that a concurrent computation always deadlocks.
+testDeadlocks :: Int -> (forall t. Conc t a) -> IO Result
+testDeadlocks = testPred predicate where
+  predicate xs = case filter isJust xs of
+    [] -> Pass
+    ds -> Fail $ "Found " ++ show (length ds) ++ "/" ++ show (length xs) ++ " productive schedules."
+
 -- | Test that a concurrent computation always returns the same
 -- result.
 testAlwaysSame :: (Eq a, Ord a) => Int -> (forall t. Conc t a) -> IO Result
@@ -31,7 +38,7 @@ testAlwaysSame = testPred predicate where
   predicate xs = case group $ sort xs of
     []    -> Pass
     [[_]] -> Pass
-    [gs]  -> Fail $ "Found " ++ show (length gs) ++ " distinct results."
+    gs    -> Fail $ "Found " ++ show (length gs) ++ " distinct results."
 
 -- | Invert the result of a test.
 testNot :: String -> IO Result -> IO Result

@@ -1,3 +1,4 @@
+-- | Tests sourced from <https://github.com/sctbenchmarks>.
 module Tests.Cases where
 
 import Control.Monad (replicateM)
@@ -8,7 +9,7 @@ import Tests.Utils
 -- | List of all tests
 testCases :: [Test]
 testCases =
-  [ Test "Simple 2-Deadlock" $ testNot "No deadlocks found!" $ testDeadlockFree 100 simple2Deadlock
+  [ Test "Simple 2-Deadlock" $ testNot "No deadlocks found!" $ testDeadlockFree 100   simple2Deadlock
   , Test "2 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 100 $ philosophers 2
   , Test "3 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 100 $ philosophers 3
   --Random scheduling isn't good enough for these, without increasing
@@ -16,6 +17,9 @@ testCases =
   --, Test "4 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 100 $ philosophers 4
   --, Test "5 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 100 $ philosophers 5
   --, Test "100 Philosophers"  $ testNot "No deadlocks found!" $ testDeadlockFree 100 $ philosophers 100
+  , Test "Threshold Value"   $ testNot "All values equal!"   $ testAlwaysSame   100   thresholdValue
+  , Test "Forgotten Unlock"  $                                 testDeadlocks    100   forgottenUnlock
+  , Test "Simple 2-Race"     $ testNot "All values equal!"   $ testAlwaysSame   100   simple2Race
   ]
 
 -- | Should deadlock on a minority of schedules.
@@ -55,3 +59,40 @@ philosophers n = do
       -- pre-emption is effectively a delay.
       unlock $ forks !! leftId
       unlock $ forks !! rightId
+
+-- | Checks if a value has been increased above a threshold, data
+-- racey.
+thresholdValue :: ConcCVar cvar m => m Bool
+thresholdValue = do
+  l <- newEmptyCVar
+  x <- newCVar 0
+
+  fork $ lock l >> modifyCVar_ x (return . (+1)) >> unlock l
+  fork $ lock l >> modifyCVar_ x (return . (+2)) >> unlock l
+  res <- spawn $ lock l >> readCVar x >>= \x' -> unlock l >> return (x' > 3)
+
+  takeCVar res
+
+-- | A lock taken but never released.
+forgottenUnlock :: ConcCVar cvar m => m ()
+forgottenUnlock = do
+  l <- newEmptyCVar
+  m <- newEmptyCVar
+
+  let lockl = lock l >> unlock l >> lock l >> lock m >> unlock m >> lock m >> unlock m
+
+  j1 <- spawn lockl
+  j2 <- spawn lockl
+
+  takeCVar j1
+  takeCVar j2
+
+-- | Very simple data race between two threads.
+simple2Race :: ConcCVar cvar m => m Int
+simple2Race = do
+  x <- newEmptyCVar
+
+  fork $ putCVar x 0
+  fork $ putCVar x 1
+
+  readCVar x
