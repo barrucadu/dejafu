@@ -12,13 +12,14 @@ import System.Random (mkStdGen)
 data Test   = Test { name :: String, result :: IO Result }
 data Result = Pass | Fail String | Error String
 
--- | Run a concurrent computation, aggregating the results.
-doTest :: ([Maybe a] -> Result) -> Int -> (forall t. Conc t a) -> IO Result
-doTest predicate num conc = predicate <$> map fst <$> runSCT sctRandom (mkStdGen 0) num conc
+-- | Test that a predicate holds over the results of a concurrent
+-- computation.
+testPred :: ([Maybe a] -> Result) -> Int -> (forall t. Conc t a) -> IO Result
+testPred predicate num conc = predicate . map fst <$> runSCT sctRandom (mkStdGen 0) num conc
 
 -- | Test that a concurrent computation is free of deadlocks.
 testDeadlockFree :: Int -> (forall t. Conc t a) -> IO Result
-testDeadlockFree = doTest predicate where
+testDeadlockFree = testPred predicate where
   predicate xs = case filter isNothing xs of
     [] -> Pass
     ds -> Fail $ "Found " ++ show (length ds) ++ "/" ++ show (length xs) ++ " deadlocking schedules."
@@ -26,7 +27,7 @@ testDeadlockFree = doTest predicate where
 -- | Test that a concurrent computation always returns the same
 -- result.
 testAlwaysSame :: (Eq a, Ord a) => Int -> (forall t. Conc t a) -> IO Result
-testAlwaysSame = doTest predicate where
+testAlwaysSame = testPred predicate where
   predicate xs = case group $ sort xs of
     []    -> Pass
     [[_]] -> Pass
