@@ -20,6 +20,7 @@ testCases =
   , Test "Threshold Value"   $ testNot "All values equal!"   $ testAlwaysSame   100   thresholdValue
   , Test "Forgotten Unlock"  $                                 testDeadlocks    100   forgottenUnlock
   , Test "Simple 2-Race"     $ testNot "All values equal!"   $ testAlwaysSame   100   simple2Race
+  , Test "Racey Stack"       $ testNot "All values equal!"   $ testAlwaysSame   100   raceyStack
   ]
 
 -- | Should deadlock on a minority of schedules.
@@ -96,3 +97,31 @@ simple2Race = do
   fork $ putCVar x 1
 
   readCVar x
+
+-- | Race on popping from a stack.
+raceyStack :: ConcCVar cvar m => m (Maybe Int)
+raceyStack = do
+  s <- newCVar []
+
+  fork $ t1 s [1..10]
+  j <- spawn $ t2 s 10 0
+
+  takeCVar j
+
+  where
+    push s a = modifyCVar_ s $ return . (a:)
+    pop s = do
+      val <- takeCVar s
+      case val of
+        [] -> putCVar s [] >> return Nothing
+        (x:xs) -> putCVar s xs >> return (Just x)
+
+    t1 s (x:xs) = push s x >> t1 s xs
+    t1 _ []     = return ()
+
+    t2 _ 0 total = return $ Just total
+    t2 s n total = do
+      val <- pop s
+      case val of
+        Just x  -> t2 s (n-1) (total+x)
+        Nothing -> return Nothing
