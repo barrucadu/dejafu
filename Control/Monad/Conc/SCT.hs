@@ -34,7 +34,8 @@
 module Control.Monad.Conc.SCT
  ( -- *Systematic Concurrency Testing
    SCTScheduler
- , Trace
+ , SchedTrace
+ , SCTTrace
  , Decision(..)
  , runSCT
 
@@ -52,12 +53,15 @@ import System.Random (RandomGen)
 
 -- | An @SCTScheduler@ is like a regular 'Scheduler', except it builds
 -- a trace of scheduling decisions made.
-type SCTScheduler s = Scheduler (s, Trace)
+type SCTScheduler s = Scheduler (s, SchedTrace)
 
--- | A @Trace@ is just a list of all the decisions that were made,
+-- | A @SchedTrace@ is just a list of all the decisions that were made,
 -- with the alternative decisions that could have been made at each
--- step.
-type Trace = [(Decision, [Decision])]
+-- step
+type SchedTrace = [(Decision, [Decision])]
+
+-- | A @SCTTrace@ is a combined 'SchedTrace' and 'Trace'.
+type SCTTrace = [(Decision, [Decision], ThreadAction)]
 
 -- | Scheduling decisions are based on the state of the running
 -- program, and so we can capture some of that state in recording what
@@ -79,12 +83,15 @@ data Decision =
 -- The initial state for each run is the final state of the last run,
 -- so it is important that the scheduler actually maintain some
 -- internal state, or all the results will be identical.
-runSCT :: SCTScheduler s -> s -> Int -> (forall t. Conc t a) -> IO [(Maybe a, Trace)]
+runSCT :: SCTScheduler s -> s -> Int -> (forall t. Conc t a) -> IO [(Maybe a, SCTTrace)]
 runSCT _     _ 0 _ = return []
 runSCT sched s n c = do
-  (res, (s', trace)) <- runConc' sched (s, [(Start 0, [])]) c
+  (res, (s', strace), ttrace) <- runConc' sched (s, [(Start 0, [])]) c
   rest <- runSCT sched s' (n - 1) c
-  return $ (res, trace) : rest
+  return $ (res, zipWith mktrace strace ttrace) : rest
+
+  where
+    mktrace (d, alts) (_, act) = (d, alts, act)
 
 -- | A simple pre-emptive random scheduler.
 sctRandom :: RandomGen g => SCTScheduler g
@@ -109,7 +116,7 @@ toSCT sched (s, trace) prior threads = (tid, (s', trace ++ [(decision, alters)])
          | otherwise            = map Start $ filter (/=tid) threads
 
 -- | Pretty-print a scheduler trace.
-showTrace :: Trace -> String
+showTrace :: SchedTrace -> String
 showTrace = trace "" 0 . map fst where
     trace prefix num (Start tid:ds)    = thread prefix num ++ trace ("S" ++ show tid) 1 ds
     trace prefix num (SwitchTo tid:ds) = thread prefix num ++ trace ("P" ++ show tid) 1 ds

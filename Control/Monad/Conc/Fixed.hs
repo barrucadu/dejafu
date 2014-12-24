@@ -7,6 +7,8 @@
 module Control.Monad.Conc.Fixed
   ( -- * The Conc Monad
     Conc
+  , Trace
+  , ThreadAction(..)
   , runConc
   , runConc'
   , liftIO
@@ -35,7 +37,7 @@ import Control.Applicative (Applicative(..), (<$>))
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar)
 import Control.Monad.Cont (Cont, cont, runCont)
 import Data.Map (Map)
-import Data.Maybe (fromJust, isNothing)
+import Data.Maybe (catMaybes, fromJust, isNothing)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import System.Random (RandomGen, randomR)
 
@@ -48,14 +50,14 @@ import qualified Data.Map as M
 -- primitives of the concurrency. `spawn` is absent as it can be
 -- derived from `new`, `fork` and `put`.
 data Action =
-    Fork Action Action
-  | forall t a. Put     (CVar t a) a Action
-  | forall t a. TryPut  (CVar t a) a (Bool -> Action)
-  | forall t a. Get     (CVar t a) (a -> Action)
-  | forall t a. Take    (CVar t a) (a -> Action)
-  | forall t a. TryTake (CVar t a) (Maybe a -> Action)
-  | Lift (IO Action)
-  | Stop
+    AFork Action Action
+  | forall t a. APut     (CVar t a) a Action
+  | forall t a. ATryPut  (CVar t a) a (Bool -> Action)
+  | forall t a. AGet     (CVar t a) (a -> Action)
+  | forall t a. ATake    (CVar t a) (a -> Action)
+  | forall t a. ATryTake (CVar t a) (Maybe a -> Action)
+  | ALift (IO Action)
+  | AStop
 
 -- | The @Conc@ monad itself. Under the hood, this uses continuations
 -- so it's able to interrupt and resume a monadic computation at any
@@ -101,7 +103,7 @@ newtype CVar t a = V (IORef (Maybe a, [Block])) deriving Eq
 -- possible.
 liftIO :: IO a -> Conc t a
 liftIO ma = C $ cont lifted where
-  lifted c = Lift $ c <$> ma
+  lifted c = ALift $ c <$> ma
 
 -- | Run the provided computation concurrently, returning the result.
 spawn :: Conc t a -> Conc t (CVar t a)
@@ -113,11 +115,11 @@ spawn ma = do
 -- | Block on a 'CVar' until it is full, then read from it (without
 -- emptying).
 readCVar :: CVar t a -> Conc t a
-readCVar cvar = C $ cont $ Get cvar
+readCVar cvar = C $ cont $ AGet cvar
 
 -- | Run the provided computation concurrently.
 fork :: Conc t () -> Conc t ()
-fork (C ma) = C $ cont $ \c -> Fork (runCont ma $ const Stop) $ c ()
+fork (C ma) = C $ cont $ \c -> AFork (runCont ma $ const AStop) $ c ()
 
 -- | Create a new empty 'CVar'.
 newEmptyCVar :: Conc t (CVar t a)
@@ -127,20 +129,20 @@ newEmptyCVar = liftIO $ do
 
 -- | Block on a 'CVar' until it is empty, then write to it.
 putCVar :: CVar t a -> a -> Conc t ()
-putCVar cvar a = C $ cont $ \c -> Put cvar a $ c ()
+putCVar cvar a = C $ cont $ \c -> APut cvar a $ c ()
 
 -- | Put a value into a 'CVar' if there isn't one, without blocking.
 tryPutCVar :: CVar t a -> a -> Conc t Bool
-tryPutCVar cvar a = C $ cont $ TryPut cvar a
+tryPutCVar cvar a = C $ cont $ ATryPut cvar a
 
 -- | Block on a 'CVar' until it is full, then read from it (with
 -- emptying).
 takeCVar :: CVar t a -> Conc t a
-takeCVar cvar = C $ cont $ Take cvar
+takeCVar cvar = C $ cont $ ATake cvar
 
 -- | Read a value from a 'CVar' if there is one, without blocking.
 tryTakeCVar :: CVar t a -> Conc t (Maybe a)
-tryTakeCVar cvar = C $ cont $ TryTake cvar
+tryTakeCVar cvar = C $ cont $ ATryTake cvar
 
 -- | Every thread has a unique identitifer. These are implemented as
 -- integers, but you shouldn't assume they are necessarily contiguous.
@@ -157,6 +159,34 @@ type ThreadId = Int
 -- thread. In either of those cases, the computation will be halted.
 type Scheduler s = s -> ThreadId -> [ThreadId] -> (ThreadId, s)
 
+-- | One of the outputs of the runner is a @Trace@, which is just a
+-- log of threads and actions they have taken.
+type Trace = [(ThreadId, ThreadAction)]
+
+-- | All the actions that a thread can perform.
+data ThreadAction =
+    Fork ThreadId
+  -- ^ Start a new thread.
+  | Put [ThreadId]
+  -- ^ Put into a 'CVar', possibly waking up some threads.
+  | BlockedPut
+  -- ^ Get blocked on a put.
+  | TryPut Bool [ThreadId]
+  -- ^ Try to put into a 'CVar', possibly waking up some threads.
+  | Read
+  -- ^ Read from a 'CVar'.
+  | BlockedRead
+  -- ^ Get blocked on a read.
+  | Take [ThreadId]
+  -- ^ Take from a 'CVar', possibly waking up some threads.
+  | BlockedTake
+  -- ^ Get blocked on a take.
+  | TryTake Bool [ThreadId]
+  -- ^ try to take from a 'CVar', possibly waking up some threads.
+  | IO
+  -- ^ Perform some IO.
+  deriving (Eq, Show)
+
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning `Just result` if it terminates, and `Nothing` if a
 -- deadlock is detected.
@@ -170,17 +200,17 @@ type Scheduler s = s -> ThreadId -> [ThreadId] -> (ThreadId, s)
 -- making your head hurt, check out the \"How `runST` works\" section
 -- of <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
 runConc :: Scheduler s -> s -> (forall t. Conc t a) -> IO (Maybe a)
-runConc sched s ma = fst <$> runConc' sched s ma
+runConc sched s ma = (\(a,_,_) -> a) <$> runConc' sched s ma
 
 -- | variant of 'runConc' which returns the final state of the
--- scheduler.
-runConc' :: Scheduler s -> s -> (forall t. Conc t a) -> IO (Maybe a, s)
+-- scheduler and an execution trace.
+runConc' :: Scheduler s -> s -> (forall t. Conc t a) -> IO (Maybe a, s, Trace)
 runConc' sched s ma = do
   mvar <- newEmptyMVar
   let (C c) = ma >>= liftIO . putMVar mvar . Just
-  s' <- runThreads (negate 1) sched s (M.fromList [(0, (runCont c $ const Stop, False))]) mvar
+  (s', trace) <- runThreads [] (negate 1) sched s (M.fromList [(0, (runCont c $ const AStop, False))]) mvar
   out <- takeMVar mvar
-  return (out, s')
+  return (out, s', reverse trace)
 
 -- | A simple random scheduler which, at every step, picks a random
 -- thread to run.
@@ -223,15 +253,21 @@ data Block = WaitFull ThreadId | WaitEmpty ThreadId deriving Eq
 -- | Run a collection of threads, until there are no threads left.
 --
 -- A thread is represented as a tuple of (next action, is blocked).
-runThreads :: ThreadId -> Scheduler s -> s -> Map ThreadId (Action, Bool) -> MVar (Maybe a) -> IO s
-runThreads prior sched s threads mvar
-  | isTerminated  = return s
-  | isDeadlocked  = putMVar mvar Nothing >> return s
-  | isBlocked     = putStrLn "Attempted to run a blocked thread, assuming deadlock."     >> putMVar mvar Nothing >> return s
-  | isNonexistant = putStrLn "Attempted to run a nonexistant thread, assuming deadlock." >> putMVar mvar Nothing >> return s
+--
+-- Note: this returns the trace in reverse order, because it's more
+-- efficient to prepend to a list than append. As this function isn't
+-- exposed to users of the library, this is just an internal gotcha to
+-- watch out for.
+runThreads :: Trace -> ThreadId -> Scheduler s -> s -> Map ThreadId (Action, Bool) -> MVar (Maybe a) -> IO (s, Trace)
+runThreads sofar prior sched s threads mvar
+  | isTerminated  = return (s, sofar)
+  | isDeadlocked  = putMVar mvar Nothing >> return (s, sofar)
+  | isBlocked     = putStrLn "Attempted to run a blocked thread, assuming deadlock."     >> putMVar mvar Nothing >> return (s, sofar)
+  | isNonexistant = putStrLn "Attempted to run a nonexistant thread, assuming deadlock." >> putMVar mvar Nothing >> return (s, sofar)
   | otherwise = do
-    threads' <- runThread (fst $ fromJust thread, chosen) threads
-    runThreads chosen sched s' threads' mvar
+    (threads', act) <- runThread (fst $ fromJust thread, chosen) threads
+    let sofar' = maybe sofar (\a -> (chosen, a) : sofar) act
+    runThreads sofar' chosen sched s' threads' mvar
 
   where
     (chosen, s')  = if prior == -1 then (0, s) else sched s prior $ M.keys runnable
@@ -244,53 +280,69 @@ runThreads prior sched s threads mvar
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
-runThread :: (Action, ThreadId) -> Map ThreadId (Action, Bool) -> IO (Map ThreadId (Action, Bool))
-runThread (Fork a b, i) threads = return . goto b i $ launch a threads
+runThread :: (Action, ThreadId) -> Map ThreadId (Action, Bool) -> IO (Map ThreadId (Action, Bool), Maybe ThreadAction)
+runThread (AFork a b, i) threads =
+  let (threads', newid) = launch a threads
+  in return (goto b i threads', Just $ Fork newid)
 
-runThread (Put v a c, i) threads = do
+runThread (APut v a c, i) threads = do
   let (V ref) = v
   (val, blocks) <- readIORef ref
   case val of
-    Just _  -> block v WaitEmpty i threads
+    Just _  -> do
+      threads' <- block v WaitEmpty i threads
+      return (threads', Just BlockedPut)
     Nothing -> do
       writeIORef ref (Just a, blocks)
-      goto c i <$> wake v WaitFull threads
+      (threads', woken) <- wake v WaitFull threads
+      return (goto c i threads', Just $ Put woken)
 
-runThread (TryPut v a c, i) threads = do
+runThread (ATryPut v a c, i) threads = do
   let (V ref) = v
   (val, blocks) <- readIORef ref
   case val of
-    Just _  -> return $ goto (c False) i threads
+    Just _  -> return (goto (c False) i threads, Just $ TryPut False [])
     Nothing -> do
       writeIORef ref (Just a, blocks)
-      goto (c True) i <$> wake v WaitFull threads
+      (threads', woken) <- wake v WaitFull threads
+      return (goto (c True) i threads', Just $ TryPut True woken)
 
-runThread (Get v c, i) threads = do
+runThread (AGet v c, i) threads = do
   let (V ref) = v
   (val, _) <- readIORef ref
   case val of
-    Just val' -> return $ goto (c val') i threads
-    Nothing   -> block v WaitFull i threads
+    Just val' -> return (goto (c val') i threads, Just Read)
+    Nothing   -> do
+      threads' <- block v WaitFull i threads
+      return (threads', Just BlockedRead)
 
-runThread (Take v c, i) threads = do
+runThread (ATake v c, i) threads = do
   let (V ref) = v
   (val, blocks) <- readIORef ref
   case val of
     Just val' -> do
       writeIORef ref (Nothing, blocks)
-      goto (c val') i <$> wake v WaitEmpty threads
-    Nothing   -> block v WaitFull i threads
+      (threads', woken) <- wake v WaitEmpty threads
+      return (goto (c val') i threads', Just $ Take woken)
+    Nothing   -> do
+      threads' <- block v WaitFull i threads
+      return (threads', Just BlockedTake)
 
-runThread (TryTake v c, i) threads = do
+runThread (ATryTake v c, i) threads = do
   let (V ref) = v
-  (val, _) <- readIORef ref
-  return $ goto (c val) i threads
+  (val, blocks) <- readIORef ref
+  case val of
+    Just _ -> do
+      writeIORef ref (Nothing, blocks)
+      (threads', woken) <- wake v WaitEmpty threads
+      return (goto (c val) i threads', Just $ TryTake True woken)
+    Nothing   -> return (goto (c Nothing) i threads, Just $ TryTake False [])
 
-runThread (Lift io, i) threads = do
+runThread (ALift io, i) threads = do
   a <- io
-  return $ goto a i threads
+  return (goto a i threads, Just IO)
 
-runThread (Stop, i) threads = return $ kill i threads
+runThread (AStop, i) threads = return (kill i threads, Nothing)
 
 -- | Replace the 'Action' of a thread.
 goto :: Ord k => a -> k -> Map k (a, b) -> Map k (a, b)
@@ -304,22 +356,28 @@ block (V ref) typ tid threads = do
   return $ M.alter (\(Just (a, _)) -> Just (a, True)) tid threads
 
 -- | Start a thread with the next free ID.
-launch :: (Ord k, Enum k) => a -> Map k (a, Bool) -> Map k (a, Bool)
-launch a m = M.insert (succ . maximum $ M.keys m) (a, False) m
+launch :: (Ord k, Enum k) => a -> Map k (a, Bool) -> (Map k (a, Bool), k)
+launch a m = (M.insert k (a, False) m, k) where
+  k = succ . maximum $ M.keys m
 
 -- | Kill a thread.
 kill :: Ord k => k -> Map k (a, b) -> Map k (a, b)
 kill = M.delete
 
--- | Wake every thread blocked on a 'CVar' read.
-wake :: Ord k => CVar t v -> (k -> Block) -> Map k (a, Bool) -> IO (Map k (a, Bool))
-wake (V ref) typ = fmap M.fromList . mapM wake' . M.toList where
-  wake' a@(tid, (act, True)) = do
-    let blck = typ tid
-    (val, blocks) <- readIORef ref
+-- | Wake every thread blocked on a 'CVar' read/write.
+wake :: Ord k => CVar t v -> (k -> Block) -> Map k (a, Bool) -> IO (Map k (a, Bool), [k])
+wake (V ref) typ m = do
+  (m', woken) <- unzip <$> mapM wake' (M.toList m)
 
-    if blck `elem` blocks
-    then writeIORef ref (val, filter (/= blck) blocks) >> return (tid, (act, False))
-    else return a
+  return (M.fromList m', catMaybes woken)
 
-  wake' a = return a
+  where
+    wake' a@(tid, (act, True)) = do
+      let blck = typ tid
+      (val, blocks) <- readIORef ref
+
+      if blck `elem` blocks
+      then writeIORef ref (val, filter (/= blck) blocks) >> return ((tid, (act, False)), Just tid)
+      else return (a, Nothing)
+
+    wake' a = return (a, Nothing)
