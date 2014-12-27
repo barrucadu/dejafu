@@ -24,7 +24,7 @@ data Fixed c n r t = F
   -- ^ Overwrite the contents of a reference.
   , liftN    :: forall a. n a -> c t a
   -- ^ Lift an action from the underlying monad
-  , unC      :: forall a. c t a -> M n r a
+  , getCont  :: forall a. c t a -> M n r a
   -- ^ Unpack the continuation-based computation from its wrapping
   -- type.
   }
@@ -99,10 +99,13 @@ runFixed' :: (Functor (c t), Functor n, Monad (c t), Monad n) => Fixed c n r t
           -> Scheduler s -> s -> c t a -> n (Maybe a, s, Trace)
 runFixed' fixed sched s ma = do
   ref <- newRef fixed Nothing
-  let c  = unC fixed $ ma >>= liftN fixed . writeRef fixed ref . Just
+
+  let c       = getCont fixed $ ma >>= liftN fixed . writeRef fixed ref . Just
   let threads = M.fromList [(0, (runCont c $ const AStop, False))]
+
   (s', trace) <- runThreads fixed [] (negate 1) sched s threads ref
-  out <- readRef fixed ref
+  out         <- readRef fixed ref
+
   return (out, s', reverse trace)
 
 -- | A @Block@ is used to determine what sort of block a thread is

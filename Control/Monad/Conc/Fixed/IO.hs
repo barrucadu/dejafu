@@ -47,7 +47,7 @@ import qualified Control.Monad.IO.Class as IO
 -- used by 'ST' and 'STRef's to prevent mutable references from
 -- leaking out of the monad. See 'runConc' for an example of what this
 -- means.
-newtype Conc t a = C (M IO IORef a) deriving (Functor, Applicative, Monad)
+newtype Conc t a = C { unC :: M IO IORef a } deriving (Functor, Applicative, Monad)
 
 instance IO.MonadIO (Conc t) where
   liftIO = liftIO
@@ -71,7 +71,7 @@ fixed = F
   , readRef   = readIORef
   , writeRef  = writeIORef
   , liftN     = liftIO
-  , unC       = \(C c) -> c
+  , getCont   = unC
   }
 
 -- | The concurrent variable type used with the 'Conc'
@@ -81,7 +81,7 @@ fixed = F
 -- order. Writing to a @CVar@ wakes up all threads blocked on reading
 -- it, and it is up to the scheduler which one runs next. Taking from
 -- a @CVar@ behaves analogously.
-newtype CVar t a = V { fidget :: R IORef a } deriving Eq
+newtype CVar t a = V { unV :: R IORef a } deriving Eq
 
 -- | Lift an 'IO' action into the 'Conc' monad.
 liftIO :: IO a -> Conc t a
@@ -98,7 +98,7 @@ spawn ma = do
 -- | Block on a 'CVar' until it is full, then read from it (without
 -- emptying).
 readCVar :: CVar t a -> Conc t a
-readCVar cvar = C $ cont $ AGet $ fidget cvar
+readCVar cvar = C $ cont $ AGet $ unV cvar
 
 -- | Run the provided computation concurrently.
 fork :: Conc t () -> Conc t ()
@@ -112,20 +112,20 @@ newEmptyCVar = liftIO $ do
 
 -- | Block on a 'CVar' until it is empty, then write to it.
 putCVar :: CVar t a -> a -> Conc t ()
-putCVar cvar a = C $ cont $ \c -> APut (fidget cvar) a $ c ()
+putCVar cvar a = C $ cont $ \c -> APut (unV cvar) a $ c ()
 
 -- | Put a value into a 'CVar' if there isn't one, without blocking.
 tryPutCVar :: CVar t a -> a -> Conc t Bool
-tryPutCVar cvar a = C $ cont $ ATryPut (fidget cvar) a
+tryPutCVar cvar a = C $ cont $ ATryPut (unV cvar) a
 
 -- | Block on a 'CVar' until it is full, then read from it (with
 -- emptying).
 takeCVar :: CVar t a -> Conc t a
-takeCVar cvar = C $ cont $ ATake $ fidget cvar
+takeCVar cvar = C $ cont $ ATake $ unV cvar
 
 -- | Read a value from a 'CVar' if there is one, without blocking.
 tryTakeCVar :: CVar t a -> Conc t (Maybe a)
-tryTakeCVar cvar = C $ cont $ ATryTake $ fidget cvar
+tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning `Just result` if it terminates, and `Nothing` if a
