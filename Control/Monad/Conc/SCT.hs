@@ -83,15 +83,15 @@ data Decision =
 -- The initial state for each run is the final state of the last run,
 -- so it is important that the scheduler actually maintain some
 -- internal state, or all the results will be identical.
-runSCT :: SCTScheduler s -> s -> Int -> (forall t. Conc t a) -> IO [(Maybe a, SCTTrace)]
-runSCT _     _ 0 _ = return []
-runSCT sched s n c = do
-  (res, (s', strace), ttrace) <- runConc' sched (s, [(Start 0, [])]) c
-  rest <- runSCT sched s' (n - 1) c
-  return $ (res, zipWith mktrace strace ttrace) : rest
+runSCT :: SCTScheduler s -> s -> Int -> (forall t. Conc t a) -> [(Maybe a, SCTTrace)]
+runSCT _     _ 0 _ = []
+runSCT sched s n c = (res, zipWith mktrace strace ttrace) : rest where
 
-  where
-    mktrace (d, alts) (_, act) = (d, alts, act)
+  (res, (s', strace), ttrace) = runConc' sched (s, [(Start 0, [])]) c
+
+  rest = runSCT sched s' (n - 1) c
+
+  mktrace (d, alts) (_, act) = (d, alts, act)
 
 -- | A simple pre-emptive random scheduler.
 sctRandom :: RandomGen g => SCTScheduler g

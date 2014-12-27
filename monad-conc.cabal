@@ -42,6 +42,7 @@ test-suite tests
   build-depends:         monad-conc
                        , base
                        , containers
+                       , monad-st
                        , mtl
                        , random
                        , transformers

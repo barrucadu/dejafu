@@ -11,9 +11,8 @@ main = do
   if and results then exitSuccess else exitFailure
 
 runTest :: Bool -> Test -> IO Bool
-runTest verbose (Test {name = name, result = result}) = do
-  res <- result
-  case res of
+runTest verbose (Test {name = name, result = result}) =
+  case result of
     Pass      -> when verbose (putStrLn $ "\27[32m[pass]\27[0m " ++ name)  >> return True
     Fail str  -> putStrLn ("\27[31m[fail]\27[0m "  ++ name ++ ": " ++ str) >> return False
     Error str -> putStrLn ("\27[35m[error]\27[0m " ++ name ++ ": " ++ str) >> return False
