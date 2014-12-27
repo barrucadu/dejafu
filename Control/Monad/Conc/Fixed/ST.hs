@@ -43,7 +43,7 @@ import qualified Control.Monad.ST.Class as ST
 -- used by 'ST' and 'STRef's to prevent mutable references from
 -- leaking out of the monad. See 'runConc' for an example of what this
 -- means.
-newtype Conc t a = C (M (ST t) (STRef t) t a) deriving (Functor, Applicative, Monad)
+newtype Conc t a = C (M (ST t) (STRef t) a) deriving (Functor, Applicative, Monad)
 
 instance ST.MonadST (Conc t) where
   type World (Conc t) = t
