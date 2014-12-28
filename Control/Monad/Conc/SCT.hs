@@ -38,6 +38,7 @@ module Control.Monad.Conc.SCT
  , SCTTrace
  , Decision(..)
  , runSCT
+ , runSCTIO
 
  -- * Schedulers
  , sctRandom
@@ -50,6 +51,8 @@ module Control.Monad.Conc.SCT
 
 import Control.Monad.Conc.Fixed
 import System.Random (RandomGen)
+
+import qualified Control.Monad.Conc.Fixed.IO as CIO
 
 -- | An @SCTScheduler@ is like a regular 'Scheduler', except it builds
 -- a trace of scheduling decisions made.
@@ -85,13 +88,31 @@ data Decision =
 -- internal state, or all the results will be identical.
 runSCT :: SCTScheduler s -> s -> Int -> (forall t. Conc t a) -> [(Maybe a, SCTTrace)]
 runSCT _     _ 0 _ = []
-runSCT sched s n c = (res, zipWith mktrace strace ttrace) : rest where
+runSCT sched s n c = (res, scttrace strace ttrace) : rest where
 
   (res, (s', strace), ttrace) = runConc' sched (s, [(Start 0, [])]) c
 
   rest = runSCT sched s' (n - 1) c
 
-  mktrace (d, alts) (_, act) = (d, alts, act)
+-- | A varant of 'runSCT' for concurrent programs that do 'IO'.
+--
+-- Warning! The IO will be executed lots of times, in lots of
+-- interleavings! Be very confident that nothing in a 'liftIO' can
+-- block on the action of another thread, or you risk deadlocking this
+-- function!.
+runSCTIO :: SCTScheduler s -> s -> Int -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
+runSCTIO _     _ 0 _ = return []
+runSCTIO sched s n c = do
+  (res, (s', strace), ttrace) <- CIO.runConc' sched (s, [(Start 0, [])]) c
+
+  rest <- runSCTIO sched s' (n - 1) c
+
+  return $ (res, scttrace strace ttrace) : rest
+
+-- | Zip a list of 'SchedTrace's and a 'Trace' together into an
+-- 'SCTTrace'.
+scttrace :: SchedTrace -> Trace -> SCTTrace
+scttrace = zipWith $ \(d, alts) (_, act) -> (d, alts, act)
 
 -- | A simple pre-emptive random scheduler.
 sctRandom :: RandomGen g => SCTScheduler g
