@@ -2,7 +2,7 @@
 module Tests.Utils where
 
 import Control.Monad.Conc.Fixed (Conc)
-import Control.Monad.Conc.SCT (runSCT, sctRandom)
+import Control.Monad.Conc.SCT (sctPreBound)
 import Data.List (group, sort)
 import Data.Maybe (isJust, isNothing)
 import System.Random (mkStdGen)
@@ -14,7 +14,7 @@ data Result = Pass | Fail String | Error String
 -- | Test that a predicate holds over the results of a concurrent
 -- computation.
 testPred :: ([Maybe a] -> Result) -> Int -> (forall t. Conc t a) -> Result
-testPred predicate num conc = predicate . map fst $ runSCT sctRandom (mkStdGen 0) num conc
+testPred predicate num conc = predicate . map fst $ sctPreBound num conc
 
 -- | Test that a concurrent computation is free of deadlocks.
 testDeadlockFree :: Int -> (forall t. Conc t a) -> Result

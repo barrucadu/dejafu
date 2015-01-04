@@ -32,29 +32,41 @@
 -- will have `b` and be waiting on `a`.
 
 module Control.Monad.Conc.SCT
- ( -- *Systematic Concurrency Testing
+ ( -- * Types
    SCTScheduler
  , SchedTrace
  , SCTTrace
  , Decision(..)
+
+-- * SCT Runners
  , runSCT
  , runSCTIO
  , runSCT'
  , runSCTIO'
 
- -- * Schedulers
+ -- * Random Schedulers
  , sctRandom
  , sctRandomNP
+
+ -- * Pre-emption Bounding
+ , sctPreBound
+ , sctPreBoundIO
+ , preEmpCount
 
  -- * Utilities
  , toSCT
  , showTrace
+ , ordNub
+ , (~=)
  ) where
 
 import Control.Monad.Conc.Fixed
 import System.Random (RandomGen)
 
 import qualified Control.Monad.Conc.Fixed.IO as CIO
+import qualified Data.Set as Set
+
+-- * Types
 
 -- | An @SCTScheduler@ is like a regular 'Scheduler', except it builds
 -- a trace of scheduling decisions made.
@@ -79,7 +91,9 @@ data Decision =
   -- ^ Continue running the last thread for another step.
   | SwitchTo ThreadId
   -- ^ Pre-empt the running thread, and switch to another.
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
+
+-- * SCT Runners
 
 -- | Run a concurrent program under a given scheduler a number of
 -- times, collecting the results and the scheduling that gave rise to
@@ -90,8 +104,8 @@ data Decision =
 -- internal state, or all the results will be identical.
 runSCT :: SCTScheduler s -> s -> Int -> (forall t. Conc t a) -> [(Maybe a, SCTTrace)]
 runSCT sched s n = runSCT' sched s n term step where
-  term (_, g) = g == 0
-  step (s, g) = (s, g - 1)
+  term _  g = g == 0
+  step s' g _ = (s', g - 1)
 
 -- | A varant of 'runSCT' for concurrent programs that do 'IO'.
 --
@@ -101,8 +115,8 @@ runSCT sched s n = runSCT' sched s n term step where
 -- function!
 runSCTIO :: SCTScheduler s -> s -> Int -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
 runSCTIO sched s n = runSCTIO' sched s n term step where
-  term (_, g) = g == 0
-  step (s, g) = (s, g - 1)
+  term _  g = g == 0
+  step s' g _ = (s', g - 1)
 
 -- | Run a concurrent program under a given scheduler, where the SCT
 -- runner itself maintains some internal state, and has a function to
@@ -114,17 +128,19 @@ runSCTIO sched s n = runSCTIO' sched s n term step where
 runSCT' :: SCTScheduler s -- ^ The scheduler
         -> s -- ^ The scheduler's initial satte
         -> g -- ^ The runner's initial state
-        -> ((s, g) -> Bool) -- ^ Termination decider
-        -> ((s, g) -> (s, g)) -- ^ State step function
+        -> (s -> g -> Bool) -- ^ Termination decider
+        -> (s -> g -> SCTTrace -> (s, g)) -- ^ State step function
         -> (forall t. Conc t a) -- ^ Conc program
         -> [(Maybe a, SCTTrace)]
 runSCT' sched s g term step c
-  | term (s, g) = []
-  | otherwise = (res, scttrace strace ttrace) : rest where
+  | term s g = []
+  | otherwise = (res, trace) : rest where
 
   (res, (s', strace), ttrace) = runConc' sched (s, [(Start 0, [])]) c
 
-  (s'', g') = step (s', g)
+  trace = scttrace strace ttrace
+
+  (s'', g') = step s' g trace
 
   rest = runSCT' sched s'' g' term step c
 
@@ -134,22 +150,20 @@ runSCT' sched s g term step c
 -- interleavings! Be very confident that nothing in a 'liftIO' can
 -- block on the action of another thread, or you risk deadlocking this
 -- function!
-runSCTIO' :: SCTScheduler s -> s -> g -> ((s, g) -> Bool) -> ((s, g) -> (s, g)) -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
+runSCTIO' :: SCTScheduler s -> s -> g -> (s -> g -> Bool) -> (s -> g -> SCTTrace -> (s, g)) -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
 runSCTIO' sched s g term step c
-  | term (s, g) = return []
+  | term s g = return []
   | otherwise = do
     (res, (s', strace), ttrace) <- CIO.runConc' sched (s, [(Start 0, [])]) c
 
-    let (s'', g') = step (s', g)
+    let trace = scttrace strace ttrace
+    let (s'', g') = step s' g trace
 
     rest <- runSCTIO' sched s'' g' term step c
 
-    return $ (res, scttrace strace ttrace) : rest
+    return $ (res, trace) : rest
 
--- | Zip a list of 'SchedTrace's and a 'Trace' together into an
--- 'SCTTrace'.
-scttrace :: SchedTrace -> Trace -> SCTTrace
-scttrace = zipWith $ \(d, alts) (_, act) -> (d, alts, act)
+-- * Random Schedulers
 
 -- | A simple pre-emptive random scheduler.
 sctRandom :: RandomGen g => SCTScheduler g
@@ -158,6 +172,119 @@ sctRandom = toSCT randomSched
 -- | A random scheduler with no pre-emption.
 sctRandomNP :: RandomGen g => SCTScheduler g
 sctRandomNP = toSCT randomSchedNP
+
+-- * Pre-emption bounding
+
+data PreBoundState = P
+  { _pc :: Int
+  -- ^ Current pre-emption count.
+  , _next :: [[Decision]]
+  -- ^ Schedules to try in this pc.
+  , _done :: [SCTTrace]
+  -- ^ Schedules completed in this pc.
+  , _halt :: Bool
+  -- ^ Indicates more schedules couldn't be found, and to halt
+  -- immediately.
+  }
+
+-- | An SCT runner using a pre-emption bounding scheduler. Schedules
+-- will be explored systematically, starting with all
+-- pre-emption-count zero schedules, and gradually adding more
+-- pre-emptions.
+sctPreBound :: Int -- ^ The pre-emption bound. Anything < 0 will be
+                  -- interpreted as 0.
+            -> (forall t. Conc t a) -> [(Maybe a, SCTTrace)]
+sctPreBound pb = runSCT' pbSched s g (pbTerm pb') (pbStep pb') where
+  s = []
+  g = P { _pc = 0, _next = [], _done = [], _halt = False }
+  pb' = if pb < 0 then 0 else pb
+
+-- | Variant of 'sctPreBound' using 'IO'. See usual caveats about IO.
+sctPreBoundIO :: Int -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
+sctPreBoundIO pb = runSCTIO' pbSched s g (pbTerm pb') (pbStep pb') where
+  s = []
+  g = P { _pc = 0, _next = [], _done = [], _halt = False }
+  pb' = if pb < 0 then 0 else pb
+
+-- | Pre-emption bounding scheduler, which uses a queue of scheduling
+-- decisions to drive the initial trace.
+pbSched :: SCTScheduler [Decision]
+pbSched = toSCT sched where
+  -- If we have a decision queued, make it.
+  sched (Start t:ds)    _ _ = (t, ds)
+  sched (Continue:ds)     t _ = (t, ds)
+  sched (SwitchTo t:ds) _ _ = (t, ds)
+
+  -- Otherwise just use a non-pre-emptive scheduler.
+  sched [] t1 ts@(t2:_)
+    | t1 `elem` ts = (t1, [])
+    | otherwise    = (t2, [])
+
+  -- Error, should never happen, so just deadlock it.
+  sched [] _ [] = (-1, [])
+
+-- | Pre-emption bounding termination function: terminates on attempt
+-- to start a PB above the limit.
+pbTerm :: Int -> a -> PreBoundState -> Bool
+pbTerm pb _ g = (_pc g == pb + 1) || _halt g
+
+-- | Pre-emption bounding state step function: computes remaining
+-- schedules to try and chooses one.
+pbStep :: Int -> a -> PreBoundState -> SCTTrace -> ([Decision], PreBoundState)
+pbStep pb _ g t = case _next g of
+  -- We have schedules remaining in this PB, so run the next
+  (x:xs) -> (tail x, g { _next = xs, _done = done' })
+
+  -- We have no schedules remaining, try to generate some more.
+  --
+  -- If there are no more schedules in this PB, and this isn't the
+  -- last PB, advance to the next.
+  --
+  -- If there are no schedules in the next PB, halt.
+  [] ->
+    let thisPB = [y | y <- concatMap others done', preEmpCount y == _pc g, not $ any (y ~=) done']
+        nextPB = ordNub [y | y <- concatMap next done', preEmpCount y == pc']
+    in case thisPB of
+         (x:xs) -> (tail x, g { _next = xs, _done = done' })
+         [] -> if _pc g == pb
+              then halt
+              else case nextPB of
+                     (x:xs) -> (tail x, g { _pc = pc', _next = xs, _done = [] })
+                     [] -> halt
+
+  where
+    halt  = ([], g { _halt = True })
+    done' = t : _done g
+    pc'   = _pc g + 1
+
+    -- | Return all modifications to this schedule which do not
+    -- introduce extra pre-emptions.
+    others ((Start i,    alts, _):ds) = [[a] | a <- alts] ++ [Start    i : o | o <- others ds]
+    others ((SwitchTo i, alts, _):ds) = [[a] | a <- alts] ++ [SwitchTo i : o | o <- others ds]
+    others ((d, _, _):ds) = [d : o | o <- others ds]
+    others [] = []
+
+    -- | Return all modifications to this schedule which do introduce
+    -- an extra pre-emption. Only introduce pre-emptions around CVar
+    -- actions.
+    next ((Continue, alts, Put _):ds)       = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
+    next ((Continue, alts, BlockedPut):ds)  = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
+    next ((Continue, alts, TryPut _ _):ds)  = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
+    next ((Continue, alts, Read):ds)        = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
+    next ((Continue, alts, BlockedRead):ds) = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
+    next ((Continue, alts, Take _):ds)      = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
+    next ((Continue, alts, BlockedTake):ds) = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
+    next ((Continue, alts, TryTake _ _):ds) = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
+    next ((d, _, _):ds) = [d : n | n <- next ds]
+    next [] = []
+
+-- | Check the pre-emption count of some scheduling decisions.
+preEmpCount :: [Decision] -> Int
+preEmpCount (SwitchTo _:ss) = 1 + preEmpCount ss
+preEmpCount (_:ss) = preEmpCount ss
+preEmpCount [] = 0
+
+-- * Utils
 
 -- | Convert a 'Scheduler' to an 'SCTScheduler' by recording the
 -- trace.
@@ -182,3 +309,22 @@ showTrace = trace "" 0 . map fst where
     trace prefix num []                = thread prefix num
 
     thread prefix num = prefix ++ replicate num '-'
+
+-- | Zip a list of 'SchedTrace's and a 'Trace' together into an
+-- 'SCTTrace'.
+scttrace :: SchedTrace -> Trace -> SCTTrace
+scttrace = zipWith $ \(d, alts) (_, act) -> (d, alts, act)
+
+-- | O(nlogn) nub, <https://github.com/nh2/haskell-ordnub>
+ordNub :: Ord a => [a] -> [a]
+ordNub = go Set.empty where
+  go _ [] = []
+  go s (x:xs)
+    | x `Set.member` s = go s xs
+    | otherwise = x : go (Set.insert x s) xs
+
+-- | Check if a list of decisions matches an initial portion of a trace.
+(~=) :: [Decision] -> SCTTrace -> Bool
+(d:ds) ~= ((t,_,_):ts) = d == t && ds ~= ts
+[] ~= _  = True
+_  ~= [] = False

@@ -9,18 +9,16 @@ import Tests.Utils
 -- | List of all tests
 testCases :: [Test]
 testCases =
-  [ Test "Simple 2-Deadlock" $ testNot "No deadlocks found!" $ testDeadlockFree 100   simple2Deadlock
-  , Test "2 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 100 $ philosophers 2
-  , Test "3 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 100 $ philosophers 3
-  --Random scheduling isn't good enough for these, without increasing
-  --the runs.
-  --, Test "4 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 100 $ philosophers 4
-  --, Test "5 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 100 $ philosophers 5
-  --, Test "100 Philosophers"  $ testNot "No deadlocks found!" $ testDeadlockFree 100 $ philosophers 100
-  , Test "Threshold Value"   $ testNot "All values equal!"   $ testAlwaysSame   100   thresholdValue
-  , Test "Forgotten Unlock"  $                                 testDeadlocks    100   forgottenUnlock
-  , Test "Simple 2-Race"     $ testNot "All values equal!"   $ testAlwaysSame   100   simple2Race
-  , Test "Racey Stack"       $ testNot "All values equal!"   $ testAlwaysSame   100   raceyStack
+  [ Test "Simple 2-Deadlock" $ testNot "No deadlocks found!" $ testDeadlockFree 1   simple2Deadlock
+  , Test "2 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 1 $ philosophers 2
+  , Test "3 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 1 $ philosophers 3
+  , Test "4 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 1 $ philosophers 4
+  , Test "5 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 1 $ philosophers 5
+  --, Test "100 Philosophers"  $ testNot "No deadlocks found!" $ testDeadlockFree 0 $ philosophers 100
+  , Test "Threshold Value"   $ testNot "All values equal!"   $ testAlwaysSame   1   thresholdValue
+  , Test "Forgotten Unlock"  $                                 testDeadlocks    1   forgottenUnlock
+  , Test "Simple 2-Race"     $ testNot "All values equal!"   $ testAlwaysSame   1   simple2Race
+  , Test "Racey Stack"       $ testNot "All values equal!"   $ testAlwaysSame   1   raceyStack
   ]
 
 -- | Should deadlock on a minority of schedules.
