@@ -57,7 +57,6 @@ module Control.Monad.Conc.SCT
  , toSCT
  , showTrace
  , ordNub
- , (~=)
  ) where
 
 import Control.Monad.Conc.Fixed
@@ -195,33 +194,36 @@ sctPreBound :: Int -- ^ The pre-emption bound. Anything < 0 will be
                   -- interpreted as 0.
             -> (forall t. Conc t a) -> [(Maybe a, SCTTrace)]
 sctPreBound pb = runSCT' pbSched s g (pbTerm pb') (pbStep pb') where
-  s = []
+  s = ([], [], [])
   g = P { _pc = 0, _next = [], _done = [], _halt = False }
   pb' = if pb < 0 then 0 else pb
 
 -- | Variant of 'sctPreBound' using 'IO'. See usual caveats about IO.
 sctPreBoundIO :: Int -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
 sctPreBoundIO pb = runSCTIO' pbSched s g (pbTerm pb') (pbStep pb') where
-  s = []
+  s = ([], [], [])
   g = P { _pc = 0, _next = [], _done = [], _halt = False }
   pb' = if pb < 0 then 0 else pb
 
 -- | Pre-emption bounding scheduler, which uses a queue of scheduling
--- decisions to drive the initial trace.
-pbSched :: SCTScheduler [Decision]
-pbSched = toSCT sched where
+-- decisions to drive the initial trace, returning the generated
+-- suffix.
+pbSched :: SCTScheduler ([Decision], SchedTrace, SchedTrace)
+pbSched ((d, pref, suff), trc) prior threads@(next:_) = case d of
   -- If we have a decision queued, make it.
-  sched (Start t:ds)    _ _ = (t, ds)
-  sched (Continue:ds)     t _ = (t, ds)
-  sched (SwitchTo t:ds) _ _ = (t, ds)
+  (Start t:ds)    -> let trc' = [(Start t,    alters t)]     in (t,     ((ds, pref ++ trc', []), trc ++ trc'))
+  (Continue:ds)   -> let trc' = [(Continue,   alters prior)] in (prior, ((ds, pref ++ trc', []), trc ++ trc'))
+  (SwitchTo t:ds) -> let trc' = [(SwitchTo t, alters t)]     in (t,     ((ds, pref ++ trc', []), trc ++ trc'))
 
   -- Otherwise just use a non-pre-emptive scheduler.
-  sched [] t1 ts@(t2:_)
-    | t1 `elem` ts = (t1, [])
-    | otherwise    = (t2, [])
+  [] | prior `elem` threads -> let trc' = [(Continue, alters prior)] in (prior, (([], pref, suff ++ trc'), trc ++ trc'))
+     | otherwise            -> let trc' = [(Continue, alters next)]  in (next,  (([], pref, suff ++ trc'), trc ++ trc'))
 
-  -- Error, should never happen, so just deadlock it.
-  sched [] _ [] = (-1, [])
+  where
+    alters tid
+      | tid == prior          = map SwitchTo $ filter (/=prior) threads
+      | prior `elem` threads = Continue : map SwitchTo (filter (\t -> t /= prior && t /= tid) threads)
+      | otherwise            = map Start $ filter (/=tid) threads
 
 -- | Pre-emption bounding termination function: terminates on attempt
 -- to start a PB above the limit.
@@ -230,10 +232,10 @@ pbTerm pb _ g = (_pc g == pb + 1) || _halt g
 
 -- | Pre-emption bounding state step function: computes remaining
 -- schedules to try and chooses one.
-pbStep :: Int -> a -> PreBoundState -> SCTTrace -> ([Decision], PreBoundState)
-pbStep pb _ g t = case _next g of
+pbStep :: Int -> (a, SchedTrace, SchedTrace) -> PreBoundState -> SCTTrace -> (([Decision], SchedTrace, SchedTrace), PreBoundState)
+pbStep pb (_, pref, suff) g t = case _next g of
   -- We have schedules remaining in this PB, so run the next
-  (x:xs) -> (tail x, g { _next = xs, _done = done' })
+  (x:xs) -> (s' x, g { _next = xs ++ thisPB, _done = done' })
 
   -- We have no schedules remaining, try to generate some more.
   --
@@ -242,39 +244,42 @@ pbStep pb _ g t = case _next g of
   --
   -- If there are no schedules in the next PB, halt.
   [] ->
-    let thisPB = [y | y <- concatMap others done', preEmpCount y == _pc g, not $ any (y ~=) done']
-        nextPB = ordNub [y | y <- concatMap next done', preEmpCount y == pc']
-    in case thisPB of
-         (x:xs) -> (tail x, g { _next = xs, _done = done' })
-         [] -> if _pc g == pb
-              then halt
-              else case nextPB of
-                     (x:xs) -> (tail x, g { _pc = pc', _next = xs, _done = [] })
-                     [] -> halt
+    case thisPB of
+      (x:xs) -> (s' x, g { _next = xs, _done = done' })
+      [] -> if _pc g == pb
+           then halt
+           else case nextPB of
+                  (x:xs) -> (s' x, g { _pc = pc', _next = xs, _done = [] })
+                  [] -> halt
 
   where
-    halt  = ([], g { _halt = True })
+    halt  = (([], [], []), g { _halt = True })
     done' = t : _done g
     pc'   = _pc g + 1
 
+    s' ds = (tail ds, [], [])
+
+    thisPB = [ map fst pref ++ y | y <- others suff ]
+    nextPB = [ y | y <- ordNub $ concatMap next done', preEmpCount y == pc' ]
+
     -- | Return all modifications to this schedule which do not
     -- introduce extra pre-emptions.
-    others ((Start i,    alts, _):ds) = [[a] | a <- alts] ++ [Start    i : o | o <- others ds]
-    others ((SwitchTo i, alts, _):ds) = [[a] | a <- alts] ++ [SwitchTo i : o | o <- others ds]
-    others ((d, _, _):ds) = [d : o | o <- others ds]
+    others ((Start    i, alts):ds) = [Start    i : o | o <- others ds] ++ [[a] | a <- alts]
+    others ((SwitchTo i, alts):ds) = [SwitchTo i : o | o <- others ds] ++ [[a] | a <- alts]
+    others ((d, _):ds) = [d : o | o <- others ds]
     others [] = []
 
     -- | Return all modifications to this schedule which do introduce
     -- an extra pre-emption. Only introduce pre-emptions around CVar
     -- actions.
-    next ((Continue, alts, Put _):ds)       = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
-    next ((Continue, alts, BlockedPut):ds)  = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
-    next ((Continue, alts, TryPut _ _):ds)  = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
-    next ((Continue, alts, Read):ds)        = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
-    next ((Continue, alts, BlockedRead):ds) = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
-    next ((Continue, alts, Take _):ds)      = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
-    next ((Continue, alts, BlockedTake):ds) = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
-    next ((Continue, alts, TryTake _ _):ds) = [[n] | n <- alts] ++ [Continue : n | n <- next ds]
+    next ((Continue, alts, Put _):ds)       = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
+    next ((Continue, alts, BlockedPut):ds)  = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
+    next ((Continue, alts, TryPut _ _):ds)  = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
+    next ((Continue, alts, Read):ds)        = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
+    next ((Continue, alts, BlockedRead):ds) = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
+    next ((Continue, alts, Take _):ds)      = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
+    next ((Continue, alts, BlockedTake):ds) = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
+    next ((Continue, alts, TryTake _ _):ds) = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
     next ((d, _, _):ds) = [d : n | n <- next ds]
     next [] = []
 
@@ -322,9 +327,3 @@ ordNub = go Set.empty where
   go s (x:xs)
     | x `Set.member` s = go s xs
     | otherwise = x : go (Set.insert x s) xs
-
--- | Check if a list of decisions matches an initial portion of a trace.
-(~=) :: [Decision] -> SCTTrace -> Bool
-(d:ds) ~= ((t,_,_):ts) = d == t && ds ~= ts
-[] ~= _  = True
-_  ~= [] = False
