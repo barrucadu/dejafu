@@ -142,8 +142,8 @@ runThreads :: (Monad (c t), Monad n) => Fixed c n r t
 runThreads fixed sofar prior sched s threads ref
   | isTerminated  = return (s, sofar)
   | isDeadlocked  = writeRef fixed ref Nothing >> return (s, sofar)
-  | isBlocked     = writeRef fixed ref Nothing >> return (s, sofar)
   | isNonexistant = writeRef fixed ref Nothing >> return (s, sofar)
+  | isBlocked     = writeRef fixed ref Nothing >> return (s, sofar)
   | otherwise = do
     (threads', act) <- stepThread (fst $ fromJust thread) fixed chosen threads
     let sofar' = (chosen, act) : sofar
@@ -153,7 +153,7 @@ runThreads fixed sofar prior sched s threads ref
     (chosen, s')  = if prior == -1 then (0, s) else sched s prior $ M.keys runnable
     runnable      = M.filter (not . snd) threads
     thread        = M.lookup chosen threads
-    isBlocked     = snd . fromJust $ M.lookup chosen threads
+    isBlocked     = snd $ fromJust thread
     isNonexistant = isNothing thread
     isTerminated  = 0 `notElem` M.keys threads
     isDeadlocked  = M.null runnable
