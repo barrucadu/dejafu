@@ -69,11 +69,14 @@ import qualified Data.Set as Set
 
 -- | An @SCTScheduler@ is like a regular 'Scheduler', except it builds
 -- a trace of scheduling decisions made.
+--
+-- Note that the 'SchedTrace' is built in *reverse*, this is more
+-- efficient than appending to the list every time.
 type SCTScheduler s = Scheduler (s, SchedTrace)
 
 -- | A @SchedTrace@ is just a list of all the decisions that were made,
 -- with the alternative decisions that could have been made at each
--- step
+-- step.
 type SchedTrace = [(Decision, [Decision])]
 
 -- | A @SCTTrace@ is a combined 'SchedTrace' and 'Trace'.
@@ -137,7 +140,7 @@ runSCT' sched s g term step c
 
   (res, (s', strace), ttrace) = runConc' sched (s, [(Start 0, [])]) c
 
-  trace = scttrace strace ttrace
+  trace = reverse $ scttrace strace ttrace
 
   (s'', g') = step s' g trace
 
@@ -155,7 +158,7 @@ runSCTIO' sched s g term step c
   | otherwise = do
     (res, (s', strace), ttrace) <- CIO.runConc' sched (s, [(Start 0, [])]) c
 
-    let trace = scttrace strace ttrace
+    let trace = reverse $ scttrace strace ttrace
     let (s'', g') = step s' g trace
 
     rest <- runSCTIO' sched s'' g' term step c
@@ -190,8 +193,9 @@ data PreBoundState = P
 -- will be explored systematically, starting with all
 -- pre-emption-count zero schedules, and gradually adding more
 -- pre-emptions.
-sctPreBound :: Int -- ^ The pre-emption bound. Anything < 0 will be
-                  -- interpreted as 0.
+sctPreBound :: Int
+            -- ^ The pre-emption bound. Anything < 0 will be
+            -- interpreted as 0.
             -> (forall t. Conc t a) -> [(Maybe a, SCTTrace)]
 sctPreBound pb = runSCT' pbSched s g (pbTerm pb') (pbStep pb') where
   s = ([], [], [])
@@ -211,13 +215,13 @@ sctPreBoundIO pb = runSCTIO' pbSched s g (pbTerm pb') (pbStep pb') where
 pbSched :: SCTScheduler ([Decision], SchedTrace, SchedTrace)
 pbSched ((d, pref, suff), trc) prior threads@(next:_) = case d of
   -- If we have a decision queued, make it.
-  (Start t:ds)    -> let trc' = [(Start t,    alters t)]     in (t,     ((ds, pref ++ trc', []), trc ++ trc'))
-  (Continue:ds)   -> let trc' = [(Continue,   alters prior)] in (prior, ((ds, pref ++ trc', []), trc ++ trc'))
-  (SwitchTo t:ds) -> let trc' = [(SwitchTo t, alters t)]     in (t,     ((ds, pref ++ trc', []), trc ++ trc'))
+  (Start t:ds)    -> let trc' = (Start t,    alters t)     in (t,     ((ds, trc':pref, suff), trc':trc))
+  (Continue:ds)   -> let trc' = (Continue,   alters prior) in (prior, ((ds, trc':pref, suff), trc':trc))
+  (SwitchTo t:ds) -> let trc' = (SwitchTo t, alters t)     in (t,     ((ds, trc':pref, suff), trc':trc))
 
   -- Otherwise just use a non-pre-emptive scheduler.
-  [] | prior `elem` threads -> let trc' = [(Continue, alters prior)] in (prior, (([], pref, suff ++ trc'), trc ++ trc'))
-     | otherwise            -> let trc' = [(Continue, alters next)]  in (next,  (([], pref, suff ++ trc'), trc ++ trc'))
+  [] | prior `elem` threads -> let trc' = (Continue,   alters prior) in (prior, (([], pref, trc':suff), trc':trc))
+     | otherwise            -> let trc' = (Start next, alters next)  in (next,  (([], pref, trc':suff), trc':trc))
 
   where
     alters tid
@@ -233,7 +237,7 @@ pbTerm pb _ g = (_pc g == pb + 1) || _halt g
 -- | Pre-emption bounding state step function: computes remaining
 -- schedules to try and chooses one.
 pbStep :: Int -> (a, SchedTrace, SchedTrace) -> PreBoundState -> SCTTrace -> (([Decision], SchedTrace, SchedTrace), PreBoundState)
-pbStep pb (_, pref, suff) g t = case _next g of
+pbStep pb (_, rPref, rSuff) g t = case _next g of
   -- We have schedules remaining in this PB, so run the next
   (x:xs) -> (s' x, g { _next = xs ++ thisPB, _done = done' })
 
@@ -253,35 +257,50 @@ pbStep pb (_, pref, suff) g t = case _next g of
                   [] -> halt
 
   where
+    pref = reverse rPref
+    suff = reverse rSuff
+
     halt  = (([], [], []), g { _halt = True })
-    done' = t : _done g
+    done' = if couldPre t then t : _done g else _done g
     pc'   = _pc g + 1
 
     s' ds = (tail ds, [], [])
 
-    thisPB = [ map fst pref ++ y | y <- others suff ]
+    pref' rest = if null pref then (\((d,_,_):_) -> d:rest) t else map fst pref ++ rest
+    thisPB = [ pref' y | y <- others suff ]
     nextPB = [ y | y <- ordNub $ concatMap next done', preEmpCount y == pc' ]
 
     -- | Return all modifications to this schedule which do not
     -- introduce extra pre-emptions.
-    others ((Start    i, alts):ds) = [Start    i : o | o <- others ds] ++ [[a] | a <- alts]
-    others ((SwitchTo i, alts):ds) = [SwitchTo i : o | o <- others ds] ++ [[a] | a <- alts]
-    others ((d, _):ds) = [d : o | o <- others ds]
+    others ((Start    i, alts):ds) = [Start    i : o | o <- others ds, not $ null o] ++ [[a] | a <- alts]
+    others ((SwitchTo i, alts):ds) = [SwitchTo i : o | o <- others ds, not $ null o] ++ [[a] | a <- alts]
+    others ((d, _):ds) = [d : o | o <- others ds, not $ null o]
     others [] = []
 
     -- | Return all modifications to this schedule which do introduce
     -- an extra pre-emption. Only introduce pre-emptions around CVar
     -- actions.
-    next ((Continue, alts, Put _):ds)       = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
-    next ((Continue, alts, BlockedPut):ds)  = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
-    next ((Continue, alts, TryPut _ _):ds)  = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
-    next ((Continue, alts, Read):ds)        = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
-    next ((Continue, alts, BlockedRead):ds) = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
-    next ((Continue, alts, Take _):ds)      = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
-    next ((Continue, alts, BlockedTake):ds) = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
-    next ((Continue, alts, TryTake _ _):ds) = [Continue : n | n <- next ds] ++ [[n] | n <- alts]
-    next ((d, _, _):ds) = [d : n | n <- next ds]
+    next ((Continue, alts, ta):ds) = [Continue : n | n <- next ds] ++ if preCand ta then [[n] | n <- alts] else []
+    next ((Start    t, _, _):ds) = [Start    t : n | n <- next ds]
+    next ((SwitchTo t, _, _):ds) = [SwitchTo t : n | n <- next ds]
     next [] = []
+
+    -- | Check if a 'ThreadAction' is a candidate for pre-emption.
+    preCand (Put _)       = True
+    preCand (TryPut _ _)  = True
+    preCand (Take _)      = True
+    preCand (TryTake _ _) = True
+    preCand BlockedPut  = True
+    preCand Read        = True
+    preCand BlockedRead = True
+    preCand BlockedTake = True
+    preCand _ = False
+
+    -- | Check if a trace could be modified to have additional pre-emptions
+    couldPre ((Continue, [], _):ds) = couldPre ds
+    couldPre ((Continue, _, ta):ds) = preCand ta || couldPre ds
+    couldPre (_:ds) = couldPre ds
+    couldPre [] = False
 
 -- | Check the pre-emption count of some scheduling decisions.
 preEmpCount :: [Decision] -> Int
@@ -294,7 +313,7 @@ preEmpCount [] = 0
 -- | Convert a 'Scheduler' to an 'SCTScheduler' by recording the
 -- trace.
 toSCT :: Scheduler s -> SCTScheduler s
-toSCT sched (s, trace) prior threads = (tid, (s', trace ++ [(decision, alters)])) where
+toSCT sched (s, trace) prior threads = (tid, (s', (decision, alters) : trace)) where
   (tid, s') = sched s prior threads
 
   decision | tid == prior         = Continue

@@ -14,7 +14,7 @@ testCases =
   , Test "3 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 1 $ philosophers 3
   , Test "4 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 1 $ philosophers 4
   , Test "5 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 1 $ philosophers 5
-  , Test "100 Philosophers"  $ testNot "No deadlocks found!" $ testDeadlockFree 2 $ philosophers 100
+  --, Test "100 Philosophers"  $ testNot "No deadlocks found!" $ testDeadlockFree 2 $ philosophers 100
   , Test "Threshold Value"   $ testNot "All values equal!"   $ testAlwaysSame   1   thresholdValue
   , Test "Forgotten Unlock"  $                                 testDeadlocks    1   forgottenUnlock
   , Test "Simple 2-Race"     $ testNot "All values equal!"   $ testAlwaysSame   1   simple2Race
