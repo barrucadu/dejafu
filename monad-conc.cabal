@@ -25,6 +25,8 @@ library
                      , Control.Monad.Conc.Fixed.Schedulers
                      , Control.Monad.Conc.SCT
   other-modules:       Control.Monad.Conc.Fixed.Internal
+                     , Control.Monad.Conc.SCT.Internal
+                     , Control.Monad.Conc.SCT.PreBound
   -- other-extensions:    
   build-depends:       base >=4.6 && <5
                      , containers
