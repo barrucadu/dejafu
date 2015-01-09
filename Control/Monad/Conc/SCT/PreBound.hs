@@ -17,9 +17,7 @@ import qualified Control.Monad.Conc.Fixed.IO as CIO
 -- * SCT Runners
 
 -- | An SCT runner using a pre-emption bounding scheduler. Schedules
--- will be explored systematically, starting with all
--- pre-emption-count zero schedules, and gradually adding more
--- pre-emptions.
+-- are explored systematically, in a depth-first fashion.
 sctPreBound :: Int
             -- ^ The pre-emption bound. Anything < 0 will be
             -- interpreted as 0.
