@@ -44,7 +44,7 @@ instance ConcFuture MVar IO where
 -- multiple times to the same `IVar`, which removes the possibility of
 -- data races.
 --
--- A minimal implementation consists of 'fork', 'newCVar',
+-- A minimal implementation consists of 'fork', 'newEmptyCVar',
 -- 'tryPutCVar', and 'tryTakeCVar'. The default implementations of
 -- 'takeCVar' and 'putCVar', however, are very inefficient, and should
 -- probably always be overridden to make use of
