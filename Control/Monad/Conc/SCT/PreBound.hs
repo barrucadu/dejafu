@@ -22,12 +22,12 @@ sctPreBound :: Int
             -- ^ The pre-emption bound. Anything < 0 will be
             -- interpreted as 0.
             -> (forall t. Conc t a) -> [(Maybe a, SCTTrace)]
-sctPreBound pb = runSCT' pbSched pbInitialS pbInitialG (pbTerm pb') (pbStep pb' False) where
+sctPreBound pb = runSCT' pbSched (pbInitialS, pbInitialG) (pbTerm pb') (pbStep pb' False) where
   pb' = if pb < 0 then 0 else pb
 
 -- | Variant of 'sctPreBound' using 'IO'. See usual caveats about IO.
 sctPreBoundIO :: Int -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
-sctPreBoundIO pb = runSCTIO' pbSched pbInitialS pbInitialG (pbTerm pb') (pbStep pb' True) where
+sctPreBoundIO pb = runSCTIO' pbSched (pbInitialS, pbInitialG) (pbTerm pb') (pbStep pb' True) where
   pb' = if pb < 0 then 0 else pb
 
 -- * Utils
@@ -105,8 +105,8 @@ pbSched (s, trc) prior threads@(next:|_) = case _decisions s of
 
 -- | Pre-emption bounding termination function: terminates on attempt
 -- to start a PB above the limit.
-pbTerm :: Int -> a -> PBState -> Bool
-pbTerm pb _ g = (_pc g == pb + 1) || _halt g
+pbTerm :: Int -> (a, PBState) -> Bool
+pbTerm pb (_, g) = (_pc g == pb + 1) || _halt g
 
 -- | Pre-emption bounding state step function: computes remaining
 -- schedules to try and chooses one.
@@ -121,8 +121,8 @@ pbStep :: Int
        -- ^ Pre-emption bound.
        -> Bool
        -- ^ Whether to consider pre-emptions around lifts.
-       -> PBSched -> PBState -> SCTTrace -> (PBSched, PBState)
-pbStep pb lifts s g t = case _next g of
+       -> (PBSched, PBState) -> SCTTrace -> (PBSched, PBState)
+pbStep pb lifts (s, g) t = case _next g of
   -- We have schedules remaining, so run the next
   Lazy (x:xs) rest -> (s' x, g { _next = nextPB +| thisPB +| xs +| rest })
 

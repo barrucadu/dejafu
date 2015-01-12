@@ -50,9 +50,9 @@ data Decision =
 -- so it is important that the scheduler actually maintain some
 -- internal state, or all the results will be identical.
 runSCT :: SCTScheduler s -> s -> Int -> (forall t. Conc t a) -> [(Maybe a, SCTTrace)]
-runSCT sched s n = runSCT' sched s n term step where
-  term _  g = g == 0
-  step s' g _ = (s', g - 1)
+runSCT sched s n = runSCT' sched (s, n) term step where
+  term (_,  g) = g == 0
+  step (s', g) _ = (s', g - 1)
 
 -- | A varant of 'runSCT' for concurrent programs that do 'IO'.
 --
@@ -61,9 +61,9 @@ runSCT sched s n = runSCT' sched s n term step where
 -- block on the action of another thread, or you risk deadlocking this
 -- function!
 runSCTIO :: SCTScheduler s -> s -> Int -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
-runSCTIO sched s n = runSCTIO' sched s n term step where
-  term _  g = g == 0
-  step s' g _ = (s', g - 1)
+runSCTIO sched s n = runSCTIO' sched (s, n) term step where
+  term (_,  g) = g == 0
+  step (s', g) _ = (s', g - 1)
 
 -- | Run a concurrent program under a given scheduler, where the SCT
 -- runner itself maintains some internal state, and has a function to
@@ -73,23 +73,22 @@ runSCTIO sched s n = runSCTIO' sched s n term step where
 -- Note: the state step function takes the state returned by the
 -- scheduler, not the initial state!
 runSCT' :: SCTScheduler s -- ^ The scheduler
-        -> s -- ^ The scheduler's initial state
-        -> g -- ^ The runner's initial state
-        -> (s -> g -> Bool) -- ^ Termination decider
-        -> (s -> g -> SCTTrace -> (s, g)) -- ^ State step function
+        -> (s, g) -- ^ The scheduler's and runner's initial states
+        -> ((s, g) -> Bool) -- ^ Termination decider
+        -> ((s, g) -> SCTTrace -> (s, g)) -- ^ State step function
         -> (forall t. Conc t a) -- ^ Conc program
         -> [(Maybe a, SCTTrace)]
-runSCT' sched s g term step c
-  | term s g = []
+runSCT' sched (s, g) term step c
+  | term (s, g) = []
   | otherwise = (res, trace) : rest where
 
   (res, (s', strace), ttrace) = runConc' sched (s, [(Start 0, [])]) c
 
   trace = reverse $ scttrace strace ttrace
 
-  (s'', g') = step s' g trace
+  (s'', g') = step (s', g) trace
 
-  rest = runSCT' sched s'' g' term step c
+  rest = runSCT' sched (s'', g') term step c
 
 -- | A variant of runSCT' for concurrent programs that do IO.
 --
@@ -97,16 +96,16 @@ runSCT' sched s g term step c
 -- interleavings! Be very confident that nothing in a 'liftIO' can
 -- block on the action of another thread, or you risk deadlocking this
 -- function!
-runSCTIO' :: SCTScheduler s -> s -> g -> (s -> g -> Bool) -> (s -> g -> SCTTrace -> (s, g)) -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
-runSCTIO' sched s g term step c
-  | term s g = return []
+runSCTIO' :: SCTScheduler s -> (s, g) -> ((s, g) -> Bool) -> ((s, g) -> SCTTrace -> (s, g)) -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
+runSCTIO' sched (s, g) term step c
+  | term (s, g) = return []
   | otherwise = do
     (res, (s', strace), ttrace) <- CIO.runConc' sched (s, [(Start 0, [])]) c
 
     let trace = reverse $ scttrace strace ttrace
-    let (s'', g') = step s' g trace
+    let (s'', g') = step (s', g) trace
 
-    rest <- runSCTIO' sched s'' g' term step c
+    rest <- runSCTIO' sched (s'', g') term step c
 
     return $ (res, trace) : rest
 
