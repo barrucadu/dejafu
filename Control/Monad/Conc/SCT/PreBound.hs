@@ -20,15 +20,13 @@ import qualified Control.Monad.Conc.Fixed.IO as CIO
 -- are explored systematically, in a depth-first fashion.
 sctPreBound :: Int
             -- ^ The pre-emption bound. Anything < 0 will be
-            -- interpreted as 0.
+            -- interpreted as no bound.
             -> (forall t. Conc t a) -> [(Maybe a, SCTTrace)]
-sctPreBound pb = runSCT' pbSched (pbInitialS, pbInitialG) (pbTerm pb') (pbStep pb' False) where
-  pb' = if pb < 0 then 0 else pb
+sctPreBound pb = runSCT' pbSched (pbInitialS, pbInitialG) (pbTerm pb) (pbStep pb False)
 
 -- | Variant of 'sctPreBound' using 'IO'. See usual caveats about IO.
 sctPreBoundIO :: Int -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
-sctPreBoundIO pb = runSCTIO' pbSched (pbInitialS, pbInitialG) (pbTerm pb') (pbStep pb' True) where
-  pb' = if pb < 0 then 0 else pb
+sctPreBoundIO pb = runSCTIO' pbSched (pbInitialS, pbInitialG) (pbTerm pb) (pbStep pb True)
 
 -- * Utils
 
@@ -106,7 +104,9 @@ pbSched (s, trc) prior threads@(next:|_) = case _decisions s of
 -- | Pre-emption bounding termination function: terminates on attempt
 -- to start a PB above the limit.
 pbTerm :: Int -> (a, PBState) -> Bool
-pbTerm pb (_, g) = (_pc g == pb + 1) || _halt g
+pbTerm pb (_, g)
+  | pb < 0    = _halt g
+  | otherwise = (_pc g == pb + 1) || _halt g
 
 -- | Pre-emption bounding state step function: computes remaining
 -- schedules to try and chooses one.
@@ -124,7 +124,9 @@ pbStep :: Int
        -> (PBSched, PBState) -> SCTTrace -> (PBSched, PBState)
 pbStep pb lifts (s, g) t = case _next g of
   -- We have schedules remaining, so run the next
-  Lazy (x:|xs) rest -> (s' x, g { _next = nextPB +| thisPB +| xs +| rest })
+  Lazy (x:|xs) rest
+    | pb /= _pc g -> (s' x, g { _next = nextPB +| thisPB +| xs +| rest })
+    | otherwise  -> (s' x, g { _next =           thisPB +| xs +| rest })
 
   -- We have no schedules remaining, try to generate some more.
   --
@@ -133,7 +135,7 @@ pbStep pb lifts (s, g) t = case _next g of
     case thisPB of
       (x:xs)
         | pb /= _pc g -> (s' x, g { _next = nextPB +| xs +| Empty })
-        | pb == _pc g -> (s' x, g { _next =           xs +| Empty })
+        | otherwise  -> (s' x, g { _next =           xs +| Empty })
       [] -> (s' [], g { _halt = True })
 
   where

@@ -7,6 +7,8 @@ module Control.Monad.Conc.SCT.Tests
     Result(..)
   , runTest
   , runTestIO
+  , runTest'
+  , runTestIO'
   -- * Predicates
   , Predicate
   , deadlocksNever
@@ -44,11 +46,19 @@ data Result = Result
 -- | Run a test using the pre-emption bounding scheduler, with a bound
 -- of 2.
 runTest :: Predicate a -> (forall t. Conc t a) -> Result
-runTest predicate conc = predicate . map fst $ sctPreBound 2 conc
+runTest = runTest' 2
 
 -- | Variant of 'runTest' using 'IO'. See usual caveats about 'IO'.
 runTestIO :: Predicate a -> (forall t. CIO.Conc t a) -> IO Result
-runTestIO predicate conc = predicate . map fst <$> sctPreBoundIO 2 conc
+runTestIO = runTestIO' 2
+
+-- | Run a test using the pre-emption bounding scheduler.
+runTest' :: Int -> Predicate a -> (forall t. Conc t a) -> Result
+runTest' pb predicate conc = predicate . map fst $ sctPreBound pb conc
+
+-- | Variant of 'runTest'' using 'IO'. See usual caveats about 'IO'.
+runTestIO' :: Int -> Predicate a -> (forall t. CIO.Conc t a) -> IO Result
+runTestIO' pb predicate conc = predicate . map fst <$> sctPreBoundIO pb conc
 
 -- * Predicates
 
