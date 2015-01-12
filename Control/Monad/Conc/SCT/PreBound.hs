@@ -50,7 +50,18 @@ xs +| l = Lazy xs l
 
 infixr +|
 
-data PreBoundState = P
+-- | State for the PB scheduler.
+data PBSched = S
+  { _decisions :: [Decision]
+  -- ^ The list of decisions still to make.
+  , _prefix :: SchedTrace
+  -- ^ The trace prefix corresponding to the decisions.
+  , _suffix :: SchedTrace
+  -- ^ The trace suffix corresponding to independent decisions.
+  }
+
+-- | State for the PB runner.
+data PBState = P
   { _pc :: Int
   -- ^ Current pre-emption count.
   , _next :: Lazy [Decision]
@@ -61,11 +72,11 @@ data PreBoundState = P
   }
 
 -- | Initial scheduler state for the PB scheduler.
-pbInitialS :: ([Decision], SchedTrace, SchedTrace)
-pbInitialS = ([], [], [])
+pbInitialS :: PBSched
+pbInitialS = S { _decisions = [], _prefix = [], _suffix = [] }
 
 -- | Initial runner state for the PB scheduler.
-pbInitialG :: PreBoundState
+pbInitialG :: PBState
 pbInitialG = P { _pc = 0, _next = Empty, _halt = False }
 
 -- * PB Scheduler
@@ -73,16 +84,16 @@ pbInitialG = P { _pc = 0, _next = Empty, _halt = False }
 -- | Pre-emption bounding scheduler, which uses a queue of scheduling
 -- decisions to drive the initial trace, returning the generated
 -- suffix.
-pbSched :: SCTScheduler ([Decision], SchedTrace, SchedTrace)
-pbSched ((d, pref, suff), trc) prior threads@(next:_) = case d of
+pbSched :: SCTScheduler PBSched
+pbSched (s, trc) prior threads@(next:_) = case _decisions s of
   -- If we have a decision queued, make it.
-  (Start t:ds)    -> let trc' = (Start t,    alters t)     in (t,     ((ds, trc':pref, suff), trc':trc))
-  (Continue:ds)   -> let trc' = (Continue,   alters prior) in (prior, ((ds, trc':pref, suff), trc':trc))
-  (SwitchTo t:ds) -> let trc' = (SwitchTo t, alters t)     in (t,     ((ds, trc':pref, suff), trc':trc))
+  (Start t:ds)    -> let trc' = (Start t,    alters t)     in (t,     (s { _decisions = ds, _prefix = trc' : _prefix s}, trc':trc))
+  (Continue:ds)   -> let trc' = (Continue,   alters prior) in (prior, (s { _decisions = ds, _prefix = trc' : _prefix s}, trc':trc))
+  (SwitchTo t:ds) -> let trc' = (SwitchTo t, alters t)     in (t,     (s { _decisions = ds, _prefix = trc' : _prefix s}, trc':trc))
 
   -- Otherwise just use a non-pre-emptive scheduler.
-  [] | prior `elem` threads -> let trc' = (Continue,   alters prior) in (prior, (([], pref, trc':suff), trc':trc))
-     | otherwise            -> let trc' = (Start next, alters next)  in (next,  (([], pref, trc':suff), trc':trc))
+  [] | prior `elem` threads -> let trc' = (Continue,   alters prior) in (prior, (s { _suffix = trc' : _suffix s}, trc':trc))
+     | otherwise            -> let trc' = (Start next, alters next)  in (next,  (s { _suffix = trc' : _suffix s}, trc':trc))
 
   where
     alters tid
@@ -92,7 +103,7 @@ pbSched ((d, pref, suff), trc) prior threads@(next:_) = case d of
 
 -- | Pre-emption bounding termination function: terminates on attempt
 -- to start a PB above the limit.
-pbTerm :: Int -> a -> PreBoundState -> Bool
+pbTerm :: Int -> a -> PBState -> Bool
 pbTerm pb _ g = (_pc g == pb + 1) || _halt g
 
 -- | Pre-emption bounding state step function: computes remaining
@@ -108,8 +119,8 @@ pbStep :: Int
        -- ^ Pre-emption bound.
        -> Bool
        -- ^ Whether to consider pre-emptions around lifts.
-       -> (a, SchedTrace, SchedTrace) -> PreBoundState -> SCTTrace -> (([Decision], SchedTrace, SchedTrace), PreBoundState)
-pbStep pb lifts (_, rPref, rSuff) g t = case _next g of
+       -> PBSched -> PBState -> SCTTrace -> (PBSched, PBState)
+pbStep pb lifts s g t = case _next g of
   -- We have schedules remaining, so run the next
   Lazy (x:xs) rest -> (s' x, g { _next = nextPB +| thisPB +| xs +| rest })
 
@@ -125,8 +136,8 @@ pbStep pb lifts (_, rPref, rSuff) g t = case _next g of
 
   where
     -- The prefix and suffix are in reverse order, fix those.
-    pref = reverse rPref
-    suff = reverse rSuff
+    pref = reverse $ _prefix s
+    suff = reverse $ _suffix s
 
     -- A prefix we can append decisions to, and a suffix with
     -- 'ThreadAction' information.
@@ -134,7 +145,7 @@ pbStep pb lifts (_, rPref, rSuff) g t = case _next g of
     suff' = drop (length pref) t
 
     -- | New scheduler state, with a given list of initial decisions.
-    s' ds = (tail ds, [], [])
+    s' ds = pbInitialS { _decisions = tail ds }
 
     -- | All schedules we get from the current one WITHOUT introducing
     -- any pre-emptions.
