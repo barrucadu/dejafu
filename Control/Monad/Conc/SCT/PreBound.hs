@@ -22,12 +22,12 @@ sctPreBound :: Int
             -- ^ The pre-emption bound. Anything < 0 will be
             -- interpreted as 0.
             -> (forall t. Conc t a) -> [(Maybe a, SCTTrace)]
-sctPreBound pb = runSCT' pbSched pbInitialS pbInitialG (pbTerm pb') (pbStep pb') where
+sctPreBound pb = runSCT' pbSched pbInitialS pbInitialG (pbTerm pb') (pbStep pb' False) where
   pb' = if pb < 0 then 0 else pb
 
 -- | Variant of 'sctPreBound' using 'IO'. See usual caveats about IO.
 sctPreBoundIO :: Int -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
-sctPreBoundIO pb = runSCTIO' pbSched pbInitialS pbInitialG (pbTerm pb') (pbStep pb') where
+sctPreBoundIO pb = runSCTIO' pbSched pbInitialS pbInitialG (pbTerm pb') (pbStep pb' True) where
   pb' = if pb < 0 then 0 else pb
 
 -- * Utils
@@ -104,8 +104,12 @@ pbTerm pb _ g = (_pc g == pb + 1) || _halt g
 -- count. Testing with a very concurrent problem (finding a deadlock
 -- in 100 dining philosophers) has revealed this may work better in
 -- practice.
-pbStep :: Int -> (a, SchedTrace, SchedTrace) -> PreBoundState -> SCTTrace -> (([Decision], SchedTrace, SchedTrace), PreBoundState)
-pbStep pb (_, rPref, rSuff) g t = case _next g of
+pbStep :: Int
+       -- ^ Pre-emption bound.
+       -> Bool
+       -- ^ Whether to consider pre-emptions around lifts.
+       -> (a, SchedTrace, SchedTrace) -> PreBoundState -> SCTTrace -> (([Decision], SchedTrace, SchedTrace), PreBoundState)
+pbStep pb lifts (_, rPref, rSuff) g t = case _next g of
   -- We have schedules remaining, so run the next
   Lazy (x:xs) rest -> (s' x, g { _next = nextPB +| thisPB +| xs +| rest })
 
@@ -138,7 +142,7 @@ pbStep pb (_, rPref, rSuff) g t = case _next g of
 
     -- | All schedules we get from the current one with ONE extra
     -- pre-emption.
-    nextPB = [ pref' y | y <- offspring suff']
+    nextPB = [ pref' y | y <- offspring lifts suff']
 
 -- * Utils (Internal)
 
@@ -152,21 +156,22 @@ siblings [] = []
 
 -- | Return all modifications to this schedule which do introduce an
 -- extra pre-emption. Only introduce pre-emptions around CVar actions.
-offspring :: SCTTrace -> [[Decision]]
-offspring ((Continue, alts, ta):ds)
-  | preCand ta = [Continue : n | n <- offspring ds, not $ null n] ++ [[n] | n <- alts]
-  | preCand ta = [Continue : n | n <- offspring ds, not $ null n]
-offspring ((d, _, _):ds) = [d : n | n <- offspring ds]
-offspring [] = []
+offspring :: Bool -> SCTTrace -> [[Decision]]
+offspring lifts ((Continue, alts, ta):ds)
+  | preCand lifts ta = [Continue : n | n <- offspring lifts ds, not $ null n] ++ [[n] | n <- alts]
+  | otherwise = [Continue : n | n <- offspring lifts ds, not $ null n]
+offspring lifts ((d, _, _):ds) = [d : n | n <- offspring lifts ds]
+offspring _ [] = []
 
 -- | Check if a 'ThreadAction' is a candidate for pre-emption.
-preCand :: ThreadAction -> Bool
-preCand (Put _)       = True
-preCand (TryPut _ _)  = True
-preCand (Take _)      = True
-preCand (TryTake _ _) = True
-preCand BlockedPut  = True
-preCand Read        = True
-preCand BlockedRead = True
-preCand BlockedTake = True
-preCand _ = False
+preCand :: Bool -> ThreadAction -> Bool
+preCand _ (Put _)       = True
+preCand _ (TryPut _ _)  = True
+preCand _ (Take _)      = True
+preCand _ (TryTake _ _) = True
+preCand _ BlockedPut  = True
+preCand _ Read        = True
+preCand _ BlockedRead = True
+preCand _ BlockedTake = True
+preCand b Lift = b
+preCand _ _ = False
