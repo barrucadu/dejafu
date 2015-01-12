@@ -50,6 +50,7 @@ data Action n r =
   | forall a. AGet     (R r a) (a -> Action n r)
   | forall a. ATake    (R r a) (a -> Action n r)
   | forall a. ATryTake (R r a) (Maybe a -> Action n r)
+  | ANew  (n (Action n r))
   | ALift (n (Action n r))
   | AStop
 
@@ -76,6 +77,8 @@ type Trace = [(ThreadId, ThreadAction)]
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
+  | New
+  -- ^ Create a new 'CVar'.
   | Put [ThreadId]
   -- ^ Put into a 'CVar', possibly waking up some threads.
   | BlockedPut
@@ -169,6 +172,7 @@ stepThread (ATryPut  ref a c) = stepTryPut  ref a c
 stepThread (AGet     ref c)   = stepGet     ref c
 stepThread (ATake    ref c)   = stepTake    ref c
 stepThread (ATryTake ref c)   = stepTryTake ref c
+stepThread (ANew     na)      = stepNew     na
 stepThread (ALift    na)      = stepLift    na
 stepThread  AStop             = stepStop
 
@@ -249,6 +253,16 @@ stepTryTake ref c fixed i threads = do
       (threads', woken) <- wake fixed ref WaitEmpty threads
       return (goto (c val) i threads', TryTake True woken)
     Nothing   -> return (goto (c Nothing) i threads, TryTake False [])
+
+-- | Create a new @CVar@. This is exactly the same as lifting a value,
+-- except by separating the two we can (a) produce a more useful
+-- trace, and (b) make smarter pre-emption decisions.
+stepNew :: (Monad (c t), Monad n)
+        => n (Action n r)
+        -> Fixed c n r t -> ThreadId -> Threads n r -> n (Threads n r, ThreadAction)
+stepNew na _ i threads = do
+  a <- na
+  return (goto a i threads, New)
 
 -- | Lift an action from the underlying monad into the @Conc@
 -- computation.

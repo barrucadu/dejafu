@@ -102,9 +102,9 @@ fork (C ma) = C $ cont $ \c -> AFork (runCont ma $ const AStop) $ c ()
 
 -- | Create a new empty 'CVar'.
 newEmptyCVar :: Conc t (CVar t a)
-newEmptyCVar = liftST $ do
-  stref <- newSTRef (Nothing, [])
-  return $ V stref
+newEmptyCVar = C $ cont lifted where
+  lifted c = ANew $ c <$> newEmptyCVar'
+  newEmptyCVar' = V <$> newSTRef (Nothing, [])
 
 -- | Block on a 'CVar' until it is empty, then write to it.
 putCVar :: CVar t a -> a -> Conc t ()
