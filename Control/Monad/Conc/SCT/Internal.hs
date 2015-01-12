@@ -4,7 +4,9 @@
 -- concurrency errors such as data races and deadlocks: internal definitions.
 module Control.Monad.Conc.SCT.Internal where
 
+import Control.Monad (liftM)
 import Control.Monad.Conc.Fixed
+import Data.List (unfoldr)
 
 import qualified Control.Monad.Conc.Fixed.IO as CIO
 
@@ -78,17 +80,17 @@ runSCT' :: SCTScheduler s -- ^ The scheduler
         -> ((s, g) -> SCTTrace -> (s, g)) -- ^ State step function
         -> (forall t. Conc t a) -- ^ Conc program
         -> [(Maybe a, SCTTrace)]
-runSCT' sched (s, g) term step c
-  | term (s, g) = []
-  | otherwise = (res, trace) : rest where
+runSCT' sched initial term step c = unfoldr go initial where
+  go sg@(s, g)
+    | term sg   = Nothing
+    | otherwise = Just ((res, trace), sg')
 
-  (res, (s', strace), ttrace) = runConc' sched (s, [(Start 0, [])]) c
+    where
+      (res, (s', strace), ttrace) = runConc' sched (s, initialTrace) c
 
-  trace = reverse $ scttrace strace ttrace
+      trace = reverse $ scttrace strace ttrace
 
-  (s'', g') = step (s', g) trace
-
-  rest = runSCT' sched (s'', g') term step c
+      sg' = step (s', g) trace
 
 -- | A variant of runSCT' for concurrent programs that do IO.
 --
@@ -97,17 +99,20 @@ runSCT' sched (s, g) term step c
 -- block on the action of another thread, or you risk deadlocking this
 -- function!
 runSCTIO' :: SCTScheduler s -> (s, g) -> ((s, g) -> Bool) -> ((s, g) -> SCTTrace -> (s, g)) -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
-runSCTIO' sched (s, g) term step c
-  | term (s, g) = return []
-  | otherwise = do
-    (res, (s', strace), ttrace) <- CIO.runConc' sched (s, [(Start 0, [])]) c
+runSCTIO' sched initial term step c = unfoldrM go initial where
+  go sg@(s, g)
+    | term sg   = return Nothing
+    | otherwise = do
+      (res, (s', strace), ttrace) <- CIO.runConc' sched (s, initialTrace) c
 
-    let trace = reverse $ scttrace strace ttrace
-    let (s'', g') = step (s', g) trace
+      let trace = reverse $ scttrace strace ttrace
+      let sg' = step (s', g) trace
 
-    rest <- runSCTIO' sched (s'', g') term step c
+      return $ Just ((res, trace), sg')
 
-    return $ (res, trace) : rest
+-- | Like 'unfoldr', but monadic.
+unfoldrM :: Monad m => (b -> m (Maybe (a, b))) -> b -> m [a]
+unfoldrM f b = f b >>= maybe (return []) (\(a, b') -> (a:) `liftM` unfoldrM f b')
 
 -- * Utils (Internal)
 
@@ -115,3 +120,7 @@ runSCTIO' sched (s, g) term step c
 -- 'SCTTrace'.
 scttrace :: SchedTrace -> Trace -> SCTTrace
 scttrace = zipWith $ \(d, alts) (_, act) -> (d, alts, act)
+
+-- | The initial trace of a @Conc@ computation.
+initialTrace :: SchedTrace
+initialTrace = [(Start 0, [])]
