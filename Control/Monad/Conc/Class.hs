@@ -1,15 +1,11 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 
--- |The monad-conc package provides a class of monads which implement
--- concurrency with (from the perspective of the programmer)
--- nondeterministic interleaving.
---
--- The major difference between this and the Par family of monads (in
--- monad-par) is that results may be implicitly dependent on
--- interleaving, giving rise to data races between threads, whereas
--- Par was explicitly designed to give rise to deterministic
--- concurrency.
+-- | This module captures the interface of @Conc@ monads in two
+-- typeclasses, one merely providing the ability to spawn new threads,
+-- and the other providing full @CVar@s. All @Conc@ monads implement
+-- the former, and to provide for nondeterminism also need to
+-- implement the latter.
 module Control.Monad.Conc.Class where
 
 import Control.Concurrent (forkIO)
@@ -23,6 +19,15 @@ import Control.Monad (unless, void)
 class Monad m => ConcFuture future m | m -> future where
   -- | Create a concurrent computation for the provided action, and
   -- return a future which can be used to query the result.
+  --
+  -- For monads which also implement 'ConcCVar', it is expected to
+  -- implement 'spawn' in terms of 'newEmptyCVar', 'fork', and
+  -- 'putCVar'.
+  --
+  -- > spawn ma = do
+  -- >   cvar <- newEmptyCVar
+  -- >   fork $ ma >>= putCVar cvar
+  -- >   return cvar
   spawn :: m a -> m (future a)
 
   -- | Block until a value is present in the future, and then return
@@ -38,10 +43,10 @@ instance ConcFuture MVar IO where
 
   readCVar = readMVar
 
--- | @ConcCVar@ builds on futures by allowing `CVar`s which threads
+-- | @ConcCVar@ builds on futures by allowing @CVar@s which threads
 -- can read from and write to, possibly multiple times. This is the
--- key difference with the `Par` monads, where it is illegal to write
--- multiple times to the same `IVar`, which removes the possibility of
+-- key difference with the @Par@ monads, where it is illegal to write
+-- multiple times to the same @IVar@, which removes the possibility of
 -- data races.
 --
 -- A minimal implementation consists of 'fork', 'newEmptyCVar',
@@ -50,14 +55,14 @@ instance ConcFuture MVar IO where
 -- probably always be overridden to make use of
 -- implementation-specific blocking functionality.
 class ConcFuture cvar m => ConcCVar cvar m | m -> cvar where
-  -- | Forks a computation to happen concurrently. Communication may
-  -- happen over `CVar`s.
+  -- | Fork a computation to happen concurrently. Communication may
+  -- happen over @CVar@s.
   fork :: m () -> m ()
 
-  -- | Creates a new empty `CVar`.
+  -- | Create a new empty @CVar@.
   newEmptyCVar :: m (cvar a)
 
-  -- | Put a value into a `CVar`. If there is already a value there,
+  -- | Put a value into a @CVar@. If there is already a value there,
   -- this will block until that value has been 'take'n, at which point
   -- the value will be stored.
   --
@@ -65,22 +70,22 @@ class ConcFuture cvar m => ConcCVar cvar m | m -> cvar where
   putCVar :: cvar a -> a -> m ()
   putCVar cvar a = tryPutCVar cvar a >>= \b -> unless b $ putCVar cvar a
 
-  -- | Attempt to put a value in a `CVar`, returning `True` (and
-  -- filling the `CVar`) if there was nothing there, otherwise
-  -- returning `False`
+  -- | Attempt to put a value in a @CVar@, returning 'True' (and
+  -- filling the @CVar@) if there was nothing there, otherwise
+  -- returning 'False'.
   tryPutCVar :: cvar a -> a -> m Bool
 
-  -- | Take a value from a `CVar`. This \"empties\" the `CVar`,
+  -- | Take a value from a @CVar@. This \"empties\" the @CVar@,
   -- allowing a new value to be 'put' in. This will block if there is
-  -- no value in the `CVar` already, until one has been 'put'.
+  -- no value in the @CVar@ already, until one has been 'put'.
   --
   -- > takeCVar cvar = tryTakeCVar cvar >>= maybe (takeCVar cvar) return
   takeCVar :: cvar a -> m a
   takeCVar cvar = tryTakeCVar cvar >>= maybe (takeCVar cvar) return
 
-  -- | Attempt to take a value from a `CVar`, returning `Just value`
-  -- (and emptying the `CVar`) if there was something there, otherwise
-  -- returning `Nothing`.
+  -- | Attempt to take a value from a @CVar@, returning a 'Just' (and
+  -- emptying the @CVar@) if there was something there, otherwise
+  -- returning 'Nothing'.
   tryTakeCVar :: cvar a -> m (Maybe a)
 
 instance ConcCVar MVar IO where

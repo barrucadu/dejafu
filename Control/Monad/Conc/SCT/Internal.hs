@@ -13,8 +13,10 @@ import qualified Control.Monad.Conc.Fixed.IO as CIO
 -- | An @SCTScheduler@ is like a regular 'Scheduler', except it builds
 -- a trace of scheduling decisions made.
 --
--- Note that the 'SchedTrace' is built in *reverse*, this is more
--- efficient than appending to the list every time.
+-- If implementing your own scheduler, note that the 'SchedTrace' is
+-- built in reverse, as this is more efficient than appending to the
+-- list every time, also note that the scheduler is not called before
+-- starting the first thread, as there is only one possible decision.
 type SCTScheduler s = Scheduler (s, SchedTrace)
 
 -- | A @SchedTrace@ is just a list of all the decisions that were made,
@@ -22,7 +24,7 @@ type SCTScheduler s = Scheduler (s, SchedTrace)
 -- step.
 type SchedTrace = [(Decision, [Decision])]
 
--- | A @SCTTrace@ is a combined 'SchedTrace' and 'Trace'.
+-- | An @SCTTrace@ is a combined 'SchedTrace' and 'Trace'.
 type SCTTrace = [(Decision, [Decision], ThreadAction)]
 
 -- | Scheduling decisions are based on the state of the running
@@ -31,7 +33,7 @@ type SCTTrace = [(Decision, [Decision], ThreadAction)]
 data Decision =
     Start ThreadId
   -- ^ Start a new thread, because the last was blocked (or it's the
-  -- initial thread).
+  -- start of computation).
   | Continue
   -- ^ Continue running the last thread for another step.
   | SwitchTo ThreadId
@@ -71,7 +73,7 @@ runSCTIO sched s n = runSCTIO' sched s n term step where
 -- Note: the state step function takes the state returned by the
 -- scheduler, not the initial state!
 runSCT' :: SCTScheduler s -- ^ The scheduler
-        -> s -- ^ The scheduler's initial satte
+        -> s -- ^ The scheduler's initial state
         -> g -- ^ The runner's initial state
         -> (s -> g -> Bool) -- ^ Termination decider
         -> (s -> g -> SCTTrace -> (s, g)) -- ^ State step function

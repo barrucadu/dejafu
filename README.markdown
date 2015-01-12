@@ -14,6 +14,19 @@ spirit of `Par`, but slightly more relaxed. Specifically, `Conc`'s
 The documentation of the latest developmental version is
 [available online][docs].
 
+`Conc` and `IO`
+---------------
+
+The intention of the `Conc` monads is to provide concurrency where any
+apparent nondeterminism arises purely from the scheduling
+behaviour. To put it another way, a given `Conc` computation,
+parametrised with a fixed set of scheduling decisions, is
+deterministic. This assumption is used by the testing functionality
+provided by Control.Monad.Conc.SCT.
+
+Whilst this assumption may not hold in general when `IO` is involved,
+you should strive to produce test cases where it does.
+
 Contributing
 ------------
 

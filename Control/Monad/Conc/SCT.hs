@@ -28,8 +28,8 @@
 -- order of acquisition of the locks in the two threads. If thread 2
 -- pre-empts thread 1 between the acquisition of the locks (or if
 -- thread 1 pre-empts thread 2), a deadlock situation will arise, as
--- thread 1 will have lock `a` and be waiting on `b`, and thread 2
--- will have `b` and be waiting on `a`.
+-- thread 1 will have lock @a@ and be waiting on @b@, and thread 2
+-- will have @b@ and be waiting on @a@.
 
 module Control.Monad.Conc.SCT
  ( -- * Types
@@ -54,7 +54,7 @@ module Control.Monad.Conc.SCT
  , preEmpCount
 
  -- * Utilities
- , toSCT
+ , makeSCT
  , showTrace
  ) where
 
@@ -67,18 +67,18 @@ import System.Random (RandomGen)
 
 -- | A simple pre-emptive random scheduler.
 sctRandom :: RandomGen g => SCTScheduler g
-sctRandom = toSCT randomSched
+sctRandom = makeSCT randomSched
 
 -- | A random scheduler with no pre-emption.
 sctRandomNP :: RandomGen g => SCTScheduler g
-sctRandomNP = toSCT randomSchedNP
+sctRandomNP = makeSCT randomSchedNP
 
 -- * Utils
 
 -- | Convert a 'Scheduler' to an 'SCTScheduler' by recording the
 -- trace.
-toSCT :: Scheduler s -> SCTScheduler s
-toSCT sched (s, trace) prior threads = (tid, (s', (decision, alters) : trace)) where
+makeSCT :: Scheduler s -> SCTScheduler s
+makeSCT sched (s, trace) prior threads = (tid, (s', (decision, alters) : trace)) where
   (tid, s') = sched s prior threads
 
   decision | tid == prior         = Continue

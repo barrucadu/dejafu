@@ -39,14 +39,10 @@ import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import qualified Control.Monad.Conc.Class as C
 import qualified Control.Monad.IO.Class as IO
 
--- | The @Conc@ monad itself. Under the hood, this uses continuations
--- so it's able to interrupt and resume a monadic computation at any
--- point where a primitive is used.
---
--- This uses the same universally-quantified indexing state trick as
--- used by 'ST' and 'STRef's to prevent mutable references from
--- leaking out of the monad. See 'runConc' for an example of what this
--- means.
+-- | The @Conc@ monad itself. This uses the same
+-- universally-quantified indexing state trick as used by 'ST' and
+-- 'STRef's to prevent mutable references from leaking out of the
+-- monad. See 'runConc' for an example of what this means.
 newtype Conc t a = C { unC :: M IO IORef a } deriving (Functor, Applicative, Monad)
 
 instance IO.MonadIO (Conc t) where
@@ -74,13 +70,12 @@ fixed = F
   , getCont   = unC
   }
 
--- | The concurrent variable type used with the 'Conc'
--- monad. Internally, these are implemented as 'IORef's, but they are
--- structured to behave fairly similarly to 'MVar's. One notable
--- difference is that 'MVar's are single-wakeup, and wake up in a FIFO
--- order. Writing to a @CVar@ wakes up all threads blocked on reading
--- it, and it is up to the scheduler which one runs next. Taking from
--- a @CVar@ behaves analogously.
+-- | The concurrent variable type used with the 'Conc' monad. One
+-- notable difference between these and 'MVar's is that 'MVar's are
+-- single-wakeup, and wake up in a FIFO order. Writing to a @CVar@
+-- wakes up all threads blocked on reading it, and it is up to the
+-- scheduler which one runs next. Taking from a @CVar@ behaves
+-- analogously.
 newtype CVar t a = V { unV :: R IORef a } deriving Eq
 
 -- | Lift an 'IO' action into the 'Conc' monad.
@@ -128,16 +123,16 @@ tryTakeCVar :: CVar t a -> Conc t (Maybe a)
 tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
--- state, returning `Just result` if it terminates, and `Nothing` if a
+-- state, returning 'Just' if it terminates, and 'Nothing' if a
 -- deadlock is detected.
 --
--- Note how the `t` in 'Conc' is universally quantified, what this
+-- Note how the @t@ in 'Conc' is universally quantified, what this
 -- means in practice is that you can't do something like this:
 --
 -- > runConc (\s _ (x:_) -> (x, s)) () $ new >>= return
 --
 -- So 'CVar's cannot leak out of the 'Conc' computation. If this is
--- making your head hurt, check out the \"How `runST` works\" section
+-- making your head hurt, check out the \"How @runST@ works\" section
 -- of <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
 runConc :: Scheduler s -> s -> (forall t. Conc t a) -> IO (Maybe a)
 runConc sched s ma = (\(a,_,_) -> a) <$> runConc' sched s ma

@@ -41,8 +41,8 @@ data Fixed c n r t = F
 
 -- | Scheduling is done in terms of a trace of 'Action's. Blocking can
 -- only occur as a result of an action, and they cover (most of) the
--- primitives of the concurrency. `spawn` is absent as it can be
--- derived from `new`, `fork` and `put`.
+-- primitives of the concurrency. 'spawn' is absent as it can be
+-- derived from 'new', 'fork' and 'put'.
 data Action n r =
     AFork (Action n r) (Action n r)
   | forall a. APut     (R r a) a (Action n r)
@@ -54,8 +54,9 @@ data Action n r =
   | ALift (n (Action n r))
   | AStop
 
--- | Every thread has a unique identitifer. These are implemented as
--- integers, but you shouldn't assume they are necessarily contiguous.
+-- | Every live thread has a unique identitifer. These are implemented
+-- as integers, but you shouldn't assume they are necessarily
+-- contiguous.
 type ThreadId = Int
 
 -- | A @Scheduler@ maintains some internal state, @s@, takes the
@@ -102,7 +103,7 @@ data ThreadAction =
   deriving (Eq, Ord, Show)
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
--- state, returning `Just result` if it terminates, and `Nothing` if a
+-- state, returning a 'Just' if it terminates, and 'Nothing' if a
 -- deadlock is detected.
 runFixed :: (Monad (c t), Monad n) => Fixed c n r t
          -> Scheduler s -> s -> c t a -> n (Maybe a)

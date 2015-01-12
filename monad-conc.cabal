@@ -4,7 +4,34 @@
 name:                monad-conc
 version:             0.0.0.0
 synopsis:            Overloadable primitives for potentially non-deterministic concurrency.
--- description:         
+
+description:
+  Concurrency is nice, deadlocks and race conditions not so much. The
+  @Par@ monad family, as defined in
+  <https://hackage.haskell.org/package/abstract-par/docs/Control-Monad-Par-Class.html abstract-par>
+  provides deterministic parallelism, but sometimes we can tolerate a
+  bit of nondeterminism.
+  .
+  This package provides a family of monads for potentially
+  nondeterministic concurrency, with an interface very much in the
+  spirit of @Par@, but slightly more relaxed. Specifically, @Conc@'s
+  @IVar@ equivalent, @CVar@s, can be written to multiple times.
+  .
+  == @Conc@ monads with 'IO':
+  .
+  The intention of the @Conc@ monads is to provide concurrency where
+  any apparent nondeterminism arises purely from the scheduling
+  behaviour. To put it another way, a given @Conc@ computation,
+  parametrised with a fixed set of scheduling decisions, is
+  deterministic. This assumption is used by the testing functionality
+  provided by Control.Monad.Conc.SCT.
+  .
+  Whilst this assumption may not hold in general when 'IO' is
+  involved, you should strive to produce test cases where it does.
+  .
+  See the <https://github.com/barrucadu/monad-conc README> for more
+  details.
+
 homepage:            https://github.com/barrucadu/monad-conc
 license:             WTFPL
 license-file:        LICENSE
