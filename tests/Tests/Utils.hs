@@ -5,7 +5,6 @@ import Control.Monad.Conc.Fixed (Conc)
 import Control.Monad.Conc.SCT (sctPreBound)
 import Data.List (group, sort)
 import Data.Maybe (isJust, isNothing)
-import System.Random (mkStdGen)
 
 -- Couldn't get Cabal's detailed tests to work, hence this approach.
 data Test   = Test { name :: String, result :: Result }

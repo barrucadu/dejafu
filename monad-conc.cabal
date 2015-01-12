@@ -66,13 +66,8 @@ library
   ghc-options:         -Wall
 
 test-suite tests
+  hs-source-dirs:      tests
   type:                exitcode-stdio-1.0
   main-is:             Tests.hs
-  build-depends:         monad-conc
-                       , base
-                       , containers
-                       , monad-st
-                       , mtl
-                       , random
-                       , transformers
+  build-depends:       monad-conc, base
   default-language:    Haskell2010
