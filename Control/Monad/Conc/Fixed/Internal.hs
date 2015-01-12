@@ -37,6 +37,16 @@ data Fixed c n r t = F
   -- type.
   }
 
+-- | The type of non-empty lists.
+data NonEmpty a = a :| [a] deriving (Eq, Ord, Read, Show)
+
+instance Functor NonEmpty where
+  fmap f (a :| as) = f a :| map f as
+
+-- | Convert a 'NonEmpty' to a regular non-empty list.
+toList :: NonEmpty a -> [a]
+toList (a :| as) = a : as
+
 -- * Running @Conc@ monads
 
 -- | Scheduling is done in terms of a trace of 'Action's. Blocking can
@@ -61,14 +71,13 @@ type ThreadId = Int
 
 -- | A @Scheduler@ maintains some internal state, @s@, takes the
 -- 'ThreadId' of the last thread scheduled, and the list of runnable
--- threads (which will never be empty). It produces a 'ThreadId' to
--- schedule, and a new state.
+-- threads. It produces a 'ThreadId' to schedule, and a new state.
 --
 -- Note: In order to prevent deadlock, the 'Conc' runtime will assume
 -- that a deadlock situation has arisen if the scheduler attempts to
 -- (a) schedule a blocked thread, or (b) schedule a nonexistant
 -- thread. In either of those cases, the computation will be halted.
-type Scheduler s = s -> ThreadId -> [ThreadId] -> (ThreadId, s)
+type Scheduler s = s -> ThreadId -> NonEmpty ThreadId -> (ThreadId, s)
 
 -- | One of the outputs of the runner is a @Trace@, which is just a
 -- log of threads and actions they have taken.
@@ -154,7 +163,8 @@ runThreads fixed sofar prior sched s threads ref
     runThreads fixed sofar' chosen sched s' threads' ref
 
   where
-    (chosen, s')  = if prior == -1 then (0, s) else sched s prior $ M.keys runnable
+    (chosen, s')  = if prior == -1 then (0, s) else sched s prior $ head runnable' :| tail runnable'
+    runnable'     = M.keys runnable
     runnable      = M.filter (not . snd) threads
     thread        = M.lookup chosen threads
     isBlocked     = snd $ fromJust thread

@@ -3,6 +3,7 @@ module Control.Monad.Conc.Fixed.Schedulers
   ( -- * Types
     Scheduler
   , ThreadId
+  , NonEmpty(..)
   -- * Pre-emptive
   , randomSched
   , roundRobinSched
@@ -11,6 +12,7 @@ module Control.Monad.Conc.Fixed.Schedulers
   , roundRobinSchedNP
   -- * Utilities
   , makeNP
+  , toList
   ) where
 
 import Control.Monad.Conc.Fixed.Internal
@@ -19,8 +21,9 @@ import System.Random (RandomGen, randomR)
 -- | A simple random scheduler which, at every step, picks a random
 -- thread to run.
 randomSched :: RandomGen g => Scheduler g
-randomSched g _ threads = (threads !! choice, g') where
-  (choice, g') = randomR (0, length threads - 1) g
+randomSched g _ threads = (threads' !! choice, g') where
+  (choice, g') = randomR (0, length threads' - 1) g
+  threads' = toList threads
 
 -- | A random scheduler which doesn't pre-empt the running
 -- thread. That is, if the last thread scheduled is still runnable,
@@ -32,8 +35,11 @@ randomSchedNP = makeNP randomSched
 -- thread with the next 'ThreadId'.
 roundRobinSched :: Scheduler ()
 roundRobinSched _ prior threads
-  | prior >= maximum threads = (minimum threads, ())
-  | otherwise = (minimum $ filter (>prior) threads, ())
+  | prior >= maximum threads' = (minimum threads', ())
+  | otherwise = (minimum $ filter (>prior) threads', ())
+
+  where
+    threads' = toList threads
 
 -- | A round-robin scheduler which doesn't pre-empt the running
 -- thread.
@@ -45,5 +51,5 @@ roundRobinSchedNP = makeNP roundRobinSched
 makeNP :: Scheduler s -> Scheduler s
 makeNP sched = newsched where
   newsched s prior threads
-    | prior `elem` threads = (prior, s)
+    | prior `elem` toList threads = (prior, s)
     | otherwise = sched s prior threads

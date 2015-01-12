@@ -85,21 +85,23 @@ pbInitialG = P { _pc = 0, _next = Empty, _halt = False }
 -- decisions to drive the initial trace, returning the generated
 -- suffix.
 pbSched :: SCTScheduler PBSched
-pbSched (s, trc) prior threads@(next:_) = case _decisions s of
+pbSched (s, trc) prior threads@(next:|_) = case _decisions s of
   -- If we have a decision queued, make it.
   (Start t:ds)    -> let trc' = (Start t,    alters t)     in (t,     (s { _decisions = ds, _prefix = trc' : _prefix s}, trc':trc))
   (Continue:ds)   -> let trc' = (Continue,   alters prior) in (prior, (s { _decisions = ds, _prefix = trc' : _prefix s}, trc':trc))
   (SwitchTo t:ds) -> let trc' = (SwitchTo t, alters t)     in (t,     (s { _decisions = ds, _prefix = trc' : _prefix s}, trc':trc))
 
   -- Otherwise just use a non-pre-emptive scheduler.
-  [] | prior `elem` threads -> let trc' = (Continue,   alters prior) in (prior, (s { _suffix = trc' : _suffix s}, trc':trc))
-     | otherwise            -> let trc' = (Start next, alters next)  in (next,  (s { _suffix = trc' : _suffix s}, trc':trc))
+  [] | prior `elem` threads' -> let trc' = (Continue,   alters prior) in (prior, (s { _suffix = trc' : _suffix s}, trc':trc))
+     | otherwise             -> let trc' = (Start next, alters next)  in (next,  (s { _suffix = trc' : _suffix s}, trc':trc))
 
   where
     alters tid
-      | tid == prior          = map SwitchTo $ filter (/=prior) threads
-      | prior `elem` threads = Continue : map SwitchTo (filter (\t -> t /= prior && t /= tid) threads)
-      | otherwise            = map Start $ filter (/=tid) threads
+      | tid == prior           = map SwitchTo $ filter (/=prior) threads'
+      | prior `elem` threads' = Continue : map SwitchTo (filter (\t -> t /= prior && t /= tid) threads')
+      | otherwise             = map Start $ filter (/=tid) threads'
+
+    threads' = toList threads
 
 -- | Pre-emption bounding termination function: terminates on attempt
 -- to start a PB above the limit.
