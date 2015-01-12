@@ -78,7 +78,7 @@ deadlocksAlways = alwaysTrue isNothing
 -- particular this means either: (a) it always deadlocks, or (b) the
 -- result is always 'Just' @x@, for some fixed @x@.
 alwaysSame :: Eq a => Predicate a
-alwaysSame = alwaysTrue2 True (==)
+alwaysSame = alwaysTrue2 (==)
 
 -- | Check that the result of a unary boolean predicate is always true.
 alwaysTrue :: (Maybe a -> Bool) -> Predicate a
@@ -89,11 +89,10 @@ alwaysTrue p xs = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = 
     | otherwise = res { _pass = False, _casesChecked = _casesChecked res + 1 }
 
 -- | Check that the result of a binary boolean predicate is always
--- true between adjacent pairs of results, using the supplied value
--- for the case of only one result.
-alwaysTrue2 :: Bool -> (Maybe a -> Maybe a -> Bool) -> Predicate a
-alwaysTrue2 z _ [_] = Result { _pass = z, _casesChecked = 1, _casesTotal = 1 }
-alwaysTrue2 _ p xs  = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = length xs } where
+-- true between adjacent pairs of results.
+alwaysTrue2 :: (Maybe a -> Maybe a -> Bool) -> Predicate a
+alwaysTrue2 _ [_] = Result { _pass = True, _casesChecked = 1, _casesTotal = 1 }
+alwaysTrue2 p xs  = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = length xs } where
   go []         = id
   go [y1,y2]    = check y1 y2 []
   go (y1:y2:ys) = check y1 y2 (y2 : ys)
