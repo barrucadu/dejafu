@@ -41,12 +41,12 @@ preEmpCount [] = 0
 -- * State
 
 -- | Data type representing a lazy, chunky, stream of data.
-data Lazy a = Lazy [a] (Lazy a) | Empty
+data Lazy a = Lazy (NonEmpty a) (Lazy a) | Empty
 
 -- | Prepend a value onto a lazy stream.
 (+|) :: [a] -> Lazy a -> Lazy a
-[] +| l = l
-xs +| l = Lazy xs l
+[]     +| l = l
+(x:xs) +| l = Lazy (x:|xs) l
 
 infixr +|
 
@@ -124,7 +124,7 @@ pbStep :: Int
        -> (PBSched, PBState) -> SCTTrace -> (PBSched, PBState)
 pbStep pb lifts (s, g) t = case _next g of
   -- We have schedules remaining, so run the next
-  Lazy (x:xs) rest -> (s' x, g { _next = nextPB +| thisPB +| xs +| rest })
+  Lazy (x:|xs) rest -> (s' x, g { _next = nextPB +| thisPB +| xs +| rest })
 
   -- We have no schedules remaining, try to generate some more.
   --
