@@ -4,21 +4,23 @@ module Tests.Cases where
 import Control.Monad (replicateM)
 import Control.Monad.Conc.Class
 import Control.Monad.Conc.CVar
-import Tests.Utils
+import Control.Monad.Conc.SCT.Tests
+
+data Test = Test { name :: String, result :: Result }
 
 -- | List of all tests
 testCases :: [Test]
 testCases =
-  [ Test "Simple 2-Deadlock" $ testNot "No deadlocks found!" $ testDeadlockFree 1   simple2Deadlock
-  , Test "2 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 1 $ philosophers 2
-  , Test "3 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 1 $ philosophers 3
-  , Test "4 Philosophers"    $ testNot "No deadlocks found!" $ testDeadlockFree 1 $ philosophers 4
-  , Test "25 Philosophers"   $ testNot "No deadlocks found!" $ testDeadlockFree 1 $ philosophers 25
-  , Test "100 Philosophers"  $ testNot "No deadlocks found!" $ testDeadlockFree 2 $ philosophers 100
-  , Test "Threshold Value"   $ testNot "All values equal!"   $ testAlwaysSame   1   thresholdValue
-  , Test "Forgotten Unlock"  $                                 testDeadlocks    1   forgottenUnlock
-  , Test "Simple 2-Race"     $ testNot "All values equal!"   $ testAlwaysSame   1   simple2Race
-  , Test "Racey Stack"       $ testNot "All values equal!"   $ testAlwaysSame   1   raceyStack
+  [ Test "Simple 2-Deadlock" $ runTest (pNot deadlocksNever)   simple2Deadlock
+  , Test "2 Philosophers"    $ runTest (pNot deadlocksNever) $ philosophers 2
+  , Test "3 Philosophers"    $ runTest (pNot deadlocksNever) $ philosophers 3
+  , Test "4 Philosophers"    $ runTest (pNot deadlocksNever) $ philosophers 4
+  , Test "25 Philosophers"   $ runTest (pNot deadlocksNever) $ philosophers 25
+  , Test "100 Philosophers"  $ runTest (pNot deadlocksNever) $ philosophers 100
+  , Test "Threshold Value"   $ runTest (pNot alwaysSame)       thresholdValue
+  , Test "Forgotten Unlock"  $ runTest  deadlocksAlways        forgottenUnlock
+  , Test "Simple 2-Race"     $ runTest (pNot alwaysSame)       simple2Race
+  , Test "Racey Stack"       $ runTest (pNot alwaysSame)       raceyStack
   ]
 
 -- | Should deadlock on a minority of schedules.
