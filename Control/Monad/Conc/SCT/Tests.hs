@@ -14,11 +14,11 @@ module Control.Monad.Conc.SCT.Tests
   , deadlocksNever
   , deadlocksAlways
   , alwaysSame
+  , alwaysTrue
+  , alwaysTrue2
   -- * Utilities
   , pAnd
   , pNot
-  , toPredicate
-  , takeWhile'
   ) where
 
 import Control.Applicative ((<$>))
@@ -68,21 +68,38 @@ type Predicate a = [Maybe a] -> Result
 
 -- | Check that a computation never deadlocks.
 deadlocksNever :: Predicate a
-deadlocksNever = toPredicate isJust
+deadlocksNever = alwaysTrue isJust
 
 -- | Check that a computation always deadlocks.
 deadlocksAlways :: Predicate a
-deadlocksAlways = toPredicate isNothing
+deadlocksAlways = alwaysTrue isNothing
 
 -- | Check that the result of a computation is always the same. In
 -- particular this means either: (a) it always deadlocks, or (b) the
 -- result is always 'Just' @x@, for some fixed @x@.
 alwaysSame :: Eq a => Predicate a
-alwaysSame [] = Result { _pass = True, _casesChecked = 0, _casesTotal = 0 }
-alwaysSame (x:xs) = go xs Result { _pass = True, _casesChecked = 1, _casesTotal = length xs } where
-  go [] s = s
+alwaysSame = alwaysTrue2 True (==)
+
+-- | Check that the result of a unary boolean predicate is always true.
+alwaysTrue :: (Maybe a -> Bool) -> Predicate a
+alwaysTrue p xs = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = length xs } where
+  go [] res = res
   go (y:ys) res
-    | y == x = go ys $ res { _casesChecked = _casesChecked res + 1 }
+    | p y = go ys $ res { _casesChecked = _casesChecked res + 1 }
+    | otherwise = res { _pass = False, _casesChecked = _casesChecked res + 1 }
+
+-- | Check that the result of a binary boolean predicate is always
+-- true between adjacent pairs of results, using the supplied value
+-- for the case of only one result.
+alwaysTrue2 :: Bool -> (Maybe a -> Maybe a -> Bool) -> Predicate a
+alwaysTrue2 z _ [_] = Result { _pass = z, _casesChecked = 1, _casesTotal = 1 }
+alwaysTrue2 _ p xs  = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = length xs } where
+  go []         = id
+  go [y1,y2]    = check y1 y2 []
+  go (y1:y2:ys) = check y1 y2 (y2 : ys)
+
+  check y1 y2 ys res
+    | p y1 y2   = go ys $ res { _casesChecked = _casesChecked res + 1 }
     | otherwise = res { _pass = False, _casesChecked = _casesChecked res + 1 }
 
 -- * Utils
@@ -97,17 +114,3 @@ pAnd p q xs = if _pass r1 then r2 else r1 where
 pNot :: Predicate a -> Predicate a
 pNot p xs = r { _pass = not $ _pass r } where
   r = p xs
-
--- | Convert a boolean function to a 'Result'-producing predicate.
-toPredicate :: (Maybe a -> Bool) -> [Maybe a] -> Result
-toPredicate f xs = Result { _pass = pass, _casesChecked = cases, _casesTotal = length xs } where
-  (_, pass, cases) = takeWhile' f xs
-
--- | Variant of 'takeWhile' that also includes a count of results
--- returned and whether it traversed the entire list.
-takeWhile' :: (a -> Bool) -> [a] -> ([a], Bool, Int)
-takeWhile' f = go [] 0 where
-  go ts n [] = (reverse ts, True, n)
-  go ts n (x:xs)
-    | f x       = go (x:ts) (n + 1) xs
-    | otherwise = (reverse ts, False, n)
