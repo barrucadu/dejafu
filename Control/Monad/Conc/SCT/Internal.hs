@@ -38,7 +38,7 @@ data Decision =
   -- ^ Continue running the last thread for another step.
   | SwitchTo ThreadId
   -- ^ Pre-empt the running thread, and switch to another.
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Show)
 
 -- * SCT Runners
 

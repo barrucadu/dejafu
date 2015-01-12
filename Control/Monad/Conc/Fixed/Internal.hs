@@ -100,7 +100,7 @@ data ThreadAction =
   -- ^ Lift an action from the underlying monad.
   | Stop
   -- ^ Cease execution and terminate.
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Show)
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a 'Just' if it terminates, and 'Nothing' if a
