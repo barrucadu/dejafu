@@ -13,9 +13,12 @@ module Control.Monad.Conc.SCT.Tests
   , Predicate
   , deadlocksNever
   , deadlocksAlways
+  , deadlocksSometimes
   , alwaysSame
   , alwaysTrue
   , alwaysTrue2
+  , somewhereTrue
+  , somewhereTrue2
   -- * Utilities
   , pAnd
   , pNot
@@ -74,32 +77,49 @@ deadlocksNever = alwaysTrue isJust
 deadlocksAlways :: Predicate a
 deadlocksAlways = alwaysTrue isNothing
 
+-- | Check that a computation deadlocks at least once.
+deadlocksSometimes :: Predicate a
+deadlocksSometimes = somewhereTrue isNothing
+
 -- | Check that the result of a computation is always the same. In
 -- particular this means either: (a) it always deadlocks, or (b) the
 -- result is always 'Just' @x@, for some fixed @x@.
 alwaysSame :: Eq a => Predicate a
 alwaysSame = alwaysTrue2 (==)
 
--- | Check that the result of a unary boolean predicate is always true.
+-- | Check that the result of a unary boolean predicate is always
+-- true. An empty list of results counts as 'True'.
 alwaysTrue :: (Maybe a -> Bool) -> Predicate a
-alwaysTrue p xs = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = length xs } where
-  go [] res = res
-  go (y:ys) res
-    | p y = go ys $ res { _casesChecked = _casesChecked res + 1 }
-    | otherwise = res { _pass = False, _casesChecked = _casesChecked res + 1 }
+alwaysTrue p = pNot $ somewhereTrue (not . p)
 
 -- | Check that the result of a binary boolean predicate is always
--- true between adjacent pairs of results.
+-- true between adjacent pairs of results. An empty list of results
+-- counts as 'True'.
 alwaysTrue2 :: (Maybe a -> Maybe a -> Bool) -> Predicate a
-alwaysTrue2 _ [_] = Result { _pass = True, _casesChecked = 1, _casesTotal = 1 }
-alwaysTrue2 p xs  = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = length xs } where
+alwaysTrue2 p = pNot $ somewhereTrue2 (\a b -> not $ p a b)
+
+-- | Check that the result of a unary boolean predicate is true at
+-- least once. An empty list of results counts as 'False'.
+somewhereTrue :: (Maybe a -> Bool) -> Predicate a
+somewhereTrue p xs = go xs Result { _pass = False, _casesChecked = 0, _casesTotal = length xs } where
+  go [] res = res
+  go (y:ys) res
+    | p y = incCC res { _pass = True }
+    | otherwise = go ys $ incCC res
+
+-- | Check that the result of a binary boolean predicate is true
+-- between at least one adjacent pair of results. An empty list of
+-- results counts as 'False'.
+somewhereTrue2 :: (Maybe a -> Maybe a -> Bool) -> Predicate a
+somewhereTrue2 _ [_] = Result { _pass = False, _casesChecked = 1, _casesTotal = 1 }
+somewhereTrue2 p xs  = go xs Result { _pass = False, _casesChecked = 0, _casesTotal = length xs } where
   go []         = id
   go [y1,y2]    = check y1 y2 []
   go (y1:y2:ys) = check y1 y2 (y2 : ys)
 
   check y1 y2 ys res
-    | p y1 y2   = go ys $ res { _casesChecked = _casesChecked res + 1 }
-    | otherwise = res { _pass = False, _casesChecked = _casesChecked res + 1 }
+    | p y1 y2   = incCC res { _pass = True }
+    | otherwise = go ys $ incCC res
 
 -- * Utils
 
@@ -113,3 +133,7 @@ pAnd p q xs = if _pass r1 then r2 else r1 where
 pNot :: Predicate a -> Predicate a
 pNot p xs = r { _pass = not $ _pass r } where
   r = p xs
+
+-- | Increment the cases checked
+incCC :: Result -> Result
+incCC r = r { _casesChecked = _casesChecked r + 1 }

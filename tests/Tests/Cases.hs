@@ -11,16 +11,16 @@ data Test = Test { name :: String, result :: Result }
 -- | List of all tests
 testCases :: [Test]
 testCases =
-  [ Test "Simple 2-Deadlock" $ runTest (pNot deadlocksNever)   simple2Deadlock
-  , Test "2 Philosophers"    $ runTest (pNot deadlocksNever) $ philosophers 2
-  , Test "3 Philosophers"    $ runTest (pNot deadlocksNever) $ philosophers 3
-  , Test "4 Philosophers"    $ runTest (pNot deadlocksNever) $ philosophers 4
-  , Test "25 Philosophers"   $ runTest (pNot deadlocksNever) $ philosophers 25
-  , Test "100 Philosophers"  $ runTest (pNot deadlocksNever) $ philosophers 100
-  , Test "Threshold Value"   $ runTest (pNot alwaysSame)       thresholdValue
-  , Test "Forgotten Unlock"  $ runTest  deadlocksAlways        forgottenUnlock
-  , Test "Simple 2-Race"     $ runTest (pNot alwaysSame)       simple2Race
-  , Test "Racey Stack"       $ runTest (pNot alwaysSame)       raceyStack
+  [ Test "Simple 2-Deadlock" $ runTest deadlocksSometimes   simple2Deadlock
+  , Test "2 Philosophers"    $ runTest deadlocksSometimes $ philosophers 2
+  , Test "3 Philosophers"    $ runTest deadlocksSometimes $ philosophers 3
+  , Test "4 Philosophers"    $ runTest deadlocksSometimes $ philosophers 4
+  , Test "25 Philosophers"   $ runTest deadlocksSometimes $ philosophers 25
+  , Test "100 Philosophers"  $ runTest deadlocksSometimes $ philosophers 100
+  , Test "Threshold Value"   $ runTest (pNot alwaysSame)    thresholdValue
+  , Test "Forgotten Unlock"  $ runTest deadlocksAlways      forgottenUnlock
+  , Test "Simple 2-Race"     $ runTest (pNot alwaysSame)    simple2Race
+  , Test "Racey Stack"       $ runTest (pNot alwaysSame)    raceyStack
   ]
 
 -- | Should deadlock on a minority of schedules.
