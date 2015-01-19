@@ -83,7 +83,7 @@ runSCT' :: SCTScheduler s -- ^ The scheduler
 runSCT' sched initial term step c = unfoldr go initial where
   go sg@(s, g)
     | term sg   = Nothing
-    | otherwise = Just ((res, trace), sg')
+    | otherwise = res `seq` Just ((res, trace), sg')
 
     where
       (res, (s', strace), ttrace) = runConc' sched (s, initialTrace) c
@@ -108,7 +108,7 @@ runSCTIO' sched initial term step c = unfoldrM go initial where
       let trace = reverse $ scttrace strace ttrace
       let sg' = step (s', g) trace
 
-      return $ Just ((res, trace), sg')
+      res `seq` return (Just ((res, trace), sg'))
 
 -- | Like 'unfoldr', but monadic.
 unfoldrM :: Monad m => (b -> m (Maybe (a, b))) -> b -> m [a]
