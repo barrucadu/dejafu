@@ -4,6 +4,7 @@
 -- concurrency errors such as data races and deadlocks: internal definitions.
 module Control.Monad.Conc.SCT.Internal where
 
+import Control.DeepSeq (NFData(..))
 import Control.Monad (liftM)
 import Control.Monad.Conc.Fixed
 import Data.List (unfoldr)
@@ -41,6 +42,11 @@ data Decision =
   | SwitchTo ThreadId
   -- ^ Pre-empt the running thread, and switch to another.
   deriving (Eq, Show)
+
+instance NFData Decision where
+  rnf (Start tid) = rnf tid
+  rnf  Continue = ()
+  rnf (SwitchTo tid) = rnf tid
 
 -- * SCT Runners
 

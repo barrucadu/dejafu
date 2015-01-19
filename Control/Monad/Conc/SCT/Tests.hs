@@ -25,6 +25,7 @@ module Control.Monad.Conc.SCT.Tests
   ) where
 
 import Control.Applicative ((<$>))
+import Control.DeepSeq (NFData(..))
 import Control.Monad.Conc.Fixed
 import Control.Monad.Conc.SCT.PreBound
 import Data.Maybe (isJust, isNothing)
@@ -45,6 +46,9 @@ data Result = Result
   , _casesTotal   :: Int
   -- ^ The total number of cases.
   }
+
+instance NFData Result where
+  rnf r = rnf (_pass r, _casesChecked r, _casesTotal r)
 
 -- | Run a test using the pre-emption bounding scheduler, with a bound
 -- of 2.

@@ -58,6 +58,7 @@ library
   -- other-extensions:    
   build-depends:       base >=4.6 && <5
                      , containers
+                     , deepseq
                      , monad-st
                      , mtl
                      , random

@@ -5,6 +5,7 @@
 -- functions.
 module Control.Monad.Conc.Fixed.Internal where
 
+import Control.DeepSeq (NFData(..))
 import Control.Monad (liftM, mapAndUnzipM)
 import Control.Monad.Cont (Cont, runCont)
 import Data.Map (Map)
@@ -42,6 +43,9 @@ data NonEmpty a = a :| [a] deriving (Eq, Ord, Read, Show)
 
 instance Functor NonEmpty where
   fmap f (a :| as) = f a :| map f as
+
+instance NFData a => NFData (NonEmpty a) where
+  rnf (x:|xs) = rnf (x, xs)
 
 -- | Convert a 'NonEmpty' to a regular non-empty list.
 toList :: NonEmpty a -> [a]
@@ -110,6 +114,20 @@ data ThreadAction =
   | Stop
   -- ^ Cease execution and terminate.
   deriving (Eq, Show)
+
+instance NFData ThreadAction where
+  rnf (TryTake b tids) = rnf (b, tids)
+  rnf (TryPut  b tids) = rnf (b, tids)
+  rnf (Fork tid)  = rnf tid
+  rnf (Take tids) = rnf tids
+  rnf (Put  tids) = rnf tids
+  rnf BlockedRead = ()
+  rnf BlockedTake = ()
+  rnf BlockedPut  = ()
+  rnf New  = ()
+  rnf Read = ()
+  rnf Lift = ()
+  rnf Stop = ()
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a 'Just' if it terminates, and 'Nothing' if a

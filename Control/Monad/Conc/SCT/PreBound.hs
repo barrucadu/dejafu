@@ -9,6 +9,7 @@ module Control.Monad.Conc.SCT.PreBound
   , preEmpCount
   ) where
 
+import Control.DeepSeq (NFData(..), force)
 import Control.Monad.Conc.Fixed
 import Control.Monad.Conc.SCT.Internal
 
@@ -58,6 +59,9 @@ data PBSched = S
   -- ^ The trace suffix corresponding to independent decisions.
   }
 
+instance NFData PBSched where
+  rnf s = rnf (_decisions s, _prefix s, _suffix s)
+
 -- | State for the PB runner.
 data PBState = P
   { _pc :: Int
@@ -83,7 +87,7 @@ pbInitialG = P { _pc = 0, _next = Empty, _halt = False }
 -- decisions to drive the initial trace, returning the generated
 -- suffix.
 pbSched :: SCTScheduler PBSched
-pbSched (s, trc) prior threads@(next:|_) = case _decisions s of
+pbSched (s, trc) prior threads@(next:|_) = force $ case _decisions s of
   -- If we have a decision queued, make it.
   (Start t:ds)    -> let trc' = (Start t,    alters t)     in (t,     (s { _decisions = ds, _prefix = trc' : _prefix s}, trc':trc))
   (Continue:ds)   -> let trc' = (Continue,   alters prior) in (prior, (s { _decisions = ds, _prefix = trc' : _prefix s}, trc':trc))
