@@ -81,10 +81,7 @@ liftST ma = C $ cont lifted where
 
 -- | Run the provided computation concurrently, returning the result.
 spawn :: Conc t a -> Conc t (CVar t a)
-spawn ma = do
-  cvar <- newEmptyCVar
-  fork $ ma >>= putCVar cvar
-  return cvar
+spawn = C.defaultSpawn
 
 -- | Block on a 'CVar' until it is full, then read from it (without
 -- emptying).

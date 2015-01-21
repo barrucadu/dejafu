@@ -22,7 +22,7 @@ class Monad m => ConcFuture future m | m -> future where
   --
   -- For monads which also implement 'ConcCVar', it is expected to
   -- implement 'spawn' in terms of 'newEmptyCVar', 'fork', and
-  -- 'putCVar'.
+  -- 'putCVar'. The 'defaultSpawn' function provides this.
   --
   -- > spawn ma = do
   -- >   cvar <- newEmptyCVar
@@ -31,16 +31,12 @@ class Monad m => ConcFuture future m | m -> future where
   spawn :: m a -> m (future a)
 
   -- | Block until a value is present in the future, and then return
-  -- it. This does not \"remove\" the value from the future, multiple
-  -- 'get's are possible, unlike 'takeMVar' for example.
+  -- it. As with 'readMVar', this does not \"remove\" the value from
+  -- the future, multiple reads are possible.
   readCVar :: future a -> m a
 
 instance ConcFuture MVar IO where
-  spawn ma = do
-    cvar <- newEmptyCVar
-    fork $ ma >>= putCVar cvar
-    return cvar
-
+  spawn    = defaultSpawn
   readCVar = readMVar
 
 -- | @ConcCVar@ builds on futures by allowing @CVar@s which threads
@@ -63,7 +59,7 @@ class ConcFuture cvar m => ConcCVar cvar m | m -> cvar where
   newEmptyCVar :: m (cvar a)
 
   -- | Put a value into a @CVar@. If there is already a value there,
-  -- this will block until that value has been 'take'n, at which point
+  -- this will block until that value has been taken, at which point
   -- the value will be stored.
   --
   -- > putCVar cvar a = tryPutCVar cvar a >>= \b -> unless b $ putCVar cvar a
@@ -76,8 +72,8 @@ class ConcFuture cvar m => ConcCVar cvar m | m -> cvar where
   tryPutCVar :: cvar a -> a -> m Bool
 
   -- | Take a value from a @CVar@. This \"empties\" the @CVar@,
-  -- allowing a new value to be 'put' in. This will block if there is
-  -- no value in the @CVar@ already, until one has been 'put'.
+  -- allowing a new value to be put in. This will block if there is no
+  -- value in the @CVar@ already, until one has been put.
   --
   -- > takeCVar cvar = tryTakeCVar cvar >>= maybe (takeCVar cvar) return
   takeCVar :: cvar a -> m a
@@ -95,3 +91,10 @@ instance ConcCVar MVar IO where
   tryPutCVar   = tryPutMVar
   takeCVar     = takeMVar
   tryTakeCVar  = tryTakeMVar
+
+-- | A default implementation of 'spawn' for 'ConcCVar' monads.
+defaultSpawn :: ConcCVar cvar m => m a -> m (cvar a)
+defaultSpawn ma = do
+  cvar <- newEmptyCVar
+  fork $ ma >>= putCVar cvar
+  return cvar
