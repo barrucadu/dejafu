@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE Rank2Types #-}
 
 -- Pre-emption bounding SCT runner for Conc monads.
 module Control.Monad.Conc.SCT.PreBound

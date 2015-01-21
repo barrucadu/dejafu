@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE Rank2Types                 #-}
 
 -- | Concurrent monads with a fixed scheduler which can do IO.
 --

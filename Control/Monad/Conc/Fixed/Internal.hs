@@ -1,5 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE Rank2Types                #-}
 
 -- | Concurrent monads with a fixed scheduler: internal types and
 -- functions.

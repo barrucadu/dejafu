@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE Rank2Types #-}
 
 -- | Useful functions for writing SCT test cases for @Conc@
 -- computations.

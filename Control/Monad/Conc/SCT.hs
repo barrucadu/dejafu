@@ -1,5 +1,3 @@
-{-# LANGUAGE RankNTypes  #-}
-
 -- | A runner for concurrent monads to systematically detect
 -- concurrency errors such as data races and deadlocks.
 --

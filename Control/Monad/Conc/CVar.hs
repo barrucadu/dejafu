@@ -1,5 +1,4 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TupleSections         #-}
 
 -- | Combinators using @CVar@s. These provide many of the helpful
 -- functions found in Control.Concurrent.MVar, but for @CVar@s. Note
@@ -69,7 +68,7 @@ modifyCVar cvar f = do
 
 -- | Modify the contents of a @CVar@.
 modifyCVar_ :: ConcCVar cvar m => cvar a -> (a -> m a) -> m ()
-modifyCVar_ cvar f = modifyCVar cvar $ \a -> (, ()) `liftM` f a
+modifyCVar_ cvar f = modifyCVar cvar $ \a -> (\b -> (b, ())) `liftM` f a
 
 -- | Put a @()@ into a @CVar@, claiming the lock. This is atomic.
 lock :: ConcCVar cvar m => cvar () -> m ()
