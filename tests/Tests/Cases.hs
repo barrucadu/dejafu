@@ -8,22 +8,22 @@ import Control.Monad.Conc.SCT.Tests
 
 import qualified Tests.Logger as L
 
-data Test = Test { name :: String, result :: Result }
+data Test = Test { name :: String, result :: Result String }
 
 -- | List of all tests
 testCases :: [Test]
 testCases =
-  [ Test "Simple 2-Deadlock" $ runTest deadlocksSometimes   simple2Deadlock
-  , Test "2 Philosophers"    $ runTest deadlocksSometimes $ philosophers 2
-  , Test "3 Philosophers"    $ runTest deadlocksSometimes $ philosophers 3
-  , Test "4 Philosophers"    $ runTest deadlocksSometimes $ philosophers 4
-  , Test "Threshold Value"   $ runTest (pNot alwaysSame)    thresholdValue
-  , Test "Forgotten Unlock"  $ runTest deadlocksAlways      forgottenUnlock
-  , Test "Simple 2-Race"     $ runTest (pNot alwaysSame)    simple2Race
-  , Test "Racey Stack"       $ runTest (pNot alwaysSame)    raceyStack
-  , Test "Logger (LA)"       $ L.testLA
-  , Test "Logger (LP)"       $ L.testLP
-  , Test "Logger (LE)"       $ L.testLE
+  [ Test "Simple 2-Deadlock" . fmap show $ runTest deadlocksSometimes   simple2Deadlock
+  , Test "2 Philosophers"    . fmap show $ runTest deadlocksSometimes $ philosophers 2
+  , Test "3 Philosophers"    . fmap show $ runTest deadlocksSometimes $ philosophers 3
+  , Test "4 Philosophers"    . fmap show $ runTest deadlocksSometimes $ philosophers 4
+  , Test "Threshold Value"   . fmap show $ runTest (pNot alwaysSame)    thresholdValue
+  , Test "Forgotten Unlock"  . fmap show $ runTest deadlocksAlways      forgottenUnlock
+  , Test "Simple 2-Race"     . fmap show $ runTest (pNot alwaysSame)    simple2Race
+  , Test "Racey Stack"       . fmap show $ runTest (pNot alwaysSame)    raceyStack
+  , Test "Logger (LA)"       . fmap show $ L.testLA
+  , Test "Logger (LP)"       . fmap show $ L.testLP
+  , Test "Logger (LE)"       . fmap show $ L.testLE
   ]
 
 -- | Should deadlock on a minority of schedules.

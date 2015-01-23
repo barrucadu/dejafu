@@ -22,11 +22,15 @@ module Control.Monad.Conc.SCT.Tests
   -- * Utilities
   , pAnd
   , pNot
+  , rForgetful
   ) where
 
 import Control.Applicative ((<$>))
+import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
+import Control.Monad (void)
 import Control.Monad.Conc.Fixed
+import Control.Monad.Conc.SCT.Internal
 import Control.Monad.Conc.SCT.PreBound
 import Data.Maybe (isJust, isNothing)
 
@@ -38,40 +42,45 @@ import qualified Control.Monad.Conc.Fixed.IO as CIO
 -- cases checked, and number of total cases. Be careful if using the
 -- total number of cases, as that value may be very big, and (due to
 -- laziness) will actually force a lot more computation!.
-data Result = Result
+data Result a = Result
   { _pass         :: Bool
   -- ^ Whether the test passed or not.
   , _casesChecked :: Int
   -- ^ The number of cases checked.
   , _casesTotal   :: Int
   -- ^ The total number of cases.
-  } deriving (Show, Read, Eq)
+  , _failures :: [(Maybe a, SCTTrace)]
+  -- ^ The failed cases, if any.
+  } deriving (Show, Eq)
 
-instance NFData Result where
-  rnf r = rnf (_pass r, _casesChecked r, _casesTotal r)
+instance NFData a => NFData (Result a) where
+  rnf r = rnf (_pass r, _casesChecked r, _casesTotal r, _failures r)
+
+instance Functor Result where
+  fmap f r = r { _failures = map (first $ fmap f) $ _failures r }
 
 -- | Run a test using the pre-emption bounding scheduler, with a bound
 -- of 2.
-runTest :: Predicate a -> (forall t. Conc t a) -> Result
+runTest :: Predicate a -> (forall t. Conc t a) -> Result a
 runTest = runTest' 2
 
 -- | Variant of 'runTest' using 'IO'. See usual caveats about 'IO'.
-runTestIO :: Predicate a -> (forall t. CIO.Conc t a) -> IO Result
+runTestIO :: Predicate a -> (forall t. CIO.Conc t a) -> IO (Result a)
 runTestIO = runTestIO' 2
 
 -- | Run a test using the pre-emption bounding scheduler.
-runTest' :: Int -> Predicate a -> (forall t. Conc t a) -> Result
-runTest' pb predicate conc = predicate . map fst $ sctPreBound pb conc
+runTest' :: Int -> Predicate a -> (forall t. Conc t a) -> Result a
+runTest' pb predicate conc = predicate $ sctPreBound pb conc
 
 -- | Variant of 'runTest'' using 'IO'. See usual caveats about 'IO'.
-runTestIO' :: Int -> Predicate a -> (forall t. CIO.Conc t a) -> IO Result
-runTestIO' pb predicate conc = predicate . map fst <$> sctPreBoundIO pb conc
+runTestIO' :: Int -> Predicate a -> (forall t. CIO.Conc t a) -> IO (Result  a)
+runTestIO' pb predicate conc = predicate <$> sctPreBoundIO pb conc
 
 -- * Predicates
 
 -- | A @Predicate@ is a function which collapses a list of results
 -- into a 'Result'.
-type Predicate a = [Maybe a] -> Result
+type Predicate a = [(Maybe a, SCTTrace)] -> Result a
 
 -- | Check that a computation never deadlocks.
 deadlocksNever :: Predicate a
@@ -94,36 +103,62 @@ alwaysSame = alwaysTrue2 (==)
 -- | Check that the result of a unary boolean predicate is always
 -- true. An empty list of results counts as 'True'.
 alwaysTrue :: (Maybe a -> Bool) -> Predicate a
-alwaysTrue p = pNot $ somewhereTrue (not . p)
+alwaysTrue p xs = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = len, _failures = failures } where
+  go [] res = res
+  go ((y,_):ys) res
+    | p y = go ys $ incCC res
+    | otherwise = incCC res { _pass = False }
+
+  (len, failures) = findFailures1 p xs
 
 -- | Check that the result of a binary boolean predicate is always
 -- true between adjacent pairs of results. An empty list of results
 -- counts as 'True'.
+--
+-- If the predicate fails, *both* (result,trace) tuples will be added
+-- to the failures list.
 alwaysTrue2 :: (Maybe a -> Maybe a -> Bool) -> Predicate a
-alwaysTrue2 p = pNot $ somewhereTrue2 (\a b -> not $ p a b)
+alwaysTrue2 _ [_] = Result { _pass = True, _casesChecked = 1, _casesTotal = 1, _failures = [] }
+alwaysTrue2 p xs  = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = len, _failures = failures } where
+  go [] = id
+  go [(y1,_),(y2,_)]    = check y1 y2 []
+  go ((y1,_):(y2,t):ys) = check y1 y2 ((y2,t) : ys)
+
+  check y1 y2 ys res
+    | p y1 y2   = go ys $ incCC res
+    | otherwise = incCC res { _pass = False }
+
+  (len, failures) = findFailures2 p xs
 
 -- | Check that the result of a unary boolean predicate is true at
 -- least once. An empty list of results counts as 'False'.
 somewhereTrue :: (Maybe a -> Bool) -> Predicate a
-somewhereTrue p xs = go xs Result { _pass = False, _casesChecked = 0, _casesTotal = length xs } where
+somewhereTrue p xs = go xs Result { _pass = False, _casesChecked = 0, _casesTotal = len, _failures = failures } where
   go [] res = res
-  go (y:ys) res
+  go ((y,_):ys) res
     | p y = incCC res { _pass = True }
     | otherwise = go ys $ incCC res
+
+  (len, failures) = findFailures1 p xs
 
 -- | Check that the result of a binary boolean predicate is true
 -- between at least one adjacent pair of results. An empty list of
 -- results counts as 'False'.
+--
+-- If the predicate fails, *both* (result,trace) tuples will be added
+-- to the failures list.
 somewhereTrue2 :: (Maybe a -> Maybe a -> Bool) -> Predicate a
-somewhereTrue2 _ [_] = Result { _pass = False, _casesChecked = 1, _casesTotal = 1 }
-somewhereTrue2 p xs  = go xs Result { _pass = False, _casesChecked = 0, _casesTotal = length xs } where
-  go []         = id
-  go [y1,y2]    = check y1 y2 []
-  go (y1:y2:ys) = check y1 y2 (y2 : ys)
+somewhereTrue2 _ [x] = Result { _pass = False, _casesChecked = 1, _casesTotal = 1, _failures = [x] }
+somewhereTrue2 p xs  = go xs Result { _pass = False, _casesChecked = 0, _casesTotal = len, _failures = failures } where
+  go [] = id
+  go [(y1,_),(y2,_)]    = check y1 y2 []
+  go ((y1,_):(y2,t):ys) = check y1 y2 ((y2,t) : ys)
 
   check y1 y2 ys res
     | p y1 y2   = incCC res { _pass = True }
     | otherwise = go ys $ incCC res
+
+  (len, failures) = findFailures2 p xs
 
 -- * Utils
 
@@ -138,6 +173,30 @@ pNot :: Predicate a -> Predicate a
 pNot p xs = r { _pass = not $ _pass r } where
   r = p xs
 
+-- | Throw away the failures information in a Result (useful for
+-- storing them in a list).
+rForgetful :: Result a -> Result ()
+rForgetful = void
+
 -- | Increment the cases checked
-incCC :: Result -> Result
+incCC :: Result a -> Result a
 incCC r = r { _casesChecked = _casesChecked r + 1 }
+
+-- | Get the length of the list and find the failing cases in one
+-- traversal.
+findFailures1 :: (Maybe a -> Bool) -> [(Maybe a, SCTTrace)] -> (Int, [(Maybe a, SCTTrace)])
+findFailures1 p xs = findFailures xs 0 [] where
+  findFailures [] l fs = (l, fs)
+  findFailures ((z,t):zs) l fs
+    | p z = findFailures zs (l+1) fs
+    | otherwise = findFailures zs (l+1) ((z,t):fs)
+
+-- | Get the length of the list and find the failing cases in one
+-- traversal.
+findFailures2 :: (Maybe a -> Maybe a -> Bool) -> [(Maybe a, SCTTrace)] -> (Int, [(Maybe a, SCTTrace)])
+findFailures2 p xs = findFailures xs 0 [] where
+  findFailures [] l fs = (l, fs)
+  findFailures [_] l fs = (l+1, fs)
+  findFailures ((z1,t1):(z2,t2):zs) l fs
+    | p z1 z2 = findFailures ((z2,t2):zs) (l+1) fs
+    | otherwise = findFailures ((z2,t2):zs) (l+1) ((z1,t1):(z2,t2):fs)

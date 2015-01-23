@@ -60,7 +60,7 @@ bad = do
 
 -- | Test that the result is always in the set of allowed values, and
 -- doesn't deadlock.
-testLA :: Result
+testLA :: Result [String]
 testLA = runTest (alwaysTrue listContents) bad where
   listContents (Just strs) = strs `elem` [ ["Hello", "World", "Foo", "Bar", "Baz"]
                                          , ["Hello", "World", "Foo", "Bar"]
@@ -68,13 +68,13 @@ testLA = runTest (alwaysTrue listContents) bad where
   listContents Nothing = False
 
 -- | Test that the "proper" result occurs at least once.
-testLP :: Result
+testLP :: Result [String]
 testLP = runTest (somewhereTrue loggedAll) bad where
   loggedAll (Just a) = length a == 5
   loggedAll Nothing  = False
 
 -- | Test that the erroneous result occurs at least once.
-testLE :: Result
+testLE :: Result [String]
 testLE = runTest (somewhereTrue loggedAlmostAll) bad where
   loggedAlmostAll (Just a) = length a == 4
   loggedAlmostAll Nothing  = False
