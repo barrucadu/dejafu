@@ -94,7 +94,7 @@ runSCT' sched initial term step c = unfoldr go initial where
     where
       (res, (s', strace), ttrace) = runConc' sched (s, initialTrace) c
 
-      trace = reverse $ scttrace strace ttrace
+      trace = scttrace (reverse strace) ttrace
 
       sg' = step (s', g) trace
 
@@ -111,7 +111,7 @@ runSCTIO' sched initial term step c = unfoldrM go initial where
     | otherwise = do
       (res, (s', strace), ttrace) <- CIO.runConc' sched (s, initialTrace) c
 
-      let trace = reverse $ scttrace strace ttrace
+      let trace = scttrace (reverse strace) ttrace
       let sg' = step (s', g) trace
 
       res `seq` return (Just ((res, trace), sg'))
