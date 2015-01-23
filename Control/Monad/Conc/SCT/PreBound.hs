@@ -140,7 +140,12 @@ pbStep pb lifts (s, g) t = case _next g of
       (x:xs)
         | pb /= _pc g -> (s' x, g { _next = nextPB +| xs +| Empty })
         | otherwise  -> (s' x, g { _next =           xs +| Empty })
-      [] -> (s' [], g { _halt = True })
+      []
+        | pb /= _pc g ->
+          case nextPB of
+            (x:xs) -> (s' x, g { _next = xs +| Empty })
+            [] -> (s' [], g { _halt = True })
+        | otherwise -> (s' [], g { _halt = True })
 
   where
     -- The prefix and suffix are in reverse order, fix those.
@@ -149,7 +154,7 @@ pbStep pb lifts (s, g) t = case _next g of
 
     -- A prefix we can append decisions to, and a suffix with
     -- 'ThreadAction' information.
-    pref' rest = if null pref then (\((d,_,_):_) -> d:rest) t else map fst pref ++ rest
+    pref' rest = if null pref then rest else map fst pref ++ rest
     suff' = drop (length pref) t
 
     -- | New scheduler state, with a given list of initial decisions.
@@ -179,7 +184,7 @@ offspring :: Bool -> SCTTrace -> [[Decision]]
 offspring lifts ((Continue, alts, ta):ds)
   | preCand lifts ta = [Continue : n | n <- offspring lifts ds, not $ null n] ++ [[n] | n <- alts]
   | otherwise = [Continue : n | n <- offspring lifts ds, not $ null n]
-offspring lifts ((d, _, _):ds) = [d : n | n <- offspring lifts ds]
+offspring lifts ((d, _, _):ds) = [d : n | n <- offspring lifts ds, not $ null n]
 offspring _ [] = []
 
 -- | Check if a 'ThreadAction' is a candidate for pre-emption.
