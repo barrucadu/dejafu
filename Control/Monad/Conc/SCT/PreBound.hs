@@ -23,11 +23,11 @@ sctPreBound :: Int
             -- ^ The pre-emption bound. Anything < 0 will be
             -- interpreted as no bound.
             -> (forall t. Conc t a) -> [(Maybe a, SCTTrace)]
-sctPreBound pb = runSCT' pbSched (pbInitialS, pbInitialG) (pbTerm pb) (pbStep pb False)
+sctPreBound pb = runSCT' pbSched (pbInitialS, pbInitialG) pbTerm (pbStep pb False)
 
 -- | Variant of 'sctPreBound' using 'IO'. See usual caveats about IO.
 sctPreBoundIO :: Int -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
-sctPreBoundIO pb = runSCTIO' pbSched (pbInitialS, pbInitialG) (pbTerm pb) (pbStep pb True)
+sctPreBoundIO pb = runSCTIO' pbSched (pbInitialS, pbInitialG) pbTerm (pbStep pb True)
 
 -- * Utils
 
@@ -64,9 +64,7 @@ instance NFData PBSched where
 
 -- | State for the PB runner.
 data PBState = P
-  { _pc :: Int
-  -- ^ Current pre-emption count.
-  , _next :: Lazy [Decision]
+  { _next :: Lazy [Decision]
   -- ^ Schedules to try.
   , _halt :: Bool
   -- ^ Indicates more schedules couldn't be found, and to halt
@@ -79,7 +77,7 @@ pbInitialS = S { _decisions = [], _prefix = [], _suffix = [] }
 
 -- | Initial runner state for the PB scheduler.
 pbInitialG :: PBState
-pbInitialG = P { _pc = 0, _next = Empty, _halt = False }
+pbInitialG = P { _next = Empty, _halt = False }
 
 -- * PB Scheduler
 
@@ -107,10 +105,8 @@ pbSched (s, trc) prior threads@(next:|_) = force $ case _decisions s of
 
 -- | Pre-emption bounding termination function: terminates on attempt
 -- to start a PB above the limit.
-pbTerm :: Int -> (a, PBState) -> Bool
-pbTerm pb (_, g)
-  | pb < 0    = _halt g
-  | otherwise = (_pc g == pb + 1) || _halt g
+pbTerm :: (a, PBState) -> Bool
+pbTerm (_, g) = _halt g
 
 -- | Pre-emption bounding state step function: computes remaining
 -- schedules to try and chooses one.
@@ -129,8 +125,8 @@ pbStep :: Int
 pbStep pb lifts (s, g) t = case _next g of
   -- We have schedules remaining, so run the next
   Lazy (x:|xs) rest
-    | pb /= _pc g -> (s' x, g { _next = nextPB +| thisPB +| xs +| rest })
-    | otherwise  -> (s' x, g { _next =           thisPB +| xs +| rest })
+    | pb /= pc   -> (s' x, g { _next = nextPB +| thisPB +| xs +| rest })
+    | otherwise -> (s' x, g { _next =           thisPB +| xs +| rest })
 
   -- We have no schedules remaining, try to generate some more.
   --
@@ -138,10 +134,10 @@ pbStep pb lifts (s, g) t = case _next g of
   Empty ->
     case thisPB of
       (x:xs)
-        | pb /= _pc g -> (s' x, g { _next = nextPB +| xs +| Empty })
-        | otherwise  -> (s' x, g { _next =           xs +| Empty })
+        | pb /= pc   -> (s' x, g { _next = nextPB +| xs +| Empty })
+        | otherwise -> (s' x, g { _next =           xs +| Empty })
       []
-        | pb /= _pc g ->
+        | pb /= pc ->
           case nextPB of
             (x:xs) -> (s' x, g { _next = xs +| Empty })
             [] -> (s' [], g { _halt = True })
@@ -154,11 +150,11 @@ pbStep pb lifts (s, g) t = case _next g of
 
     -- A prefix we can append decisions to, and a suffix with
     -- 'ThreadAction' information.
-    pref' rest = if null pref then rest else map fst pref ++ rest
-    suff' = drop (length pref) t
+    pref' = (map fst pref ++)
+    suff' = drop (length pref + 1) t
 
     -- | New scheduler state, with a given list of initial decisions.
-    s' ds = pbInitialS { _decisions = tail ds }
+    s' ds = pbInitialS { _decisions = ds }
 
     -- | All schedules we get from the current one WITHOUT introducing
     -- any pre-emptions.
@@ -168,13 +164,16 @@ pbStep pb lifts (s, g) t = case _next g of
     -- pre-emption.
     nextPB = [ pref' y | y <- offspring lifts suff']
 
+    -- | The pre-emption count of the last explored schedule.
+    pc = preEmpCount $ map (\(d,_,_) -> d) t
+
 -- * Utils (Internal)
 
 -- | Return all modifications to this schedule which do not introduce
 -- extra pre-emptions.
 siblings :: SchedTrace -> [[Decision]]
-siblings ((Start    i, alts):ds) = [Start    i : o | o <- siblings ds, not $ null o] ++ [[a] | a <- alts]
-siblings ((SwitchTo i, alts):ds) = [SwitchTo i : o | o <- siblings ds, not $ null o] ++ [[a] | a <- alts]
+siblings ((Start    i, alts):ds) = [[a] | a <- alts] ++ [Start    i : o | o <- siblings ds, not $ null o]
+siblings ((SwitchTo i, alts):ds) = [[a] | a <- alts] ++ [SwitchTo i : o | o <- siblings ds, not $ null o]
 siblings ((d, _):ds) = [d : o | o <- siblings ds, not $ null o]
 siblings [] = []
 
@@ -182,7 +181,7 @@ siblings [] = []
 -- extra pre-emption. Only introduce pre-emptions around CVar actions.
 offspring :: Bool -> SCTTrace -> [[Decision]]
 offspring lifts ((Continue, alts, ta):ds)
-  | preCand lifts ta = [Continue : n | n <- offspring lifts ds, not $ null n] ++ [[n] | n <- alts]
+  | preCand lifts ta = [[n] | n <- alts] ++ [Continue : n | n <- offspring lifts ds, not $ null n]
   | otherwise = [Continue : n | n <- offspring lifts ds, not $ null n]
 offspring lifts ((d, _, _):ds) = [d : n | n <- offspring lifts ds, not $ null n]
 offspring _ [] = []
