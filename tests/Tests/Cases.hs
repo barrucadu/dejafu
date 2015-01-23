@@ -6,6 +6,8 @@ import Control.Monad.Conc.Class
 import Control.Monad.Conc.CVar
 import Control.Monad.Conc.SCT.Tests
 
+import qualified Tests.Logger as L
+
 data Test = Test { name :: String, result :: Result }
 
 -- | List of all tests
@@ -15,12 +17,13 @@ testCases =
   , Test "2 Philosophers"    $ runTest deadlocksSometimes $ philosophers 2
   , Test "3 Philosophers"    $ runTest deadlocksSometimes $ philosophers 3
   , Test "4 Philosophers"    $ runTest deadlocksSometimes $ philosophers 4
-  , Test "25 Philosophers"   $ runTest deadlocksSometimes $ philosophers 25
-  , Test "100 Philosophers"  $ runTest deadlocksSometimes $ philosophers 100
   , Test "Threshold Value"   $ runTest (pNot alwaysSame)    thresholdValue
   , Test "Forgotten Unlock"  $ runTest deadlocksAlways      forgottenUnlock
   , Test "Simple 2-Race"     $ runTest (pNot alwaysSame)    simple2Race
   , Test "Racey Stack"       $ runTest (pNot alwaysSame)    raceyStack
+  , Test "Logger (LA)"       $ L.testLA
+  , Test "Logger (LP)"       $ L.testLP
+  , Test "Logger (LE)"       $ L.testLE
   ]
 
 -- | Should deadlock on a minority of schedules.
