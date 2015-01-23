@@ -3,9 +3,8 @@
 -- | Useful functions for writing SCT test cases for @Conc@
 -- computations.
 module Control.Monad.Conc.SCT.Tests
-  ( -- * Test suites
-    Test(..)
-  , doTests
+  (
+  doTests
   -- * Test cases
   , Result(..)
   , runTest
@@ -41,27 +40,12 @@ import qualified Control.Monad.Conc.Fixed.IO as CIO
 
 -- * Test suites
 
--- | A single test, composed of a name to print when running test
--- suites, and a result.
-data Test a = Test
-  { _name :: String
-  -- ^ The name of the test case.
-  , _result :: Result a
-  -- ^ The result of the test case.
-  } deriving (Show, Eq)
-
-instance NFData a => NFData (Test a) where
-  rnf t = rnf (_name t, _result t)
-
-instance Functor Test where
-  fmap f t = t { _result = f <$> _result t }
-
 -- | Run a collection of tests (with a pb of 2), printing results to
 -- stdout, and returning 'True' iff all tests pass.
 doTests :: Show a =>
         Bool
         -- ^ Whether to print test passes.
-        -> [Test a]
+        -> [(String, Result a)]
         -- ^ The test cases
         -> IO Bool
 doTests verbose tests = do
@@ -69,8 +53,8 @@ doTests verbose tests = do
   return $ and results
 
 -- | Run a test and print to stdout
-doTest :: Show a => Bool -> Test a -> IO Bool
-doTest verbose (Test { _name = name, _result = result }) = do
+doTest :: Show a => Bool -> (String, Result a) -> IO Bool
+doTest verbose (name, result) = do
   if _pass result
   then
     -- If verbose, display a pass message.
