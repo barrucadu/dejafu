@@ -45,7 +45,7 @@ data Result = Result
   -- ^ The number of cases checked.
   , _casesTotal   :: Int
   -- ^ The total number of cases.
-  }
+  } deriving (Show, Read, Eq)
 
 instance NFData Result where
   rnf r = rnf (_pass r, _casesChecked r, _casesTotal r)
