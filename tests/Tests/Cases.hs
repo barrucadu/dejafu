@@ -73,7 +73,7 @@ thresholdValue = do
 
   fork $ lock l >> modifyCVar_ x (return . (+1)) >> unlock l
   fork $ lock l >> modifyCVar_ x (return . (+2)) >> unlock l
-  res <- spawn $ lock l >> readCVar x >>= \x' -> unlock l >> return (x' > 3)
+  res <- spawn $ lock l >> readCVar x >>= \x' -> unlock l >> return (x' >= 3)
 
   takeCVar res
 
