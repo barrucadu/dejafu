@@ -3,8 +3,11 @@
 -- | Useful functions for writing SCT test cases for @Conc@
 -- computations.
 module Control.Monad.Conc.SCT.Tests
-  ( -- * Test cases
-    Result(..)
+  ( -- * Test suites
+    Test(..)
+  , doTests
+  -- * Test cases
+  , Result(..)
   , runTest
   , runTestIO
   , runTest'
@@ -28,13 +31,59 @@ module Control.Monad.Conc.SCT.Tests
 import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
-import Control.Monad (void)
+import Control.Monad (when, void)
 import Control.Monad.Conc.Fixed
 import Control.Monad.Conc.SCT.Internal
 import Control.Monad.Conc.SCT.PreBound
 import Data.Maybe (isJust, isNothing)
 
 import qualified Control.Monad.Conc.Fixed.IO as CIO
+
+-- * Test suites
+
+-- | A single test, composed of a name to print when running test
+-- suites, and a result.
+data Test a = Test
+  { _name :: String
+  -- ^ The name of the test case.
+  , _result :: Result a
+  -- ^ The result of the test case.
+  } deriving (Show, Eq)
+
+instance NFData a => NFData (Test a) where
+  rnf t = rnf (_name t, _result t)
+
+instance Functor Test where
+  fmap f t = t { _result = f <$> _result t }
+
+-- | Run a collection of tests (with a pb of 2), printing results to
+-- stdout, and returning 'True' iff all tests pass.
+doTests :: Show a =>
+        Bool
+        -- ^ Whether to print test passes.
+        -> [Test a]
+        -- ^ The test cases
+        -> IO Bool
+doTests verbose tests = do
+  results <- mapM (doTest verbose) tests
+  return $ and results
+
+-- | Run a test and print to stdout
+doTest :: Show a => Bool -> Test a -> IO Bool
+doTest verbose (Test { _name = name, _result = result }) = do
+  if _pass result
+  then
+    -- If verbose, display a pass message.
+    when verbose $
+      putStrLn $ "\27[32m[pass]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")"
+  else do
+    -- Display a failure message, and the first 3 failed traces
+    putStrLn ("\27[31m[fail]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")")
+    mapM_ (\fail -> putStrLn $ "\t" ++ show fail) . take 3 $ _failures result
+    when (length (_failures result) > 3) $
+      putStrLn "\t..."
+
+  return $ _pass result
 
 -- * Test cases
 

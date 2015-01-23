@@ -8,10 +8,8 @@ import Control.Monad.Conc.SCT.Tests
 
 import qualified Tests.Logger as L
 
-data Test = Test { name :: String, result :: Result String }
-
 -- | List of all tests
-testCases :: [Test]
+testCases :: [Test String]
 testCases =
   [ Test "Simple 2-Deadlock" . fmap show $ runTest deadlocksSometimes   simple2Deadlock
   , Test "2 Philosophers"    . fmap show $ runTest deadlocksSometimes $ philosophers 2
