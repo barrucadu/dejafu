@@ -59,6 +59,7 @@ library
   build-depends:       base >=4.6 && <5
                      , containers
                      , deepseq
+                     , monad-loops
                      , monad-st
                      , mtl
                      , random

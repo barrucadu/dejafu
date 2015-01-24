@@ -5,8 +5,8 @@
 module Control.Monad.Conc.SCT.Internal where
 
 import Control.DeepSeq (NFData(..))
-import Control.Monad (liftM)
 import Control.Monad.Conc.Fixed
+import Control.Monad.Loops (unfoldrM)
 import Data.List (unfoldr)
 
 import qualified Control.Monad.Conc.Fixed.IO as CIO
@@ -115,10 +115,6 @@ runSCTIO' sched initial term step c = unfoldrM go initial where
       let sg' = step (s', g) trace
 
       res `seq` return (Just ((res, trace), sg'))
-
--- | Like 'unfoldr', but monadic.
-unfoldrM :: Monad m => (b -> m (Maybe (a, b))) -> b -> m [a]
-unfoldrM f b = f b >>= maybe (return []) (\(a, b') -> (a:) `liftM` unfoldrM f b')
 
 -- * Utils (Internal)
 
