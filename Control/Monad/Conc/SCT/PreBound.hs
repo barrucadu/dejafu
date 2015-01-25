@@ -132,16 +132,21 @@ pbStep pb lifts (s, g) t = case _next g of
   --
   -- If there are no more schedules, halt.
   Empty ->
-    case thisPB of
-      (x:xs)
+    case (thisPB, nextPB) of
+      -- We still have schedules in the current PB, so add those to
+      -- the queue (and any schedules from the next PB if we're not at
+      -- the limit)
+      (x:xs, _)
         | pb /= pc   -> (s' x, g { _next = nextPB +| xs +| Empty })
         | otherwise -> (s' x, g { _next =           xs +| Empty })
-      []
-        | pb /= pc ->
-          case nextPB of
-            (x:xs) -> (s' x, g { _next = xs +| Empty })
-            [] -> (s' [], g { _halt = True })
-        | otherwise -> (s' [], g { _halt = True })
+
+      -- No schedules left in this PB, but if we have some more from
+      -- the next PB (and we're not at the limit) add those.
+      ([], x:xs)
+        | pb /= pc   -> (s' x, g { _next = xs +| Empty })
+
+      -- No schedules left at all, so halt.
+      _ -> halt
 
   where
     -- The prefix and suffix are in reverse order, fix those.
@@ -155,6 +160,9 @@ pbStep pb lifts (s, g) t = case _next g of
 
     -- | New scheduler state, with a given list of initial decisions.
     s' ds = pbInitialS { _decisions = ds }
+
+    -- | The halt state
+    halt = (pbInitialS, g { _halt = True })
 
     -- | All schedules we get from the current one WITHOUT introducing
     -- any pre-emptions.

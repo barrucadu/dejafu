@@ -3,8 +3,7 @@
 -- | Useful functions for writing SCT test cases for @Conc@
 -- computations.
 module Control.Monad.Conc.SCT.Tests
-  (
-  doTests
+  ( doTests
   -- * Test cases
   , Result(..)
   , runTest

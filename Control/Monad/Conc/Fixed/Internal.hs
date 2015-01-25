@@ -13,7 +13,7 @@ import Data.Maybe (catMaybes, fromJust, isNothing)
 
 import qualified Data.Map as M
 
--- * Types
+-- * The @Conc@ Monad
 
 -- | The underlying monad is based on continuations over Actions.
 type M n r a = Cont (Action n r) a
@@ -22,8 +22,7 @@ type M n r a = Cont (Action n r) a
 -- and a list of things blocked on it.
 type R r a = r (Maybe a, [Block])
 
--- | Doing this with a typeclass proved to be really hard, so here's a
--- dict of methods for different implementations to override!
+-- | Dict of methods for concrete implementations to override.
 data Fixed c n r t = F
   { newRef   :: forall a. a -> n (r a)
   -- ^ Create a new reference
@@ -38,6 +37,8 @@ data Fixed c n r t = F
   -- type.
   }
 
+-- * Non-Empty Lists
+
 -- | The type of non-empty lists.
 data NonEmpty a = a :| [a] deriving (Eq, Ord, Read, Show)
 
@@ -51,12 +52,12 @@ instance NFData a => NFData (NonEmpty a) where
 toList :: NonEmpty a -> [a]
 toList (a :| as) = a : as
 
--- * Running @Conc@ monads
+-- * Running @Conc@ Computations
 
 -- | Scheduling is done in terms of a trace of 'Action's. Blocking can
 -- only occur as a result of an action, and they cover (most of) the
--- primitives of the concurrency. 'spawn' is absent as it can be
--- derived from 'new', 'fork' and 'put'.
+-- primitives of the concurrency. 'spawn' is absent as it is
+-- implemented in terms of 'newEmptyCVar', 'fork', and 'putCVar'.
 data Action n r =
     AFork (Action n r) (Action n r)
   | forall a. APut     (R r a) a (Action n r)
@@ -77,10 +78,11 @@ type ThreadId = Int
 -- 'ThreadId' of the last thread scheduled, and the list of runnable
 -- threads. It produces a 'ThreadId' to schedule, and a new state.
 --
--- Note: In order to prevent deadlock, the 'Conc' runtime will assume
--- that a deadlock situation has arisen if the scheduler attempts to
--- (a) schedule a blocked thread, or (b) schedule a nonexistant
--- thread. In either of those cases, the computation will be halted.
+-- Note: In order to prevent computation from hanging, the 'Conc'
+-- runtime will assume that a deadlock situation has arisen if the
+-- scheduler attempts to (a) schedule a blocked thread, or (b)
+-- schedule a nonexistent thread. In either of those cases, the
+-- computation will be halted.
 type Scheduler s = s -> ThreadId -> NonEmpty ThreadId -> (ThreadId, s)
 
 -- | One of the outputs of the runner is a @Trace@, which is just a
@@ -110,7 +112,9 @@ data ThreadAction =
   | TryTake Bool [ThreadId]
   -- ^ Try to take from a 'CVar', possibly waking up some threads.
   | Lift
-  -- ^ Lift an action from the underlying monad.
+  -- ^ Lift an action from the underlying monad. Note that the
+  -- penultimate action in a trace will always be a @Lift@, this is an
+  -- artefact of how the runner works.
   | Stop
   -- ^ Cease execution and terminate.
   deriving (Eq, Show)
@@ -136,7 +140,7 @@ runFixed :: (Monad (c t), Monad n) => Fixed c n r t
          -> Scheduler s -> s -> c t a -> n (Maybe a)
 runFixed fixed sched s ma = liftM (\(a,_,_) -> a) $ runFixed' fixed sched s ma
 
--- | Variant of 'runConc' which returns the final state of the
+-- | Variant of 'runFixed' which returns the final state of the
 -- scheduler and an execution trace.
 runFixed' :: (Monad (c t), Monad n) => Fixed c n r t
           -> Scheduler s -> s -> c t a -> n (Maybe a, s, Trace)
@@ -281,7 +285,7 @@ stepTryTake ref c fixed i threads = do
       writeRef fixed ref (Nothing, blocks)
       (threads', woken) <- wake fixed ref WaitEmpty threads
       return (goto (c val) i threads', TryTake True woken)
-    Nothing   -> return (goto (c Nothing) i threads, TryTake False [])
+    Nothing -> return (goto (c Nothing) i threads, TryTake False [])
 
 -- | Create a new @CVar@. This is exactly the same as lifting a value,
 -- except by separating the two we can (a) produce a more useful

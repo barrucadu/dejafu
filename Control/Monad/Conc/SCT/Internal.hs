@@ -44,9 +44,9 @@ data Decision =
   deriving (Eq, Show)
 
 instance NFData Decision where
-  rnf (Start tid) = rnf tid
-  rnf  Continue = ()
+  rnf (Start    tid) = rnf tid
   rnf (SwitchTo tid) = rnf tid
+  rnf Continue = ()
 
 -- * SCT Runners
 

@@ -47,7 +47,6 @@ library
   exposed-modules:     Control.Monad.Conc.Class
                      , Control.Monad.Conc.CVar
                      , Control.Monad.Conc.Fixed
-                     , Control.Monad.Conc.Fixed.ST
                      , Control.Monad.Conc.Fixed.IO
                      , Control.Monad.Conc.Fixed.Schedulers
                      , Control.Monad.Conc.SCT
@@ -60,7 +59,6 @@ library
                      , containers
                      , deepseq
                      , monad-loops
-                     , monad-st
                      , mtl
                      , random
                      , transformers

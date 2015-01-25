@@ -79,22 +79,24 @@ makeSCT :: Scheduler s -> SCTScheduler s
 makeSCT sched (s, trace) prior threads = (tid, (s', (decision, alters) : trace)) where
   (tid, s') = sched s prior threads
 
-  decision | tid == prior           = Continue
-           | prior `elem` threads' = SwitchTo tid
-           | otherwise             = Start tid
+  decision
+    | tid == prior           = Continue
+    | prior `elem` threads' = SwitchTo tid
+    | otherwise             = Start tid
 
-  alters | tid == prior           = map SwitchTo $ filter (/=prior) threads'
-         | prior `elem` threads' = Continue : map SwitchTo (filter (\t -> t /= prior && t /= tid) threads')
-         | otherwise             = map Start $ filter (/=tid) threads'
+  alters
+    | tid == prior           = map SwitchTo $ filter (/=prior) threads'
+    | prior `elem` threads' = Continue : map SwitchTo (filter (\t -> t /= prior && t /= tid) threads')
+    | otherwise             = map Start $ filter (/=tid) threads'
 
   threads' = toList threads
 
 -- | Pretty-print a scheduler trace.
 showTrace :: SchedTrace -> String
 showTrace = trace "" 0 . map fst where
-    trace prefix num (Start tid:ds)    = thread prefix num ++ trace ("S" ++ show tid) 1 ds
-    trace prefix num (SwitchTo tid:ds) = thread prefix num ++ trace ("P" ++ show tid) 1 ds
-    trace prefix num (Continue:ds)     = trace prefix (num + 1) ds
-    trace prefix num []                = thread prefix num
+  trace prefix num (Start tid:ds)    = thread prefix num ++ trace ("S" ++ show tid) 1 ds
+  trace prefix num (SwitchTo tid:ds) = thread prefix num ++ trace ("P" ++ show tid) 1 ds
+  trace prefix num (Continue:ds)     = trace prefix (num + 1) ds
+  trace prefix num []                = thread prefix num
 
-    thread prefix num = prefix ++ replicate num '-'
+  thread prefix num = prefix ++ replicate num '-'

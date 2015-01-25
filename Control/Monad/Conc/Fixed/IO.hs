@@ -29,10 +29,14 @@ module Control.Monad.Conc.Fixed.IO
   , readCVar
   , takeCVar
   , tryTakeCVar
+
+  -- * Schedulers
+  , module Control.Monad.Conc.Fixed.Schedulers
   ) where
 
 import Control.Applicative (Applicative(..), (<$>))
 import Control.Monad.Conc.Fixed.Internal
+import Control.Monad.Conc.Fixed.Schedulers
 import Control.Monad.Cont (cont, runCont)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 
@@ -126,7 +130,7 @@ tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 -- Note how the @t@ in 'Conc' is universally quantified, what this
 -- means in practice is that you can't do something like this:
 --
--- > runConc (\s _ (x:_) -> (x, s)) () $ new >>= return
+-- > runConc (\s _ (x:_) -> (x, s)) () newEmptyCVar
 --
 -- So 'CVar's cannot leak out of the 'Conc' computation. If this is
 -- making your head hurt, check out the \"How @runST@ works\" section
