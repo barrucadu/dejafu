@@ -116,7 +116,7 @@ runSCTIO' sched initial term step c = unfoldrM go initial where
 
       res `seq` return (Just ((res, trace), sg'))
 
--- * Schedulers
+-- * Schedulers and Traces
 
 -- | Convert a 'Scheduler' to an 'SCTScheduler' by recording the
 -- trace.
@@ -135,6 +135,16 @@ makeSCT sched (s, trace) prior threads = (tid, (s', (decision, alters) : trace))
     | otherwise             = map Start $ filter (/=tid) threads'
 
   threads' = toList threads
+
+-- | Pretty-print a scheduler trace.
+showTrace :: SchedTrace -> String
+showTrace = trace "" 0 . map fst where
+  trace prefix num (Start tid:ds)    = thread prefix num ++ trace ("S" ++ show tid) 1 ds
+  trace prefix num (SwitchTo tid:ds) = thread prefix num ++ trace ("P" ++ show tid) 1 ds
+  trace prefix num (Continue:ds)     = trace prefix (num + 1) ds
+  trace prefix num []                = thread prefix num
+
+  thread prefix num = prefix ++ replicate num '-'
 
 -- * Utils (Internal)
 

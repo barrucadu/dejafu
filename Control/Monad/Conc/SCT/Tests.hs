@@ -4,6 +4,7 @@
 -- computations.
 module Control.Monad.Conc.SCT.Tests
   ( doTests
+  , doTests'
   -- * Test cases
   , Result(..)
   , runTest
@@ -41,32 +42,75 @@ import qualified Control.Monad.Conc.Fixed.IO as CIO
 
 -- | Run a collection of tests (with a pb of 2), printing results to
 -- stdout, and returning 'True' iff all tests pass.
-doTests :: Show a =>
-        Bool
+doTests :: Show a
+        => Bool
         -- ^ Whether to print test passes.
         -> [(String, Result a)]
         -- ^ The test cases
         -> IO Bool
-doTests verbose tests = do
-  results <- mapM (doTest verbose) tests
+doTests = doTests' show
+
+-- | Variant of 'doTests' which takes a result printing function.
+doTests' :: (a -> String) -> Bool -> [(String, Result a)] -> IO Bool
+doTests' showf verbose tests = do
+  results <- mapM (doTest showf verbose) tests
   return $ and results
 
 -- | Run a test and print to stdout
-doTest :: Show a => Bool -> (String, Result a) -> IO Bool
-doTest verbose (name, result) = do
+doTest :: (a -> String) -> Bool -> (String, Result a) -> IO Bool
+doTest showf verbose (name, result) = do
   if _pass result
   then
     -- If verbose, display a pass message.
     when verbose $
       putStrLn $ "\27[32m[pass]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")"
   else do
-    -- Display a failure message, and the first 3 failed traces
+    -- Display a failure message, and the first 5 (simplified) failed traces
     putStrLn ("\27[31m[fail]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")")
-    mapM_ (\fail -> putStrLn $ "\t" ++ show fail) . take 3 $ _failures result
-    when (length (_failures result) > 3) $
+    let traces = let (rs, ts) = unzip . take 5 $ _failures result in rs `zip` simplify ts
+    mapM_ (\(r, t) -> putStrLn $ "\t" ++ maybe "[deadlock]" showf r ++ " " ++ showtrc t) traces
+    when (length (_failures result) > 5) $
       putStrLn "\t..."
 
   return $ _pass result
+
+-- | Simplify a collection of traces, by attempting to factor out
+-- common prefixes and suffixes.
+simplify :: [SCTTrace] -> [(SCTTrace, SCTTrace, SCTTrace)]
+simplify [t] = [([], t, [])]
+simplify ts = map (\t -> (pref, drop plen $ take (length t - slen) t, suff)) ts where
+  pref = commonPrefix ts
+  plen = length pref
+  suff = commonSuffix ts
+  slen = length suff
+
+  -- | Common prefix of a bunch of lists
+  commonPrefix = foldl1 commonPrefix2
+
+  -- | Common suffix of a bunch of lists
+  commonSuffix = reverse . commonPrefix . map reverse
+
+  -- | Common prefix of two lists
+  commonPrefix2 [] _ = []
+  commonPrefix2 _ [] = []
+  commonPrefix2 (x:xs) (y:ys)
+    | x == y     = x : commonPrefix2 xs ys
+    | otherwise = []
+
+-- | Pretty-print a simplified trace
+showtrc :: (SCTTrace, SCTTrace, SCTTrace) -> String
+showtrc (p, t, s) = case (p, s) of
+  ([], []) -> hilight ++ showtrc' t ++ reset
+  ([], _)  -> hilight ++ showtrc' t ++ reset ++ s'
+  (_, [])  -> p' ++ hilight ++ showtrc' t ++ reset
+  (_, _)   -> p' ++ hilight ++ showtrc' t ++ reset ++ s'
+
+  where
+    showtrc' = showTrace . map (\(d,as,_) -> (d,as))
+    hilight = "\27[33m"
+    reset   = "\27[0m"
+    p' = (if length p > 25 then ("..." ++) . reverse . take 25 . reverse else id) $ showtrc' p
+    s' = (if length s > 25 then (++ "...") . take 25 else id) $ showtrc' s
 
 -- * Test cases
 

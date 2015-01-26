@@ -88,13 +88,3 @@ preEmpCount :: [Decision] -> Int
 preEmpCount (SwitchTo _:ss) = 1 + preEmpCount ss
 preEmpCount (_:ss) = preEmpCount ss
 preEmpCount [] = 0
-
--- | Pretty-print a scheduler trace.
-showTrace :: SchedTrace -> String
-showTrace = trace "" 0 . map fst where
-  trace prefix num (Start tid:ds)    = thread prefix num ++ trace ("S" ++ show tid) 1 ds
-  trace prefix num (SwitchTo tid:ds) = thread prefix num ++ trace ("P" ++ show tid) 1 ds
-  trace prefix num (Continue:ds)     = trace prefix (num + 1) ds
-  trace prefix num []                = thread prefix num
-
-  thread prefix num = prefix ++ replicate num '-'
