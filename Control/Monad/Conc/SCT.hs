@@ -46,19 +46,29 @@ module Control.Monad.Conc.SCT
  , sctRandom
  , sctRandomNP
 
- -- * Pre-emption Bounding
+ -- * Schedule Bounding
+ -- | Schedule bounding is a means of cutting down the search space of
+ -- schedules, by taking advantage of some intrinsic properties of
+ -- schedules: such as the number of pre-emptions (pre-emption
+ -- bounding), or the number of deviations from a deterministic
+ -- scheduler (delay bounding); and then exploring all schedules
+ -- within the bound.
+ , sctBounded
+ , sctBoundedIO
  , sctPreBound
  , sctPreBoundIO
- , preEmpCount
+ , sctDelayBound
+ , sctDelayBoundIO
 
  -- * Utilities
  , makeSCT
+ , preEmpCount
  , showTrace
  ) where
 
 import Control.Monad.Conc.Fixed
 import Control.Monad.Conc.SCT.Internal
-import Control.Monad.Conc.SCT.PreBound
+import Control.Monad.Conc.SCT.Bounding
 import System.Random (RandomGen)
 
 -- * Random Schedulers
@@ -73,23 +83,11 @@ sctRandomNP = makeSCT randomSchedNP
 
 -- * Utils
 
--- | Convert a 'Scheduler' to an 'SCTScheduler' by recording the
--- trace.
-makeSCT :: Scheduler s -> SCTScheduler s
-makeSCT sched (s, trace) prior threads = (tid, (s', (decision, alters) : trace)) where
-  (tid, s') = sched s prior threads
-
-  decision
-    | tid == prior           = Continue
-    | prior `elem` threads' = SwitchTo tid
-    | otherwise             = Start tid
-
-  alters
-    | tid == prior           = map SwitchTo $ filter (/=prior) threads'
-    | prior `elem` threads' = Continue : map SwitchTo (filter (\t -> t /= prior && t /= tid) threads')
-    | otherwise             = map Start $ filter (/=tid) threads'
-
-  threads' = toList threads
+-- | Check the pre-emption count of some scheduling decisions.
+preEmpCount :: [Decision] -> Int
+preEmpCount (SwitchTo _:ss) = 1 + preEmpCount ss
+preEmpCount (_:ss) = preEmpCount ss
+preEmpCount [] = 0
 
 -- | Pretty-print a scheduler trace.
 showTrace :: SchedTrace -> String

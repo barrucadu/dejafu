@@ -32,7 +32,7 @@ import Control.DeepSeq (NFData(..))
 import Control.Monad (when, void)
 import Control.Monad.Conc.Fixed
 import Control.Monad.Conc.SCT.Internal
-import Control.Monad.Conc.SCT.PreBound
+import Control.Monad.Conc.SCT.Bounding
 import Data.Maybe (isJust, isNothing)
 
 import qualified Control.Monad.Conc.Fixed.IO as CIO
