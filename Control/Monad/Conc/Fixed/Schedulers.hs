@@ -16,6 +16,7 @@ module Control.Monad.Conc.Fixed.Schedulers
   ) where
 
 import Control.Monad.Conc.Fixed.Internal
+import Data.List.Extra
 import System.Random (RandomGen, randomR)
 
 -- | A simple random scheduler which, at every step, picks a random

@@ -34,6 +34,7 @@ import Control.Monad (when, void)
 import Control.Monad.Conc.Fixed
 import Control.Monad.Conc.SCT.Internal
 import Control.Monad.Conc.SCT.Bounding
+import Data.List.Extra
 import Data.Maybe (isJust, isNothing)
 
 import qualified Control.Monad.Conc.Fixed.IO as CIO
@@ -83,19 +84,6 @@ simplify ts = map (\t -> (pref, drop plen $ take (length t - slen) t, suff)) ts 
   plen = length pref
   suff = commonSuffix ts
   slen = length suff
-
-  -- | Common prefix of a bunch of lists
-  commonPrefix = foldl1 commonPrefix2
-
-  -- | Common suffix of a bunch of lists
-  commonSuffix = reverse . commonPrefix . map reverse
-
-  -- | Common prefix of two lists
-  commonPrefix2 [] _ = []
-  commonPrefix2 _ [] = []
-  commonPrefix2 (x:xs) (y:ys)
-    | x == y     = x : commonPrefix2 xs ys
-    | otherwise = []
 
 -- | Pretty-print a simplified trace
 showtrc :: (SCTTrace, SCTTrace, SCTTrace) -> String

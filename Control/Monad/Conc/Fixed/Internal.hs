@@ -8,6 +8,7 @@ module Control.Monad.Conc.Fixed.Internal where
 import Control.DeepSeq (NFData(..))
 import Control.Monad (liftM, mapAndUnzipM)
 import Control.Monad.Cont (Cont, runCont)
+import Data.List.Extra
 import Data.Map (Map)
 import Data.Maybe (catMaybes, fromJust, isNothing)
 
@@ -36,21 +37,6 @@ data Fixed c n r t = F
   -- ^ Unpack the continuation-based computation from its wrapping
   -- type.
   }
-
--- * Non-Empty Lists
-
--- | The type of non-empty lists.
-data NonEmpty a = a :| [a] deriving (Eq, Ord, Read, Show)
-
-instance Functor NonEmpty where
-  fmap f (a :| as) = f a :| map f as
-
-instance NFData a => NFData (NonEmpty a) where
-  rnf (x:|xs) = rnf (x, xs)
-
--- | Convert a 'NonEmpty' to a regular non-empty list.
-toList :: NonEmpty a -> [a]
-toList (a :| as) = a : as
 
 -- * Running @Conc@ Computations
 

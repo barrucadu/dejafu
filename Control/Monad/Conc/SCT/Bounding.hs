@@ -7,6 +7,7 @@ module Control.Monad.Conc.SCT.Bounding where
 import Control.DeepSeq (NFData(..), force)
 import Control.Monad.Conc.Fixed
 import Control.Monad.Conc.SCT.Internal
+import Data.List.Extra
 
 import qualified Control.Monad.Conc.Fixed.IO as CIO
 
@@ -83,16 +84,6 @@ sctBoundedIO siblings offspring b = runSCTIO' prefixSched (initialS, initialG) b
 
 -- * State
 
--- | Data type representing a lazy, chunky, tagged, stream of data.
-data Lazy t a = Lazy (t, NonEmpty a) (Lazy t a) | Empty t
-
--- | Prepend a value onto a lazy stream.
-(+|) :: (t, [a]) -> Lazy t a -> Lazy t a
-(_, [])   +| l = l
-(t, x:xs) +| l = Lazy (t, x:|xs) l
-
-infixr +|
-
 -- | State for the prefix scheduler.
 data Sched = S
   { _decisions :: [Decision]
@@ -106,7 +97,7 @@ instance NFData Sched where
 
 -- | State for the bounded runner.
 data State = P
-  { _next :: Lazy Int [Decision]
+  { _next :: Stream Int [Decision]
   -- ^ Schedules to try.
   , _halt :: Bool
   -- ^ Indicates more schedules couldn't be found, and to halt
@@ -159,7 +150,7 @@ bStep :: (SCTTrace -> [[Decision]])
       -> (Sched, State) -> SCTTrace -> (Sched, State)
 bStep siblings offspring blim (s, g) t = case _next g of
   -- We have schedules remaining, so run the next
-  Lazy (b, x:|xs) rest
+  Stream (b, x:|xs) rest
     | b /= blim  -> (s' x, g { _next = (b+1, next) +| (b, this) +| (b, xs) +| rest })
     | otherwise -> (s' x, g { _next =                (b, this) +| (b, xs) +| rest })
 
@@ -184,7 +175,7 @@ bStep siblings offspring blim (s, g) t = case _next g of
       _ -> halt
 
   where
-    (pref, suff) = let ((Start 0,_,_):px, sx) = splitAt (_prefixlen s + 1) t in ((map (\(d,_,_) -> d) px ++), sx)
+    (pref, suff) = splitAtF (\((Start 0,_,_):px) -> (map (\(d,_,_) -> d) px ++)) id (_prefixlen s + 1) t
 
     -- | New scheduler state, with a given list of initial decisions.
     s' ds = initialS { _decisions = ds, _prefixlen = length ds }
