@@ -45,13 +45,16 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Control.Monad.Conc.Class
-                     , Control.Monad.Conc.CVar
-                     , Control.Monad.Conc.CVar.Strict
+
+                     , Control.Concurrent.CVar
+                     , Control.Concurrent.CVar.Strict
+
                      , Control.Monad.Conc.Fixed
                      , Control.Monad.Conc.Fixed.IO
                      , Control.Monad.Conc.Fixed.Schedulers
                      , Control.Monad.Conc.SCT
                      , Control.Monad.Conc.SCT.Tests
+
   other-modules:       Control.Monad.Conc.Fixed.Internal
                      , Control.Monad.Conc.SCT.Bounding
                      , Control.Monad.Conc.SCT.Internal

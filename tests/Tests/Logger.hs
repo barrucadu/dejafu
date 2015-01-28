@@ -9,8 +9,8 @@ module Tests.Logger
   , testLA, testLP, testLE
   ) where
 
+import Control.Concurrent.CVar
 import Control.Monad.Conc.Class
-import Control.Monad.Conc.CVar
 import Control.Monad.Conc.SCT.Tests
 
 data Logger m = Logger (CVar m LogCommand) (CVar m [String])

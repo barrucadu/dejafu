@@ -3,7 +3,7 @@
 -- that these do not in general mask exceptions, and are not atomic,
 -- being implemented in terms of the primitives in the 'MonadConc'
 -- typeclass.
-module Control.Monad.Conc.CVar
+module Control.Concurrent.CVar
  ( -- *@CVar@s
   CVar
  , newEmptyCVar

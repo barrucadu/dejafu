@@ -3,8 +3,8 @@ module Tests.Cases where
 
 import Control.Applicative ((<$>))
 import Control.Monad (replicateM)
+import Control.Concurrent.CVar
 import Control.Monad.Conc.Class
-import Control.Monad.Conc.CVar
 import Control.Monad.Conc.SCT.Tests
 
 import qualified Tests.Logger as L
