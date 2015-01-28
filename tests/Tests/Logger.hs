@@ -13,12 +13,12 @@ import Control.Monad.Conc.Class
 import Control.Monad.Conc.CVar
 import Control.Monad.Conc.SCT.Tests
 
-data Logger cvar = Logger (cvar LogCommand) (cvar [String])
+data Logger m = Logger (CVar m LogCommand) (CVar m [String])
 
 data LogCommand = Message String | Stop
 
 -- | Create a new logger with no internal log.
-initLogger :: ConcCVar cvar m => m (Logger cvar)
+initLogger :: MonadConc m => m (Logger m)
 initLogger = do
   cmd <- newEmptyCVar
   log <- newCVar []
@@ -26,7 +26,7 @@ initLogger = do
   fork $ logger l
   return l
 
-logger :: ConcCVar cvar m => Logger cvar -> m ()
+logger :: MonadConc m => Logger m -> m ()
 logger (Logger cmd log) = loop where
   loop = do
     command <- takeCVar cmd
@@ -38,17 +38,17 @@ logger (Logger cmd log) = loop where
       Stop -> return ()
 
 -- | Add a string to the log.
-logMessage :: ConcCVar cvar m => Logger cvar -> String -> m ()
+logMessage :: MonadConc m => Logger m -> String -> m ()
 logMessage (Logger cmd _) str = putCVar cmd $ Message str
 
 -- | Stop the logger and return the contents of the log.
-logStop :: ConcCVar cvar m => Logger cvar -> m [String]
+logStop :: MonadConc m => Logger m -> m [String]
 logStop (Logger cmd log) = do
   putCVar cmd Stop
   readCVar log
 
 -- | Race condition! Can you see where?
-bad :: ConcCVar cvar m => m [String]
+bad :: MonadConc m => m [String]
 bad = do
   l <- initLogger
   logMessage l "Hello"

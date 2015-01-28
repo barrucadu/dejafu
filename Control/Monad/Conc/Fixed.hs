@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE Rank2Types                 #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 -- | Concurrent monads with a fixed scheduler.
 module Control.Monad.Conc.Fixed
@@ -10,8 +10,8 @@ module Control.Monad.Conc.Fixed
   , ThreadAction(..)
   , runConc
   , runConc'
-  , spawn
   , fork
+  , spawn
 
   -- * Communication: CVars
   , CVar
@@ -41,15 +41,14 @@ import qualified Control.Monad.Conc.Class as C
 -- monad. See 'runConc' for an example of what this means.
 newtype Conc t a = C { unC :: M (ST t) (STRef t) a } deriving (Functor, Applicative, Monad)
 
-instance C.ConcFuture (CVar t) (Conc t) where
-  spawn    = spawn
-  readCVar = readCVar
+instance C.MonadConc (Conc t) where
+  type CVar (Conc t) = CVar t
 
-instance C.ConcCVar (CVar t) (Conc t) where
   fork         = fork
   newEmptyCVar = newEmptyCVar
   putCVar      = putCVar
   tryPutCVar   = tryPutCVar
+  readCVar     = readCVar
   takeCVar     = takeCVar
   tryTakeCVar  = tryTakeCVar
 
@@ -72,7 +71,7 @@ newtype CVar t a = V { unV :: R (STRef t) a } deriving Eq
 
 -- | Run the provided computation concurrently, returning the result.
 spawn :: Conc t a -> Conc t (CVar t a)
-spawn = C.defaultSpawn
+spawn = C.spawn
 
 -- | Block on a 'CVar' until it is full, then read from it (without
 -- emptying).

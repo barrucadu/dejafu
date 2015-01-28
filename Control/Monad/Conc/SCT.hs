@@ -6,7 +6,7 @@
 -- update the shared variable, and release the locks. The main thread
 -- waits for them both to terminate, and returns the final result.
 --
--- > bad :: ConcCVar cvar m => m Int
+-- > bad :: MonadConc m => m Int
 -- > bad = do
 -- >   a <- newEmptyCVar
 -- >   b <- newEmptyCVar

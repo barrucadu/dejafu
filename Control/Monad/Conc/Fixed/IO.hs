@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE Rank2Types                 #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 -- | Concurrent monads with a fixed scheduler which can do IO.
 --
@@ -18,8 +18,8 @@ module Control.Monad.Conc.Fixed.IO
   , runConc
   , runConc'
   , liftIO
-  , spawn
   , fork
+  , spawn
 
   -- * Communication: CVars
   , CVar
@@ -52,15 +52,14 @@ newtype Conc t a = C { unC :: M IO IORef a } deriving (Functor, Applicative, Mon
 instance IO.MonadIO (Conc t) where
   liftIO = liftIO
 
-instance C.ConcFuture (CVar t) (Conc t) where
-  spawn    = spawn
-  readCVar = readCVar
+instance C.MonadConc (Conc t) where
+  type CVar (Conc t) = CVar t
 
-instance C.ConcCVar (CVar t) (Conc t) where
   fork         = fork
   newEmptyCVar = newEmptyCVar
   putCVar      = putCVar
   tryPutCVar   = tryPutCVar
+  readCVar     = readCVar
   takeCVar     = takeCVar
   tryTakeCVar  = tryTakeCVar
 
@@ -89,7 +88,7 @@ liftIO ma = C $ cont lifted where
 
 -- | Run the provided computation concurrently, returning the result.
 spawn :: Conc t a -> Conc t (CVar t a)
-spawn = C.defaultSpawn
+spawn = C.spawn
 
 -- | Block on a 'CVar' until it is full, then read from it (without
 -- emptying).

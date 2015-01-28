@@ -26,7 +26,7 @@ testCases =
   ]
 
 -- | Should deadlock on a minority of schedules.
-simple2Deadlock :: ConcCVar cvar m => m Int
+simple2Deadlock :: MonadConc m => m Int
 simple2Deadlock = do
   a <- newEmptyCVar
   b <- newEmptyCVar
@@ -43,7 +43,7 @@ simple2Deadlock = do
 
 -- | Dining philosophers problem, result is irrelevent, we just want
 -- deadlocks.
-philosophers :: ConcCVar cvar m => Int -> m ()
+philosophers :: MonadConc m => Int -> m ()
 philosophers n = do
   forks <- replicateM n newEmptyCVar
   let phils = map (\(i,p) -> p i forks) $ zip [0..] $ replicate n philosopher
@@ -65,7 +65,7 @@ philosophers n = do
 
 -- | Checks if a value has been increased above a threshold, data
 -- racey.
-thresholdValue :: ConcCVar cvar m => m Bool
+thresholdValue :: MonadConc m => m Bool
 thresholdValue = do
   l <- newEmptyCVar
   x <- newCVar 0
@@ -77,7 +77,7 @@ thresholdValue = do
   takeCVar res
 
 -- | A lock taken but never released.
-forgottenUnlock :: ConcCVar cvar m => m ()
+forgottenUnlock :: MonadConc m => m ()
 forgottenUnlock = do
   l <- newEmptyCVar
   m <- newEmptyCVar
@@ -91,7 +91,7 @@ forgottenUnlock = do
   takeCVar j2
 
 -- | Very simple data race between two threads.
-simple2Race :: ConcCVar cvar m => m Int
+simple2Race :: MonadConc m => m Int
 simple2Race = do
   x <- newEmptyCVar
 
@@ -101,7 +101,7 @@ simple2Race = do
   readCVar x
 
 -- | Race on popping from a stack.
-raceyStack :: ConcCVar cvar m => m (Maybe Int)
+raceyStack :: MonadConc m => m (Maybe Int)
 raceyStack = do
   s <- newCVar []
 
