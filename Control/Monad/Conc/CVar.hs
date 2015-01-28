@@ -1,18 +1,23 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-
 -- | Combinators using @CVar@s. These provide many of the helpful
 -- functions found in Control.Concurrent.MVar, but for @CVar@s. Note
 -- that these do not in general mask exceptions, and are not atomic,
 -- being implemented in terms of the primitives in the 'MonadConc'
 -- typeclass.
 module Control.Monad.Conc.CVar
- ( -- *Combinators
-   newCVar
+ ( -- *@CVar@s
+  CVar
+ , newEmptyCVar
+ , newCVar
+ , takeCVar
+ , putCVar
+ , readCVar
  , swapCVar
+ , tryTakeCVar
+ , tryPutCVar
  , isEmptyCVar
  , withCVar
- , modifyCVar
  , modifyCVar_
+ , modifyCVar
 
  -- * Binary semaphores
  -- | A common use of @CVar@s is in making binary semaphores to
