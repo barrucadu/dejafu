@@ -80,11 +80,3 @@ sctRandom = makeSCT randomSched
 -- | A random scheduler with no pre-emption.
 sctRandomNP :: RandomGen g => SCTScheduler g
 sctRandomNP = makeSCT randomSchedNP
-
--- * Utils
-
--- | Check the pre-emption count of some scheduling decisions.
-preEmpCount :: [Decision] -> Int
-preEmpCount (SwitchTo _:ss) = 1 + preEmpCount ss
-preEmpCount (_:ss) = preEmpCount ss
-preEmpCount [] = 0

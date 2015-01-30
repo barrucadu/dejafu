@@ -34,8 +34,11 @@ import Control.Monad (when, void)
 import Control.Monad.Conc.Fixed
 import Control.Monad.Conc.SCT.Internal
 import Control.Monad.Conc.SCT.Bounding
+import Control.Monad.Conc.SCT.Shrink
+import Data.Function (on)
+import Data.List (groupBy, foldl')
 import Data.List.Extra
-import Data.Maybe (isJust, isNothing)
+import Data.Maybe (mapMaybe, isJust, isNothing)
 
 import qualified Control.Monad.Conc.Fixed.IO as CIO
 
@@ -70,7 +73,7 @@ doTest showf verbose (name, result) = do
     putStrLn ("\27[31m[fail]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")")
     let traces = let (rs, ts) = unzip . take 5 $ _failures result in rs `zip` simplify ts
     mapM_ (\(r, t) -> putStrLn $ "\t" ++ maybe "[deadlock]" showf r ++ " " ++ showtrc t) traces
-    when (length (_failures result) > 5) $
+    when (moreThan (_failures result) 5) $
       putStrLn "\t..."
 
   return $ _pass result
@@ -124,21 +127,38 @@ instance Functor Result where
   fmap f r = r { _failures = map (first $ fmap f) $ _failures r }
 
 -- | Run a test using the pre-emption bounding scheduler, with a bound
--- of 2.
-runTest :: Predicate a -> (forall t. Conc t a) -> Result a
+-- of 2, and attempt to shrink any failing traces.
+runTest :: Eq a => Predicate a -> (forall t. Conc t a) -> Result a
 runTest = runTest' 2
 
 -- | Variant of 'runTest' using 'IO'. See usual caveats about 'IO'.
-runTestIO :: Predicate a -> (forall t. CIO.Conc t a) -> IO (Result a)
+runTestIO :: Eq a => Predicate a -> (forall t. CIO.Conc t a) -> IO (Result a)
 runTestIO = runTestIO' 2
 
--- | Run a test using the pre-emption bounding scheduler.
-runTest' :: Int -> Predicate a -> (forall t. Conc t a) -> Result a
-runTest' pb predicate conc = predicate $ sctPreBound pb conc
+-- | Run a test using the pre-emption bounding scheduler, and attempt
+-- to shrink any failing traces.
+runTest' :: Eq a => Int -> Predicate a -> (forall t. Conc t a) -> Result a
+runTest' pb predicate conc = andShrink . predicate $ sctPreBound pb conc where
+  andShrink r
+    | null $ _failures r = r
+    | otherwise = r { _failures = uniques . map (\failure@(res, _) -> (res, shrink failure conc)) $ _failures r }
 
 -- | Variant of 'runTest'' using 'IO'. See usual caveats about 'IO'.
-runTestIO' :: Int -> Predicate a -> (forall t. CIO.Conc t a) -> IO (Result  a)
-runTestIO' pb predicate conc = predicate <$> sctPreBoundIO pb conc
+runTestIO' :: Eq a => Int -> Predicate a -> (forall t. CIO.Conc t a) -> IO (Result  a)
+runTestIO' pb predicate conc = (predicate <$> sctPreBoundIO pb conc) >>= andShrink where
+  andShrink r
+    | null $ _failures r = return r
+    | otherwise = (\fs -> r { _failures = uniques fs }) <$>
+      mapM (\failure@(res, _) -> (\trc' -> (res, trc')) <$> shrinkIO failure conc) (_failures r)
+
+-- | Find unique failures and return the simplest trace for each
+-- failure.
+uniques :: Eq a => [(Maybe a, SCTTrace)] -> [(Maybe a, SCTTrace)]
+uniques = mapMaybe (foldl' simplest' Nothing) . groupBy ((==) `on` fst) where
+  simplest' Nothing r = Just r
+  simplest' r@(Just (_, trc)) s@(_, trc')
+    | simplest [trc, trc'] == Just trc = r
+    | otherwise = Just s
 
 -- * Predicates
 

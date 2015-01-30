@@ -23,6 +23,21 @@ commonPrefix ls = foldl1 commonPrefix2 ls where
 commonSuffix :: Eq a => [[a]] -> [a]
 commonSuffix = reverse . commonPrefix . map reverse
 
+-- | Like 'nubBy', but only compare adjacent elements.
+nubishBy :: (a -> a -> Bool) -> [a] -> [a]
+nubishBy eq = nubish' Nothing where
+  nubish' _ [] = []
+  nubish' Nothing (x:xs) = x : nubish' (Just x) xs
+  nubish' e'@(Just e) (x:xs)
+    | e `eq` x = nubish' e' xs
+    | otherwise = x : nubish' (Just x) xs
+
+-- | Check if a list has more than some number of elements.
+moreThan :: [a] -> Int -> Bool
+moreThan [] n = n < 0
+moreThan _ 0  = True
+moreThan (_:xs) n = moreThan xs (n-1)
+
 -- * Non-empty lists
 -- | This gets exposed to users of the library, so it has a bunch of
 -- classes which aren't actually used in the rest of the code to make

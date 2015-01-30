@@ -53,6 +53,7 @@ library
                      , Control.Monad.Conc.Fixed.IO
                      , Control.Monad.Conc.Fixed.Schedulers
                      , Control.Monad.Conc.SCT
+                     , Control.Monad.Conc.SCT.Shrink
                      , Control.Monad.Conc.SCT.Tests
 
   other-modules:       Control.Monad.Conc.Fixed.Internal

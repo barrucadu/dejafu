@@ -42,6 +42,12 @@ pbOffspring lifts ((Continue, alts, ta):ds)
 pbOffspring lifts ((d, _, _):ds) = [d : n | n <- pbOffspring lifts ds, not $ null n]
 pbOffspring _ [] = []
 
+-- | Check the pre-emption count of some scheduling decisions.
+preEmpCount :: [Decision] -> Int
+preEmpCount (SwitchTo _:ss) = 1 + preEmpCount ss
+preEmpCount (_:ss) = preEmpCount ss
+preEmpCount [] = 0
+
 -- * Delay bounding
 
 -- | An SCT runner using a delay-bounding scheduler. Schedules are
