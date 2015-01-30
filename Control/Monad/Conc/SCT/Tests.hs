@@ -5,6 +5,8 @@
 module Control.Monad.Conc.SCT.Tests
   ( doTests
   , doTests'
+  , autocheck
+  , autocheckIO
   -- * Test cases
   , Result(..)
   , runTest
@@ -36,7 +38,7 @@ import Control.Monad.Conc.SCT.Internal
 import Control.Monad.Conc.SCT.Bounding
 import Control.Monad.Conc.SCT.Shrink
 import Data.Function (on)
-import Data.List (groupBy, foldl')
+import Data.List (foldl')
 import Data.List.Extra
 import Data.Maybe (mapMaybe, isJust, isNothing)
 
@@ -59,6 +61,24 @@ doTests' :: (a -> String) -> Bool -> [(String, Result a)] -> IO Bool
 doTests' showf verbose tests = do
   results <- mapM (doTest showf verbose) tests
   return $ and results
+
+-- | Automatically test a computation. In particular, look for
+-- deadlocks and multiple return values.
+autocheck :: (Eq a, Show a) => (forall t. Conc t a) -> IO Bool
+autocheck t = doTests True cases where
+  cases = [ ("Never Deadlocks",   runTest deadlocksNever t)
+          , ("Consistent Result", runTest alwaysSame     t)
+          ]
+
+-- | Automatically test an 'IO' computation. In particular, look for
+-- deadlocks and multiple return values. See usual caveats about 'IO'.
+autocheckIO :: (Eq a, Show a) => (forall t. CIO.Conc t a) -> IO Bool
+autocheckIO t = do
+  dead <- runTestIO deadlocksNever t
+  same <- runTestIO alwaysSame     t
+  doTests True [ ("Never Deadlocks",   dead)
+               , ("Consistent Result", same)
+              ]
 
 -- | Run a test and print to stdout
 doTest :: (a -> String) -> Bool -> (String, Result a) -> IO Bool
@@ -100,8 +120,8 @@ showtrc (p, t, s) = case (p, s) of
     showtrc' = showTrace . map (\(d,as,_) -> (d,as))
     hilight = "\27[33m"
     reset   = "\27[0m"
-    p' = (if length p > 25 then ("..." ++) . reverse . take 25 . reverse else id) $ showtrc' p
-    s' = (if length s > 25 then (++ "...") . take 25 else id) $ showtrc' s
+    p' = (if length p > 50 then ("..." ++) . reverse . take 50 . reverse else id) $ showtrc' p
+    s' = (if length s > 50 then (++ "...") . take 50 else id) $ showtrc' s
 
 -- * Test cases
 
@@ -154,7 +174,7 @@ runTestIO' pb predicate conc = (predicate <$> sctPreBoundIO pb conc) >>= andShri
 -- | Find unique failures and return the simplest trace for each
 -- failure.
 uniques :: Eq a => [(Maybe a, SCTTrace)] -> [(Maybe a, SCTTrace)]
-uniques = mapMaybe (foldl' simplest' Nothing) . groupBy ((==) `on` fst) where
+uniques = mapMaybe (foldl' simplest' Nothing) . groupByIsh ((==) `on` fst) where
   simplest' Nothing r = Just r
   simplest' r@(Just (_, trc)) s@(_, trc')
     | simplest [trc, trc'] == Just trc = r

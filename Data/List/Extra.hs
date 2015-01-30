@@ -2,6 +2,7 @@
 module Data.List.Extra where
 
 import Control.DeepSeq (NFData(..))
+import Data.List (groupBy)
 
 -- * Regular lists
 
@@ -37,6 +38,20 @@ moreThan :: [a] -> Int -> Bool
 moreThan [] n = n < 0
 moreThan _ 0  = True
 moreThan (_:xs) n = moreThan xs (n-1)
+
+-- | Like 'groupBy', but also handle things which are separated by a
+-- couple of elements.
+groupByIsh :: (a -> a -> Bool) -> [a] -> [[a]]
+groupByIsh f = merge Nothing . merge Nothing . merge Nothing . groupBy f where
+  merge Nothing (xs:ys:rest) = merge (Just (xs, ys)) rest
+  merge Nothing groups = groups
+
+  merge (Just (xs,ys)) (zs:zss)
+    | head xs `f` head zs = merge (Just (xs ++ zs, ys)) zss
+    | head ys `f` head zs = merge (Just (xs, ys ++ zs)) zss
+    | otherwise = xs : merge (Just (ys, zs)) zss
+
+  merge (Just (xs, ys)) zs = xs : ys : zs
 
 -- * Non-empty lists
 -- | This gets exposed to users of the library, so it has a bunch of
