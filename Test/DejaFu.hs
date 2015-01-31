@@ -2,7 +2,7 @@
 
 -- | Useful functions for writing SCT test cases for @Conc@
 -- computations.
-module Control.Monad.Conc.SCT.Tests
+module Test.DejaFu
   ( doTests
   , doTests'
   , autocheck
@@ -33,16 +33,16 @@ import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when, void)
-import Control.Monad.Conc.Fixed
-import Control.Monad.Conc.SCT.Internal
-import Control.Monad.Conc.SCT.Bounding
-import Control.Monad.Conc.SCT.Shrink
 import Data.Function (on)
 import Data.List (foldl')
 import Data.List.Extra
 import Data.Maybe (mapMaybe, isJust, isNothing)
+import Test.DejaFu.Deterministic
+import Test.DejaFu.SCT.Internal
+import Test.DejaFu.SCT.Bounding
+import Test.DejaFu.Shrink
 
-import qualified Control.Monad.Conc.Fixed.IO as CIO
+import qualified Test.DejaFu.Deterministic.IO as CIO
 
 -- * Test suites
 

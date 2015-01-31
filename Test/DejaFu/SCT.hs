@@ -29,7 +29,7 @@
 -- thread 1 will have lock @a@ and be waiting on @b@, and thread 2
 -- will have @b@ and be waiting on @a@.
 
-module Control.Monad.Conc.SCT
+module Test.DejaFu.SCT
  ( -- * Types
    SCTScheduler
  , SchedTrace
@@ -66,10 +66,10 @@ module Control.Monad.Conc.SCT
  , showTrace
  ) where
 
-import Control.Monad.Conc.Fixed
-import Control.Monad.Conc.SCT.Internal
-import Control.Monad.Conc.SCT.Bounding
 import System.Random (RandomGen)
+import Test.DejaFu.Deterministic
+import Test.DejaFu.SCT.Internal
+import Test.DejaFu.SCT.Bounding
 
 -- * Random Schedulers
 

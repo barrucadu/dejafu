@@ -2,7 +2,7 @@
 
 -- | Functions for attempting to find maximally simple traces
 -- producing a given result.
-module Control.Monad.Conc.SCT.Shrink
+module Test.DejaFu.Shrink
   ( -- * Trace shrinking
     shrink
   , shrink'
@@ -20,16 +20,16 @@ module Control.Monad.Conc.SCT.Shrink
   ) where
 
 import Control.Applicative ((<$>))
-import Control.Monad.Conc.Fixed
-import Control.Monad.Conc.SCT.Bounding
-import Control.Monad.Conc.SCT.Internal
 import Data.Function (on)
 import Data.List (sortBy, isPrefixOf)
 import Data.List.Extra
 import Data.Maybe (fromJust, listToMaybe)
 import Data.Ord (comparing)
+import Test.DejaFu.Deterministic
+import Test.DejaFu.SCT.Bounding
+import Test.DejaFu.SCT.Internal
 
-import qualified Control.Monad.Conc.Fixed.IO as CIO
+import qualified Test.DejaFu.Deterministic.IO as CIO
 
 -- | Attempt to find a trace with a minimal number of pre-emptions
 -- that gives rise to the desired output.

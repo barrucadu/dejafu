@@ -3,7 +3,7 @@
 
 -- | Concurrent monads with a fixed scheduler: internal types and
 -- functions.
-module Control.Monad.Conc.Fixed.Internal where
+module Test.DejaFu.Deterministic.Internal where
 
 import Control.DeepSeq (NFData(..))
 import Control.Monad (liftM, mapAndUnzipM)

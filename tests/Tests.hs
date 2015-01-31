@@ -1,6 +1,6 @@
 module Main (main) where
 
-import Control.Monad.Conc.SCT.Tests (doTests')
+import Test.DejaFu (doTests')
 import Tests.Cases
 import System.Exit (exitFailure, exitSuccess)
 

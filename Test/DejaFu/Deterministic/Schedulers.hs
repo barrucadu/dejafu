@@ -1,5 +1,5 @@
 -- | Schedulers for the fixed @Conc@ monads.
-module Control.Monad.Conc.Fixed.Schedulers
+module Test.DejaFu.Deterministic.Schedulers
   ( -- * Types
     Scheduler
   , ThreadId
@@ -15,9 +15,9 @@ module Control.Monad.Conc.Fixed.Schedulers
   , toList
   ) where
 
-import Control.Monad.Conc.Fixed.Internal
 import Data.List.Extra
 import System.Random (RandomGen, randomR)
+import Test.DejaFu.Deterministic.Internal
 
 -- | A simple random scheduler which, at every step, picks a random
 -- thread to run.

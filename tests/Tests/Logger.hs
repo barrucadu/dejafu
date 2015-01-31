@@ -11,7 +11,7 @@ module Tests.Logger
 
 import Control.Concurrent.CVar
 import Control.Monad.Conc.Class
-import Control.Monad.Conc.SCT.Tests
+import Test.DejaFu
 
 data Logger m = Logger (CVar m LogCommand) (CVar m [String])
 

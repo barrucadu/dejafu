@@ -2,14 +2,14 @@
 
 -- | A runner for concurrent monads to systematically detect
 -- concurrency errors such as data races and deadlocks: internal definitions.
-module Control.Monad.Conc.SCT.Internal where
+module Test.DejaFu.SCT.Internal where
 
 import Control.DeepSeq (NFData(..))
-import Control.Monad.Conc.Fixed
 import Control.Monad.Loops (unfoldrM)
 import Data.List (unfoldr)
+import Test.DejaFu.Deterministic
 
-import qualified Control.Monad.Conc.Fixed.IO as CIO
+import qualified Test.DejaFu.Deterministic.IO as CIO
 
 -- * Types
 

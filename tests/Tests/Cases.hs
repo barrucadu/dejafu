@@ -5,7 +5,7 @@ import Control.Applicative ((<$>))
 import Control.Monad (replicateM)
 import Control.Concurrent.CVar
 import Control.Monad.Conc.Class
-import Control.Monad.Conc.SCT.Tests
+import Test.DejaFu
 
 import qualified Tests.Logger as L
 

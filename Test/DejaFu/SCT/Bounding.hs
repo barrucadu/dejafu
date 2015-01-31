@@ -2,14 +2,14 @@
 
 -- Building blocks for SCT runners based on schedule bounding, with
 -- implementations of pre-emption bounding and delay bounding.
-module Control.Monad.Conc.SCT.Bounding where
+module Test.DejaFu.SCT.Bounding where
 
 import Control.DeepSeq (NFData(..), force)
-import Control.Monad.Conc.Fixed
-import Control.Monad.Conc.SCT.Internal
 import Data.List.Extra
+import Test.DejaFu.Deterministic
+import Test.DejaFu.SCT.Internal
 
-import qualified Control.Monad.Conc.Fixed.IO as CIO
+import qualified Test.DejaFu.Deterministic.IO as CIO
 
 -- * Pre-emption bounding
 
