@@ -136,7 +136,7 @@ simplest = listToMaybe . nubBy (lexico `on` map (\(d,_,_) -> d)) . restrict cont
   -- Find the best element(s) of the list and drop all worse ones.
   restrict f xs =
     let f' = f . map (\(d,_,_) -> d)
-    in case sortBy (comparing $ f') xs of
+    in case sortBy (comparing f') xs of
          [] -> []
          ys -> let best = f' $ head ys in filter ((==best) . f') ys
 
