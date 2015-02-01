@@ -1,12 +1,8 @@
 -- Modification (to introduce bug) of an example in Parallel and
 -- Concurrent Programming in Haskell, chapter 7.
 module Tests.Logger
-  ( Logger
-  , initLogger
-  , logMessage
-  , logStop
-  , bad
-  , testLA, testLP, testLE
+  ( badLogger
+  , validResult, isGood, isBad
   ) where
 
 import Control.Concurrent.CVar
@@ -48,8 +44,8 @@ logStop (Logger cmd log) = do
   readCVar log
 
 -- | Race condition! Can you see where?
-bad :: MonadConc m => m [String]
-bad = do
+badLogger :: MonadConc m => m [String]
+badLogger = do
   l <- initLogger
   logMessage l "Hello"
   logMessage l "World"
@@ -60,21 +56,21 @@ bad = do
 
 -- | Test that the result is always in the set of allowed values, and
 -- doesn't deadlock.
-testLA :: Result [String]
-testLA = runTest (alwaysTrue listContents) bad where
-  listContents (Just strs) = strs `elem` [ ["Hello", "World", "Foo", "Bar", "Baz"]
-                                         , ["Hello", "World", "Foo", "Bar"]
-                                         ]
-  listContents Nothing = False
+validResult :: Predicate [String]
+validResult = alwaysTrue check where
+  check (Just strs) = strs `elem` [ ["Hello", "World", "Foo", "Bar", "Baz"]
+                                  , ["Hello", "World", "Foo", "Bar"]
+                                  ]
+  check Nothing = False
 
 -- | Test that the "proper" result occurs at least once.
-testLP :: Result [String]
-testLP = runTest (somewhereTrue loggedAll) bad where
-  loggedAll (Just a) = length a == 5
-  loggedAll Nothing  = False
+isGood :: Predicate [String]
+isGood = somewhereTrue check where
+  check (Just a) = length a == 5
+  check Nothing  = False
 
 -- | Test that the erroneous result occurs at least once.
-testLE :: Result [String]
-testLE = runTest (somewhereTrue loggedAlmostAll) bad where
-  loggedAlmostAll (Just a) = length a == 4
-  loggedAlmostAll Nothing  = False
+isBad :: Predicate [String]
+isBad = somewhereTrue check where
+  check (Just a) = length a == 4
+  check Nothing  = False

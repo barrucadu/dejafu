@@ -53,7 +53,7 @@ library
                      , Test.DejaFu
                      , Test.DejaFu.Deterministic
                      , Test.DejaFu.Deterministic.IO
-                     , Test.DejaFu.Deterministic.Schedulers
+                     , Test.DejaFu.Deterministic.Schedule
                      , Test.DejaFu.SCT
                      , Test.DejaFu.Shrink
 

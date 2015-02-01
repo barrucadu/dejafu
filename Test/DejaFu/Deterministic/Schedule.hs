@@ -1,7 +1,6 @@
--- | Schedulers for the fixed @Conc@ monads.
-module Test.DejaFu.Deterministic.Schedulers
-  ( -- * Types
-    Scheduler
+-- | Deterministic scheduling for concurrent computations.
+module Test.DejaFu.Deterministic.Schedule
+  ( Scheduler
   , ThreadId
   , NonEmpty(..)
   -- * Pre-emptive

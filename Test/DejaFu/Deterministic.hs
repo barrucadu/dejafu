@@ -2,14 +2,16 @@
 {-# LANGUAGE Rank2Types                 #-}
 {-# LANGUAGE TypeFamilies               #-}
 
--- | Concurrent monads with a fixed scheduler.
+-- | Deterministic traced execution of concurrent computations which
+-- don't do @IO@.
+--
+-- This works by executing the computation on a single thread, calling
+-- out to the supplied scheduler after each step to determine which
+-- thread runs next.
 module Test.DejaFu.Deterministic
-  ( -- * The Conc Monad
+  ( -- * The @Conc@ Monad
     Conc
-  , Trace
-  , ThreadAction(..)
   , runConc
-  , runConc'
   , fork
   , spawn
 
@@ -22,8 +24,14 @@ module Test.DejaFu.Deterministic
   , takeCVar
   , tryTakeCVar
 
-  -- * Schedulers
-  , module Test.DejaFu.Deterministic.Schedulers
+  -- * Execution traces
+  , Trace
+  , Decision
+  , ThreadAction
+  , showTrace
+
+  -- * Scheduling
+  , module Test.DejaFu.Deterministic.Schedule
   ) where
 
 import Control.Applicative (Applicative(..), (<$>))
@@ -31,14 +39,14 @@ import Control.Monad.Cont (cont, runCont)
 import Control.Monad.ST (ST, runST)
 import Data.STRef (STRef, newSTRef, readSTRef, writeSTRef)
 import Test.DejaFu.Deterministic.Internal
-import Test.DejaFu.Deterministic.Schedulers
+import Test.DejaFu.Deterministic.Schedule
 
 import qualified Control.Monad.Conc.Class as C
 
 -- | The @Conc@ monad itself. This uses the same
 -- universally-quantified indexing state trick as used by 'ST' and
 -- 'STRef's to prevent mutable references from leaking out of the
--- monad. See 'runConc' for an example of what this means.
+-- monad.
 newtype Conc t a = C { unC :: M (ST t) (STRef t) a } deriving (Functor, Applicative, Monad)
 
 instance C.MonadConc (Conc t) where
@@ -107,20 +115,16 @@ tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a 'Just' if it terminates, and 'Nothing' if a
--- deadlock is detected.
+-- deadlock is detected. Also returned is the final state of the
+-- scheduler, and an execution trace.
 --
 -- Note how the @t@ in 'Conc' is universally quantified, what this
 -- means in practice is that you can't do something like this:
 --
--- > runConc (\s _ (x:_) -> (x, s)) () $ new >>= return
+-- > runConc (\s _ (x:_) -> (x, s)) () newEmptyCVar
 --
 -- So 'CVar's cannot leak out of the 'Conc' computation. If this is
 -- making your head hurt, check out the \"How @runST@ works\" section
 -- of <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
-runConc :: Scheduler s -> s -> (forall t. Conc t a) -> Maybe a
-runConc sched s ma = let (a,_,_) = runConc' sched s ma in a
-
--- | Variant of 'runConc' which returns the final state of the
--- scheduler and an execution trace.
-runConc' :: Scheduler s -> s -> (forall t. Conc t a) -> (Maybe a, s, Trace)
-runConc' sched s ma = runST $ runFixed' fixed sched s ma
+runConc :: Scheduler s -> s -> (forall t. Conc t a) -> (Maybe a, s, Trace)
+runConc sched s ma = runST $ runFixed fixed sched s ma

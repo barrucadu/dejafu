@@ -3,11 +3,8 @@
 -- | Functions for attempting to find maximally simple traces
 -- producing a given result.
 module Test.DejaFu.Shrink
-  ( -- * Trace shrinking
-    shrink
-  , shrink'
+  ( shrink
   , shrinkIO
-  , shrinkIO'
 
   -- * Utilities
   -- | If you wanted to implement your own shrinking logic, these are
@@ -21,35 +18,25 @@ module Test.DejaFu.Shrink
 
 import Control.Applicative ((<$>))
 import Data.Function (on)
-import Data.List (sortBy, isPrefixOf)
-import Data.List.Extra
+import Data.List (sortBy, isPrefixOf, nubBy)
 import Data.Maybe (fromJust, listToMaybe)
 import Data.Ord (comparing)
 import Test.DejaFu.Deterministic
+import Test.DejaFu.Deterministic.Internal
+import Test.DejaFu.Deterministic.IO (ConcIO)
 import Test.DejaFu.SCT.Bounding
 import Test.DejaFu.SCT.Internal
 
-import qualified Test.DejaFu.Deterministic.IO as CIO
-
 -- | Attempt to find a trace with a minimal number of pre-emptions
 -- that gives rise to the desired output.
-shrink :: Eq a => (Maybe a, SCTTrace) -> (forall t. Conc t a) -> SCTTrace
-shrink (res, trc) = shrink' (res ==) trc
-
--- | Variant of 'shrink' for 'IO'. See usual caveats about 'IO'.
-shrinkIO :: Eq a => (Maybe a, SCTTrace) -> (forall t. CIO.Conc t a) -> IO SCTTrace
-shrinkIO (res, trc) = shrinkIO' (res ==) trc
-
--- | Variant of 'shrink' which takes a function to determine if the
--- result is erroneous in the same way.
-shrink' :: (Maybe a -> Bool) -> SCTTrace -> (forall t. Conc t a) -> SCTTrace
-shrink' p trace t = shrink'' [] trace where
-  shrink'' e trc = case nextscts of
+shrink :: Eq a => (Maybe a, Trace) -> (forall t. Conc t a) -> Trace
+shrink (result, trace) t = shrink' [] trace where
+  shrink' e trc = case nextscts of
     -- No candidates for further shrinking found
     [] -> trc
     -- Attempt to shrink further. Safe because shrink'' will always
     -- return at least one result.
-    ts -> fromJust . simplest $ map (uncurry shrink'') ts
+    ts -> fromJust . simplest $ map (uncurry shrink') ts
 
     where
       -- Get all candidate trace prefixes which start with the given
@@ -63,7 +50,7 @@ shrink' p trace t = shrink'' [] trace where
       -- Pick a candidate for further simplification, and attempt to
       -- identify a new essential trace prefix.
       step (pref, tid) =
-        let tries = filter (/=trace) $ try p pref t
+        let tries = filter (/=trace) $ try (==result) pref t
         in case simplest tries of
              -- No further candidates available.
              Nothing -> []
@@ -75,22 +62,20 @@ shrink' p trace t = shrink'' [] trace where
                -- If not, just re-use the original prefix.
                else [(e, best)]
 
-
--- | Variant of 'shrinkIO' which takes a function to determine if the
--- result is erroneous in the same way. See usual caveats about 'IO'.
-shrinkIO' :: (Maybe a -> Bool) -> SCTTrace -> (forall t. CIO.Conc t a) -> IO SCTTrace
-shrinkIO' p trace t = shrink'' [] trace where
-  shrink'' e trc = do
+-- | Variant of 'shrink' for computations which do 'IO'.
+shrinkIO :: Eq a => (Maybe a, Trace) -> (forall t. ConcIO t a) -> IO Trace
+shrinkIO (result, trace) t = shrink' [] trace where
+  shrink' e trc = do
     let cands = filter (\(ds, _) -> e `isPrefixOf` ds) $ candidates trc
     nextscts <- concat <$> mapM step cands
 
     case nextscts of
       [] -> return trc
-      ts -> fromJust . simplest <$> mapM (uncurry shrink'') ts
+      ts -> fromJust . simplest <$> mapM (uncurry shrink') ts
 
     where
       step (pref, tid) = do
-        tries <- tryIO p pref t
+        tries <- tryIO (==result) pref t
         return $
           case simplest tries of
             Nothing   -> []
@@ -103,34 +88,35 @@ shrinkIO' p trace t = shrink'' [] trace where
 -- produced by attempting to drop one pre-emption. Furthermore, the
 -- 'ThreadId' of the thread which performed the dropped pre-emption is
 -- also returned.
-candidates :: SCTTrace -> [([Decision], ThreadId)]
+candidates :: Trace -> [([Decision], ThreadId)]
 candidates = candidates' [] where
   candidates' _ [] = []
   candidates' ps ((SwitchTo i, _, _):ts) = (reverse ps, i) : candidates' (SwitchTo i : ps) ts
   candidates' ps ((t, _, _):ts) = candidates' (t : ps) ts
 
--- | Try all traces with a given trace prefix and return those which
--- satisfy the predicate.
-try :: (Maybe a -> Bool) -> [Decision] -> (forall t. Conc t a) -> [SCTTrace]
+-- | Try all traces with a given trace prefix, which introduce no more
+-- than one new pre-emption, and return those which satisfy the
+-- predicate.
+try :: (Maybe a -> Bool) -> [Decision] -> (forall t. Conc t a) -> [Trace]
 try p pref c = map snd . filter (p . fst) $ sctPreBoundOffset pref c
 
--- | Variant of 'try' for 'IO' See usual caveats about 'IO'.
-tryIO :: (Maybe a -> Bool) -> [Decision] -> (forall t. CIO.Conc t a) -> IO [SCTTrace]
+-- | Variant of 'try' for computations which do 'IO'.
+tryIO :: (Maybe a -> Bool) -> [Decision] -> (forall t. ConcIO t a) -> IO [Trace]
 tryIO p pref c = map snd . filter (p . fst) <$> sctPreBoundOffsetIO pref c
 
--- | Given a list of 'SCTTraces' which follow on from a given prefix,
--- determine if the removed pre-emption is \"essential\". That is,
--- every 'SCTTrace' starts with the prefix followed by a pre-emption
--- to the given thread.
-essential :: ([Decision], ThreadId) -> [SCTTrace] -> Bool
-essential (ds, tid) = all ((pref `isPrefixOf`) . unSCT) where
+-- | Given a list of 'Trace's which follow on from a given prefix,
+-- determine if the removed pre-emption is /essential/. That is, every
+-- 'Trace' starts with the prefix followed immediately by a
+-- pre-emption to the given thread.
+essential :: ([Decision], ThreadId) -> [Trace] -> Bool
+essential (ds, tid) = all ((pref `isPrefixOf`) . map (\(d,_,_) -> d)) where
   pref = ds ++ [SwitchTo tid]
 
--- | Return the simplest 'SCTTrace' from a collection. Roughly, the
+-- | Return the simplest 'Trace' from a collection. Roughly, the
 -- one with the fewest pre-emptions. If the list is empty, return
 -- 'Nothing'.
-simplest :: [SCTTrace] -> Maybe SCTTrace
-simplest = listToMaybe . nubishBy (lexico `on` unSCT) . restrict contextSwitch . restrict preEmpCount where
+simplest :: [Trace] -> Maybe Trace
+simplest = listToMaybe . nubBy (lexico `on` map (\(d,_,_) -> d)) . restrict contextSwitch . restrict preEmpCount where
 
   -- Favour schedules with fewer context switches if they have the
   -- same number of pre-emptions.
@@ -148,24 +134,21 @@ simplest = listToMaybe . nubishBy (lexico `on` unSCT) . restrict contextSwitch .
   lexico _ [] = False
 
   -- Find the best element(s) of the list and drop all worse ones.
-  restrict f xs = case sortBy (comparing $ f . unSCT) xs of
-    [] -> []
-    ys -> let best = f . unSCT $ head ys in filter ((==best) . f . unSCT) ys
+  restrict f xs =
+    let f' = f . map (\(d,_,_) -> d)
+    in case sortBy (comparing $ f') xs of
+         [] -> []
+         ys -> let best = f' $ head ys in filter ((==best) . f') ys
 
 -- | Like pre-emption bounding, but rather than starting from nothing,
 -- use the given trace prefix.
-sctPreBoundOffset :: [Decision] -> (forall t. Conc t a) -> [(Maybe a, SCTTrace)]
+sctPreBoundOffset :: [Decision] -> (forall t. Conc t a) -> [(Maybe a, Trace)]
 sctPreBoundOffset ds = runSCT' prefixSched (initialS', initialG) bTerm (bStep pbSiblings (pbOffspring False) pb) where
   initialS' = initialS { _decisions = tail ds, _prefixlen = length ds - 1 }
   pb = preEmpCount ds + 1
 
--- | Variant of 'sctPreBoundOffset' for 'IO'. See usual caveats about
--- 'IO'.
-sctPreBoundOffsetIO :: [Decision] -> (forall t. CIO.Conc t a) -> IO [(Maybe a, SCTTrace)]
+-- | Variant of 'sctPreBoundOffset' for computations which do 'IO'.
+sctPreBoundOffsetIO :: [Decision] -> (forall t. ConcIO t a) -> IO [(Maybe a, Trace)]
 sctPreBoundOffsetIO ds = runSCTIO' prefixSched (initialS', initialG) bTerm (bStep pbSiblings (pbOffspring False) pb) where
   initialS' = initialS { _decisions = tail ds, _prefixlen = length ds - 1 }
   pb = preEmpCount ds + 1
-
--- | Convert an 'SCTTrace' to a list of 'Decision's.
-unSCT :: SCTTrace -> [Decision]
-unSCT = map $ \(d, _, _) -> d

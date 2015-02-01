@@ -1,6 +1,6 @@
 -- | Strict alternatives to the functions in
 -- Control.Monad.Conc.CVar. Specifically, values are evaluated to
--- normal form befire being put into a @CVar@.
+-- normal form before being put into a @CVar@.
 module Control.Concurrent.CVar.Strict
  ( -- *@CVar@s
   CVar

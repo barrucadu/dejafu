@@ -1,17 +1,71 @@
 {-# LANGUAGE Rank2Types #-}
 
--- | Useful functions for writing SCT test cases for @Conc@
--- computations.
+-- | Deterministic testing for concurrent computations.
+--
+-- As an example, consider this program, which has two locks and a
+-- shared variable. Two threads are spawned, which claim the locks,
+-- update the shared variable, and release the locks. The main thread
+-- waits for them both to terminate, and returns the final result.
+--
+-- > bad :: MonadConc m => m Int
+-- > bad = do
+-- >   a <- newEmptyCVar
+-- >   b <- newEmptyCVar
+-- >
+-- >   c <- newCVar 0
+-- >
+-- >   j1 <- spawn $ lock a >> lock b >> modifyCVar_ c (return . succ) >> unlock b >> unlock a
+-- >   j2 <- spawn $ lock b >> lock a >> modifyCVar_ c (return . pred) >> unlock a >> unlock b
+-- >
+-- >   takeCVar j1
+-- >   takeCVar j2
+-- >
+-- >   takeCVar c
+--
+-- The correct result is 0, as it starts out as 0 and is incremented
+-- and decremented by threads 1 and 2, respectively. However, note the
+-- order of acquisition of the locks in the two threads. If thread 2
+-- pre-empts thread 1 between the acquisition of the locks (or if
+-- thread 1 pre-empts thread 2), a deadlock situation will arise, as
+-- thread 1 will have lock @a@ and be waiting on @b@, and thread 2
+-- will have @b@ and be waiting on @a@.
+--
+-- Here is what @dejafu@ has to say about it:
+--
+-- > > autocheck bad
+-- > [fail] Never Deadlocks (checked: 4)
+-- >         [deadlock] S0---------S1-P2--S1-
+-- >         [deadlock] S0---------S2-P1--S2-
+-- > [fail] Consistent Result (checked: 3)
+-- >         [deadlock] S0---------S1-P2--S1-
+-- >         0 S0---------S1--------S2--------S0-----
+-- >         [deadlock] S0---------S2-P1--S2-
+-- > False
+--
+-- It identifies the deadlock, and also the possible results the
+-- computation can produce, and displays a simplified trace leading to
+-- each failing outcome. It also returns @False@ as there are test
+-- failures. The automatic testing functionality is good enough if you
+-- only want to check your computation is deterministic, but if you
+-- have more specific requirements (or have some expected and
+-- tolerated level of nondeterminism), you can write tests yourself
+-- using the @dejafu*@ functions.
+--
+-- __Warning:__ If your computation under test does @IO@, the @IO@
+-- will be executed lots of times! Be sure that it is deterministic
+-- enough not to invalidate your test results.
 module Test.DejaFu
-  ( doTests
-  , doTests'
-  , autocheck
+  ( autocheck
+  , dejafu
+  , dejafus
   , autocheckIO
+  , dejafuIO
+  , dejafusIO
   -- * Test cases
   , Result(..)
   , runTest
-  , runTestIO
   , runTest'
+  , runTestIO
   , runTestIO'
   -- * Predicates
   , Predicate
@@ -19,109 +73,66 @@ module Test.DejaFu
   , deadlocksAlways
   , deadlocksSometimes
   , alwaysSame
+  , notAlwaysSame
   , alwaysTrue
   , alwaysTrue2
   , somewhereTrue
   , somewhereTrue2
-  -- * Utilities
-  , pAnd
-  , pNot
-  , rForgetful
   ) where
 
 import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
-import Control.Monad (when, void)
-import Data.Function (on)
-import Data.List (foldl')
+import Control.Monad (when)
+import Data.List (nubBy)
 import Data.List.Extra
-import Data.Maybe (mapMaybe, isJust, isNothing)
+import Data.Maybe (isJust, isNothing)
 import Test.DejaFu.Deterministic
-import Test.DejaFu.SCT.Internal
-import Test.DejaFu.SCT.Bounding
+import Test.DejaFu.Deterministic.Internal
+import Test.DejaFu.Deterministic.IO (ConcIO)
+import Test.DejaFu.SCT
 import Test.DejaFu.Shrink
 
-import qualified Test.DejaFu.Deterministic.IO as CIO
+-- | Run a test and print the result to stdout, return 'True' if it
+-- passes.
+dejafu :: (Eq a, Show a)
+       => (forall t. Conc t a)
+       -- ^ The computation to test
+       -> (String, Predicate a)
+       -- ^ The test case, as a (name, predicate) pair.
+       -> IO Bool
+dejafu conc test = dejafus conc [test]
 
--- * Test suites
+-- | Variant of 'dejafu' for computations which do 'IO'.
+dejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
+dejafuIO concio test = dejafusIO concio [test]
 
--- | Run a collection of tests (with a pb of 2), printing results to
--- stdout, and returning 'True' iff all tests pass.
-doTests :: Show a
-        => Bool
-        -- ^ Whether to print test passes.
-        -> [(String, Result a)]
-        -- ^ The test cases
-        -> IO Bool
-doTests = doTests' show
+-- | Run a collection of tests, returning 'True' if all pass.
+dejafus :: (Eq a, Show a) => (forall t. Conc t a) -> [(String, Predicate a)] -> IO Bool
+dejafus conc tests = do
+  results <- mapM (\(name, test) -> doTest name $ runTest test conc) tests
+  return $ and results
 
--- | Variant of 'doTests' which takes a result printing function.
-doTests' :: (a -> String) -> Bool -> [(String, Result a)] -> IO Bool
-doTests' showf verbose tests = do
-  results <- mapM (doTest showf verbose) tests
+-- | Variant of 'dejafus' for computations which do 'IO'.
+dejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
+dejafusIO concio tests = do
+  results <- mapM (\(name, test) -> doTest name =<< runTestIO test concio) tests
   return $ and results
 
 -- | Automatically test a computation. In particular, look for
 -- deadlocks and multiple return values.
 autocheck :: (Eq a, Show a) => (forall t. Conc t a) -> IO Bool
-autocheck t = doTests True cases where
-  cases = [ ("Never Deadlocks",   runTest deadlocksNever t)
-          , ("Consistent Result", runTest alwaysSame     t)
+autocheck conc = dejafus conc cases where
+  cases = [ ("Never Deadlocks",   deadlocksNever)
+          , ("Consistent Result", alwaysSame)
           ]
 
--- | Automatically test an 'IO' computation. In particular, look for
--- deadlocks and multiple return values. See usual caveats about 'IO'.
-autocheckIO :: (Eq a, Show a) => (forall t. CIO.Conc t a) -> IO Bool
-autocheckIO t = do
-  dead <- runTestIO deadlocksNever t
-  same <- runTestIO alwaysSame     t
-  doTests True [ ("Never Deadlocks",   dead)
-               , ("Consistent Result", same)
-              ]
-
--- | Run a test and print to stdout
-doTest :: (a -> String) -> Bool -> (String, Result a) -> IO Bool
-doTest showf verbose (name, result) = do
-  if _pass result
-  then
-    -- If verbose, display a pass message.
-    when verbose $
-      putStrLn $ "\27[32m[pass]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")"
-  else do
-    -- Display a failure message, and the first 5 (simplified) failed traces
-    putStrLn ("\27[31m[fail]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")")
-    let traces = let (rs, ts) = unzip . take 5 $ _failures result in rs `zip` simplify ts
-    mapM_ (\(r, t) -> putStrLn $ "\t" ++ maybe "[deadlock]" showf r ++ " " ++ showtrc t) traces
-    when (moreThan (_failures result) 5) $
-      putStrLn "\t..."
-
-  return $ _pass result
-
--- | Simplify a collection of traces, by attempting to factor out
--- common prefixes and suffixes.
-simplify :: [SCTTrace] -> [(SCTTrace, SCTTrace, SCTTrace)]
-simplify [t] = [([], t, [])]
-simplify ts = map (\t -> (pref, drop plen $ take (length t - slen) t, suff)) ts where
-  pref = commonPrefix ts
-  plen = length pref
-  suff = commonSuffix ts
-  slen = length suff
-
--- | Pretty-print a simplified trace
-showtrc :: (SCTTrace, SCTTrace, SCTTrace) -> String
-showtrc (p, t, s) = case (p, s) of
-  ([], []) -> hilight ++ showtrc' t ++ reset
-  ([], _)  -> hilight ++ showtrc' t ++ reset ++ s'
-  (_, [])  -> p' ++ hilight ++ showtrc' t ++ reset
-  (_, _)   -> p' ++ hilight ++ showtrc' t ++ reset ++ s'
-
-  where
-    showtrc' = showTrace . map (\(d,as,_) -> (d,as))
-    hilight = "\27[33m"
-    reset   = "\27[0m"
-    p' = (if length p > 50 then ("..." ++) . reverse . take 50 . reverse else id) $ showtrc' p
-    s' = (if length s > 50 then (++ "...") . take 50 else id) $ showtrc' s
+-- | Variant of 'autocheck' for computations which do 'IO'.
+autocheckIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> IO Bool
+autocheckIO concio = dejafusIO concio cases where
+  cases = [ ("Never Deadlocks",   deadlocksNever)
+          , ("Consistent Result", alwaysSame)
+          ]
 
 -- * Test cases
 
@@ -136,7 +147,7 @@ data Result a = Result
   -- ^ The number of cases checked.
   , _casesTotal   :: Int
   -- ^ The total number of cases.
-  , _failures :: [(Maybe a, SCTTrace)]
+  , _failures :: [(Maybe a, Trace)]
   -- ^ The failed cases, if any.
   } deriving (Show, Eq)
 
@@ -146,45 +157,45 @@ instance NFData a => NFData (Result a) where
 instance Functor Result where
   fmap f r = r { _failures = map (first $ fmap f) $ _failures r }
 
--- | Run a test using the pre-emption bounding scheduler, with a bound
--- of 2, and attempt to shrink any failing traces.
+-- | Run a predicate over all executions with two or fewer
+-- pre-emptions, and attempt to shrink any failing traces. A
+-- pre-emption is a context switch where the old thread was still
+-- runnable.
+--
+-- In the resultant traces, a pre-emption is displayed as \"Px\",
+-- where @x@ is the ID of the thread being switched to, whereas a
+-- regular context switch is displayed as \"Sx\" (for \"start\").
 runTest :: Eq a => Predicate a -> (forall t. Conc t a) -> Result a
 runTest = runTest' 2
 
--- | Variant of 'runTest' using 'IO'. See usual caveats about 'IO'.
-runTestIO :: Eq a => Predicate a -> (forall t. CIO.Conc t a) -> IO (Result a)
+-- | Variant of 'runTest' for computations which do 'IO'.
+runTestIO :: Eq a => Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
 runTestIO = runTestIO' 2
 
--- | Run a test using the pre-emption bounding scheduler, and attempt
--- to shrink any failing traces.
+-- | Variant of 'runTest' which takes a pre-emption bound.
 runTest' :: Eq a => Int -> Predicate a -> (forall t. Conc t a) -> Result a
 runTest' pb predicate conc = andShrink . predicate $ sctPreBound pb conc where
   andShrink r
     | null $ _failures r = r
     | otherwise = r { _failures = uniques . map (\failure@(res, _) -> (res, shrink failure conc)) $ _failures r }
 
--- | Variant of 'runTest'' using 'IO'. See usual caveats about 'IO'.
-runTestIO' :: Eq a => Int -> Predicate a -> (forall t. CIO.Conc t a) -> IO (Result  a)
+-- | Variant of 'runTest'' for computations which do 'IO'.
+runTestIO' :: Eq a => Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result  a)
 runTestIO' pb predicate conc = (predicate <$> sctPreBoundIO pb conc) >>= andShrink where
   andShrink r
     | null $ _failures r = return r
     | otherwise = (\fs -> r { _failures = uniques fs }) <$>
       mapM (\failure@(res, _) -> (\trc' -> (res, trc')) <$> shrinkIO failure conc) (_failures r)
 
--- | Find unique failures and return the simplest trace for each
--- failure.
-uniques :: Eq a => [(Maybe a, SCTTrace)] -> [(Maybe a, SCTTrace)]
-uniques = mapMaybe (foldl' simplest' Nothing) . groupByIsh ((==) `on` fst) where
-  simplest' Nothing r = Just r
-  simplest' r@(Just (_, trc)) s@(_, trc')
-    | simplest [trc, trc'] == Just trc = r
-    | otherwise = Just s
+-- | Strip out duplicates
+uniques :: Eq a => [(Maybe a, Trace)] -> [(Maybe a, Trace)]
+uniques = map head . groupByIsh (==)
 
 -- * Predicates
 
 -- | A @Predicate@ is a function which collapses a list of results
 -- into a 'Result'.
-type Predicate a = [(Maybe a, SCTTrace)] -> Result a
+type Predicate a = [(Maybe a, Trace)] -> Result a
 
 -- | Check that a computation never deadlocks.
 deadlocksNever :: Predicate a
@@ -204,8 +215,12 @@ deadlocksSometimes = somewhereTrue isNothing
 alwaysSame :: Eq a => Predicate a
 alwaysSame = alwaysTrue2 (==)
 
+-- | Check that the result of a computation is not always the same.
+notAlwaysSame :: Eq a => Predicate a
+notAlwaysSame = somewhereTrue2 (/=)
+
 -- | Check that the result of a unary boolean predicate is always
--- true. An empty list of results counts as 'True'.
+-- true.
 alwaysTrue :: (Maybe a -> Bool) -> Predicate a
 alwaysTrue p xs = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = len, _failures = failures } where
   go [] res = res
@@ -216,10 +231,12 @@ alwaysTrue p xs = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = 
   (len, failures) = findFailures1 p xs
 
 -- | Check that the result of a binary boolean predicate is always
--- true between adjacent pairs of results. An empty list of results
--- counts as 'True'.
+-- true between adjacent pairs of results. In general, it is probably
+-- best to only check properties here which are transitive and
+-- symmetric, in order to draw conclusions about the entire collection
+-- of executions.
 --
--- If the predicate fails, *both* (result,trace) tuples will be added
+-- If the predicate fails, /both/ (result,trace) tuples will be added
 -- to the failures list.
 alwaysTrue2 :: (Maybe a -> Maybe a -> Bool) -> Predicate a
 alwaysTrue2 _ [_] = Result { _pass = True, _casesChecked = 1, _casesTotal = 1, _failures = [] }
@@ -235,7 +252,7 @@ alwaysTrue2 p xs  = go xs Result { _pass = True, _casesChecked = 0, _casesTotal 
   (len, failures) = findFailures2 p xs
 
 -- | Check that the result of a unary boolean predicate is true at
--- least once. An empty list of results counts as 'False'.
+-- least once.
 somewhereTrue :: (Maybe a -> Bool) -> Predicate a
 somewhereTrue p xs = go xs Result { _pass = False, _casesChecked = 0, _casesTotal = len, _failures = failures } where
   go [] res = res
@@ -246,10 +263,12 @@ somewhereTrue p xs = go xs Result { _pass = False, _casesChecked = 0, _casesTota
   (len, failures) = findFailures1 p xs
 
 -- | Check that the result of a binary boolean predicate is true
--- between at least one adjacent pair of results. An empty list of
--- results counts as 'False'.
+-- between at least one adjacent pair of results. In general, it is
+-- probably best to only check properties here which are transitive
+-- and symmetric, in order to draw conclusions about the entire
+-- collection of executions.
 --
--- If the predicate fails, *both* (result,trace) tuples will be added
+-- If the predicate fails, /both/ (result,trace) tuples will be added
 -- to the failures list.
 somewhereTrue2 :: (Maybe a -> Maybe a -> Bool) -> Predicate a
 somewhereTrue2 _ [x] = Result { _pass = False, _casesChecked = 1, _casesTotal = 1, _failures = [x] }
@@ -264,23 +283,35 @@ somewhereTrue2 p xs  = go xs Result { _pass = False, _casesChecked = 0, _casesTo
 
   (len, failures) = findFailures2 p xs
 
--- * Utils
+-- * Internal
 
--- | Compose two predicates sequentially.
-pAnd :: Predicate a -> Predicate a -> Predicate a
-pAnd p q xs = if _pass r1 then r2 else r1 where
-  r1 = p xs
-  r2 = q xs
+-- | Run a test and print to stdout
+doTest :: (Eq a, Show a) => String -> Result a -> IO Bool
+doTest name result = do
+  if _pass result
+  then
+    -- Display a pass message.
+    putStrLn $ "\27[32m[pass]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")"
+  else do
+    -- Display a failure message, and the first 5 (simplified) failed traces
+    putStrLn ("\27[31m[fail]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")")
+    let failures = nubBy reseq $ _failures result
+    mapM_ (\(r, t) -> putStrLn $ "\t" ++ maybe "[deadlock]" show r ++ " " ++ showTrace t) $ take 5 failures
+    when (moreThan failures 5) $
+      putStrLn "\t..."
 
--- | Invert the result of a predicate.
-pNot :: Predicate a -> Predicate a
-pNot p xs = r { _pass = not $ _pass r } where
-  r = p xs
+  return $ _pass result
 
--- | Throw away the failures information in a Result (useful for
--- storing them in a list).
-rForgetful :: Result a -> Result ()
-rForgetful = void
+  where
+    reseq (res, trc) (res', trc') = res == res' && trc `eq` trc'
+    -- Two traces are "equal" if their decisions differ ONLY in
+    -- non-preemptive context switches. This helps filter out some
+    -- false positives.
+    eq [] [] = True
+    eq _ [] = False
+    eq [] _ = False
+    eq ((Start _,_,_):as) ((Start _,_,_):bs) = as `eq` bs
+    eq ((a,_,_):as) ((b,_,_):bs) = a == b && as `eq` bs
 
 -- | Increment the cases checked
 incCC :: Result a -> Result a
@@ -288,7 +319,7 @@ incCC r = r { _casesChecked = _casesChecked r + 1 }
 
 -- | Get the length of the list and find the failing cases in one
 -- traversal.
-findFailures1 :: (Maybe a -> Bool) -> [(Maybe a, SCTTrace)] -> (Int, [(Maybe a, SCTTrace)])
+findFailures1 :: (Maybe a -> Bool) -> [(Maybe a, Trace)] -> (Int, [(Maybe a, Trace)])
 findFailures1 p xs = findFailures xs 0 [] where
   findFailures [] l fs = (l, fs)
   findFailures ((z,t):zs) l fs
@@ -297,7 +328,7 @@ findFailures1 p xs = findFailures xs 0 [] where
 
 -- | Get the length of the list and find the failing cases in one
 -- traversal.
-findFailures2 :: (Maybe a -> Maybe a -> Bool) -> [(Maybe a, SCTTrace)] -> (Int, [(Maybe a, SCTTrace)])
+findFailures2 :: (Maybe a -> Maybe a -> Bool) -> [(Maybe a, Trace)] -> (Int, [(Maybe a, Trace)])
 findFailures2 p xs = findFailures xs 0 [] where
   findFailures [] l fs = (l, fs)
   findFailures [_] l fs = (l+1, fs)

@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
--- | This module captures the interface of @Conc@ monads in a
--- typeclass.
+-- | This module captures in a typeclass the interface of concurrency
+-- monads.
 module Control.Monad.Conc.Class where
 
 import Control.Concurrent (forkIO)
@@ -9,8 +9,9 @@ import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVa
 import Control.Monad (unless, void)
 
 -- | @MonadConc@ is like a combination of 'ParFuture' and 'ParIVar'
--- from the abstract-par package. It captures the interface of @Conc@
--- monads in terms of how they can operate on shared state.
+-- from the abstract-par package. It captures the interface of
+-- concurrency monads in terms of how they can operate on shared
+-- state.
 --
 -- There are a few notable differences: firstly, @Par@ imposes
 -- 'NFData' constraints on everything, as it achieves its speed-up by

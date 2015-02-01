@@ -1,29 +1,9 @@
 -- | Tests sourced from <https://github.com/sctbenchmarks>.
 module Tests.Cases where
 
-import Control.Applicative ((<$>))
 import Control.Monad (replicateM)
 import Control.Concurrent.CVar
 import Control.Monad.Conc.Class
-import Test.DejaFu
-
-import qualified Tests.Logger as L
-
--- | List of all tests
-testCases :: [(String, Result String)]
-testCases =
-  [ ("Simple 2-Deadlock" , show <$> runTest deadlocksSometimes simple2Deadlock)
-  , ("2 Philosophers"    , show <$> runTest deadlocksSometimes (philosophers 2))
-  , ("3 Philosophers"    , show <$> runTest deadlocksSometimes (philosophers 3))
-  , ("4 Philosophers"    , show <$> runTest deadlocksSometimes (philosophers 4))
-  , ("Threshold Value"   , show <$> runTest (pNot alwaysSame)  thresholdValue)
-  , ("Forgotten Unlock"  , show <$> runTest deadlocksAlways    forgottenUnlock)
-  , ("Simple 2-Race"     , show <$> runTest (pNot alwaysSame)  simple2Race)
-  , ("Racey Stack"       , show <$> runTest (pNot alwaysSame)  raceyStack)
-  , ("Logger (LA)"       , show <$> L.testLA)
-  , ("Logger (LP)"       , show <$> L.testLP)
-  , ("Logger (LE)"       , show <$> L.testLE)
-  ]
 
 -- | Should deadlock on a minority of schedules.
 simple2Deadlock :: MonadConc m => m Int

@@ -6,7 +6,7 @@
 module Test.DejaFu.Deterministic.Internal where
 
 import Control.DeepSeq (NFData(..))
-import Control.Monad (liftM, mapAndUnzipM)
+import Control.Monad (mapAndUnzipM)
 import Control.Monad.Cont (Cont, runCont)
 import Data.List.Extra
 import Data.Map (Map)
@@ -57,23 +57,53 @@ data Action n r =
 
 -- | Every live thread has a unique identitifer. These are implemented
 -- as integers, but you shouldn't assume they are necessarily
--- contiguous.
+-- contiguous, or globally unique (although it is the case that no two
+-- threads alive at the same time will have the same identifier).
 type ThreadId = Int
 
 -- | A @Scheduler@ maintains some internal state, @s@, takes the
 -- 'ThreadId' of the last thread scheduled, and the list of runnable
 -- threads. It produces a 'ThreadId' to schedule, and a new state.
 --
--- Note: In order to prevent computation from hanging, the 'Conc'
--- runtime will assume that a deadlock situation has arisen if the
--- scheduler attempts to (a) schedule a blocked thread, or (b)
--- schedule a nonexistent thread. In either of those cases, the
--- computation will be halted.
+-- Note: In order to prevent computation from hanging, the runtime
+-- will assume that a deadlock situation has arisen if the scheduler
+-- attempts to (a) schedule a blocked thread, or (b) schedule a
+-- nonexistent thread. In either of those cases, the computation will
+-- be halted.
 type Scheduler s = s -> ThreadId -> NonEmpty ThreadId -> (ThreadId, s)
 
--- | One of the outputs of the runner is a @Trace@, which is just a
--- log of threads and actions they have taken.
-type Trace = [(ThreadId, ThreadAction)]
+-- | One of the outputs of the runner is a @Trace@, which is a log of
+-- decisions made, alternative decisions, and the action a thread took
+-- in its step.
+type Trace = [(Decision, [Decision], ThreadAction)]
+
+-- | Pretty-print a trace.
+showTrace :: Trace -> String
+showTrace = trace "" 0 where
+  trace prefix num ((Start tid,_,_):ds)    = thread prefix num ++ trace ("S" ++ show tid) 1 ds
+  trace prefix num ((SwitchTo tid,_,_):ds) = thread prefix num ++ trace ("P" ++ show tid) 1 ds
+  trace prefix num ((Continue,_,_):ds)     = trace prefix (num + 1) ds
+  trace prefix num []                      = thread prefix num
+
+  thread prefix num = prefix ++ replicate num '-'
+
+-- | Scheduling decisions are based on the state of the running
+-- program, and so we can capture some of that state in recording what
+-- specific decision we made.
+data Decision =
+    Start ThreadId
+  -- ^ Start a new thread, because the last was blocked (or it's the
+  -- start of computation).
+  | Continue
+  -- ^ Continue running the last thread for another step.
+  | SwitchTo ThreadId
+  -- ^ Pre-empt the running thread, and switch to another.
+  deriving (Eq, Show)
+
+instance NFData Decision where
+  rnf (Start    tid) = rnf tid
+  rnf (SwitchTo tid) = rnf tid
+  rnf Continue = ()
 
 -- | All the actions that a thread can perform.
 data ThreadAction =
@@ -121,16 +151,11 @@ instance NFData ThreadAction where
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a 'Just' if it terminates, and 'Nothing' if a
--- deadlock is detected.
+-- deadlock is detected. Also returned is the final state of the
+-- scheduler, and an execution trace.
 runFixed :: (Monad (c t), Monad n) => Fixed c n r t
-         -> Scheduler s -> s -> c t a -> n (Maybe a)
-runFixed fixed sched s ma = liftM (\(a,_,_) -> a) $ runFixed' fixed sched s ma
-
--- | Variant of 'runFixed' which returns the final state of the
--- scheduler and an execution trace.
-runFixed' :: (Monad (c t), Monad n) => Fixed c n r t
           -> Scheduler s -> s -> c t a -> n (Maybe a, s, Trace)
-runFixed' fixed sched s ma = do
+runFixed fixed sched s ma = do
   ref <- newRef fixed Nothing
 
   let c       = getCont fixed $ ma >>= liftN fixed . writeRef fixed ref . Just
@@ -167,7 +192,7 @@ runThreads fixed sofar prior sched s threads ref
   | isBlocked     = writeRef fixed ref Nothing >> return (s, sofar)
   | otherwise = do
     (threads', act) <- stepThread (fst $ fromJust thread) fixed chosen threads
-    let sofar' = (chosen, act) : sofar
+    let sofar' = (decision, alternatives, act) : sofar
     runThreads fixed sofar' chosen sched s' threads' ref
 
   where
@@ -179,6 +204,16 @@ runThreads fixed sofar prior sched s threads ref
     isNonexistant = isNothing thread
     isTerminated  = 0 `notElem` M.keys threads
     isDeadlocked  = M.null runnable
+
+    decision
+      | chosen == prior         = Continue
+      | prior `elem` runnable' = SwitchTo chosen
+      | otherwise              = Start chosen
+
+    alternatives
+      | chosen == prior         = map SwitchTo $ filter (/=prior) runnable'
+      | prior `elem` runnable' = Continue : map SwitchTo (filter (\t -> t /= prior && t /= chosen) runnable')
+      | otherwise              = map Start $ filter (/=chosen) runnable'
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
