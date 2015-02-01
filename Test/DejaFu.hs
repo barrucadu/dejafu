@@ -189,7 +189,7 @@ runTestIO' pb predicate conc = (predicate <$> sctPreBoundIO pb conc) >>= andShri
 
 -- | Strip out duplicates
 uniques :: Eq a => [(Maybe a, Trace)] -> [(Maybe a, Trace)]
-uniques = map head . groupByIsh (==)
+uniques = nubBy resEq . map head . groupByIsh (==)
 
 -- * Predicates
 
@@ -295,23 +295,13 @@ doTest name result = do
   else do
     -- Display a failure message, and the first 5 (simplified) failed traces
     putStrLn ("\27[31m[fail]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")")
-    let failures = nubBy reseq $ _failures result
+
+    let failures = _failures result
     mapM_ (\(r, t) -> putStrLn $ "\t" ++ maybe "[deadlock]" show r ++ " " ++ showTrace t) $ take 5 failures
     when (moreThan failures 5) $
       putStrLn "\t..."
 
   return $ _pass result
-
-  where
-    reseq (res, trc) (res', trc') = res == res' && trc `eq` trc'
-    -- Two traces are "equal" if their decisions differ ONLY in
-    -- non-preemptive context switches. This helps filter out some
-    -- false positives.
-    eq [] [] = True
-    eq _ [] = False
-    eq [] _ = False
-    eq ((Start _,_,_):as) ((Start _,_,_):bs) = as `eq` bs
-    eq ((a,_,_):as) ((b,_,_):bs) = a == b && as `eq` bs
 
 -- | Increment the cases checked
 incCC :: Result a -> Result a
@@ -335,3 +325,14 @@ findFailures2 p xs = findFailures xs 0 [] where
   findFailures ((z1,t1):(z2,t2):zs) l fs
     | p z1 z2 = findFailures ((z2,t2):zs) (l+1) fs
     | otherwise = findFailures ((z2,t2):zs) (l+1) ((z1,t1):(z2,t2):fs)
+
+-- | Check if two failures are \"equal\". Specifically, they have the
+-- same value, and the traces differ only in non-pre-emptive context
+-- switches. This helps filter out some duplicates.
+resEq :: Eq a => (Maybe a, Trace) -> (Maybe a, Trace) -> Bool
+resEq (res, trc) (res', trc') = res == res' && trc `eq` trc' where
+  eq [] [] = True
+  eq _ [] = False
+  eq [] _ = False
+  eq ((Start _,_,_):as) ((Start _,_,_):bs) = as `eq` bs
+  eq ((a,_,_):as) ((b,_,_):bs) = a == b && as `eq` bs
