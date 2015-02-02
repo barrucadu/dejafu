@@ -327,12 +327,10 @@ findFailures2 p xs = findFailures xs 0 [] where
     | otherwise = findFailures ((z2,t2):zs) (l+1) ((z1,t1):(z2,t2):fs)
 
 -- | Check if two failures are \"equal\". Specifically, they have the
--- same value, and the traces differ only in non-pre-emptive context
--- switches. This helps filter out some duplicates.
+-- same value, traces restricted to pre-emptive context switches are
+-- the same. This helps filter out some duplicates.
 resEq :: Eq a => (Maybe a, Trace) -> (Maybe a, Trace) -> Bool
-resEq (res, trc) (res', trc') = res == res' && trc `eq` trc' where
-  eq [] [] = True
-  eq _ [] = False
-  eq [] _ = False
-  eq ((Start _,_,_):as) ((Start _,_,_):bs) = as `eq` bs
-  eq ((a,_,_):as) ((b,_,_):bs) = a == b && as `eq` bs
+resEq (res, trc) (res', trc') = res == res' && restrict trc == restrict trc' where
+  restrict ((SwitchTo i,_,_):xs) = i : restrict xs
+  restrict (_:xs) = restrict xs
+  restrict [] = []
