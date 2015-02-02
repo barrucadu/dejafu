@@ -12,13 +12,12 @@ module Test.DejaFu.Shrink
   , candidates
   , try
   , tryIO
-  , essential
   , simplest
   ) where
 
 import Control.Applicative ((<$>))
 import Data.Function (on)
-import Data.List (sortBy, isPrefixOf, nubBy)
+import Data.List (sortBy, nubBy)
 import Data.Maybe (fromJust, listToMaybe)
 import Data.Ord (comparing)
 import Test.DejaFu.Deterministic
@@ -30,59 +29,20 @@ import Test.DejaFu.SCT.Internal
 -- | Attempt to find a trace with a minimal number of pre-emptions
 -- that gives rise to the desired output.
 shrink :: Eq a => (Maybe a, Trace) -> (forall t. Conc t a) -> Trace
-shrink (result, trace) t = shrink' [] trace where
-  shrink' e trc = case nextscts of
-    -- No candidates for further shrinking found
-    [] -> trc
-    -- Attempt to shrink further. Safe because shrink'' will always
-    -- return at least one result.
-    ts -> fromJust . simplest $ map (uncurry shrink') ts
+shrink (result, trace) t = fromJust $ simplest derivs where
+  -- Get all candidate trace prefixes.
+  cands = map fst $ candidates trace
 
-    where
-      -- Get all candidate trace prefixes which start with the given
-      -- essential portion.
-      cands = filter (\(ds, _) -> e `isPrefixOf` ds) $ candidates trc
-
-      -- Get traces for further shrinking, by finding the essential
-      -- prefixes out of the candidates
-      nextscts = concatMap step cands
-
-      -- Pick a candidate for further simplification, and attempt to
-      -- identify a new essential trace prefix.
-      step (pref, tid) =
-        let tries = filter (/=trace) $ try (==result) pref t
-        in case simplest tries of
-             -- No further candidates available.
-             Nothing -> []
-             Just best ->
-               if essential (pref, tid) tries
-               -- If the pre-emption is essential, we have a new
-               -- essential prefix.
-               then [(pref ++ [SwitchTo tid], best)]
-               -- If not, just re-use the original prefix.
-               else [(e, best)]
+  -- Get all derivative traces introducing no more than one further
+  -- pre-emption.
+  derivs = concatMap (\pref -> try (==result) pref t) cands
 
 -- | Variant of 'shrink' for computations which do 'IO'.
 shrinkIO :: Eq a => (Maybe a, Trace) -> (forall t. ConcIO t a) -> IO Trace
-shrinkIO (result, trace) t = shrink' [] trace where
-  shrink' e trc = do
-    let cands = filter (\(ds, _) -> e `isPrefixOf` ds) $ candidates trc
-    nextscts <- concat <$> mapM step cands
-
-    case nextscts of
-      [] -> return trc
-      ts -> fromJust . simplest <$> mapM (uncurry shrink') ts
-
-    where
-      step (pref, tid) = do
-        tries <- tryIO (==result) pref t
-        return $
-          case simplest tries of
-            Nothing   -> []
-            Just best ->
-              if essential (pref, tid) tries
-              then [(pref ++ [SwitchTo tid], best)]
-              else [(e, best)]
+shrinkIO (result, trace) t = do
+  let cands = map fst $ candidates trace
+  derivs <- concat <$> mapM (\pref -> tryIO (==result) pref t) cands
+  return . fromJust $ simplest derivs
 
 -- | Generate all candidate trace prefixes from a trace. These are
 -- produced by attempting to drop one pre-emption. Furthermore, the
@@ -103,14 +63,6 @@ try p pref c = map snd . filter (p . fst) $ sctPreBoundOffset pref c
 -- | Variant of 'try' for computations which do 'IO'.
 tryIO :: (Maybe a -> Bool) -> [Decision] -> (forall t. ConcIO t a) -> IO [Trace]
 tryIO p pref c = map snd . filter (p . fst) <$> sctPreBoundOffsetIO pref c
-
--- | Given a list of 'Trace's which follow on from a given prefix,
--- determine if the removed pre-emption is /essential/. That is, every
--- 'Trace' starts with the prefix followed immediately by a
--- pre-emption to the given thread.
-essential :: ([Decision], ThreadId) -> [Trace] -> Bool
-essential (ds, tid) = all ((pref `isPrefixOf`) . map (\(d,_,_) -> d)) where
-  pref = ds ++ [SwitchTo tid]
 
 -- | Return the simplest 'Trace' from a collection. Roughly, the
 -- one with the fewest pre-emptions. If the list is empty, return
