@@ -218,13 +218,13 @@ bStep siblings offspring blim (s, g) t = case _next g of
 -- | Check if a 'ThreadAction' might be an interesting candidate for
 -- pre-empting or delaying.
 interesting :: Bool -> ThreadAction -> Bool
-interesting _ (Put _)       = True
-interesting _ (TryPut _ _)  = True
-interesting _ (Take _)      = True
-interesting _ (TryTake _ _) = True
-interesting _ BlockedPut  = True
-interesting _ Read        = True
-interesting _ BlockedRead = True
-interesting _ BlockedTake = True
+interesting _ (Put _ _)       = True
+interesting _ (TryPut _ _ _)  = True
+interesting _ (Take _ _)      = True
+interesting _ (TryTake _ _ _) = True
+interesting _ (BlockedPut _)  = True
+interesting _ (Read _)        = True
+interesting _ (BlockedRead _) = True
+interesting _ (BlockedTake _) = True
 interesting l Lift = l
 interesting _ _ = False

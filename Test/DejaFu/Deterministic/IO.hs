@@ -32,6 +32,7 @@ module Test.DejaFu.Deterministic.IO
   , Trace
   , Decision
   , ThreadAction
+  , CVarId
   , showTrace
 
   -- * Scheduling
@@ -98,8 +99,8 @@ fork (C ma) = C $ cont $ \c -> AFork (runCont ma $ const AStop) $ c ()
 -- | Create a new empty 'CVar'.
 newEmptyCVar :: ConcIO t (CVar t a)
 newEmptyCVar = C $ cont lifted where
-  lifted c = ANew $ c <$> newEmptyCVar'
-  newEmptyCVar' = V <$> newIORef (Nothing, [])
+  lifted c = ANew $ \cvid -> c <$> newEmptyCVar' cvid
+  newEmptyCVar' cvid = V <$> newIORef (cvid, Nothing, [])
 
 -- | Block on a 'CVar' until it is empty, then write to it.
 putCVar :: CVar t a -> a -> ConcIO t ()
