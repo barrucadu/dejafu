@@ -84,14 +84,15 @@ import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when)
-import Data.List (nubBy)
+import Data.Function (on)
+import Data.List (nubBy, sortBy)
 import Data.List.Extra
 import Data.Maybe (isJust, isNothing)
+import Data.Monoid ((<>))
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.IO (ConcIO)
 import Test.DejaFu.SCT
-import Test.DejaFu.Shrink
 
 -- | Run a test and print the result to stdout, return 'True' if it
 -- passes.
@@ -158,9 +159,8 @@ instance Functor Result where
   fmap f r = r { _failures = map (first $ fmap f) $ _failures r }
 
 -- | Run a predicate over all executions with two or fewer
--- pre-emptions, and attempt to shrink any failing traces. A
--- pre-emption is a context switch where the old thread was still
--- runnable.
+-- pre-emptions. A pre-emption is a context switch where the old
+-- thread was still runnable.
 --
 -- In the resultant traces, a pre-emption is displayed as \"Px\",
 -- where @x@ is the ID of the thread being switched to, whereas a
@@ -174,22 +174,50 @@ runTestIO = runTestIO' 2
 
 -- | Variant of 'runTest' which takes a pre-emption bound.
 runTest' :: Eq a => Int -> Predicate a -> (forall t. Conc t a) -> Result a
-runTest' pb predicate conc = andShrink . predicate $ sctPreBound pb conc where
-  andShrink r
-    | null $ _failures r = r
-    | otherwise = r { _failures = uniques . map (\failure@(res, _) -> (res, shrink failure conc)) $ _failures r }
+runTest' pb predicate conc = r { _failures = uniques $ _failures r } where
+  r = predicate $ sctPreBound pb conc
 
 -- | Variant of 'runTest'' for computations which do 'IO'.
 runTestIO' :: Eq a => Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result  a)
-runTestIO' pb predicate conc = (predicate <$> sctPreBoundIO pb conc) >>= andShrink where
-  andShrink r
-    | null $ _failures r = return r
-    | otherwise = (\fs -> r { _failures = uniques fs }) <$>
-      mapM (\failure@(res, _) -> (\trc' -> (res, trc')) <$> shrinkIO failure conc) (_failures r)
+runTestIO' pb predicate conc = do
+  r <- predicate <$> sctPreBoundIO pb conc
+  return $ r { _failures = uniques $ _failures r }
 
 -- | Strip out duplicates
 uniques :: Eq a => [(Maybe a, Trace)] -> [(Maybe a, Trace)]
-uniques = nubBy resEq . map head . groupByIsh (==)
+uniques = concatMap simplest . groupByIsh ((==) `on` fst) . nubBy resEq where
+  -- Restrict a list of failures to the simplest ones
+  simplest as = let xs@((_,trc):_) = sortBy (simpler `on` snd) as in filter (\(_,trc') -> simpler trc trc' == EQ) xs
+
+  -- Of two traces, determine which (if either) is the simpler
+  simpler a b = emps <> cswit <> lexico where
+    a' = map (\(d,_,_) -> d) a
+    b' = map (\(d,_,_) -> d) b
+
+    -- Comparisons we care about (in order)
+    emps   = preEmpCount a' `compare` preEmpCount b'
+    cswit  = contextSwitchCount a' `compare` contextSwitchCount b'
+    lexico = lexicographic a' b'
+
+    contextSwitchCount (Start _:ss) = 1 + contextSwitchCount ss
+    contextSwitchCount (_:ss) = contextSwitchCount ss
+    contextSwitchCount _ = 0::Int
+
+    lexicographic (SwitchTo i:_) (SwitchTo j:_) = i `compare` j
+    lexicographic (Start i:_) (Start j:_) = i `compare` j
+    lexicographic (Continue:as) (b:bs) = if b /= Continue then LT else lexicographic as bs
+    lexicographic (_:as) (_:bs) = lexicographic as bs
+    lexicographic [] [] = EQ
+    lexicographic [] _  = LT
+    lexicographic _ []  = GT
+
+  -- Check if two failures are approximately equal (same result & pre-emptions)
+  resEq (res, trc) (res', trc') = res == res' && restrict trc == restrict trc'
+
+  -- Restrict a trace to just pre-emptions
+  restrict ((SwitchTo i,_,_):xs) = i : restrict xs
+  restrict (_:xs) = restrict xs
+  restrict [] = []
 
 -- * Predicates
 
@@ -325,12 +353,3 @@ findFailures2 p xs = findFailures xs 0 [] where
   findFailures ((z1,t1):(z2,t2):zs) l fs
     | p z1 z2 = findFailures ((z2,t2):zs) (l+1) fs
     | otherwise = findFailures ((z2,t2):zs) (l+1) ((z1,t1):(z2,t2):fs)
-
--- | Check if two failures are \"equal\". Specifically, they have the
--- same value, traces restricted to pre-emptive context switches are
--- the same. This helps filter out some duplicates.
-resEq :: Eq a => (Maybe a, Trace) -> (Maybe a, Trace) -> Bool
-resEq (res, trc) (res', trc') = res == res' && restrict trc == restrict trc' where
-  restrict ((SwitchTo i,_,_):xs) = i : restrict xs
-  restrict (_:xs) = restrict xs
-  restrict [] = []

@@ -55,7 +55,6 @@ library
                      , Test.DejaFu.Deterministic.IO
                      , Test.DejaFu.Deterministic.Schedule
                      , Test.DejaFu.SCT
-                     , Test.DejaFu.Shrink
 
   other-modules:       Test.DejaFu.Deterministic.Internal
                      , Test.DejaFu.SCT.Bounding

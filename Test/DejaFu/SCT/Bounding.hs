@@ -156,11 +156,11 @@ bTerm (_, g) = _halt g
 -- | Schedule bounding state step function: computes remaining
 -- schedules to try and chooses one.
 --
--- This effectively produces schedules in a depth-first order, rather
--- than breadth-first. This means it will explore some schedules with
--- a higher bound before all the ones with a lower bound. Testing with
--- a very concurrent problem (finding a deadlock in 100 dining
--- philosophers) has revealed this may work better in practice.
+-- This explores schedules in a slightly weird order, it tries to bias
+-- towards first exploring schedules with a low, but nonzero, schedule
+-- bound. The reason for this is to try to generate simple failing
+-- examples quickly, but without getting mired in exploring a lot of
+-- zero-bound schedules which might not exhibit a bug.
 bStep :: (Trace -> [[Decision]])
       -- ^ Sibling generation function.
       -> (Trace -> [[Decision]])
@@ -171,8 +171,9 @@ bStep :: (Trace -> [[Decision]])
 bStep siblings offspring blim (s, g) t = case _next g of
   -- We have schedules remaining, so run the next
   Stream (b, x:|xs) rest
-    | b /= blim  -> (s' x, g { _next = (b+1, next) +| (b, this) +| (b, xs) +| rest })
-    | otherwise -> (s' x, g { _next =                (b, this) +| (b, xs) +| rest })
+    | b /= blim && b == 0 -> (s' x, g { _next = (b+1, next) +| (b, this) +| (b, xs) +| rest })
+    | b /= blim         -> (s' x, g { _next = (b, this) +| (b+1, next) +| (b, xs) +| rest })
+    | otherwise -> (s' x, g { _next = (b, this) +| (b, xs) +| rest })
 
   -- We have no schedules remaining, try to generate some more.
   --
@@ -183,8 +184,9 @@ bStep siblings offspring blim (s, g) t = case _next g of
       -- the queue (and any schedules from the next bound if we're not at
       -- the limit)
       (x:xs, _)
-        | b /= blim  -> (s' x, g { _next = (b+1, next) +| (b, xs) +| Empty b })
-        | otherwise -> (s' x, g { _next =                (b, xs) +| Empty b })
+        | b /= blim && b == 0 -> (s' x, g { _next = (b+1, next) +| (b, xs) +| Empty b })
+        | b /= blim         -> (s' x, g { _next = (b, xs) +| (b+1, next) +| Empty b })
+        | otherwise -> (s' x, g { _next = (b, xs) +| Empty b })
 
       -- No schedules left in this bound, but if we have some more from
       -- the next bound (and we're not at the limit) add those.
