@@ -84,11 +84,9 @@ import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when)
-import Data.Function (on)
-import Data.List (nubBy, sortBy)
 import Data.List.Extra
 import Data.Maybe (isJust, isNothing)
-import Data.Monoid ((<>))
+import Data.Monoid (mconcat)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.IO (ConcIO)
@@ -185,19 +183,21 @@ runTestIO' pb predicate conc = do
 
 -- | Strip out duplicates
 uniques :: Eq a => [(Maybe a, Trace)] -> [(Maybe a, Trace)]
-uniques = concatMap simplest . groupByIsh ((==) `on` fst) . nubBy resEq where
-  -- Restrict a list of failures to the simplest ones
-  simplest as = let xs@((_,trc):_) = sortBy (simpler `on` snd) as in filter (\(_,trc') -> simpler trc trc' == EQ) xs
+uniques = sortNubBy simplicity
 
-  -- Of two traces, determine which (if either) is the simpler
-  simpler a b = emps <> cswit <> lexico where
-    a' = map (\(d,_,_) -> d) a
-    b' = map (\(d,_,_) -> d) b
+-- | Determine which of two failures is simpler, if they are comparable.
+simplicity :: Eq a => (Maybe a, Trace) -> (Maybe a, Trace) -> Maybe Ordering
+simplicity (r, t) (s, u)
+  | r /= s = Nothing
+  | otherwise = Just $ mconcat
+    [ preEmpCount t' `compare` preEmpCount u'
+    , contextSwitchCount t' `compare` contextSwitchCount u'
+    , lexicographic t' u'
+    ]
 
-    -- Comparisons we care about (in order)
-    emps   = preEmpCount a' `compare` preEmpCount b'
-    cswit  = contextSwitchCount a' `compare` contextSwitchCount b'
-    lexico = lexicographic a' b'
+  where
+    t' = map (\(d,_,_) -> d) t
+    u' = map (\(d,_,_) -> d) u
 
     contextSwitchCount (Start _:ss) = 1 + contextSwitchCount ss
     contextSwitchCount (_:ss) = contextSwitchCount ss
@@ -210,14 +210,6 @@ uniques = concatMap simplest . groupByIsh ((==) `on` fst) . nubBy resEq where
     lexicographic [] [] = EQ
     lexicographic [] _  = LT
     lexicographic _ []  = GT
-
-  -- Check if two failures are approximately equal (same result & pre-emptions)
-  resEq (res, trc) (res', trc') = res == res' && restrict trc == restrict trc'
-
-  -- Restrict a trace to just pre-emptions
-  restrict ((SwitchTo i,_,_):xs) = i : restrict xs
-  restrict (_:xs) = restrict xs
-  restrict [] = []
 
 -- * Predicates
 
