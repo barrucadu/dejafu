@@ -234,37 +234,24 @@ stepThread  AStop             = stepStop
 stepFork :: (Monad (c t), Monad n)
          => Action n r -> Action n r
          -> Fixed c n r t -> ThreadId -> Threads n r -> n (Threads n r, ThreadAction)
-stepFork a b _ i threads =
-  let (threads', newid) = launch a threads
-  in return (goto b i threads', Fork newid)
+stepFork a b _ i threads = return (goto b i threads', Fork newid) where
+  (threads', newid) = launch a threads
 
 -- | Put a value into a @CVar@, blocking the thread until it's empty.
 stepPut :: (Monad (c t), Monad n)
         => R r a -> a -> Action n r
         -> Fixed c n r t -> ThreadId -> Threads n r -> n (Threads n r, ThreadAction)
 stepPut ref a c fixed i threads = do
-  (val, blocks) <- readRef fixed ref
-  case val of
-    Just _  -> do
-      threads' <- block fixed ref WaitEmpty i threads
-      return (threads', BlockedPut)
-    Nothing -> do
-      writeRef fixed ref (Just a, blocks)
-      (threads', woken) <- wake fixed ref WaitFull threads
-      return (goto c i threads', Put woken)
+  (success, threads', woken) <- putIntoCVar True ref a (const c) fixed i threads
+  return (threads', if success then Put woken else BlockedPut)
 
 -- | Try to put a value into a @CVar@, without blocking.
 stepTryPut :: (Monad (c t), Monad n)
            => R r a -> a -> (Bool -> Action n r)
            -> Fixed c n r t -> ThreadId -> Threads n r -> n (Threads n r, ThreadAction)
 stepTryPut ref a c fixed i threads = do
-  (val, blocks) <- readRef fixed ref
-  case val of
-    Just _  -> return (goto (c False) i threads, TryPut False [])
-    Nothing -> do
-      writeRef fixed ref (Just a, blocks)
-      (threads', woken) <- wake fixed ref WaitFull threads
-      return (goto (c True) i threads', TryPut True woken)
+  (success, threads', woken) <- putIntoCVar False ref a c fixed i threads
+  return (threads', TryPut success woken)
 
 -- | Get the value from a @CVar@, without emptying, blocking the
 -- thread until it's full.
@@ -285,28 +272,16 @@ stepTake :: (Monad (c t), Monad n)
          => R r a -> (a -> Action n r)
          -> Fixed c n r t -> ThreadId -> Threads n r -> n (Threads n r, ThreadAction)
 stepTake ref c fixed i threads = do
-  (val, blocks) <- readRef fixed ref
-  case val of
-    Just val' -> do
-      writeRef fixed ref (Nothing, blocks)
-      (threads', woken) <- wake fixed ref WaitEmpty threads
-      return (goto (c val') i threads', Take woken)
-    Nothing   -> do
-      threads' <- block fixed ref WaitFull i threads
-      return (threads', BlockedTake)
+  (success, threads', woken) <- takeFromCVar True ref (c . fromJust) fixed i threads
+  return (threads', if success then Take woken else BlockedTake)
 
 -- | Try to take the value from a @CVar@, without blocking.
 stepTryTake :: (Monad (c t), Monad n)
             => R r a -> (Maybe a -> Action n r)
             -> Fixed c n r t -> ThreadId -> Threads n r -> n (Threads n r, ThreadAction)
 stepTryTake ref c fixed i threads = do
-  (val, blocks) <- readRef fixed ref
-  case val of
-    Just _ -> do
-      writeRef fixed ref (Nothing, blocks)
-      (threads', woken) <- wake fixed ref WaitEmpty threads
-      return (goto (c val) i threads', TryTake True woken)
-    Nothing -> return (goto (c Nothing) i threads, TryTake False [])
+  (success, threads', woken) <- takeFromCVar True ref c fixed i threads
+  return (threads', TryTake success woken)
 
 -- | Create a new @CVar@. This is exactly the same as lifting a value,
 -- except by separating the two we can (a) produce a more useful
@@ -331,6 +306,52 @@ stepLift na _ i threads = do
 stepStop :: (Monad (c t), Monad n)
          => Fixed c n r t -> ThreadId -> Threads n r -> n (Threads n r, ThreadAction)
 stepStop _ i threads = return (kill i threads, Stop)
+
+-- * Manipulating @CVar@s
+
+-- | Put a value into a @CVar@, in either a blocking or nonblocking
+-- way.
+putIntoCVar :: (Monad (c t), Monad n)
+            => Bool -> R r a -> a -> (Bool -> Action n r)
+            -> Fixed c n r t -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
+putIntoCVar blocking ref a c fixed i threads = do
+  (val, blocks) <- readRef fixed ref
+
+  case val of
+    Just _
+      | blocking -> do
+        threads' <- block fixed ref WaitEmpty i threads
+        return (False, threads', [])
+
+      | otherwise ->
+        return (False, goto (c False) i threads, [])
+
+    Nothing -> do
+      writeRef fixed ref (Just a, blocks)
+      (threads', woken) <- wake fixed ref WaitFull threads
+      return (True, goto (c True) i threads', woken)
+
+-- | Take a value from a @CVar@, in either a blocking or nonblocking
+-- way.
+takeFromCVar :: (Monad (c t), Monad n)
+             => Bool -> R r a -> (Maybe a -> Action n r)
+             -> Fixed c n r t -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
+takeFromCVar blocking ref c fixed i threads = do
+  (val, blocks) <- readRef fixed ref
+
+  case val of
+    Just _ -> do
+      writeRef fixed ref (Nothing, blocks)
+      (threads', woken) <- wake fixed ref WaitEmpty threads
+      return (True, goto (c val) i threads', woken)
+
+    Nothing
+      | blocking -> do
+        threads' <- block fixed ref WaitFull i threads
+        return (False, threads', [])
+
+      | otherwise ->
+        return (False, goto (c Nothing) i threads, [])
 
 -- * Manipulating threads
 
