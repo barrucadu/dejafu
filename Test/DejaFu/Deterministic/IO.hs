@@ -29,6 +29,9 @@ module Test.DejaFu.Deterministic.IO
   , takeCVar
   , tryTakeCVar
 
+  -- * Testing
+  , _concNoTest
+
   -- * Execution traces
   , Trace
   , Decision(..)
@@ -65,14 +68,14 @@ instance C.MonadConc (ConcIO t) where
   readCVar     = readCVar
   takeCVar     = takeCVar
   tryTakeCVar  = tryTakeCVar
+  _concNoTest  = _concNoTest
 
-fixed :: Fixed ConcIO IO IORef t
+fixed :: Fixed IO IORef
 fixed = F
   { newRef    = newIORef
   , readRef   = readIORef
   , writeRef  = writeIORef
-  , liftN     = liftIO
-  , getCont   = unC
+  , liftN     = unC . liftIO
   }
 
 -- | The concurrent variable type used with the 'ConcIO' monad. These
@@ -120,9 +123,13 @@ takeCVar cvar = C $ cont $ ATake $ unV cvar
 tryTakeCVar :: CVar t a -> ConcIO t (Maybe a)
 tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 
+-- | Run the argument in one step. If the argument fails, the whole
+-- computation will fail.
+_concNoTest :: ConcIO t a -> ConcIO t a
+_concNoTest ma = C $ cont $ \c -> ANoTest (unC ma) c
+
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning an failure reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
 runConcIO :: Scheduler s -> s -> (forall t. ConcIO t a) -> IO (Either Failure a, s, Trace)
--- Note: Don't eta-reduce, the forall t messes up type inference.
-runConcIO sched s ma = runFixed fixed sched s ma
+runConcIO sched s ma = runFixed fixed sched s $ unC ma

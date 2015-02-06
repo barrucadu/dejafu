@@ -86,6 +86,27 @@ class Monad m => MonadConc m where
   -- returning 'Nothing'.
   tryTakeCVar :: CVar m a -> m (Maybe a)
 
+  -- | Runs its argument, just as if the @_concNoTest@ weren't there.
+  --
+  -- > _concNoTest x = x
+  --
+  -- This function is purely for testing purposes, and indicates that
+  -- it's not worth considering more than one schedule here. This is
+  -- useful if you have some larger computation built up out of
+  -- subcomputations which you have already got tests for: you only
+  -- want to consider what's unique to the large component.
+  --
+  -- The test runner will report a failure if the argument fails.
+  --
+  -- Note that inappropriate use of @_concNoTest@ can actually
+  -- /suppress/ bugs! For this reason it is recommended to use it only
+  -- for things which don't make use of any state from a larger
+  -- scope. As a rule-of-thumb: if you can't define it as a top-level
+  -- function taking no @CVar@ arguments, you probably shouldn't
+  -- @_concNoTest@ it.
+  _concNoTest :: m a -> m a
+  _concNoTest = id
+
 instance MonadConc IO where
   type CVar IO = MVar
 

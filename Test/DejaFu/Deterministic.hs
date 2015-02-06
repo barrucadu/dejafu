@@ -25,6 +25,9 @@ module Test.DejaFu.Deterministic
   , takeCVar
   , tryTakeCVar
 
+  -- * Testing
+  , _concNoTest
+
   -- * Execution traces
   , Trace
   , Decision(..)
@@ -61,14 +64,14 @@ instance C.MonadConc (Conc t) where
   readCVar     = readCVar
   takeCVar     = takeCVar
   tryTakeCVar  = tryTakeCVar
+  _concNoTest = _concNoTest
 
-fixed :: Fixed Conc (ST t) (STRef t) t
+fixed :: Fixed (ST t) (STRef t)
 fixed = F
   { newRef    = newSTRef
   , readRef   = readSTRef
   , writeRef  = writeSTRef
-  , liftN     = \ma -> C $ cont (\c -> ALift $ c <$> ma)
-  , getCont   = unC
+  , liftN     = \ma -> cont (\c -> ALift $ c <$> ma)
   }
 
 -- | The concurrent variable type used with the 'Conc' monad. One
@@ -115,6 +118,11 @@ takeCVar cvar = C $ cont $ ATake $ unV cvar
 tryTakeCVar :: CVar t a -> Conc t (Maybe a)
 tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 
+-- | Run the argument in one step. If the argument fails, the whole
+-- computation will fail.
+_concNoTest :: Conc t a -> Conc t a
+_concNoTest ma = C $ cont $ \c -> ANoTest (unC ma) c
+
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
@@ -128,4 +136,4 @@ tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 -- making your head hurt, check out the \"How @runST@ works\" section
 -- of <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
 runConc :: Scheduler s -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace)
-runConc sched s ma = runST $ runFixed fixed sched s ma
+runConc sched s ma = runST $ runFixed fixed sched s $ unC ma

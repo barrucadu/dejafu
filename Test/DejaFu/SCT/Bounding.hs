@@ -7,7 +7,6 @@ module Test.DejaFu.SCT.Bounding where
 import Control.DeepSeq (NFData(..), force)
 import Data.List.Extra
 import Test.DejaFu.Deterministic
-import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.IO (ConcIO)
 import Test.DejaFu.SCT.Internal
 
