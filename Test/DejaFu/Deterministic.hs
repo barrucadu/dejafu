@@ -11,6 +11,7 @@
 module Test.DejaFu.Deterministic
   ( -- * The @Conc@ Monad
     Conc
+  , Failure(..)
   , runConc
   , fork
   , spawn
@@ -26,8 +27,8 @@ module Test.DejaFu.Deterministic
 
   -- * Execution traces
   , Trace
-  , Decision
-  , ThreadAction
+  , Decision(..)
+  , ThreadAction(..)
   , CVarId
   , showTrace
 
@@ -115,9 +116,8 @@ tryTakeCVar :: CVar t a -> Conc t (Maybe a)
 tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
--- state, returning a 'Just' if it terminates, and 'Nothing' if a
--- deadlock is detected. Also returned is the final state of the
--- scheduler, and an execution trace.
+-- state, returning a failure reason on error. Also returned is the
+-- final state of the scheduler, and an execution trace.
 --
 -- Note how the @t@ in 'Conc' is universally quantified, what this
 -- means in practice is that you can't do something like this:
@@ -127,5 +127,5 @@ tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 -- So 'CVar's cannot leak out of the 'Conc' computation. If this is
 -- making your head hurt, check out the \"How @runST@ works\" section
 -- of <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
-runConc :: Scheduler s -> s -> (forall t. Conc t a) -> (Maybe a, s, Trace)
+runConc :: Scheduler s -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace)
 runConc sched s ma = runST $ runFixed fixed sched s ma

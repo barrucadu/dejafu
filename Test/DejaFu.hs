@@ -63,6 +63,7 @@ module Test.DejaFu
   , dejafusIO
   -- * Test cases
   , Result(..)
+  , Failure(..)
   , runTest
   , runTest'
   , runTestIO
@@ -85,10 +86,8 @@ import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when)
 import Data.List.Extra
-import Data.Maybe (isJust, isNothing)
 import Data.Monoid (mconcat)
 import Test.DejaFu.Deterministic
-import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.IO (ConcIO)
 import Test.DejaFu.SCT
 
@@ -146,7 +145,7 @@ data Result a = Result
   -- ^ The number of cases checked.
   , _casesTotal   :: Int
   -- ^ The total number of cases.
-  , _failures :: [(Maybe a, Trace)]
+  , _failures :: [(Either Failure a, Trace)]
   -- ^ The failed cases, if any.
   } deriving (Show, Eq)
 
@@ -182,11 +181,11 @@ runTestIO' pb predicate conc = do
   return $ r { _failures = uniques $ _failures r }
 
 -- | Strip out duplicates
-uniques :: Eq a => [(Maybe a, Trace)] -> [(Maybe a, Trace)]
+uniques :: Eq a => [(a, Trace)] -> [(a, Trace)]
 uniques = sortNubBy simplicity
 
 -- | Determine which of two failures is simpler, if they are comparable.
-simplicity :: Eq a => (Maybe a, Trace) -> (Maybe a, Trace) -> Maybe Ordering
+simplicity :: Eq a => (a, Trace) -> (a, Trace) -> Maybe Ordering
 simplicity (r, t) (s, u)
   | r /= s = Nothing
   | otherwise = Just $ mconcat
@@ -215,19 +214,19 @@ simplicity (r, t) (s, u)
 
 -- | A @Predicate@ is a function which collapses a list of results
 -- into a 'Result'.
-type Predicate a = [(Maybe a, Trace)] -> Result a
+type Predicate a = [(Either Failure a, Trace)] -> Result a
 
 -- | Check that a computation never deadlocks.
 deadlocksNever :: Predicate a
-deadlocksNever = alwaysTrue isJust
+deadlocksNever = alwaysTrue (not . either (==Deadlock) (const False))
 
 -- | Check that a computation always deadlocks.
 deadlocksAlways :: Predicate a
-deadlocksAlways = alwaysTrue isNothing
+deadlocksAlways = alwaysTrue $ either (==Deadlock) (const False)
 
 -- | Check that a computation deadlocks at least once.
 deadlocksSometimes :: Predicate a
-deadlocksSometimes = somewhereTrue isNothing
+deadlocksSometimes = somewhereTrue $ either (==Deadlock) (const False)
 
 -- | Check that the result of a computation is always the same. In
 -- particular this means either: (a) it always deadlocks, or (b) the
@@ -241,7 +240,7 @@ notAlwaysSame = somewhereTrue2 (/=)
 
 -- | Check that the result of a unary boolean predicate is always
 -- true.
-alwaysTrue :: (Maybe a -> Bool) -> Predicate a
+alwaysTrue :: (Either Failure a -> Bool) -> Predicate a
 alwaysTrue p xs = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = len, _failures = failures } where
   go [] res = res
   go ((y,_):ys) res
@@ -258,7 +257,7 @@ alwaysTrue p xs = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = 
 --
 -- If the predicate fails, /both/ (result,trace) tuples will be added
 -- to the failures list.
-alwaysTrue2 :: (Maybe a -> Maybe a -> Bool) -> Predicate a
+alwaysTrue2 :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
 alwaysTrue2 _ [_] = Result { _pass = True, _casesChecked = 1, _casesTotal = 1, _failures = [] }
 alwaysTrue2 p xs  = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = len, _failures = failures } where
   go [] = id
@@ -273,7 +272,7 @@ alwaysTrue2 p xs  = go xs Result { _pass = True, _casesChecked = 0, _casesTotal 
 
 -- | Check that the result of a unary boolean predicate is true at
 -- least once.
-somewhereTrue :: (Maybe a -> Bool) -> Predicate a
+somewhereTrue :: (Either Failure a -> Bool) -> Predicate a
 somewhereTrue p xs = go xs Result { _pass = False, _casesChecked = 0, _casesTotal = len, _failures = failures } where
   go [] res = res
   go ((y,_):ys) res
@@ -290,7 +289,7 @@ somewhereTrue p xs = go xs Result { _pass = False, _casesChecked = 0, _casesTota
 --
 -- If the predicate fails, /both/ (result,trace) tuples will be added
 -- to the failures list.
-somewhereTrue2 :: (Maybe a -> Maybe a -> Bool) -> Predicate a
+somewhereTrue2 :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
 somewhereTrue2 _ [x] = Result { _pass = False, _casesChecked = 1, _casesTotal = 1, _failures = [x] }
 somewhereTrue2 p xs  = go xs Result { _pass = False, _casesChecked = 0, _casesTotal = len, _failures = failures } where
   go [] = id
@@ -317,7 +316,7 @@ doTest name result = do
     putStrLn ("\27[31m[fail]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")")
 
     let failures = _failures result
-    mapM_ (\(r, t) -> putStrLn $ "\t" ++ maybe "[deadlock]" show r ++ " " ++ showTrace t) $ take 5 failures
+    mapM_ (\(r, t) -> putStrLn $ "\t" ++ either showfail show r ++ " " ++ showTrace t) $ take 5 failures
     when (moreThan failures 5) $
       putStrLn "\t..."
 
@@ -329,7 +328,7 @@ incCC r = r { _casesChecked = _casesChecked r + 1 }
 
 -- | Get the length of the list and find the failing cases in one
 -- traversal.
-findFailures1 :: (Maybe a -> Bool) -> [(Maybe a, Trace)] -> (Int, [(Maybe a, Trace)])
+findFailures1 :: (Either Failure a -> Bool) -> [(Either Failure a, Trace)] -> (Int, [(Either Failure a, Trace)])
 findFailures1 p xs = findFailures xs 0 [] where
   findFailures [] l fs = (l, fs)
   findFailures ((z,t):zs) l fs
@@ -338,10 +337,16 @@ findFailures1 p xs = findFailures xs 0 [] where
 
 -- | Get the length of the list and find the failing cases in one
 -- traversal.
-findFailures2 :: (Maybe a -> Maybe a -> Bool) -> [(Maybe a, Trace)] -> (Int, [(Maybe a, Trace)])
+findFailures2 :: (Either Failure a -> Either Failure a -> Bool) -> [(Either Failure a, Trace)] -> (Int, [(Either Failure a, Trace)])
 findFailures2 p xs = findFailures xs 0 [] where
   findFailures [] l fs = (l, fs)
   findFailures [_] l fs = (l+1, fs)
   findFailures ((z1,t1):(z2,t2):zs) l fs
     | p z1 z2 = findFailures ((z2,t2):zs) (l+1) fs
     | otherwise = findFailures ((z2,t2):zs) (l+1) ((z1,t1):(z2,t2):fs)
+
+-- | Pretty-print a failure
+showfail :: Failure -> String
+showfail Deadlock        = "[deadlock]"
+showfail InternalError   = "[internal-error]"
+showfail FailureInNoTest = "[_concNoTest]"

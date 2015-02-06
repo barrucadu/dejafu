@@ -14,11 +14,11 @@ import Test.DejaFu.SCT.Internal
 -- * Pre-emption bounding
 
 -- | An SCT runner using a pre-emption bounding scheduler.
-sctPreBound :: Int -> (forall t. Conc t a) -> [(Maybe a, Trace)]
+sctPreBound :: Int -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
 sctPreBound = sctBounded pbSiblings (pbOffspring False)
 
 -- | Variant of 'sctPreBound' for computations which do 'IO'.
-sctPreBoundIO :: Int -> (forall t. ConcIO t a) -> IO [(Maybe a, Trace)]
+sctPreBoundIO :: Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
 sctPreBoundIO = sctBoundedIO pbSiblings (pbOffspring True)
 
 -- | Return all modifications to this schedule which do not introduce
@@ -50,11 +50,11 @@ preEmpCount [] = 0
 -- * Delay bounding
 
 -- | An SCT runner using a delay-bounding scheduler.
-sctDelayBound :: Int -> (forall t. Conc t a) -> [(Maybe a, Trace)]
+sctDelayBound :: Int -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
 sctDelayBound = sctBounded (const []) (dbOffspring False)
 
 -- | Variant of 'sctDelayBound' for computations which do 'IO'.
-sctDelayBoundIO :: Int -> (forall t. ConcIO t a) -> IO [(Maybe a, Trace)]
+sctDelayBoundIO :: Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
 sctDelayBoundIO = sctBoundedIO (const []) (dbOffspring True)
 
 -- | Return all modifications to the schedule which introduce an extra
@@ -92,14 +92,14 @@ sctBounded :: (Trace -> [[Decision]])
            -- ^ Child generation function.
            -> Int
            -- ^ Bound, anything < 0 will be interpreted as no bound.
-           -> (forall t. Conc t a) -> [(Maybe a, Trace)]
+           -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
 sctBounded siblings offspring b = runSCT' prefixSched (initialS, initialG) bTerm (bStep siblings offspring b)
 
 -- | Variant of 'sctBounded' for computations which do 'IO'.
 sctBoundedIO :: (Trace -> [[Decision]])
              -> (Trace -> [[Decision]])
              -> Int
-             -> (forall t. ConcIO t a) -> IO [(Maybe a, Trace)]
+             -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
 sctBoundedIO siblings offspring b = runSCTIO' prefixSched (initialS, initialG) bTerm (bStep siblings offspring b)
 
 -- * State

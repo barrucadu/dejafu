@@ -146,25 +146,36 @@ instance NFData ThreadAction where
   rnf (Fork tid) = rnf tid
   rnf (New  c) = rnf c
   rnf (Read c) = rnf c
-  rnf Lift = ()
-  rnf Stop = ()
+  rnf ta = ta `seq` ()
+
+-- | An indication of how a concurrent computation failed.
+data Failure =
+    InternalError
+  -- ^ Will be raised if the scheduler does something bad. This should
+  -- never arise unless you write your own, faulty, scheduler! If it
+  -- does, please file a bug report.
+  | Deadlock
+  deriving (Eq, Show)
+
+instance NFData Failure where
+  rnf f = f `seq` () -- All failures are in WHNF already.
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a 'Just' if it terminates, and 'Nothing' if a
 -- deadlock is detected. Also returned is the final state of the
 -- scheduler, and an execution trace.
 runFixed :: (Monad (c t), Monad n) => Fixed c n r t
-          -> Scheduler s -> s -> c t a -> n (Maybe a, s, Trace)
+          -> Scheduler s -> s -> c t a -> n (Either Failure a, s, Trace)
 runFixed fixed sched s ma = do
   ref <- newRef fixed Nothing
 
-  let c       = getCont fixed $ ma >>= liftN fixed . writeRef fixed ref . Just
+  let c       = getCont fixed $ ma >>= liftN fixed . writeRef fixed ref . Just . Right
   let threads = M.fromList [(0, (runCont c $ const AStop, False))]
 
   (s', trace) <- runThreads fixed (-1, 0) [] (negate 1) sched s threads ref
   out         <- readRef fixed ref
 
-  return (out, s', reverse trace)
+  return (fromJust out, s', reverse trace)
 
 -- * Running threads
 
@@ -184,12 +195,12 @@ type Threads n r = Map ThreadId (Action n r, Bool)
 -- exposed to users of the library, this is just an internal gotcha to
 -- watch out for.
 runThreads :: (Monad (c t), Monad n) => Fixed c n r t
-           -> (CVarId, ThreadId) -> Trace -> ThreadId -> Scheduler s -> s -> Threads n r -> r (Maybe a) -> n (s, Trace)
+           -> (CVarId, ThreadId) -> Trace -> ThreadId -> Scheduler s -> s -> Threads n r -> r (Maybe (Either Failure a)) -> n (s, Trace)
 runThreads fixed (lastcvid, lasttid) sofar prior sched s threads ref
   | isTerminated  = return (s, sofar)
-  | isDeadlocked  = writeRef fixed ref Nothing >> return (s, sofar)
-  | isNonexistant = writeRef fixed ref Nothing >> return (s, sofar)
-  | isBlocked     = writeRef fixed ref Nothing >> return (s, sofar)
+  | isDeadlocked  = writeRef fixed ref (Just $ Left Deadlock) >> return (s, sofar)
+  | isNonexistant = writeRef fixed ref (Just $ Left InternalError) >> return (s, sofar)
+  | isBlocked     = writeRef fixed ref (Just $ Left InternalError) >> return (s, sofar)
   | otherwise = do
     (threads', act) <- stepThread (fst $ fromJust thread) fixed (lastcvid, lasttid) chosen threads
     let sofar' = (decision, alternatives, act) : sofar

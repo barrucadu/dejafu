@@ -21,13 +21,13 @@ runSCT :: Scheduler s -- ^ The scheduler
        -> s -- ^ The scheduler's initial state
        -> Int -- ^ The number of executions to perform
        -> (forall t. Conc t a) -- ^ The computation to test
-       -> [(Maybe a, Trace)]
+       -> [(Either Failure a, Trace)]
 runSCT sched s n = runSCT' sched (s, n) term step where
   term (_,  g) = g == 0
   step (s', g) _ = (s', g - 1)
 
 -- | Variant of 'runSCT' for computations which do 'IO'.
-runSCTIO :: Scheduler s -> s -> Int -> (forall t. ConcIO t a) -> IO [(Maybe a, Trace)]
+runSCTIO :: Scheduler s -> s -> Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
 runSCTIO sched s n = runSCTIO' sched (s, n) term step where
   term (_,  g) = g == 0
   step (s', g) _ = (s', g - 1)
@@ -44,7 +44,7 @@ runSCT' :: Scheduler s -- ^ The scheduler
         -> ((s, g) -> Bool) -- ^ Termination decider
         -> ((s, g) -> Trace -> (s, g)) -- ^ State step function
         -> (forall t. Conc t a) -- ^ The computation to test
-        -> [(Maybe a, Trace)]
+        -> [(Either Failure a, Trace)]
 runSCT' sched initial term step c = unfoldr go initial where
   go sg@(s, g)
     | term sg   = Nothing
@@ -56,7 +56,7 @@ runSCT' sched initial term step c = unfoldr go initial where
       sg' = step (s', g) trace
 
 -- | Variant of 'runSCT'' for computations which do 'IO'.
-runSCTIO' :: Scheduler s -> (s, g) -> ((s, g) -> Bool) -> ((s, g) -> Trace -> (s, g)) -> (forall t. ConcIO t a) -> IO [(Maybe a, Trace)]
+runSCTIO' :: Scheduler s -> (s, g) -> ((s, g) -> Bool) -> ((s, g) -> Trace -> (s, g)) -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
 runSCTIO' sched initial term step c = unfoldrM go initial where
   go sg@(s, g)
     | term sg   = return Nothing

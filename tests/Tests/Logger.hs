@@ -58,19 +58,19 @@ badLogger = do
 -- doesn't deadlock.
 validResult :: Predicate [String]
 validResult = alwaysTrue check where
-  check (Just strs) = strs `elem` [ ["Hello", "World", "Foo", "Bar", "Baz"]
-                                  , ["Hello", "World", "Foo", "Bar"]
-                                  ]
-  check Nothing = False
+  check (Right strs) = strs `elem` [ ["Hello", "World", "Foo", "Bar", "Baz"]
+                                   , ["Hello", "World", "Foo", "Bar"]
+                                   ]
+  check _ = False
 
 -- | Test that the "proper" result occurs at least once.
 isGood :: Predicate [String]
 isGood = somewhereTrue check where
-  check (Just a) = length a == 5
-  check Nothing  = False
+  check (Right a) = length a == 5
+  check _ = False
 
 -- | Test that the erroneous result occurs at least once.
 isBad :: Predicate [String]
 isBad = somewhereTrue check where
-  check (Just a) = length a == 4
-  check Nothing  = False
+  check (Right a) = length a == 4
+  check _ = False

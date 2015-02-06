@@ -14,6 +14,7 @@
 module Test.DejaFu.Deterministic.IO
   ( -- * The @ConcIO@ Monad
     ConcIO
+  , Failure(..)
   , runConcIO
   , liftIO
   , fork
@@ -30,8 +31,8 @@ module Test.DejaFu.Deterministic.IO
 
   -- * Execution traces
   , Trace
-  , Decision
-  , ThreadAction
+  , Decision(..)
+  , ThreadAction(..)
   , CVarId
   , showTrace
 
@@ -120,9 +121,8 @@ tryTakeCVar :: CVar t a -> ConcIO t (Maybe a)
 tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
--- state, returning 'Just' if it terminates, and 'Nothing' if a
--- deadlock is detected. Also returned is the final state of the
--- scheduler, and an execution trace.
-runConcIO :: Scheduler s -> s -> (forall t. ConcIO t a) -> IO (Maybe a, s, Trace)
+-- state, returning an failure reason on error. Also returned is the
+-- final state of the scheduler, and an execution trace.
+runConcIO :: Scheduler s -> s -> (forall t. ConcIO t a) -> IO (Either Failure a, s, Trace)
 -- Note: Don't eta-reduce, the forall t messes up type inference.
 runConcIO sched s ma = runFixed fixed sched s ma
