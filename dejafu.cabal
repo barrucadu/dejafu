@@ -58,11 +58,13 @@ library
                      , Test.DejaFu.Deterministic.IO
                      , Test.DejaFu.Deterministic.Schedule
                      , Test.DejaFu.SCT
+                     , Test.DejaFu.STM
 
   other-modules:       Test.DejaFu.Deterministic.Internal
                      , Test.DejaFu.SCT.Bounding
                      , Test.DejaFu.SCT.Internal
 
+                     , Control.State
                      , Data.List.Extra
 
   -- other-extensions:    

@@ -42,7 +42,8 @@ module Test.DejaFu.Deterministic
 import Control.Applicative (Applicative(..), (<$>))
 import Control.Monad.Cont (cont, runCont)
 import Control.Monad.ST (ST, runST)
-import Data.STRef (STRef, newSTRef, readSTRef, writeSTRef)
+import Control.State (Wrapper(..), refST)
+import Data.STRef (STRef, newSTRef)
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
 
@@ -67,12 +68,7 @@ instance C.MonadConc (Conc t) where
   _concNoTest = _concNoTest
 
 fixed :: Fixed (ST t) (STRef t)
-fixed = F
-  { newRef    = newSTRef
-  , readRef   = readSTRef
-  , writeRef  = writeSTRef
-  , liftN     = \ma -> cont (\c -> ALift $ c <$> ma)
-  }
+fixed = Wrapper refST $ \ma -> cont (\c -> ALift $ c <$> ma)
 
 -- | The concurrent variable type used with the 'Conc' monad. One
 -- notable difference between these and 'MVar's is that 'MVar's are

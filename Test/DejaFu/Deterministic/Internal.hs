@@ -8,6 +8,7 @@ module Test.DejaFu.Deterministic.Internal where
 import Control.DeepSeq (NFData(..))
 import Control.Monad (liftM, mapAndUnzipM)
 import Control.Monad.Cont (Cont, runCont)
+import Control.State
 import Data.List.Extra
 import Data.Map (Map)
 import Data.Maybe (catMaybes, fromJust, isNothing)
@@ -23,17 +24,8 @@ type M n r a = Cont (Action n r) a
 -- list of things blocked on it, and a unique numeric identifier.
 type R r a = r (CVarId, Maybe a, [Block])
 
--- | Dict of methods for concrete implementations to override.
-data Fixed n r = F
-  { newRef   :: forall a. a -> n (r a)
-  -- ^ Create a new reference
-  , readRef  :: forall a. r a -> n a
-  -- ^ Read a reference.
-  , writeRef :: forall a. r a -> a -> n ()
-  -- ^ Overwrite the contents of a reference.
-  , liftN    :: forall a. n a -> M n r a
-  -- ^ Lift an action from the underlying monad
-  }
+-- | Dict of methods for implementations to override.
+type Fixed n r = Wrapper n r (Cont (Action n r))
 
 -- * Running @Conc@ Computations
 
@@ -170,15 +162,15 @@ instance NFData Failure where
 -- deadlock is detected. Also returned is the final state of the
 -- scheduler, and an execution trace.
 runFixed :: Monad n => Fixed n r
-          -> Scheduler s -> s -> M n r a -> n (Either Failure a, s, Trace)
+         -> Scheduler s -> s -> M n r a -> n (Either Failure a, s, Trace)
 runFixed fixed sched s ma = do
-  ref <- newRef fixed Nothing
+  ref <- newRef (wref fixed) Nothing
 
-  let c       = ma >>= liftN fixed . writeRef fixed ref . Just . Right
+  let c       = ma >>= liftN fixed . writeRef (wref fixed) ref . Just . Right
   let threads = M.fromList [(0, (runCont c $ const AStop, False))]
 
   (s', trace) <- runThreads fixed (-1, 0) [] (negate 1) sched s threads ref
-  out         <- readRef fixed ref
+  out         <- readRef (wref fixed) ref
 
   return (fromJust out, s', reverse trace)
 
@@ -203,11 +195,11 @@ runThreads :: Monad n => Fixed n r
            -> (CVarId, ThreadId) -> Trace -> ThreadId -> Scheduler s -> s -> Threads n r -> r (Maybe (Either Failure a)) -> n (s, Trace)
 runThreads fixed (lastcvid, lasttid) sofar prior sched s threads ref
   | isTerminated  = return (s, sofar)
-  | isDeadlocked  = writeRef fixed ref (Just $ Left Deadlock) >> return (s, sofar)
-  | isNonexistant = writeRef fixed ref (Just $ Left InternalError) >> return (s, sofar)
-  | isBlocked     = writeRef fixed ref (Just $ Left InternalError) >> return (s, sofar)
+  | isDeadlocked  = writeRef (wref fixed) ref (Just $ Left Deadlock) >> return (s, sofar)
+  | isNonexistant = writeRef (wref fixed) ref (Just $ Left InternalError) >> return (s, sofar)
+  | isBlocked     = writeRef (wref fixed) ref (Just $ Left InternalError) >> return (s, sofar)
   | otherwise = do
-    stepped <- stepThread (fst $ fromJust thread) fixed (sched, s) (lastcvid, lasttid) chosen threads
+    stepped <- stepThread fixed (fst $ fromJust thread) (sched, s) (lastcvid, lasttid) chosen threads
     case stepped of
       Right (threads', act) -> do
         let sofar' = (decision, alternatives, act) : sofar
@@ -217,7 +209,7 @@ runThreads fixed (lastcvid, lasttid) sofar prior sched s threads ref
 
         runThreads fixed (lastcvid', lasttid') sofar' chosen sched s' threads' ref
 
-      Left failure -> writeRef fixed ref (Just $ Left failure) >> return (s, sofar)
+      Left failure -> writeRef (wref fixed) ref (Just $ Left failure) >> return (s, sofar)
 
   where
     (chosen, s')  = if prior == -1 then (0, s) else sched s prior $ head runnable' :| tail runnable'
@@ -241,10 +233,10 @@ runThreads fixed (lastcvid, lasttid) sofar prior sched s threads ref
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
-stepThread :: Monad n
-           => Action n r
-           -> Fixed n r -> (Scheduler s, s) -> (CVarId, ThreadId) -> ThreadId -> Threads n r -> n (Either Failure (Threads n r, ThreadAction))
-stepThread action fixed (scheduler, schedstate) (lastcvid, lasttid) tid threads = case action of
+stepThread :: Monad n => Fixed n r
+           -> Action n r
+           -> (Scheduler s, s) -> (CVarId, ThreadId) -> ThreadId -> Threads n r -> n (Either Failure (Threads n r, ThreadAction))
+stepThread fixed action (scheduler, schedstate) (lastcvid, lasttid) tid threads = case action of
   AFork    a b     -> stepFork    a b
   APut     ref a c -> stepPut     ref a c
   ATryPut  ref a c -> stepTryPut  ref a c
@@ -278,7 +270,7 @@ stepThread action fixed (scheduler, schedstate) (lastcvid, lasttid) tid threads 
     -- | Get the value from a @CVar@, without emptying, blocking the
     -- thread until it's full.
     stepGet ref c = do
-      (cvid, val, _) <- readRef fixed ref
+      (cvid, val, _) <- readRef (wref fixed) ref
       case val of
         Just val' -> return $ Right (goto (c val') tid threads, Read cvid)
         Nothing   -> do
@@ -325,7 +317,7 @@ stepThread action fixed (scheduler, schedstate) (lastcvid, lasttid) tid threads 
 
 -- | Get the ID of a CVar
 getCVarId :: Monad n => Fixed n r -> R r a -> n CVarId
-getCVarId fixed ref = (\(cvid,_,_) -> cvid) `liftM` readRef fixed ref
+getCVarId fixed ref = (\(cvid,_,_) -> cvid) `liftM` readRef (wref fixed) ref
 
 -- | Put a value into a @CVar@, in either a blocking or nonblocking
 -- way.
@@ -333,7 +325,7 @@ putIntoCVar :: Monad n
             => Bool -> R r a -> a -> (Bool -> Action n r)
             -> Fixed n r -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
 putIntoCVar blocking ref a c fixed threadid threads = do
-  (cvid, val, blocks) <- readRef fixed ref
+  (cvid, val, blocks) <- readRef (wref fixed) ref
 
   case val of
     Just _
@@ -345,7 +337,7 @@ putIntoCVar blocking ref a c fixed threadid threads = do
         return (False, goto (c False) threadid threads, [])
 
     Nothing -> do
-      writeRef fixed ref (cvid, Just a, blocks)
+      writeRef (wref fixed) ref (cvid, Just a, blocks)
       (threads', woken) <- wake fixed ref WaitFull threads
       return (True, goto (c True) threadid threads', woken)
 
@@ -355,11 +347,11 @@ takeFromCVar :: Monad n
              => Bool -> R r a -> (Maybe a -> Action n r)
              -> Fixed n r -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
 takeFromCVar blocking ref c fixed threadid threads = do
-  (cvid, val, blocks) <- readRef fixed ref
+  (cvid, val, blocks) <- readRef (wref fixed) ref
 
   case val of
     Just _ -> do
-      writeRef fixed ref (cvid, Nothing, blocks)
+      writeRef (wref fixed) ref (cvid, Nothing, blocks)
       (threads', woken) <- wake fixed ref WaitEmpty threads
       return (True, goto (c val) threadid threads', woken)
 
@@ -378,11 +370,11 @@ goto :: Action n r -> ThreadId -> Threads n r -> Threads n r
 goto a = M.alter $ \(Just (_, b)) -> Just (a, b)
 
 -- | Block a thread on a @CVar@.
-block :: Monad n => Fixed n r
-      -> R r a -> (ThreadId -> Block) -> ThreadId -> Threads n r -> n (Threads n r)
+block :: Monad n
+      => Fixed n r -> R r a -> (ThreadId -> Block) -> ThreadId -> Threads n r -> n (Threads n r)
 block fixed ref typ tid threads = do
-  (cvid, val, blocks) <- readRef fixed ref
-  writeRef fixed ref (cvid, val, typ tid : blocks)
+  (cvid, val, blocks) <- readRef (wref fixed) ref
+  writeRef (wref fixed) ref (cvid, val, typ tid : blocks)
   return $ M.alter (\(Just (a, _)) -> Just (a, True)) tid threads
 
 -- | Start a thread with the given ID. This must not already be in use!
@@ -394,8 +386,8 @@ kill :: ThreadId -> Threads n r -> Threads n r
 kill = M.delete
 
 -- | Wake every thread blocked on a @CVar@ read/write.
-wake :: Monad n => Fixed n r
-     -> R r a -> (ThreadId -> Block) -> Threads n r -> n (Threads n r, [ThreadId])
+wake :: Monad n
+     => Fixed n r -> R r a -> (ThreadId -> Block) -> Threads n r -> n (Threads n r, [ThreadId])
 wake fixed ref typ m = do
   (m', woken) <- mapAndUnzipM wake' (M.toList m)
 
@@ -404,10 +396,10 @@ wake fixed ref typ m = do
   where
     wake' a@(tid, (act, True)) = do
       let blck = typ tid
-      (cvid, val, blocks) <- readRef fixed ref
+      (cvid, val, blocks) <- readRef (wref fixed) ref
 
       if blck `elem` blocks
-      then writeRef fixed ref (cvid, val, filter (/= blck) blocks) >> return ((tid, (act, False)), Just tid)
+      then writeRef (wref fixed) ref (cvid, val, filter (/= blck) blocks) >> return ((tid, (act, False)), Just tid)
       else return (a, Nothing)
 
     wake' a = return (a, Nothing)

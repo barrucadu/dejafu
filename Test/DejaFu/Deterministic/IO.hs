@@ -45,7 +45,8 @@ module Test.DejaFu.Deterministic.IO
 
 import Control.Applicative (Applicative(..), (<$>))
 import Control.Monad.Cont (cont, runCont)
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Control.State (Wrapper(..), refIO)
+import Data.IORef (IORef, newIORef)
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
 
@@ -71,12 +72,7 @@ instance C.MonadConc (ConcIO t) where
   _concNoTest  = _concNoTest
 
 fixed :: Fixed IO IORef
-fixed = F
-  { newRef    = newIORef
-  , readRef   = readIORef
-  , writeRef  = writeIORef
-  , liftN     = unC . liftIO
-  }
+fixed = Wrapper refIO $ unC . liftIO
 
 -- | The concurrent variable type used with the 'ConcIO' monad. These
 -- behave the same as @Conc@'s @CVar@s
