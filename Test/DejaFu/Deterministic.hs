@@ -15,6 +15,7 @@ module Test.DejaFu.Deterministic
   , runConc
   , fork
   , spawn
+  , atomically
 
   -- * Communication: CVars
   , CVar
@@ -46,6 +47,7 @@ import Control.State (Wrapper(..), refST)
 import Data.STRef (STRef, newSTRef)
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
+import Test.DejaFu.STM (STMLike, runTransactionST)
 
 import qualified Control.Monad.Conc.Class as C
 
@@ -53,10 +55,11 @@ import qualified Control.Monad.Conc.Class as C
 -- universally-quantified indexing state trick as used by 'ST' and
 -- 'STRef's to prevent mutable references from leaking out of the
 -- monad.
-newtype Conc t a = C { unC :: M (ST t) (STRef t) a } deriving (Functor, Applicative, Monad)
+newtype Conc t a = C { unC :: M (ST t) (STRef t) (STMLike t) a } deriving (Functor, Applicative, Monad)
 
 instance C.MonadConc (Conc t) where
-  type CVar (Conc t) = CVar t
+  type CVar    (Conc t) = CVar t
+  type STMLike (Conc t) = STMLike t (ST t) (STRef t)
 
   fork         = fork
   newEmptyCVar = newEmptyCVar
@@ -65,9 +68,10 @@ instance C.MonadConc (Conc t) where
   readCVar     = readCVar
   takeCVar     = takeCVar
   tryTakeCVar  = tryTakeCVar
-  _concNoTest = _concNoTest
+  atomically   = atomically
+  _concNoTest  = _concNoTest
 
-fixed :: Fixed (ST t) (STRef t)
+fixed :: Fixed (ST t) (STRef t) (STMLike t)
 fixed = Wrapper refST $ \ma -> cont (\c -> ALift $ c <$> ma)
 
 -- | The concurrent variable type used with the 'Conc' monad. One
@@ -90,6 +94,12 @@ readCVar cvar = C $ cont $ AGet $ unV cvar
 -- | Run the provided computation concurrently.
 fork :: Conc t () -> Conc t ()
 fork (C ma) = C $ cont $ \c -> AFork (runCont ma $ const AStop) $ c ()
+
+-- | Run the provided 'MonadSTM' transaction atomically. If 'retry' is
+-- called, it will be blocked until any of the touched 'CTVar's have
+-- been written to.
+atomically :: STMLike t (ST t) (STRef t) a -> Conc t a
+atomically stm = C $ cont $ AAtom stm
 
 -- | Create a new empty 'CVar'.
 newEmptyCVar :: Conc t (CVar t a)
@@ -132,4 +142,4 @@ _concNoTest ma = C $ cont $ \c -> ANoTest (unC ma) c
 -- making your head hurt, check out the \"How @runST@ works\" section
 -- of <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
 runConc :: Scheduler s -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace)
-runConc sched s ma = runST $ runFixed fixed sched s $ unC ma
+runConc sched s ma = runST $ runFixed fixed runTransactionST sched s $ unC ma

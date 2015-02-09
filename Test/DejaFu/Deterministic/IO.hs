@@ -19,6 +19,7 @@ module Test.DejaFu.Deterministic.IO
   , liftIO
   , fork
   , spawn
+  , atomically
 
   -- * Communication: CVars
   , CVar
@@ -49,18 +50,20 @@ import Control.State (Wrapper(..), refIO)
 import Data.IORef (IORef, newIORef)
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
+import Test.DejaFu.STM (STMLike, runTransactionIO)
 
 import qualified Control.Monad.Conc.Class as C
 import qualified Control.Monad.IO.Class as IO
 
 -- | The 'IO' variant of Test.DejaFu.Deterministic's @Conc@ monad.
-newtype ConcIO t a = C { unC :: M IO IORef a } deriving (Functor, Applicative, Monad)
+newtype ConcIO t a = C { unC :: M IO IORef (STMLike t) a } deriving (Functor, Applicative, Monad)
 
 instance IO.MonadIO (ConcIO t) where
   liftIO = liftIO
 
 instance C.MonadConc (ConcIO t) where
-  type CVar (ConcIO t) = CVar t
+  type CVar    (ConcIO t) = CVar t
+  type STMLike (ConcIO t) = STMLike t IO IORef
 
   fork         = fork
   newEmptyCVar = newEmptyCVar
@@ -69,9 +72,10 @@ instance C.MonadConc (ConcIO t) where
   readCVar     = readCVar
   takeCVar     = takeCVar
   tryTakeCVar  = tryTakeCVar
+  atomically   = atomically
   _concNoTest  = _concNoTest
 
-fixed :: Fixed IO IORef
+fixed :: Fixed IO IORef (STMLike t)
 fixed = Wrapper refIO $ unC . liftIO
 
 -- | The concurrent variable type used with the 'ConcIO' monad. These
@@ -95,6 +99,12 @@ readCVar cvar = C $ cont $ AGet $ unV cvar
 -- | Run the provided computation concurrently.
 fork :: ConcIO t () -> ConcIO t ()
 fork (C ma) = C $ cont $ \c -> AFork (runCont ma $ const AStop) $ c ()
+
+-- | Run the provided 'MonadSTM' transaction atomically. If 'retry' is
+-- called, it will be blocked until any of the touched 'CTVar's have
+-- been written to.
+atomically :: STMLike t IO IORef a -> ConcIO t a
+atomically stm = C $ cont $ AAtom stm
 
 -- | Create a new empty 'CVar'.
 newEmptyCVar :: ConcIO t (CVar t a)
@@ -128,4 +138,4 @@ _concNoTest ma = C $ cont $ \c -> ANoTest (unC ma) c
 -- state, returning an failure reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
 runConcIO :: Scheduler s -> s -> (forall t. ConcIO t a) -> IO (Either Failure a, s, Trace)
-runConcIO sched s ma = runFixed fixed sched s $ unC ma
+runConcIO sched s ma = runFixed fixed runTransactionIO sched s $ unC ma
