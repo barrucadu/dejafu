@@ -110,7 +110,7 @@ atomically stm = C $ cont $ AAtom stm
 newEmptyCVar :: ConcIO t (CVar t a)
 newEmptyCVar = C $ cont lifted where
   lifted c = ANew $ \cvid -> c <$> newEmptyCVar' cvid
-  newEmptyCVar' cvid = V <$> newIORef (cvid, Nothing, [])
+  newEmptyCVar' cvid = V <$> newIORef (cvid, Nothing)
 
 -- | Block on a 'CVar' until it is empty, then write to it.
 putCVar :: CVar t a -> a -> ConcIO t ()

@@ -348,5 +348,6 @@ findFailures2 p xs = findFailures xs 0 [] where
 -- | Pretty-print a failure
 showfail :: Failure -> String
 showfail Deadlock        = "[deadlock]"
+showfail STMDeadlock     = "[stm-deadlock]"
 showfail InternalError   = "[internal-error]"
 showfail FailureInNoTest = "[_concNoTest]"

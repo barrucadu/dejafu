@@ -105,7 +105,7 @@ atomically stm = C $ cont $ AAtom stm
 newEmptyCVar :: Conc t (CVar t a)
 newEmptyCVar = C $ cont lifted where
   lifted c = ANew $ \cvid -> c <$> newEmptyCVar' cvid
-  newEmptyCVar' cvid = V <$> newSTRef (cvid, Nothing, [])
+  newEmptyCVar' cvid = V <$> newSTRef (cvid, Nothing)
 
 -- | Block on a 'CVar' until it is empty, then write to it.
 putCVar :: CVar t a -> a -> Conc t ()
