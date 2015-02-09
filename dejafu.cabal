@@ -46,9 +46,12 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Control.Monad.Conc.Class
+                     , Control.Monad.STM.Class
 
                      , Control.Concurrent.CVar
                      , Control.Concurrent.CVar.Strict
+                     , Control.Concurrent.STM.CTVar
+                     , Control.Concurrent.STM.CTMVar
 
                      , Test.DejaFu
                      , Test.DejaFu.Deterministic
@@ -69,6 +72,7 @@ library
                      , monad-loops
                      , mtl
                      , random
+                     , stm
                      , transformers
   -- hs-source-dirs:      
   default-language:    Haskell2010

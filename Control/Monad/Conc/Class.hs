@@ -7,6 +7,10 @@ module Control.Monad.Conc.Class where
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
 import Control.Monad (unless, void)
+import Control.Monad.STM (STM)
+import Control.Monad.STM.Class (MonadSTM)
+
+import qualified Control.Monad.STM as S
 
 -- | @MonadConc@ is like a combination of 'ParFuture' and 'ParIVar'
 -- from the abstract-par package. It captures the interface of
@@ -23,12 +27,18 @@ import Control.Monad (unless, void)
 -- write multiple times to the same @IVar@ (or to non-blockingly read
 -- from it), which removes the possibility of data races.
 --
+-- Every @MonadConc@ has an associated 'MonadSTM', transactions of
+-- which can be run atomically.
+--
 -- A minimal implementation consists of 'fork', 'newEmptyCVar',
 -- 'tryPutCVar', and 'tryTakeCVar'. The default implementations of
 -- 'takeCVar' and 'putCVar', however, are very inefficient, and should
 -- probably always be overridden to make use of
 -- implementation-specific blocking functionality.
-class Monad m => MonadConc m where
+class Monad m => MonadConc m  where
+  -- | The associated 'MonadSTM' for this class.
+  type STMLike m :: * -> *
+
   -- | The mutable reference type. This may contain one value at a
   -- time, attempting to read or take from an \"empty\" @CVar@ will
   -- block until it is full, and attempting to put to a \"full\"
@@ -86,6 +96,9 @@ class Monad m => MonadConc m where
   -- returning 'Nothing'.
   tryTakeCVar :: CVar m a -> m (Maybe a)
 
+  -- | Perform a series of STM actions atomically.
+  atomically :: STMLike m a -> m a
+
   -- | Runs its argument, just as if the @_concNoTest@ weren't there.
   --
   -- > _concNoTest x = x
@@ -108,7 +121,8 @@ class Monad m => MonadConc m where
   _concNoTest = id
 
 instance MonadConc IO where
-  type CVar IO = MVar
+  type STMLike IO = STM
+  type CVar    IO = MVar
 
   readCVar     = readMVar
   fork         = void . forkIO
@@ -117,3 +131,4 @@ instance MonadConc IO where
   tryPutCVar   = tryPutMVar
   takeCVar     = takeMVar
   tryTakeCVar  = tryTakeMVar
+  atomically   = S.atomically
