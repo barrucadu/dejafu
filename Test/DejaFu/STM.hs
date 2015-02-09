@@ -143,10 +143,8 @@ runTransactionST ma ctvid = do
   (res, undo, ctvid') <- doTransaction fixedST ma ctvid
 
   case res of
-    Retry _ -> undo
-    _ -> return ()
-
-  return (res, ctvid')
+    Retry _ -> undo >> return (res, ctvid)
+    _ -> return (res, ctvid')
 
 -- | Run a transaction in the 'IO' monad, returning the result and new
 -- initial 'CTVarId'. If the transaction ended by calling 'retry', any
@@ -156,10 +154,8 @@ runTransactionIO ma ctvid = do
   (res, undo, ctvid') <- doTransaction fixedIO ma ctvid
 
   case res of
-    Retry _ -> undo
-    _ -> return ()
-
-  return (res, ctvid')
+    Retry _ -> undo >> return (res, ctvid)
+    _ -> return (res, ctvid')
 
 -- | Run a STM transaction, returning an action to undo its effects.
 doTransaction :: Monad n => Fixed t n r -> STMLike t n r a -> CTVarId -> n (Result a, n (), CTVarId)
