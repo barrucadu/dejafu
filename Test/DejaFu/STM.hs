@@ -208,8 +208,8 @@ stepTrans fixed act newctvid = case act of
     stepNew :: (Ref n r -> CTVarId -> n (STMAction t n r)) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepNew na = do
       let newctvid' = I $ unI newctvid + 1
-      a <- na (wref fixed) newctvid'
-      return (a, nothing, newctvid', [], [])
+      a <- na (wref fixed) newctvid
+      return (a, nothing, newctvid', [], [newctvid])
 
     stepOrElse :: STMLike t n r a -> STMLike t n r a -> (a -> STMAction t n r) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepOrElse a b c = do
