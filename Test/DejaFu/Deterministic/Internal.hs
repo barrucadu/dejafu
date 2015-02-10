@@ -6,6 +6,7 @@
 module Test.DejaFu.Deterministic.Internal where
 
 import Control.DeepSeq (NFData(..))
+import Control.Monad (when)
 import Control.Monad.Cont (Cont, runCont)
 import Control.State
 import Data.List (intersect)
@@ -218,7 +219,7 @@ runThreads fixed runstm sched origg origthreads ref = go (-1, initialCTVarId, 0)
     | isNonexistant = writeRef (wref fixed) ref (Just $ Left InternalError) >> return (g, sofar)
     | isBlocked     = writeRef (wref fixed) ref (Just $ Left InternalError) >> return (g, sofar)
     | otherwise = do
-      stepped <- stepThread fixed runstm (fst $ fromJust thread) (sched, g) lastids chosen threads
+      stepped <- stepThread fixed runconc runstm (fst $ fromJust thread) lastids chosen threads
       case stepped of
         Right (threads', lastcvid', lastctvid', lasttid', act) ->
           let sofar' = (decision, alternatives, act) : sofar
@@ -238,6 +239,8 @@ runThreads fixed runstm sched origg origthreads ref = go (-1, initialCTVarId, 0)
                                          ((~= OnCVarEmpty undefined) `fmap` M.lookup 0 threads) == Just True)
       isSTMLocked   = M.null runnable && ((~= OnCTVar []) `fmap` M.lookup 0 threads) == Just True
 
+      runconc ma = do { (x,_,_) <- runFixed fixed runstm sched g ma; return x }
+
       decision
         | chosen == prior         = Continue
         | prior `elem` runnable' = SwitchTo chosen
@@ -250,10 +253,21 @@ runThreads fixed runstm sched origg origthreads ref = go (-1, initialCTVarId, 0)
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
-stepThread :: Monad n => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId)) 
+stepThread :: Monad n => Fixed n r s
+           -> (forall x. M n r s x -> n (Either Failure x))
+           -- ^ Run a 'MonadConc' computation atomically.
+           -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
+           -- ^ Run a 'MonadSTM' transaction atomically.
            -> Action n r s
-           -> (Scheduler g, g) -> (CVarId, CTVarId, ThreadId) -> ThreadId -> Threads n r s -> n (Either Failure (Threads n r s, CVarId, CTVarId, ThreadId,ThreadAction))
-stepThread fixed runstm action (scheduler, schedstate) (lastcvid, lastctvid, lasttid) tid threads = case action of
+           -- ^ Action to step
+           -> (CVarId, CTVarId, ThreadId)
+           -- ^ Current fresh IDs
+           -> ThreadId
+           -- ^ ID of the current thread
+           -> Threads n r s
+           -- ^ Current state of threads
+           -> n (Either Failure (Threads n r s, CVarId, CTVarId, ThreadId, ThreadAction))
+stepThread fixed runconc runstm action (lastcvid, lastctvid, lasttid) tid threads = case action of
   AFork    a b     -> stepFork    a b
   APut     ref a c -> stepPut     ref a c
   ATryPut  ref a c -> stepTryPut  ref a c
@@ -285,23 +299,19 @@ stepThread fixed runstm action (scheduler, schedstate) (lastcvid, lastctvid, las
 
     -- | Get the value from a @CVar@, without emptying, blocking the
     -- thread until it's full.
-    stepGet (cvid, ref) c = do
-      val <- readRef (wref fixed) ref
-      case val of
-        Just val' -> return $ Right (goto (c val') tid threads, lastcvid, lastctvid, lasttid, Read cvid)
-        Nothing   -> return $
-          let threads' = block (OnCVarFull cvid) tid threads
-          in Right (threads', lastcvid, lastctvid, lasttid, BlockedRead cvid)
+    stepGet cvar@(cvid, _) c = do
+      (success, threads', _) <- readFromCVar False True cvar (c . fromJust) fixed tid threads
+      return $ Right (threads', lastcvid, lastctvid, lasttid, if success then Read cvid else BlockedRead cvid)
 
     -- | Take the value from a @CVar@, blocking the thread until it's
     -- full.
     stepTake cvar@(cvid, _) c = do
-      (success, threads', woken) <- takeFromCVar True cvar (c . fromJust) fixed tid threads
+      (success, threads', woken) <- readFromCVar True True cvar (c . fromJust) fixed tid threads
       return $ Right (threads', lastcvid, lastctvid, lasttid, if success then Take cvid woken else BlockedTake cvid)
 
     -- | Try to take the value from a @CVar@, without blocking.
     stepTryTake cvar@(cvid, _) c = do
-      (success, threads', woken) <- takeFromCVar False cvar c fixed tid threads
+      (success, threads', woken) <- readFromCVar True False cvar c fixed tid threads
       return $ Right (threads', lastcvid, lastctvid, lasttid, TryTake cvid success woken)
 
     -- | Run a STM transaction atomically.
@@ -330,7 +340,7 @@ stepThread fixed runstm action (scheduler, schedstate) (lastcvid, lastctvid, las
 
     -- | Run a computation atomically. If this fails, the entire thing fails.
     stepNoTest ma c = do
-      (a, _, _) <- runFixed fixed runstm scheduler schedstate ma
+      a <- runconc ma
       return $
         case a of
           Right a' -> Right (goto (c a') tid threads, lastcvid, lastctvid, lasttid, NoTest)
@@ -365,15 +375,15 @@ putIntoCVar blocking (cvid, ref) a c fixed threadid threads = do
 
 -- | Take a value from a @CVar@, in either a blocking or nonblocking
 -- way.
-takeFromCVar :: Monad n
-             => Bool -> R r a -> (Maybe a -> Action n r s)
+readFromCVar :: Monad n
+             => Bool -> Bool -> R r a -> (Maybe a -> Action n r s)
              -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-takeFromCVar blocking (cvid, ref) c fixed threadid threads = do
+readFromCVar emptying blocking (cvid, ref) c fixed threadid threads = do
   val <- readRef (wref fixed) ref
 
   case val of
     Just _ -> do
-      writeRef (wref fixed) ref Nothing
+      when emptying $ writeRef (wref fixed) ref Nothing
       let (threads', woken) = wake (OnCVarEmpty cvid) threads
       return (True, goto (c val) threadid threads', woken)
 
