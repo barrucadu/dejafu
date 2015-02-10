@@ -20,7 +20,6 @@ module Test.DejaFu.STM
   -- * @CTVar@s
   , CTVar
   , CTVarId
-  , initialCTVarId
   , newCTVar
   , readCTVar
   , writeCTVar
@@ -82,13 +81,7 @@ newtype CTVar t r a = V (CTVarId, r a)
 
 -- | The unique ID of a 'CTVar'. Only meaningful within a single
 -- concurrent computation.
-newtype CTVarId = I { unI :: Int } deriving (Eq, Ord, Show)
-
--- | The initial 'CTVarId'. Use this when you start your computation,
--- but after that always use the latest value returned by running a
--- transaction, or you'll get funky wake-up behaviour.
-initialCTVarId :: CTVarId
-initialCTVarId = I 0
+type CTVarId = Int
 
 -- | Abort the current transaction, restoring any 'CTVar's written to,
 -- and returning the list of 'CTVar's read.
@@ -133,7 +126,7 @@ data Result a =
 -- suitable for testing individual transactions, but not for composing
 -- multiple ones.
 runTransaction :: (forall t. STMLike t (ST t) (STRef t) a) -> Result a
-runTransaction ma = fst $ runST $ runTransactionST ma initialCTVarId
+runTransaction ma = fst $ runST $ runTransactionST ma 0
 
 -- | Run a transaction in the 'ST' monad, returning the result and new
 -- initial 'CTVarId'. If the transaction ended by calling 'retry', any
@@ -207,7 +200,7 @@ stepTrans fixed act newctvid = case act of
 
     stepNew :: (Ref n r -> CTVarId -> n (STMAction t n r)) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepNew na = do
-      let newctvid' = I $ unI newctvid + 1
+      let newctvid' = newctvid + 1
       a <- na (wref fixed) newctvid
       return (a, nothing, newctvid', [], [newctvid])
 
