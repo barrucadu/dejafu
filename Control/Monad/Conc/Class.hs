@@ -1,4 +1,5 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies     #-}
 
 -- | This module captures in a typeclass the interface of concurrency
 -- monads.
@@ -35,7 +36,7 @@ import qualified Control.Monad.STM as S
 -- 'takeCVar' and 'putCVar', however, are very inefficient, and should
 -- probably always be overridden to make use of
 -- implementation-specific blocking functionality.
-class Monad m => MonadConc m  where
+class (Monad m, MonadSTM (STMLike m)) => MonadConc m  where
   -- | The associated 'MonadSTM' for this class.
   type STMLike m :: * -> *
 
