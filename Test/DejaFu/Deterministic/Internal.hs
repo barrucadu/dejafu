@@ -6,7 +6,6 @@
 module Test.DejaFu.Deterministic.Internal where
 
 import Control.DeepSeq (NFData(..))
-import Control.Monad (liftM)
 import Control.Monad.Cont (Cont, runCont)
 import Control.State
 import Data.List (intersect)
@@ -24,7 +23,7 @@ type M n r s a = Cont (Action n r s) a
 
 -- | CVars are represented as a unique numeric identifier, and a
 -- reference containing a Maybe value.
-type R r a = r (CVarId, Maybe a)
+type R r a = (CVarId, r (Maybe a))
 
 -- | Dict of methods for implementations to override.
 type Fixed n r s = Wrapper n r (Cont (Action n r s))
@@ -275,21 +274,19 @@ stepThread fixed runstm action (scheduler, schedstate) (lastcvid, lastctvid, las
 
     -- | Put a value into a @CVar@, blocking the thread until it's
     -- empty.
-    stepPut ref a c = do
-      (success, threads', woken) <- putIntoCVar True ref a (const c) fixed tid threads
-      cvid <- getCVarId fixed ref
+    stepPut cvar@(cvid, _) a c = do
+      (success, threads', woken) <- putIntoCVar True cvar a (const c) fixed tid threads
       return $ Right (threads', lastcvid, lastctvid, lasttid, if success then Put cvid woken else BlockedPut cvid)
 
     -- | Try to put a value into a @CVar@, without blocking.
-    stepTryPut ref a c = do
-      (success, threads', woken) <- putIntoCVar False ref a c fixed tid threads
-      cvid <- getCVarId fixed ref
+    stepTryPut cvar@(cvid, _) a c = do
+      (success, threads', woken) <- putIntoCVar False cvar a c fixed tid threads
       return $ Right (threads', lastcvid, lastctvid, lasttid, TryPut cvid success woken)
 
     -- | Get the value from a @CVar@, without emptying, blocking the
     -- thread until it's full.
-    stepGet ref c = do
-      (cvid, val) <- readRef (wref fixed) ref
+    stepGet (cvid, ref) c = do
+      val <- readRef (wref fixed) ref
       case val of
         Just val' -> return $ Right (goto (c val') tid threads, lastcvid, lastctvid, lasttid, Read cvid)
         Nothing   -> return $
@@ -298,15 +295,13 @@ stepThread fixed runstm action (scheduler, schedstate) (lastcvid, lastctvid, las
 
     -- | Take the value from a @CVar@, blocking the thread until it's
     -- full.
-    stepTake ref c = do
-      (success, threads', woken) <- takeFromCVar True ref (c . fromJust) fixed tid threads
-      cvid <- getCVarId fixed ref
+    stepTake cvar@(cvid, _) c = do
+      (success, threads', woken) <- takeFromCVar True cvar (c . fromJust) fixed tid threads
       return $ Right (threads', lastcvid, lastctvid, lasttid, if success then Take cvid woken else BlockedTake cvid)
 
     -- | Try to take the value from a @CVar@, without blocking.
-    stepTryTake ref c = do
-      (success, threads', woken) <- takeFromCVar True ref c fixed tid threads
-      cvid <- getCVarId fixed ref
+    stepTryTake cvar@(cvid, _) c = do
+      (success, threads', woken) <- takeFromCVar False cvar c fixed tid threads
       return $ Right (threads', lastcvid, lastctvid, lasttid, TryTake cvid success woken)
 
     -- | Run a STM transaction atomically.
@@ -346,17 +341,13 @@ stepThread fixed runstm action (scheduler, schedstate) (lastcvid, lastctvid, las
 
 -- * Manipulating @CVar@s
 
--- | Get the ID of a CVar
-getCVarId :: Monad n => Fixed n r s -> R r a -> n CVarId
-getCVarId fixed ref = fst `liftM` readRef (wref fixed) ref
-
 -- | Put a value into a @CVar@, in either a blocking or nonblocking
 -- way.
 putIntoCVar :: Monad n
             => Bool -> R r a -> a -> (Bool -> Action n r s)
             -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-putIntoCVar blocking ref a c fixed threadid threads = do
-  (cvid, val) <- readRef (wref fixed) ref
+putIntoCVar blocking (cvid, ref) a c fixed threadid threads = do
+  val <- readRef (wref fixed) ref
 
   case val of
     Just _
@@ -368,7 +359,7 @@ putIntoCVar blocking ref a c fixed threadid threads = do
         return (False, goto (c False) threadid threads, [])
 
     Nothing -> do
-      writeRef (wref fixed) ref (cvid, Just a)
+      writeRef (wref fixed) ref $ Just a
       let (threads', woken) = wake (OnCVarFull cvid) threads
       return (True, goto (c True) threadid threads', woken)
 
@@ -377,12 +368,12 @@ putIntoCVar blocking ref a c fixed threadid threads = do
 takeFromCVar :: Monad n
              => Bool -> R r a -> (Maybe a -> Action n r s)
              -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-takeFromCVar blocking ref c fixed threadid threads = do
-  (cvid, val) <- readRef (wref fixed) ref
+takeFromCVar blocking (cvid, ref) c fixed threadid threads = do
+  val <- readRef (wref fixed) ref
 
   case val of
     Just _ -> do
-      writeRef (wref fixed) ref (cvid, Nothing)
+      writeRef (wref fixed) ref Nothing
       let (threads', woken) = wake (OnCVarEmpty cvid) threads
       return (True, goto (c val) threadid threads', woken)
 
