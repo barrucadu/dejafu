@@ -6,6 +6,7 @@ module Control.Monad.STM.Class where
 
 import Control.Concurrent.STM (STM)
 import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
+import Control.Exception (Exception)
 import Control.Monad (unless)
 
 import qualified Control.Monad.STM as S
@@ -52,6 +53,13 @@ class Monad m => MonadSTM m where
   -- | Write the supplied value into the @CTVar@.
   writeCTVar :: CTVar m a -> a -> m ()
 
+  -- | Throw an exception. This aborts the transaction and propagates
+  -- the exception.
+  throwSTM :: Exception e => e -> m a
+
+  -- | Handling exceptions from 'throwSTM'.
+  catchSTM :: Exception e => m a -> (e -> m a) -> m a
+
 instance MonadSTM STM where
   type CTVar STM = TVar
 
@@ -60,3 +68,5 @@ instance MonadSTM STM where
   newCTVar   = newTVar
   readCTVar  = readTVar
   writeCTVar = writeTVar
+  throwSTM   = S.throwSTM
+  catchSTM   = S.catchSTM

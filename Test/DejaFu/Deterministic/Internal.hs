@@ -350,6 +350,8 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
           Retry touched ->
             let threads' = block (OnCTVar touched) tid threads
             in (threads', idSource { _nextCTVId = newctvid }, BlockedSTM)
+            in (threads', lastcvid, newctvid, lasttid, BlockedSTM)
+          Exception _ -> error "Exceptions not yet handled in stepThread"
 
     -- | Create a new @CVar@, using the next 'CVarId'.
     stepNew na = do
