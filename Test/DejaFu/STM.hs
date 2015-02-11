@@ -218,16 +218,15 @@ stepTrans fixed act newctvid = case act of
       (res, undo, newctvid') <- doTransaction fixed stm newctvid
       case res of
         Success written val -> return (c val, undo, newctvid', [], written)
-        Retry readen -> return (ARetry, undo, newctvid, readen, [])
+        Retry readen -> return (ARetry, nothing, newctvid, readen, [])
         Exception exc -> case fromException exc of
           Just exc' -> do
-            undo
             (rese, undoe, newctvide') <- doTransaction fixed (h exc') newctvid
             case rese of
               Success written val -> return (c val, undoe, newctvide', [], written)
-              Exception exce -> return (AThrow exce, undoe, newctvid, [], [])
-              Retry readen -> return (ARetry, undoe, newctvid, readen, [])
-          Nothing -> return (AThrow exc, undo, newctvid, [], [])
+              Exception exce -> return (AThrow exce, nothing, newctvid, [], [])
+              Retry readen -> return (ARetry, nothing, newctvid, readen, [])
+          Nothing -> return (AThrow exc, nothing, newctvid, [], [])
 
     stepRead :: CTVar t r a -> (a -> STMAction t n r) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepRead (V (ctvid, ref)) c = do
@@ -251,14 +250,13 @@ stepTrans fixed act newctvid = case act of
       (resa, undoa, newctvida') <- doTransaction fixed a newctvid
       case resa of
         Success written val -> return (c val, undoa, newctvida', [], written)
-        Exception exc -> return (AThrow exc, undoa, newctvid, [], [])
+        Exception exc -> return (AThrow exc, nothing, newctvid, [], [])
         Retry _ -> do
-          undoa
           (resb, undob, newctvidb') <- doTransaction fixed b newctvid
           case resb of
             Success written val -> return (c val, undob, newctvidb', [], written)
-            Exception exc -> return (AThrow exc, undob, newctvid, [], [])
-            Retry readen -> return (ARetry, undob, newctvid, readen, [])
+            Exception exc -> return (AThrow exc, nothing, newctvid, [], [])
+            Retry readen -> return (ARetry, nothing, newctvid, readen, [])
 
     stepLift :: n (STMAction t n r) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepLift na = do
