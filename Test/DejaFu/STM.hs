@@ -30,6 +30,7 @@ module Test.DejaFu.STM
 import Control.Applicative (Applicative)
 import Control.Exception (Exception, SomeException(..), fromException)
 import Control.Monad (liftM)
+import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
 import Control.Monad.Cont (Cont, cont, runCont)
 import Control.Monad.ST (ST, runST)
 import Control.State
@@ -47,6 +48,12 @@ import qualified Control.Monad.STM.Class as C
 -- reason).
 newtype STMLike t n r a = S { unS :: Cont (STMAction t n r) a } deriving (Functor, Applicative, Monad)
 
+instance Monad n => MonadThrow (STMLike t n r) where
+  throwM = throwSTM
+
+instance Monad n => MonadCatch (STMLike t n r) where
+  catch = catchSTM
+
 instance Monad n => C.MonadSTM (STMLike t n r) where
   type CTVar (STMLike t n r) = CTVar t r
 
@@ -55,8 +62,6 @@ instance Monad n => C.MonadSTM (STMLike t n r) where
   newCTVar   = newCTVar
   readCTVar  = readCTVar
   writeCTVar = writeCTVar
-  throwSTM   = throwSTM
-  catchSTM   = catchSTM
 
 -- | STM transactions are represented as a sequence of primitive
 -- actions.

@@ -71,6 +71,7 @@ library
   build-depends:       base >=4.6 && <5
                      , containers
                      , deepseq
+                     , exceptions >=0.7
                      , monad-loops
                      , mtl
                      , random
