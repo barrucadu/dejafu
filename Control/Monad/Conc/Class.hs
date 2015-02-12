@@ -7,7 +7,9 @@ module Control.Monad.Conc.Class where
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
+import Control.Exception (Exception)
 import Control.Monad (unless, void)
+import Control.Monad.Catch (MonadCatch, MonadThrow, catch, throwM)
 import Control.Monad.STM (STM)
 import Control.Monad.STM.Class (MonadSTM)
 
@@ -36,7 +38,7 @@ import qualified Control.Monad.STM as S
 -- 'takeCVar' and 'putCVar', however, are very inefficient, and should
 -- probably always be overridden to make use of
 -- implementation-specific blocking functionality.
-class (Monad m, MonadSTM (STMLike m)) => MonadConc m  where
+class (Monad m, MonadCatch m, MonadSTM (STMLike m), MonadThrow m) => MonadConc m  where
   -- | The associated 'MonadSTM' for this class.
   type STMLike m :: * -> *
 
@@ -99,6 +101,21 @@ class (Monad m, MonadSTM (STMLike m)) => MonadConc m  where
 
   -- | Perform a series of STM actions atomically.
   atomically :: STMLike m a -> m a
+
+  -- | Throw an exception. This will \"bubble up\" looking for an
+  -- exception handler capable of dealing with it and, if one is not
+  -- found, the thread is killed.
+  --
+  -- > throw = throwM
+  throw :: Exception e => e -> m a
+  throw = throwM
+
+  -- | Catch an exception. This is only required to be able to catch
+  -- exceptions raised by 'throw', unlike the more general
+  -- Control.Exception.catch function. If you need to be able to catch
+  -- /all/ errors, you will have to use 'IO'.
+  catch :: Exception e => m a -> (e -> m a) -> m a
+  catch = Control.Monad.Catch.catch
 
   -- | Runs its argument, just as if the @_concNoTest@ weren't there.
   --

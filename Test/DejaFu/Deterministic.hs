@@ -41,6 +41,8 @@ module Test.DejaFu.Deterministic
   ) where
 
 import Control.Applicative (Applicative(..), (<$>))
+import Control.Exception (Exception)
+import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.Monad.ST (ST, runST)
 import Control.State (Wrapper(..), refST)
@@ -56,6 +58,12 @@ import qualified Control.Monad.Conc.Class as C
 -- 'STRef's to prevent mutable references from leaking out of the
 -- monad.
 newtype Conc t a = C { unC :: M (ST t) (STRef t) (STMLike t) a } deriving (Functor, Applicative, Monad)
+
+instance MonadCatch (Conc t) where
+  catch = error "Exceptions not yet handled in Conc."
+
+instance MonadThrow (Conc t) where
+  throwM = error "Exceptions not yet handled in Conc."
 
 instance C.MonadConc (Conc t) where
   type CVar    (Conc t) = CVar t

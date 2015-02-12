@@ -45,6 +45,8 @@ module Test.DejaFu.Deterministic.IO
   ) where
 
 import Control.Applicative (Applicative(..), (<$>))
+import Control.Exception (Exception)
+import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.State (Wrapper(..), refIO)
 import Data.IORef (IORef, newIORef)
@@ -57,6 +59,12 @@ import qualified Control.Monad.IO.Class as IO
 
 -- | The 'IO' variant of Test.DejaFu.Deterministic's @Conc@ monad.
 newtype ConcIO t a = C { unC :: M IO IORef (STMLike t) a } deriving (Functor, Applicative, Monad)
+
+instance MonadCatch (ConcIO t) where
+  catch = error "Exceptions not yet handled in ConcIO."
+
+instance MonadThrow (ConcIO t) where
+  throwM = error "Exceptions not yet handled in ConcIO."
 
 instance IO.MonadIO (ConcIO t) where
   liftIO = liftIO
