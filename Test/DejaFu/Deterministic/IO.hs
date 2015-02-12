@@ -20,6 +20,7 @@ module Test.DejaFu.Deterministic.IO
   , fork
   , spawn
   , atomically
+  , throw
 
   -- * Communication: CVars
   , CVar
@@ -45,7 +46,7 @@ module Test.DejaFu.Deterministic.IO
   ) where
 
 import Control.Applicative (Applicative(..), (<$>))
-import Control.Exception (Exception)
+import Control.Exception (Exception, SomeException(..))
 import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.State (Wrapper(..), refIO)
@@ -64,7 +65,7 @@ instance MonadCatch (ConcIO t) where
   catch = error "Exceptions not yet handled in ConcIO."
 
 instance MonadThrow (ConcIO t) where
-  throwM = error "Exceptions not yet handled in ConcIO."
+  throwM = throw
 
 instance IO.MonadIO (ConcIO t) where
   liftIO = liftIO
@@ -136,6 +137,14 @@ takeCVar cvar = C $ cont $ ATake $ unV cvar
 -- | Read a value from a 'CVar' if there is one, without blocking.
 tryTakeCVar :: CVar t a -> ConcIO t (Maybe a)
 tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
+
+-- | Raise an exception in the 'ConcIO' monad. The exception is raised
+-- when the action is run, not when it is applied. It short-citcuits
+-- the rest of the computation:
+--
+-- > throw e >> x == throw e
+throw :: Exception e => e -> ConcIO t a
+throw e = C $ cont $ \_ -> AThrow (SomeException e)
 
 -- | Run the argument in one step. If the argument fails, the whole
 -- computation will fail.

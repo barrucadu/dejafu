@@ -7,6 +7,7 @@ module Test.DejaFu.Deterministic.Internal where
 
 import Control.DeepSeq (NFData(..))
 import Control.Monad (liftM, when)
+import Control.Exception (SomeException)
 import Control.Monad.Cont (Cont, runCont)
 import Control.State
 import Data.List (intersect)
@@ -46,6 +47,7 @@ data Action n r s =
   | forall a. AAtom    (s n r a) (a -> Action n r s)
   | ANew  (CVarId -> n (Action n r s))
   | ALift (n (Action n r s))
+  | AThrow SomeException
   | AStop
 
 -- | Every live thread has a unique identitifer.
@@ -128,6 +130,12 @@ data ThreadAction =
   | NoTest
   -- ^ A computation annotated with '_concNoTest' was executed in a
   -- single step.
+  | PushHandler
+  -- ^ Add a new exception handler.
+  | PopHandler
+  -- ^ Remove the most recent exception handler.
+  | Throw
+  -- ^ Throw an exception.
   | Lift
   -- ^ Lift an action from the underlying monad. Note that the
   -- penultimate action in a trace will always be a @Lift@, this is an
@@ -302,6 +310,7 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
   AAtom    stm c   -> stepAtom    stm c
   ANew     na      -> stepNew     na
   ALift    na      -> stepLift    na
+  AThrow   e       -> stepThrow   e
   ANoTest  ma a    -> stepNoTest  ma a
   AStop            -> stepStop
 
@@ -351,7 +360,11 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
             let threads' = block (OnCTVar touched) tid threads
             in (threads', idSource { _nextCTVId = newctvid }, BlockedSTM)
             in (threads', lastcvid, newctvid, lasttid, BlockedSTM)
-          Exception _ -> error "Exceptions not yet handled in stepThread"
+          Exception e -> stepThrow e
+
+    -- | Throw an exception, and propagate it to the appropriate
+    -- handler.
+    stepThrow _ = error "Exceptions not yet handled in stepThread"
 
     -- | Create a new @CVar@, using the next 'CVarId'.
     stepNew na = do
