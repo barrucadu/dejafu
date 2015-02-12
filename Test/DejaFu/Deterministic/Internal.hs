@@ -6,8 +6,8 @@
 module Test.DejaFu.Deterministic.Internal where
 
 import Control.DeepSeq (NFData(..))
+import Control.Exception (Exception, SomeException(..), fromException)
 import Control.Monad (liftM, when)
-import Control.Exception (SomeException)
 import Control.Monad.Cont (Cont, runCont)
 import Control.State
 import Data.List (intersect)
@@ -48,6 +48,7 @@ data Action n r s =
   | ANew  (CVarId -> n (Action n r s))
   | ALift (n (Action n r s))
   | AThrow SomeException
+  | forall a e. Exception e => ACatching (e -> M n r s a) (M n r s a) (a -> Action n r s)
   | AStop
 
 -- | Every live thread has a unique identitifer.
@@ -130,12 +131,12 @@ data ThreadAction =
   | NoTest
   -- ^ A computation annotated with '_concNoTest' was executed in a
   -- single step.
-  | PushHandler
-  -- ^ Add a new exception handler.
-  | PopHandler
-  -- ^ Remove the most recent exception handler.
+  | Catching
+  -- ^ Register a new exception handler
   | Throw
   -- ^ Throw an exception.
+  | Killed
+  -- ^ Killed by an uncaught exception.
   | Lift
   -- ^ Lift an action from the underlying monad. Note that the
   -- penultimate action in a trace will always be a @Lift@, this is an
@@ -168,6 +169,8 @@ data Failure =
   -- ^ The computation became blocked indefinitely on @CVar@s.
   | STMDeadlock
   -- ^ The computation became blocked indefinitely on @CTVar@s.
+  | UncaughtException
+  -- ^ An uncaught exception bubbled to the top of the computation.
   | FailureInNoTest
   -- ^ A computation annotated with '_concNoTest' produced a failure,
   -- rather than a result.
@@ -191,7 +194,7 @@ runFixed' fixed runstm sched s idSource ma = do
   ref <- newRef (wref fixed) Nothing
 
   let c       = ma >>= liftN fixed . writeRef (wref fixed) ref . Just . Right
-  let threads = M.fromList [(0, (runCont c $ const AStop, Nothing))]
+  let threads = M.fromList [(0, (runCont c $ const AStop, Nothing, []))]
 
   (s', idSource', trace) <- runThreads fixed runstm sched s threads idSource ref
   out <- readRef (wref fixed) ref
@@ -205,14 +208,24 @@ runFixed' fixed runstm sched s idSource ma = do
 data BlockedOn = OnCVarFull CVarId | OnCVarEmpty CVarId | OnCTVar [CTVarId] deriving Eq
 
 -- | Determine if a thread is blocked in a certainw ay.
-(~=) :: (a, Maybe BlockedOn) -> BlockedOn -> Bool
-(_, Just (OnCVarFull  _)) ~= (OnCVarFull  _) = True
-(_, Just (OnCVarEmpty _)) ~= (OnCVarEmpty _) = True
-(_, Just (OnCTVar    _))  ~= (OnCTVar     _) = True
+(~=) :: (a, Maybe BlockedOn, b) -> BlockedOn -> Bool
+(_, Just (OnCVarFull  _), _) ~= (OnCVarFull  _) = True
+(_, Just (OnCVarEmpty _), _) ~= (OnCVarEmpty _) = True
+(_, Just (OnCTVar     _), _) ~= (OnCTVar     _) = True
 _ ~= _ = False
 
--- | Threads are represented as a tuple of (next action, is blocked).
-type Threads n r s = Map ThreadId (Action n r s, Maybe BlockedOn)
+-- | Threads are represented as a tuple of (next action, is blocked, handler stack).
+type Threads n r s = Map ThreadId (Action n r s, Maybe BlockedOn, [Handler n r s])
+
+-- | An exception handler.
+data Handler n r s = forall e. Exception e => Handler (e -> Action n r s)
+
+-- | Propagate an exception upwards, finding the closest handler
+-- which can deal with it.
+propagate :: SomeException -> [Handler n r s] -> Maybe (Action n r s, [Handler n r s])
+propagate _ [] = Nothing
+propagate e (Handler h:hs) = maybe (propagate e hs) (\act -> Just (act, hs)) $ fmap h e' where
+  e' = fromException e
 
 -- | The number of ID parameters was getting a bit unwieldy, so this
 -- hides them all away.
@@ -252,20 +265,27 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) ori
     | isNonexistant = writeRef (wref fixed) ref (Just $ Left InternalError) >> return (g, idSource, sofar)
     | isBlocked     = writeRef (wref fixed) ref (Just $ Left InternalError) >> return (g, idSource, sofar)
     | otherwise = do
-      stepped <- stepThread fixed runconc runstm (fst $ fromJust thread) idSource chosen threads
+      stepped <- stepThread fixed runconc runstm ((\(a,_,_) -> a) $ fromJust thread) idSource chosen threads
       case stepped of
         Right (threads', idSource', act) ->
           let sofar' = (decision, alternatives, act) : sofar
           in  go idSource' sofar' chosen g' threads'
+
+        Left UncaughtException
+          | chosen == 0 -> writeRef (wref fixed) ref (Just $ Left UncaughtException) >> return (g, idSource, sofar)
+          | otherwise ->
+          let sofar' = (decision, alternatives, Killed) : sofar
+              threads' = kill chosen threads
+          in go idSource sofar' chosen g' threads'
 
         Left failure -> writeRef (wref fixed) ref (Just $ Left failure) >> return (g, idSource, sofar)
 
     where
       (chosen, g')  = if prior == -1 then (0, g) else sched g prior $ head runnable' :| tail runnable'
       runnable'     = M.keys runnable
-      runnable      = M.filter (isNothing . snd) threads
+      runnable      = M.filter (isNothing . (\(_,b,_) -> b)) threads
       thread        = M.lookup chosen threads
-      isBlocked     = isJust . snd $ fromJust thread
+      isBlocked     = isJust . (\(_,b,_) -> b) $ fromJust thread
       isNonexistant = isNothing thread
       isTerminated  = 0 `notElem` M.keys threads
       isDeadlocked  = M.null runnable && (((~= OnCVarFull undefined) `fmap` M.lookup 0 threads) == Just True ||
@@ -311,6 +331,7 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
   ANew     na      -> stepNew     na
   ALift    na      -> stepLift    na
   AThrow   e       -> stepThrow   e
+  ACatching h ma c -> stepCatching h ma c
   ANoTest  ma a    -> stepNoTest  ma a
   AStop            -> stepStop
 
@@ -351,20 +372,32 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
     -- | Run a STM transaction atomically.
     stepAtom stm c = do
       (res, newctvid) <- runstm stm (_nextCTVId idSource)
-      return . Right $
-        case res of
-          Success touched val ->
-            let (threads', woken) = wake (OnCTVar touched) threads
-            in (goto (c val) tid threads', idSource { _nextCTVId = newctvid }, STM woken)
-          Retry touched ->
-            let threads' = block (OnCTVar touched) tid threads
-            in (threads', idSource { _nextCTVId = newctvid }, BlockedSTM)
-            in (threads', lastcvid, newctvid, lasttid, BlockedSTM)
-          Exception e -> stepThrow e
+      case res of
+        Success touched val ->
+          let (threads', woken) = wake (OnCTVar touched) threads
+          in return $ Right (goto (c val) tid threads', idSource { _nextCTVId = newctvid }, STM woken)
+        Retry touched ->
+          let threads' = block (OnCTVar touched) tid threads
+          in return $ Right (threads', idSource { _nextCTVId = newctvid }, BlockedSTM)
+        Exception e -> stepThrow e
+
+    -- | Run a subcomputation in an exception-catching context.
+    stepCatching h ma c = do
+      let a = runCont ma $ c
+      let e = \exc -> runCont (h exc) c
+
+      let threads' = M.alter (\(Just (_, Nothing, hs)) -> Just (a, Nothing, Handler e:hs)) tid threads
+
+      return $ Right (threads', idSource, Catching)
 
     -- | Throw an exception, and propagate it to the appropriate
     -- handler.
-    stepThrow _ = error "Exceptions not yet handled in stepThread"
+    stepThrow e = return $
+      case propagate e . (\(_,_,c) -> c) . fromJust $ M.lookup tid threads of
+        Just (act, hs) ->
+          let threads' = M.alter (\(Just (_, Nothing, _)) -> Just (act, Nothing, hs)) tid threads
+          in Right (threads', idSource, Throw)
+        Nothing -> Left UncaughtException
 
     -- | Create a new @CVar@, using the next 'CVarId'.
     stepNew na = do
@@ -439,11 +472,11 @@ readFromCVar emptying blocking (cvid, ref) c fixed threadid threads = do
 
 -- | Replace the @Action@ of a thread.
 goto :: Action n r s -> ThreadId -> Threads n r s -> Threads n r s
-goto a = M.alter $ \(Just (_, b)) -> Just (a, b)
+goto a = M.alter $ \(Just (_, b, hs)) -> Just (a, b, hs)
 
 -- | Start a thread with the given ID. This must not already be in use!
 launch :: ThreadId -> Action n r s -> Threads n r s -> Threads n r s
-launch tid a = M.insert tid (a, Nothing)
+launch tid a = M.insert tid (a, Nothing, [])
 
 -- | Kill a thread.
 kill :: ThreadId -> Threads n r s -> Threads n r s
@@ -452,17 +485,17 @@ kill = M.delete
 -- | Block a thread.
 block :: BlockedOn -> ThreadId -> Threads n r s -> Threads n r s
 block blockedOn = M.alter doBlock where
-  doBlock (Just (a, _)) = Just (a, Just blockedOn)
+  doBlock (Just (a, _, hs)) = Just (a, Just blockedOn, hs)
 
 -- | Unblock all threads waiting on the appropriate block. For 'CTVar'
 -- blocks, this will wake all threads waiting on at least one of the
 -- given 'CTVar's.
 wake :: BlockedOn -> Threads n r s -> (Threads n r s, [ThreadId])
 wake blockedOn threads = (M.map unblock threads, M.keys $ M.filter isBlocked threads) where
-  unblock thread@(a, _)
-    | isBlocked thread = (a, Nothing)
+  unblock thread@(a, _, hs)
+    | isBlocked thread = (a, Nothing, hs)
     | otherwise = thread
 
-  isBlocked (_, theblock) = case (theblock, blockedOn) of
+  isBlocked (_, theblock, _) = case (theblock, blockedOn) of
     (Just (OnCTVar ctvids), OnCTVar blockedOn') -> ctvids `intersect` blockedOn' /= []
     _ -> theblock == Just blockedOn

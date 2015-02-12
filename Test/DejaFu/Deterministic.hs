@@ -17,6 +17,7 @@ module Test.DejaFu.Deterministic
   , spawn
   , atomically
   , throw
+  , catch
 
   -- * Communication: CVars
   , CVar
@@ -43,7 +44,6 @@ module Test.DejaFu.Deterministic
 
 import Control.Applicative (Applicative(..), (<$>))
 import Control.Exception (Exception, SomeException(..))
-import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.Monad.ST (ST, runST)
 import Control.State (Wrapper(..), refST)
@@ -52,6 +52,7 @@ import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
 import Test.DejaFu.STM (STMLike, runTransactionST)
 
+import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
 
 -- | The @Conc@ monad itself. This uses the same
@@ -60,10 +61,10 @@ import qualified Control.Monad.Conc.Class as C
 -- monad.
 newtype Conc t a = C { unC :: M (ST t) (STRef t) (STMLike t) a } deriving (Functor, Applicative, Monad)
 
-instance MonadCatch (Conc t) where
-  catch = error "Exceptions not yet handled in Conc."
+instance Ca.MonadCatch (Conc t) where
+  catch = catch
 
-instance MonadThrow (Conc t) where
+instance Ca.MonadThrow (Conc t) where
   throwM = throw
 
 instance C.MonadConc (Conc t) where
@@ -140,6 +141,12 @@ tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 -- > throw e >> x == throw e
 throw :: Exception e => e -> Conc t a
 throw e = C $ cont $ \_ -> AThrow (SomeException e)
+
+-- | Catch an exception raised by 'throw'. This __cannot__ catch
+-- errors, such as evaluating 'undefined', or division by zero. If you
+-- need that, use Control.Exception.catch and 'ConcIO'.
+catch :: Exception e => Conc t a -> (e -> Conc t a) -> Conc t a
+catch ma h = C $ cont $ ACatching (\e -> unC $ h e) (unC ma)
 
 -- | Run the argument in one step. If the argument fails, the whole
 -- computation will fail.
