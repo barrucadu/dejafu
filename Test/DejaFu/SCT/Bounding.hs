@@ -227,5 +227,6 @@ interesting _ (BlockedRead _) = True
 interesting _ (BlockedTake _) = True
 interesting _ (STM _)         = True
 interesting _ BlockedSTM      = True
+interesting _ (ThrowTo _)     = True
 interesting l Lift = l
 interesting _ _ = False

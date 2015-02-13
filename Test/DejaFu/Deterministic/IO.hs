@@ -22,6 +22,8 @@ module Test.DejaFu.Deterministic.IO
   , spawn
   , atomically
   , throw
+  , throwTo
+  , killThread
   , catch
 
   -- * Communication: CVars
@@ -79,6 +81,7 @@ instance C.MonadConc (ConcIO t) where
 
   fork         = fork
   myThreadId   = myThreadId
+  throwTo      = throwTo
   newEmptyCVar = newEmptyCVar
   putCVar      = putCVar
   tryPutCVar   = tryPutCVar
@@ -153,6 +156,18 @@ tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 -- > throw e >> x == throw e
 throw :: Exception e => e -> ConcIO t a
 throw e = C $ cont $ \_ -> AThrow (SomeException e)
+
+-- | Throw an exception to the target thread. This blocks until the
+-- exception is delivered, and it is just as if the target thread had
+-- raised it with 'throw'. This can interrupt a blocked action.
+throwTo :: Exception e => ThreadId -> e -> ConcIO t ()
+throwTo tid e = C $ cont $ \c -> AThrowTo tid (SomeException e) $ c ()
+
+-- | Raise the 'ThreadKilled' exception in the target thread. Note
+-- that if the thread is prepared to catch this exception, it won't
+-- actually kill it.
+killThread :: ThreadId => ConcIO t ()
+killThread = C.killThread
 
 -- | Catch an exception raised by 'throw'. This __cannot__ catch
 -- errors, such as evaluating 'undefined', or division by zero. If you

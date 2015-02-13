@@ -5,9 +5,10 @@
 -- functions.
 module Test.DejaFu.Deterministic.Internal where
 
+import Control.Applicative ((<$>))
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception, SomeException(..), fromException)
-import Control.Monad (liftM, when)
+import Control.Monad (when)
 import Control.Monad.Cont (Cont, runCont)
 import Control.State
 import Data.List (intersect)
@@ -49,6 +50,7 @@ data Action n r s =
   | ANew  (CVarId -> n (Action n r s))
   | ALift (n (Action n r s))
   | AThrow SomeException
+  | AThrowTo ThreadId SomeException (Action n r s)
   | forall a e. Exception e => ACatching (e -> M n r s a) (M n r s a) (a -> Action n r s)
   | APopCatching (Action n r s)
   | AStop
@@ -141,6 +143,8 @@ data ThreadAction =
   -- ^ Pop the innermost exception handler from the stack.
   | Throw
   -- ^ Throw an exception.
+  | ThrowTo ThreadId
+  -- ^ Throw an exception to a thread.
   | Killed
   -- ^ Killed by an uncaught exception.
   | Lift
@@ -189,12 +193,12 @@ instance NFData Failure where
 -- state, returning a 'Just' if it terminates, and 'Nothing' if a
 -- deadlock is detected. Also returned is the final state of the
 -- scheduler, and an execution trace.
-runFixed :: Monad n => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
+runFixed :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
          -> Scheduler g -> g -> M n r s a -> n (Either Failure a, g, Trace)
-runFixed fixed runstm sched s ma = (\(e,g,_,t) -> (e,g,t)) `liftM` runFixed' fixed runstm sched s initialIdSource ma
+runFixed fixed runstm sched s ma = (\(e,g,_,t) -> (e,g,t)) <$> runFixed' fixed runstm sched s initialIdSource ma
 
 -- | Same as 'runFixed', be parametrised by an 'IdSource'.
-runFixed' :: Monad n => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
+runFixed' :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
           -> Scheduler g -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace)
 runFixed' fixed runstm sched s idSource ma = do
   ref <- newRef (wref fixed) Nothing
@@ -230,7 +234,7 @@ data Handler n r s = forall e. Exception e => Handler (e -> Action n r s)
 -- which can deal with it.
 propagate :: SomeException -> [Handler n r s] -> Maybe (Action n r s, [Handler n r s])
 propagate _ [] = Nothing
-propagate e (Handler h:hs) = maybe (propagate e hs) (\act -> Just (act, hs)) $ fmap h e' where
+propagate e (Handler h:hs) = maybe (propagate e hs) (\act -> Just (act, hs)) $ h <$> e' where
   e' = fromException e
 
 -- | The number of ID parameters was getting a bit unwieldy, so this
@@ -261,7 +265,7 @@ initialIdSource = Id 0 0 0
 -- efficient to prepend to a list than append. As this function isn't
 -- exposed to users of the library, this is just an internal gotcha to
 -- watch out for.
-runThreads :: Monad n => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
+runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
            -> Scheduler g -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace)
 runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) origg origthreads where
   go idSource sofar prior g threads
@@ -294,9 +298,9 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) ori
       isBlocked     = isJust . (\(_,b,_) -> b) $ fromJust thread
       isNonexistant = isNothing thread
       isTerminated  = 0 `notElem` M.keys threads
-      isDeadlocked  = M.null runnable && (((~= OnCVarFull undefined) `fmap` M.lookup 0 threads) == Just True ||
-                                         ((~= OnCVarEmpty undefined) `fmap` M.lookup 0 threads) == Just True)
-      isSTMLocked   = M.null runnable && ((~= OnCTVar []) `fmap` M.lookup 0 threads) == Just True
+      isDeadlocked  = M.null runnable && (((~= OnCVarFull  undefined) <$> M.lookup 0 threads) == Just True ||
+                                         ((~= OnCVarEmpty undefined) <$> M.lookup 0 threads) == Just True)
+      isSTMLocked   = M.null runnable && ((~= OnCTVar []) <$> M.lookup 0 threads) == Just True
 
       runconc ma i = do { (a,_,i',_) <- runFixed' fixed runstm sched g i ma; return (a,i') }
 
@@ -312,7 +316,7 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) ori
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
-stepThread :: Monad n => Fixed n r s
+stepThread :: (Functor n, Monad n) => Fixed n r s
            -> (forall x. M n r s x -> IdSource -> n (Either Failure x, IdSource))
            -- ^ Run a 'MonadConc' computation atomically.
            -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
@@ -338,6 +342,7 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
   ANew     na      -> stepNew     na
   ALift    na      -> stepLift    na
   AThrow   e       -> stepThrow   e
+  AThrowTo t e c   -> stepThrowTo t e c
   ACatching h ma c -> stepCatching h ma c
   APopCatching a   -> stepPopCatching a
   ANoTest  ma a    -> stepNoTest  ma a
@@ -345,7 +350,7 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
 
   where
     -- | Start a new thread, assigning it the next 'ThreadId'
-    stepFork a b = return $ Right (goto (b tid) tid threads', idSource', Fork newtid) where
+    stepFork a b = return $ Right (goto (b newtid) tid threads', idSource', Fork newtid) where
       threads' = launch newtid a threads
       (idSource', newtid) = nextTId idSource
 
@@ -406,11 +411,22 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
     -- | Throw an exception, and propagate it to the appropriate
     -- handler.
     stepThrow e = return $
-      case propagate e . (\(_,_,c) -> c) . fromJust $ M.lookup tid threads of
+      case propagate e . (\(_,_,hs) -> hs) . fromJust $ M.lookup tid threads of
         Just (act, hs) ->
           let threads' = M.alter (\(Just (_, Nothing, _)) -> Just (act, Nothing, hs)) tid threads
           in Right (threads', idSource, Throw)
         Nothing -> Left UncaughtException
+
+    -- | Throw an exception to the target thread, and propagate it to
+    -- the appropriate handler.
+    stepThrowTo t e c = return $
+      let threads' = goto c tid threads
+      in case propagate e . (\(_,_,hs) -> hs) <$> M.lookup t threads of
+           Just (Just (act, hs)) -> Right (M.insert t (act, Nothing, hs) threads', idSource, ThrowTo t)
+           Just Nothing
+             | t == 0     -> Left UncaughtException
+             | otherwise -> Right (kill t threads', idSource, ThrowTo t)
+           Nothing -> Right (threads', idSource, ThrowTo t)
 
     -- | Create a new @CVar@, using the next 'CVarId'.
     stepNew na = do

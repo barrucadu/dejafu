@@ -3,11 +3,16 @@
 
 -- | This module captures in a typeclass the interface of concurrency
 -- monads.
-module Control.Monad.Conc.Class where
+module Control.Monad.Conc.Class
+  ( MonadConc(..)
+  -- * Utilities
+  , spawn
+  , killThread
+  ) where
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
-import Control.Exception (Exception)
+import Control.Exception (Exception, AsyncException(ThreadKilled))
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, catch, throwM)
 import Control.Monad.STM (STM)
@@ -61,19 +66,6 @@ class ( Monad m, MonadCatch m, MonadThrow m
   -- | Get the @ThreadId@ of the current thread.
   myThreadId :: m (ThreadId m)
 
-  -- | Create a concurrent computation for the provided action, and
-  -- return a @CVar@ which can be used to query the result.
-  --
-  -- > spawn ma = do
-  -- >   cvar <- newEmptyCVar
-  -- >   _ <- fork $ ma >>= putCVar cvar
-  -- >   return cvar
-  spawn :: m a -> m (CVar m a)
-  spawn ma = do
-    cvar <- newEmptyCVar
-    _ <- fork $ ma >>= putCVar cvar
-    return cvar
-
   -- | Create a new empty @CVar@.
   newEmptyCVar :: m (CVar m a)
 
@@ -126,6 +118,11 @@ class ( Monad m, MonadCatch m, MonadThrow m
   catch :: Exception e => m a -> (e -> m a) -> m a
   catch = Control.Monad.Catch.catch
 
+  -- | Throw an exception to the target thread. This blocks until the
+  -- exception is delivered, and it is just as if the target thread
+  -- had raised it with 'throw'. This can interrupt a blocked action.
+  throwTo :: Exception e => ThreadId m => e -> m ()
+
   -- | Runs its argument, just as if the @_concNoTest@ weren't there.
   --
   -- > _concNoTest x = x
@@ -155,9 +152,24 @@ instance MonadConc IO where
   readCVar     = readMVar
   fork         = forkIO
   myThreadId   = C.myThreadId
+  throwTo      = C.throwTo
   newEmptyCVar = newEmptyMVar
   putCVar      = putMVar
   tryPutCVar   = tryPutMVar
   takeCVar     = takeMVar
   tryTakeCVar  = tryTakeMVar
   atomically   = S.atomically
+
+-- | Create a concurrent computation for the provided action, and
+-- return a @CVar@ which can be used to query the result.
+spawn :: MonadConc m => m a -> m (CVar m a)
+spawn ma = do
+  cvar <- newEmptyCVar
+  _ <- fork $ ma >>= putCVar cvar
+  return cvar
+
+-- | Raise the 'ThreadKilled' exception in the target thread. Note
+-- that if the thread is prepared to catch this exception, it won't
+-- actually kill it.
+killThread :: MonadConc m => ThreadId m => m ()
+killThread tid = throwTo tid ThreadKilled
