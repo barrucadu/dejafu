@@ -1,5 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE Rank2Types                 #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
 
 -- | Deterministic traced execution of concurrent computations which
@@ -18,6 +18,8 @@ module Test.DejaFu.Deterministic.IO
   , runConcIO
   , liftIO
   , fork
+  , forkFinally
+  , forkWithUnmask
   , myThreadId
   , spawn
   , atomically
@@ -25,6 +27,8 @@ module Test.DejaFu.Deterministic.IO
   , throwTo
   , killThread
   , catch
+  , mask
+  , uninterruptibleMask
 
   -- * Communication: CVars
   , CVar
@@ -71,6 +75,10 @@ instance Ca.MonadCatch (ConcIO t) where
 instance Ca.MonadThrow (ConcIO t) where
   throwM = throw
 
+instance Ca.MonadMask (ConcIO t) where
+  mask = mask
+  uninterruptibleMask = uninterruptibleMask
+
 instance IO.MonadIO (ConcIO t) where
   liftIO = liftIO
 
@@ -79,17 +87,18 @@ instance C.MonadConc (ConcIO t) where
   type STMLike  (ConcIO t) = STMLike t IO IORef
   type ThreadId (ConcIO t) = Int
 
-  fork         = fork
-  myThreadId   = myThreadId
-  throwTo      = throwTo
-  newEmptyCVar = newEmptyCVar
-  putCVar      = putCVar
-  tryPutCVar   = tryPutCVar
-  readCVar     = readCVar
-  takeCVar     = takeCVar
-  tryTakeCVar  = tryTakeCVar
-  atomically   = atomically
-  _concNoTest  = _concNoTest
+  fork           = fork
+  forkWithUnmask = forkWithUnmask
+  myThreadId     = myThreadId
+  throwTo        = throwTo
+  newEmptyCVar   = newEmptyCVar
+  putCVar        = putCVar
+  tryPutCVar     = tryPutCVar
+  readCVar       = readCVar
+  takeCVar       = takeCVar
+  tryTakeCVar    = tryTakeCVar
+  atomically     = atomically
+  _concNoTest    = _concNoTest
 
 fixed :: Fixed IO IORef (STMLike t)
 fixed = Wrapper refIO $ unC . liftIO
@@ -174,6 +183,45 @@ killThread = C.killThread
 -- need that, use Control.Exception.catch and 'liftIO'.
 catch :: Exception e => ConcIO t a -> (e -> ConcIO t a) -> ConcIO t a
 catch ma h = C $ cont $ ACatching (unC . h) (unC ma)
+
+-- | Fork a thread and call the supplied function when the thread is
+-- about to terminate, with an exception or a returned value. The
+-- function is called with asynchronous exceptions masked.
+--
+-- This function is useful for informing the parent when a child
+-- terminates, for example.
+forkFinally :: ConcIO t a -> (Either SomeException a -> ConcIO t ()) -> ConcIO t ThreadId
+forkFinally action and_then =
+  mask $ \restore ->
+    fork $ Ca.try (restore action) >>= and_then
+
+-- | Like 'fork', but the child thread is passed a function that can
+-- be used to unmask asynchronous exceptions.
+forkWithUnmask :: ((forall a. ConcIO t a -> ConcIO t a) -> ConcIO t ()) -> ConcIO t ThreadId
+forkWithUnmask = error "'forkWithUnmask' not yet implemented for 'ConcIO'"
+
+-- | Executes a computation with asynchronous exceptions
+-- /masked/. That is, any thread which attempts to raise an exception
+-- in the current thread with 'throwTo' will be blocked until
+-- asynchronous exceptions are unmasked again.
+--
+-- The argument passed to mask is a function that takes as its
+-- argument another function, which can be used to restore the
+-- prevailing masking state within the context of the masked
+-- computation.
+mask :: ((forall a. ConcIO t a -> ConcIO t a) -> ConcIO t b) -> ConcIO t b
+mask = error "'mask' not yet implemented for 'ConcIO'"
+
+-- | Like 'mask', but the masked computation is not
+-- interruptible. THIS SHOULD BE USED WITH GREAT CARE, because if a
+-- thread executing in 'uninterruptibleMask' blocks for any reason,
+-- then the thread (and possibly the program, if this is the main
+-- thread) will be unresponsive and unkillable. This function should
+-- only be necessary if you need to mask exceptions around an
+-- interruptible operation, and you can guarantee that the
+-- interruptible operation will only block for a short period of time.
+uninterruptibleMask :: ((forall a. ConcIO t a -> ConcIO t a) -> ConcIO t b) -> ConcIO t b
+uninterruptibleMask = error "'uninterruptibleMask' not yet implemented for 'ConcIO'"
 
 -- | Run the argument in one step. If the argument fails, the whole
 -- computation will fail.
