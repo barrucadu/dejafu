@@ -50,7 +50,7 @@ module Test.DejaFu.Deterministic
   ) where
 
 import Control.Applicative (Applicative(..), (<$>))
-import Control.Exception (Exception, SomeException(..))
+import Control.Exception (Exception, MaskingState(..), SomeException(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.Monad.ST (ST, runST)
 import Control.State (Wrapper(..), refST)
@@ -205,7 +205,10 @@ forkWithUnmask = error "'forkWithUnmask' not yet implemented for 'Conc'"
 -- prevailing masking state within the context of the masked
 -- computation.
 mask :: ((forall a. Conc t a -> Conc t a) -> Conc t b) -> Conc t b
-mask = error "'mask' not yet implemented for 'Conc'"
+-- Can't avoid the lambda here (and in uninterruptibleMask and in
+-- ConcIO) because RankNTypes inference is scary.
+mask mb = C $ cont $ AMasking MaskedInterruptible (\f -> unC $ mb $ wrap f) where
+ wrap f = C . f . unC
 
 -- | Like 'mask', but the masked computation is not
 -- interruptible. THIS SHOULD BE USED WITH GREAT CARE, because if a
@@ -216,7 +219,8 @@ mask = error "'mask' not yet implemented for 'Conc'"
 -- interruptible operation, and you can guarantee that the
 -- interruptible operation will only block for a short period of time.
 uninterruptibleMask :: ((forall a. Conc t a -> Conc t a) -> Conc t b) -> Conc t b
-uninterruptibleMask = error "'uninterruptibleMask' not yet implemented for 'Conc'"
+uninterruptibleMask mb = C $ cont $ AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f) where
+ wrap f x = C $ f $ unC x
 
 -- | Run the argument in one step. If the argument fails, the whole
 -- computation will fail.

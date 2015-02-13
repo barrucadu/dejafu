@@ -1,5 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE Rank2Types                #-}
+{-# LANGUAGE RankNTypes                #-}
 
 -- | Concurrent monads with a fixed scheduler: internal types and
 -- functions.
@@ -7,7 +7,7 @@ module Test.DejaFu.Deterministic.Internal where
 
 import Control.Applicative ((<$>))
 import Control.DeepSeq (NFData(..))
-import Control.Exception (Exception, SomeException(..), fromException)
+import Control.Exception (Exception, MaskingState(..), SomeException(..), fromException)
 import Control.Monad (when)
 import Control.Monad.Cont (Cont, runCont)
 import Control.State
@@ -53,6 +53,7 @@ data Action n r s =
   | AThrowTo ThreadId SomeException (Action n r s)
   | forall a e. Exception e => ACatching (e -> M n r s a) (M n r s a) (a -> Action n r s)
   | APopCatching (Action n r s)
+  | forall a. AMasking MaskingState ((forall b. M n r s b -> M n r s b) -> M n r s a) (a -> Action n r s)
   | AStop
 
 -- | Every live thread has a unique identitifer.
@@ -345,6 +346,7 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
   AThrowTo t e c   -> stepThrowTo t e c
   ACatching h ma c -> stepCatching h ma c
   APopCatching a   -> stepPopCatching a
+  AMasking m ma c  -> stepMasking m ma c
   ANoTest  ma a    -> stepNoTest  ma a
   AStop            -> stepStop
 
@@ -427,6 +429,11 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
              | t == 0     -> Left UncaughtException
              | otherwise -> Right (kill t threads', idSource, ThrowTo t)
            Nothing -> Right (threads', idSource, ThrowTo t)
+
+    -- | Execute a subcomputation with a new masking state, and give
+    -- it a function to run a computation with the current masking
+    -- state.
+    stepMasking m ma c = error "'AMasking' not yet implemented in 'stepThread'"
 
     -- | Create a new @CVar@, using the next 'CVarId'.
     stepNew na = do

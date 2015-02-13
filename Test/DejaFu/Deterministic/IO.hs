@@ -54,7 +54,7 @@ module Test.DejaFu.Deterministic.IO
   ) where
 
 import Control.Applicative (Applicative(..), (<$>))
-import Control.Exception (Exception, SomeException(..))
+import Control.Exception (Exception, MaskingState(..), SomeException(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.State (Wrapper(..), refIO)
 import Data.IORef (IORef, newIORef)
@@ -210,7 +210,8 @@ forkWithUnmask = error "'forkWithUnmask' not yet implemented for 'ConcIO'"
 -- prevailing masking state within the context of the masked
 -- computation.
 mask :: ((forall a. ConcIO t a -> ConcIO t a) -> ConcIO t b) -> ConcIO t b
-mask = error "'mask' not yet implemented for 'ConcIO'"
+mask mb = C $ cont $ AMasking MaskedInterruptible (\f -> unC $ mb $ wrap f) where
+ wrap f = C . f . unC
 
 -- | Like 'mask', but the masked computation is not
 -- interruptible. THIS SHOULD BE USED WITH GREAT CARE, because if a
@@ -221,7 +222,8 @@ mask = error "'mask' not yet implemented for 'ConcIO'"
 -- interruptible operation, and you can guarantee that the
 -- interruptible operation will only block for a short period of time.
 uninterruptibleMask :: ((forall a. ConcIO t a -> ConcIO t a) -> ConcIO t b) -> ConcIO t b
-uninterruptibleMask = error "'uninterruptibleMask' not yet implemented for 'ConcIO'"
+uninterruptibleMask mb = C $ cont $ AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f) where
+ wrap f = C . f . unC
 
 -- | Run the argument in one step. If the argument fails, the whole
 -- computation will fail.
