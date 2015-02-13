@@ -50,6 +50,7 @@ data Action n r s =
   | ALift (n (Action n r s))
   | AThrow SomeException
   | forall a e. Exception e => ACatching (e -> M n r s a) (M n r s a) (a -> Action n r s)
+  | APopCatching (Action n r s)
   | AStop
 
 -- | Every live thread has a unique identitifer.
@@ -136,6 +137,8 @@ data ThreadAction =
   -- single step.
   | Catching
   -- ^ Register a new exception handler
+  | PopCatching
+  -- ^ Pop the innermost exception handler from the stack.
   | Throw
   -- ^ Throw an exception.
   | Killed
@@ -336,6 +339,7 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
   ALift    na      -> stepLift    na
   AThrow   e       -> stepThrow   e
   ACatching h ma c -> stepCatching h ma c
+  APopCatching a   -> stepPopCatching a
   ANoTest  ma a    -> stepNoTest  ma a
   AStop            -> stepStop
 
@@ -389,13 +393,15 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
         Exception e -> stepThrow e
 
     -- | Run a subcomputation in an exception-catching context.
-    stepCatching h ma c = do
-      let a = runCont ma c
-      let e = \exc -> runCont (h exc) c
+    stepCatching h ma c = return $ Right (threads', idSource, Catching) where
+      a     = runCont ma      (APopCatching . c)
+      e exc = runCont (h exc) (APopCatching . c)
 
-      let threads' = M.alter (\(Just (_, Nothing, hs)) -> Just (a, Nothing, Handler e:hs)) tid threads
+      threads' = M.alter (\(Just (_, Nothing, hs)) -> Just (a, Nothing, Handler e:hs)) tid threads
 
-      return $ Right (threads', idSource, Catching)
+    -- | Pop the top exception handler from the thread's stack.
+    stepPopCatching a = return $ Right (threads', idSource, PopCatching) where
+      threads' = M.alter (\(Just (_, Nothing, _:hs)) -> Just (a, Nothing, hs)) tid threads
 
     -- | Throw an exception, and propagate it to the appropriate
     -- handler.
