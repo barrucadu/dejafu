@@ -390,7 +390,7 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
 
     -- | Run a subcomputation in an exception-catching context.
     stepCatching h ma c = do
-      let a = runCont ma $ c
+      let a = runCont ma c
       let e = \exc -> runCont (h exc) c
 
       let threads' = M.alter (\(Just (_, Nothing, hs)) -> Just (a, Nothing, Handler e:hs)) tid threads

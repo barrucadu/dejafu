@@ -158,7 +158,7 @@ throw e = C $ cont $ \_ -> AThrow (SomeException e)
 -- errors, such as evaluating 'undefined', or division by zero. If you
 -- need that, use Control.Exception.catch and 'liftIO'.
 catch :: Exception e => ConcIO t a -> (e -> ConcIO t a) -> ConcIO t a
-catch ma h = C $ cont $ ACatching (\e -> unC $ h e) (unC ma)
+catch ma h = C $ cont $ ACatching (unC . h) (unC ma)
 
 -- | Run the argument in one step. If the argument fails, the whole
 -- computation will fail.
