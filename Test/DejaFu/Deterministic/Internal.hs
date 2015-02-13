@@ -37,7 +37,8 @@ type Fixed n r s = Wrapper n r (Cont (Action n r s))
 -- primitives of the concurrency. 'spawn' is absent as it is
 -- implemented in terms of 'newEmptyCVar', 'fork', and 'putCVar'.
 data Action n r s =
-    AFork (Action n r s) (Action n r s)
+    AFork (Action n r s) (ThreadId -> Action n r s)
+  | AMyTId (ThreadId -> Action n r s)
   | forall a. APut     (R r a) a (Action n r s)
   | forall a. ATryPut  (R r a) a (Bool -> Action n r s)
   | forall a. AGet     (R r a) (a -> Action n r s)
@@ -105,6 +106,8 @@ instance NFData Decision where
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
+  | MyThreadId
+  -- ^ Get the 'ThreadId' of the current thread.
   | New CVarId
   -- ^ Create a new 'CVar'.
   | Put CVarId [ThreadId]
@@ -322,6 +325,7 @@ stepThread :: Monad n => Fixed n r s
            -> n (Either Failure (Threads n r s, IdSource, ThreadAction))
 stepThread fixed runconc runstm action idSource tid threads = case action of
   AFork    a b     -> stepFork    a b
+  AMyTId   c       -> stepMyTId c
   APut     ref a c -> stepPut     ref a c
   ATryPut  ref a c -> stepTryPut  ref a c
   AGet     ref c   -> stepGet     ref c
@@ -337,9 +341,12 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
 
   where
     -- | Start a new thread, assigning it the next 'ThreadId'
-    stepFork a b = return $ Right (goto b tid threads', idSource', Fork newtid) where
+    stepFork a b = return $ Right (goto (b tid) tid threads', idSource', Fork newtid) where
       threads' = launch newtid a threads
       (idSource', newtid) = nextTId idSource
+
+    -- | Get the 'ThreadId' of the current thread
+    stepMyTId c = return $ Right (goto (c tid) tid threads, idSource, MyThreadId)
 
     -- | Put a value into a @CVar@, blocking the thread until it's
     -- empty.

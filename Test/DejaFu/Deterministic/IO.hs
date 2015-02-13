@@ -18,6 +18,7 @@ module Test.DejaFu.Deterministic.IO
   , runConcIO
   , liftIO
   , fork
+  , myThreadId
   , spawn
   , atomically
   , throw
@@ -72,10 +73,12 @@ instance IO.MonadIO (ConcIO t) where
   liftIO = liftIO
 
 instance C.MonadConc (ConcIO t) where
-  type CVar    (ConcIO t) = CVar t
-  type STMLike (ConcIO t) = STMLike t IO IORef
+  type CVar     (ConcIO t) = CVar t
+  type STMLike  (ConcIO t) = STMLike t IO IORef
+  type ThreadId (ConcIO t) = Int
 
   fork         = fork
+  myThreadId   = myThreadId
   newEmptyCVar = newEmptyCVar
   putCVar      = putCVar
   tryPutCVar   = tryPutCVar
@@ -107,8 +110,12 @@ readCVar :: CVar t a -> ConcIO t a
 readCVar cvar = C $ cont $ AGet $ unV cvar
 
 -- | Run the provided computation concurrently.
-fork :: ConcIO t () -> ConcIO t ()
-fork (C ma) = C $ cont $ \c -> AFork (runCont ma $ const AStop) $ c ()
+fork :: ConcIO t () -> ConcIO t ThreadId
+fork (C ma) = C $ cont $ AFork (runCont ma $ const AStop)
+
+-- | Get the 'ThreadId' of the current thread.
+myThreadId :: ConcIO t ThreadId
+myThreadId = C $ cont AMyTId
 
 -- | Run the provided 'MonadSTM' transaction atomically. If 'retry' is
 -- called, it will be blocked until any of the touched 'CTVar's have

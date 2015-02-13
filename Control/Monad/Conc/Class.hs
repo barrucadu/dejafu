@@ -8,11 +8,12 @@ module Control.Monad.Conc.Class where
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
 import Control.Exception (Exception)
-import Control.Monad (unless, void)
+import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, catch, throwM)
 import Control.Monad.STM (STM)
 import Control.Monad.STM.Class (MonadSTM)
 
+import qualified Control.Concurrent as C
 import qualified Control.Monad.STM as S
 
 -- | @MonadConc@ is like a combination of 'ParFuture' and 'ParIVar'
@@ -38,7 +39,9 @@ import qualified Control.Monad.STM as S
 -- 'takeCVar' and 'putCVar', however, are very inefficient, and should
 -- probably always be overridden to make use of
 -- implementation-specific blocking functionality.
-class (Monad m, MonadCatch m, MonadSTM (STMLike m), MonadThrow m) => MonadConc m  where
+class ( Monad m, MonadCatch m, MonadThrow m
+      , MonadSTM (STMLike m)
+      , Eq (ThreadId m), Show (ThreadId m)) => MonadConc m  where
   -- | The associated 'MonadSTM' for this class.
   type STMLike m :: * -> *
 
@@ -48,21 +51,27 @@ class (Monad m, MonadCatch m, MonadSTM (STMLike m), MonadThrow m) => MonadConc m
   -- @CVar@ will block until it is empty.
   type CVar m :: * -> *
 
+  -- | An abstract handle to a thread
+  type ThreadId m :: *
+
   -- | Fork a computation to happen concurrently. Communication may
   -- happen over @CVar@s.
-  fork :: m () -> m ()
+  fork :: m () -> m (ThreadId m)
+
+  -- | Get the @ThreadId@ of the current thread.
+  myThreadId :: m (ThreadId m)
 
   -- | Create a concurrent computation for the provided action, and
   -- return a @CVar@ which can be used to query the result.
   --
   -- > spawn ma = do
   -- >   cvar <- newEmptyCVar
-  -- >   fork $ ma >>= putCVar cvar
+  -- >   _ <- fork $ ma >>= putCVar cvar
   -- >   return cvar
   spawn :: m a -> m (CVar m a)
   spawn ma = do
     cvar <- newEmptyCVar
-    fork $ ma >>= putCVar cvar
+    _ <- fork $ ma >>= putCVar cvar
     return cvar
 
   -- | Create a new empty @CVar@.
@@ -139,11 +148,13 @@ class (Monad m, MonadCatch m, MonadSTM (STMLike m), MonadThrow m) => MonadConc m
   _concNoTest = id
 
 instance MonadConc IO where
-  type STMLike IO = STM
-  type CVar    IO = MVar
+  type STMLike IO  = STM
+  type CVar    IO  = MVar
+  type ThreadId IO = C.ThreadId
 
   readCVar     = readMVar
-  fork         = void . forkIO
+  fork         = forkIO
+  myThreadId   = C.myThreadId
   newEmptyCVar = newEmptyMVar
   putCVar      = putMVar
   tryPutCVar   = tryPutMVar
