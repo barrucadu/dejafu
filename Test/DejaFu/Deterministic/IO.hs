@@ -211,7 +211,7 @@ forkWithUnmask = error "'forkWithUnmask' not yet implemented for 'ConcIO'"
 -- computation.
 mask :: ((forall a. ConcIO t a -> ConcIO t a) -> ConcIO t b) -> ConcIO t b
 mask mb = C $ cont $ AMasking MaskedInterruptible (\f -> unC $ mb $ wrap f) where
- wrap f = C . f . unC
+  wrap f = C . f . unC
 
 -- | Like 'mask', but the masked computation is not
 -- interruptible. THIS SHOULD BE USED WITH GREAT CARE, because if a
@@ -223,7 +223,7 @@ mask mb = C $ cont $ AMasking MaskedInterruptible (\f -> unC $ mb $ wrap f) wher
 -- interruptible operation will only block for a short period of time.
 uninterruptibleMask :: ((forall a. ConcIO t a -> ConcIO t a) -> ConcIO t b) -> ConcIO t b
 uninterruptibleMask mb = C $ cont $ AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f) where
- wrap f = C . f . unC
+  wrap f = C . f . unC
 
 -- | Run the argument in one step. If the argument fails, the whole
 -- computation will fail.

@@ -1,5 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 
 -- | Concurrent monads with a fixed scheduler: internal types and
 -- functions.
@@ -9,7 +10,7 @@ import Control.Applicative ((<$>))
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception, MaskingState(..), SomeException(..), fromException)
 import Control.Monad (when)
-import Control.Monad.Cont (Cont, runCont)
+import Control.Monad.Cont (Cont, cont, runCont)
 import Control.State
 import Data.List (intersect)
 import Data.List.Extra
@@ -54,7 +55,7 @@ data Action n r s =
   | forall a e. Exception e => ACatching (e -> M n r s a) (M n r s a) (a -> Action n r s)
   | APopCatching (Action n r s)
   | forall a. AMasking MaskingState ((forall b. M n r s b -> M n r s b) -> M n r s a) (a -> Action n r s)
-  | AResetMask MaskingState (Action n r s)
+  | AResetMask Bool Bool MaskingState (Action n r s)
   | AStop
 
 -- | Every live thread has a unique identitifer.
@@ -149,10 +150,14 @@ data ThreadAction =
   -- ^ Throw an exception to a thread.
   | Killed
   -- ^ Killed by an uncaught exception.
-  | SetMasking MaskingState
-  -- ^ Set the masking state.
-  | ResetMasking MaskingState
-  -- ^ Return to an earlier masking state.
+  | SetMasking Bool MaskingState
+  -- ^ Set the masking state. If 'True', this is being used to set the
+  -- masking state to the original state in the argument passed to a
+  -- 'mask'ed function.
+  | ResetMasking Bool MaskingState
+  -- ^ Return to an earlier masking state.  If 'True', this is being
+  -- used to return to the state of the masked block in the argument
+  -- passed to a 'mask'ed function.
   | Lift
   -- ^ Lift an action from the underlying monad. Note that the
   -- penultimate action in a trace will always be a @Lift@, this is an
@@ -164,8 +169,8 @@ data ThreadAction =
 instance NFData ThreadAction where
   rnf (TryTake c b tids) = rnf (c, b, tids)
   rnf (TryPut  c b tids) = rnf (c, b, tids)
-  rnf (SetMasking   m) = m `seq` ()
-  rnf (ResetMasking m) = m `seq` ()
+  rnf (SetMasking   b m) = m `seq` b `seq` ()
+  rnf (ResetMasking b m) = m `seq` b `seq` ()
   rnf (BlockedRead c) = rnf c
   rnf (BlockedTake c) = rnf c
   rnf (BlockedPut  c) = rnf c
@@ -338,7 +343,7 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) ori
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
-stepThread :: (Functor n, Monad n) => Fixed n r s
+stepThread :: forall n r s. (Functor n, Monad n) => Fixed n r s
            -> (forall x. M n r s x -> IdSource -> n (Either Failure x, IdSource))
            -- ^ Run a 'MonadConc' computation atomically.
            -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
@@ -368,7 +373,7 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
   ACatching h ma c -> stepCatching    h ma c
   APopCatching a   -> stepPopCatching a
   AMasking m ma c  -> stepMasking     m ma c
-  AResetMask m c   -> stepResetMask   m c
+  AResetMask b1 b2 m c -> stepResetMask b1 b2 m c
   ANoTest  ma a    -> stepNoTest      ma a
   AStop            -> stepStop
 
@@ -455,10 +460,25 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
     -- | Execute a subcomputation with a new masking state, and give
     -- it a function to run a computation with the current masking
     -- state.
-    stepMasking m ma c = error "'AMasking' not yet implemented in 'stepThread'"
+    --
+    -- Explicit type sig necessary for checking in the prescence of
+    -- 'umask', sadly.
+    stepMasking :: MaskingState
+                -> ((forall b. M n r s b -> M n r s b) -> M n r s a)
+                -> (a -> Action n r s)
+                -> n (Either Failure (Threads n r s, IdSource, ThreadAction))
+    stepMasking m ma c = return $ Right (threads', idSource, SetMasking False m) where
+      a = runCont (ma umask) (AResetMask False False m' . c)
+
+      m' = _masking . fromJust $ M.lookup tid threads
+      umask mb = resetMask True m' >> mb >>= \b -> resetMask False m >> return b
+      resetMask typ mask = cont $ \k -> AResetMask typ True mask $ k ()
+
+      threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = a, _masking = m }) tid threads
 
     -- | Reset the masking thread of the state.
-    stepResetMask m c = error "'AResetMask' not yet implemented  in 'stepThread'"
+    stepResetMask b1 b2 m c = return $ Right (threads', idSource, (if b1 then SetMasking else ResetMasking) b2 m) where
+      threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = c, _masking = m }) tid threads
 
     -- | Create a new @CVar@, using the next 'CVarId'.
     stepNew na = do
