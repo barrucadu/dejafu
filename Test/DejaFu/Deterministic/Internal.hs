@@ -54,6 +54,7 @@ data Action n r s =
   | forall a e. Exception e => ACatching (e -> M n r s a) (M n r s a) (a -> Action n r s)
   | APopCatching (Action n r s)
   | forall a. AMasking MaskingState ((forall b. M n r s b -> M n r s b) -> M n r s a) (a -> Action n r s)
+  | AResetMask MaskingState (Action n r s)
   | AStop
 
 -- | Every live thread has a unique identitifer.
@@ -148,6 +149,10 @@ data ThreadAction =
   -- ^ Throw an exception to a thread.
   | Killed
   -- ^ Killed by an uncaught exception.
+  | SetMasking MaskingState
+  -- ^ Set the masking state.
+  | ResetMasking MaskingState
+  -- ^ Return to an earlier masking state.
   | Lift
   -- ^ Lift an action from the underlying monad. Note that the
   -- penultimate action in a trace will always be a @Lift@, this is an
@@ -159,9 +164,12 @@ data ThreadAction =
 instance NFData ThreadAction where
   rnf (TryTake c b tids) = rnf (c, b, tids)
   rnf (TryPut  c b tids) = rnf (c, b, tids)
+  rnf (SetMasking   m) = m `seq` ()
+  rnf (ResetMasking m) = m `seq` ()
   rnf (BlockedRead c) = rnf c
   rnf (BlockedTake c) = rnf c
   rnf (BlockedPut  c) = rnf c
+  rnf (ThrowTo tid) = rnf tid
   rnf (Take c tids) = rnf (c, tids)
   rnf (Put  c tids) = rnf (c, tids)
   rnf (STM  tids) = rnf tids
@@ -332,22 +340,23 @@ stepThread :: (Functor n, Monad n) => Fixed n r s
            -- ^ Current state of threads
            -> n (Either Failure (Threads n r s, IdSource, ThreadAction))
 stepThread fixed runconc runstm action idSource tid threads = case action of
-  AFork    a b     -> stepFork    a b
-  AMyTId   c       -> stepMyTId c
-  APut     ref a c -> stepPut     ref a c
-  ATryPut  ref a c -> stepTryPut  ref a c
-  AGet     ref c   -> stepGet     ref c
-  ATake    ref c   -> stepTake    ref c
-  ATryTake ref c   -> stepTryTake ref c
-  AAtom    stm c   -> stepAtom    stm c
-  ANew     na      -> stepNew     na
-  ALift    na      -> stepLift    na
-  AThrow   e       -> stepThrow   e
-  AThrowTo t e c   -> stepThrowTo t e c
-  ACatching h ma c -> stepCatching h ma c
+  AFork    a b     -> stepFork        a b
+  AMyTId   c       -> stepMyTId       c
+  APut     ref a c -> stepPut         ref a c
+  ATryPut  ref a c -> stepTryPut      ref a c
+  AGet     ref c   -> stepGet         ref c
+  ATake    ref c   -> stepTake        ref c
+  ATryTake ref c   -> stepTryTake     ref c
+  AAtom    stm c   -> stepAtom        stm c
+  ANew     na      -> stepNew         na
+  ALift    na      -> stepLift        na
+  AThrow   e       -> stepThrow       e
+  AThrowTo t e c   -> stepThrowTo     t e c
+  ACatching h ma c -> stepCatching    h ma c
   APopCatching a   -> stepPopCatching a
-  AMasking m ma c  -> stepMasking m ma c
-  ANoTest  ma a    -> stepNoTest  ma a
+  AMasking m ma c  -> stepMasking     m ma c
+  AResetMask m c   -> stepResetMask   m c
+  ANoTest  ma a    -> stepNoTest      ma a
   AStop            -> stepStop
 
   where
@@ -434,6 +443,9 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
     -- it a function to run a computation with the current masking
     -- state.
     stepMasking m ma c = error "'AMasking' not yet implemented in 'stepThread'"
+
+    -- | Reset the masking thread of the state.
+    stepResetMask m c = error "'AResetMask' not yet implemented  in 'stepThread'"
 
     -- | Create a new @CVar@, using the next 'CVarId'.
     stepNew na = do
