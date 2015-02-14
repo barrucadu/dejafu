@@ -148,6 +148,8 @@ data ThreadAction =
   -- ^ Throw an exception.
   | ThrowTo ThreadId
   -- ^ Throw an exception to a thread.
+  | BlockedThrowTo ThreadId
+  -- ^ Get blocked on a 'throwTo'.
   | Killed
   -- ^ Killed by an uncaught exception.
   | SetMasking Bool MaskingState
@@ -229,7 +231,7 @@ runFixed' fixed runstm sched s idSource ma = do
 
 -- | A @BlockedOn@ is used to determine what sort of variable a thread
 -- is blocked on.
-data BlockedOn = OnCVarFull CVarId | OnCVarEmpty CVarId | OnCTVar [CTVarId] deriving Eq
+data BlockedOn = OnCVarFull CVarId | OnCVarEmpty CVarId | OnCTVar [CTVarId] | OnMask ThreadId deriving Eq
 
 -- | Determine if a thread is blocked in a certainw ay.
 (~=) :: Thread n r s -> BlockedOn -> Bool
@@ -237,6 +239,7 @@ thread ~= theblock = case (_blocking thread, theblock) of
   (Just (OnCVarFull  _), OnCVarFull  _) -> True
   (Just (OnCVarEmpty _), OnCVarEmpty _) -> True
   (Just (OnCTVar     _), OnCTVar     _) -> True
+  (Just (OnMask      _), OnMask      _) -> True
   _ -> False
 
 -- | Threads are stored in a map index by 'ThreadId'.
@@ -284,6 +287,10 @@ nextTId idsource = let newid = _nextTId idsource + 1 in (idsource { _nextTId = n
 initialIdSource :: IdSource
 initialIdSource = Id 0 0 0
 
+-- | Check if a thread can be interrupted by an exception.
+interruptible :: Thread n r s -> Bool
+interruptible thread = _masking thread == Unmasked || (_masking thread == MaskedInterruptible && isJust (_blocking thread))
+
 -- | Run a collection of threads, until there are no threads left.
 --
 -- A thread is represented as a tuple of (next action, is blocked).
@@ -306,13 +313,14 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) ori
       case stepped of
         Right (threads', idSource', act) ->
           let sofar' = (decision, alternatives, act) : sofar
-          in  go idSource' sofar' chosen g' threads'
+              threads'' = if (interruptible <$> M.lookup chosen threads') == Just True then unblockWaitingOn chosen threads' else threads'
+          in  go idSource' sofar' chosen g' threads''
 
         Left UncaughtException
           | chosen == 0 -> writeRef (wref fixed) ref (Just $ Left UncaughtException) >> return (g, idSource, sofar)
           | otherwise ->
           let sofar' = (decision, alternatives, Killed) : sofar
-              threads' = kill chosen threads
+              threads' = unblockWaitingOn chosen $ kill chosen threads
           in go idSource sofar' chosen g' threads'
 
         Left failure -> writeRef (wref fixed) ref (Just $ Left failure) >> return (g, idSource, sofar)
@@ -326,10 +334,16 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) ori
       isNonexistant = isNothing thread
       isTerminated  = 0 `notElem` M.keys threads
       isDeadlocked  = M.null runnable && (((~= OnCVarFull  undefined) <$> M.lookup 0 threads) == Just True ||
-                                         ((~= OnCVarEmpty undefined) <$> M.lookup 0 threads) == Just True)
+                                         ((~= OnCVarEmpty undefined) <$> M.lookup 0 threads) == Just True ||
+                                         ((~= OnMask      undefined) <$> M.lookup 0 threads) == Just True)
       isSTMLocked   = M.null runnable && ((~= OnCTVar []) <$> M.lookup 0 threads) == Just True
 
       runconc ma i = do { (a,_,i',_) <- runFixed' fixed runstm sched g i ma; return (a,i') }
+
+      unblockWaitingOn tid = M.map unblock where
+        unblock thrd = case _blocking thrd of
+          Just (OnMask t) | t == tid -> thrd { _blocking = Nothing }
+          _ -> thrd
 
       decision
         | chosen == prior         = Continue
@@ -450,11 +464,16 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
     -- the appropriate handler.
     stepThrowTo t e c = return $
       let threads' = goto c tid threads
-      in case propagate e . _handlers <$> M.lookup t threads of
-           Just (Just (act, hs)) -> Right (M.alter (\(Just thread) -> Just $ thread { _continuation = act, _blocking = Nothing, _handlers = hs }) t threads', idSource, ThrowTo t)
-           Just Nothing
-             | t == 0     -> Left UncaughtException
-             | otherwise -> Right (kill t threads', idSource, ThrowTo t)
+          blocked = M.alter (\(Just thread) -> Just $ thread { _blocking = Just (OnMask t) }) tid threads
+          interrupted act hs = M.alter (\(Just thread) -> Just $ thread { _continuation = act, _blocking = Nothing, _handlers = hs }) t
+      in case M.lookup t threads of
+           Just thread
+             | interruptible thread -> case propagate e $ _handlers thread of
+               Just (act, hs) -> Right (interrupted act hs threads', idSource, ThrowTo t)
+               Nothing
+                 | t == 0     -> Left UncaughtException
+                 | otherwise -> Right (kill t threads', idSource, ThrowTo t)
+             | otherwise -> Right (blocked, idSource, BlockedThrowTo t)
            Nothing -> Right (threads', idSource, ThrowTo t)
 
     -- | Execute a subcomputation with a new masking state, and give
