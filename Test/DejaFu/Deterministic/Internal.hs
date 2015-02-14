@@ -39,7 +39,7 @@ type Fixed n r s = Wrapper n r (Cont (Action n r s))
 -- primitives of the concurrency. 'spawn' is absent as it is
 -- implemented in terms of 'newEmptyCVar', 'fork', and 'putCVar'.
 data Action n r s =
-    AFork (Action n r s) (ThreadId -> Action n r s)
+    AFork ((forall b. M n r s b -> M n r s b) -> Action n r s) (ThreadId -> Action n r s)
   | AMyTId (ThreadId -> Action n r s)
   | forall a. APut     (R r a) a (Action n r s)
   | forall a. ATryPut  (R r a) a (Bool -> Action n r s)
@@ -220,7 +220,7 @@ runFixed' fixed runstm sched s idSource ma = do
   ref <- newRef (wref fixed) Nothing
 
   let c       = ma >>= liftN fixed . writeRef (wref fixed) ref . Just . Right
-  let threads = launch' Unmasked 0 (runCont c $ const AStop) M.empty
+  let threads = launch' Unmasked 0 (const $ runCont c $ const AStop) M.empty
 
   (s', idSource', trace) <- runThreads fixed runstm sched s threads idSource ref
   out <- readRef (wref fixed) ref
@@ -576,14 +576,17 @@ goto a = M.alter $ \(Just thread) -> Just (thread { _continuation = a })
 
 -- | Start a thread with the given ID, inheriting the masking state
 -- from the parent thread. This must not already be in use!
-launch :: ThreadId -> ThreadId -> Action n r s -> Threads n r s -> Threads n r s
+launch :: ThreadId -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
 launch parent tid a threads = launch' mask tid a threads where
   mask = fromMaybe Unmasked $ _masking <$> M.lookup parent threads
 
 -- | Start a thread with the given ID and masking state. This must not already be in use!
-launch' :: MaskingState -> ThreadId -> Action n r s -> Threads n r s -> Threads n r s
+launch' :: MaskingState -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
 launch' mask tid a = M.insert tid thread where
-  thread = Thread { _continuation = a, _blocking = Nothing, _handlers = [], _masking = mask }
+  thread = Thread { _continuation = a umask, _blocking = Nothing, _handlers = [], _masking = mask }
+
+  umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False mask >> return b
+  resetMask typ m = cont $ \k -> AResetMask typ True m $ k ()
 
 -- | Kill a thread.
 kill :: ThreadId -> Threads n r s -> Threads n r s

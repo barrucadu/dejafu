@@ -67,7 +67,8 @@ class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
   fork :: m () -> m (ThreadId m)
 
   -- | Like 'fork', but the child thread is passed a function that can
-  -- be used to unmask asynchronous exceptions.
+  -- be used to unmask asynchronous exceptions. This function should
+  -- not be used within a 'mask' or 'uninterruptibleMask'.
   forkWithUnmask :: ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
 
   -- | Get the @ThreadId@ of the current thread.
@@ -140,7 +141,8 @@ class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
   -- The argument passed to mask is a function that takes as its
   -- argument another function, which can be used to restore the
   -- prevailing masking state within the context of the masked
-  -- computation.
+  -- computation. This function should not be used within an
+  -- 'uninterruptibleMask'.
   --
   -- > mask = Control.Monad.Catch.mask
   mask :: ((forall a. m a -> m a) -> m b) -> m b
@@ -154,7 +156,8 @@ class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
   -- only be necessary if you need to mask exceptions around an
   -- interruptible operation, and you can guarantee that the
   -- interruptible operation will only block for a short period of
-  -- time.
+  -- time. The supplied unmasking function should not be used within a
+  -- 'mask'.
   --
   -- > uninterruptibleMask = Control.Monad.Catch.uninterruptibleMask
   uninterruptibleMask :: ((forall a. m a -> m a) -> m b) -> m b
