@@ -228,5 +228,7 @@ interesting _ (BlockedTake _) = True
 interesting _ (STM _)         = True
 interesting _ BlockedSTM      = True
 interesting _ (ThrowTo _)     = True
+interesting _ (SetMasking _ _) = True
+interesting _ (ResetMasking _ _ ) = True
 interesting l Lift = l
 interesting _ _ = False
