@@ -47,6 +47,7 @@ module Test.DejaFu.Deterministic.IO
   , Decision(..)
   , ThreadAction(..)
   , CVarId
+  , MaskingState(..)
   , showTrace
 
   -- * Scheduling
