@@ -14,7 +14,7 @@ import Control.State
 import Data.List (intersect)
 import Data.List.Extra
 import Data.Map (Map)
-import Data.Maybe (fromJust, isJust, isNothing)
+import Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
 import Test.DejaFu.STM (CTVarId, Result(..))
 
 import qualified Data.Map as M
@@ -213,7 +213,7 @@ runFixed' fixed runstm sched s idSource ma = do
   ref <- newRef (wref fixed) Nothing
 
   let c       = ma >>= liftN fixed . writeRef (wref fixed) ref . Just . Right
-  let threads = launch 0 (runCont c $ const AStop) M.empty
+  let threads = launch' Unmasked 0 (runCont c $ const AStop) M.empty
 
   (s', idSource', trace) <- runThreads fixed runstm sched s threads idSource ref
   out <- readRef (wref fixed) ref
@@ -375,7 +375,7 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
   where
     -- | Start a new thread, assigning it the next 'ThreadId'
     stepFork a b = return $ Right (goto (b newtid) tid threads', idSource', Fork newtid) where
-      threads' = launch newtid a threads
+      threads' = launch tid newtid a threads
       (idSource', newtid) = nextTId idSource
 
     -- | Get the 'ThreadId' of the current thread
@@ -535,10 +535,16 @@ readFromCVar emptying blocking (cvid, ref) c fixed threadid threads = do
 goto :: Action n r s -> ThreadId -> Threads n r s -> Threads n r s
 goto a = M.alter $ \(Just thread) -> Just (thread { _continuation = a })
 
--- | Start a thread with the given ID. This must not already be in use!
-launch :: ThreadId -> Action n r s -> Threads n r s -> Threads n r s
-launch tid a = M.insert tid thread where
-  thread = Thread { _continuation = a, _blocking = Nothing, _handlers = [], _masking = Unmasked }
+-- | Start a thread with the given ID, inheriting the masking state
+-- from the parent thread. This must not already be in use!
+launch :: ThreadId -> ThreadId -> Action n r s -> Threads n r s -> Threads n r s
+launch parent tid a threads = launch' mask tid a threads where
+  mask = fromMaybe Unmasked $ _masking <$> M.lookup parent threads
+
+-- | Start a thread with the given ID and masking state. This must not already be in use!
+launch' :: MaskingState -> ThreadId -> Action n r s -> Threads n r s -> Threads n r s
+launch' mask tid a = M.insert tid thread where
+  thread = Thread { _continuation = a, _blocking = Nothing, _handlers = [], _masking = mask }
 
 -- | Kill a thread.
 kill :: ThreadId -> Threads n r s -> Threads n r s
