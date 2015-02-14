@@ -1,5 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE Rank2Types                 #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
 
 -- | Deterministic traced execution of concurrent computations which
@@ -14,8 +14,17 @@ module Test.DejaFu.Deterministic
   , Failure(..)
   , runConc
   , fork
+  , forkFinally
+  , forkWithUnmask
+  , myThreadId
   , spawn
   , atomically
+  , throw
+  , throwTo
+  , killThread
+  , catch
+  , mask
+  , uninterruptibleMask
 
   -- * Communication: CVars
   , CVar
@@ -34,6 +43,7 @@ module Test.DejaFu.Deterministic
   , Decision(..)
   , ThreadAction(..)
   , CVarId
+  , MaskingState(..)
   , showTrace
 
   -- * Scheduling
@@ -41,6 +51,7 @@ module Test.DejaFu.Deterministic
   ) where
 
 import Control.Applicative (Applicative(..), (<$>))
+import Control.Exception (Exception, MaskingState(..), SomeException(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.Monad.ST (ST, runST)
 import Control.State (Wrapper(..), refST)
@@ -49,6 +60,7 @@ import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
 import Test.DejaFu.STM (STMLike, runTransactionST)
 
+import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
 
 -- | The @Conc@ monad itself. This uses the same
@@ -57,19 +69,36 @@ import qualified Control.Monad.Conc.Class as C
 -- monad.
 newtype Conc t a = C { unC :: M (ST t) (STRef t) (STMLike t) a } deriving (Functor, Applicative, Monad)
 
-instance C.MonadConc (Conc t) where
-  type CVar    (Conc t) = CVar t
-  type STMLike (Conc t) = STMLike t (ST t) (STRef t)
+wrap :: (M (ST t) (STRef t) (STMLike t) a -> M (ST t) (STRef t) (STMLike t) a) -> (Conc t a -> Conc t a)
+wrap f = C . f . unC
 
-  fork         = fork
-  newEmptyCVar = newEmptyCVar
-  putCVar      = putCVar
-  tryPutCVar   = tryPutCVar
-  readCVar     = readCVar
-  takeCVar     = takeCVar
-  tryTakeCVar  = tryTakeCVar
-  atomically   = atomically
-  _concNoTest  = _concNoTest
+instance Ca.MonadCatch (Conc t) where
+  catch = catch
+
+instance Ca.MonadThrow (Conc t) where
+  throwM = throw
+
+instance Ca.MonadMask (Conc t) where
+  mask = mask
+  uninterruptibleMask = uninterruptibleMask
+
+instance C.MonadConc (Conc t) where
+  type CVar     (Conc t) = CVar t
+  type STMLike  (Conc t) = STMLike t (ST t) (STRef t)
+  type ThreadId (Conc t) = Int
+
+  fork           = fork
+  forkWithUnmask = forkWithUnmask
+  myThreadId     = myThreadId
+  throwTo        = throwTo
+  newEmptyCVar   = newEmptyCVar
+  putCVar        = putCVar
+  tryPutCVar     = tryPutCVar
+  readCVar       = readCVar
+  takeCVar       = takeCVar
+  tryTakeCVar    = tryTakeCVar
+  atomically     = atomically
+  _concNoTest    = _concNoTest
 
 fixed :: Fixed (ST t) (STRef t) (STMLike t)
 fixed = Wrapper refST $ \ma -> cont (\c -> ALift $ c <$> ma)
@@ -92,8 +121,12 @@ readCVar :: CVar t a -> Conc t a
 readCVar cvar = C $ cont $ AGet $ unV cvar
 
 -- | Run the provided computation concurrently.
-fork :: Conc t () -> Conc t ()
-fork (C ma) = C $ cont $ \c -> AFork (runCont ma $ const AStop) $ c ()
+fork :: Conc t () -> Conc t ThreadId
+fork (C ma) = C $ cont $ AFork (const $ runCont ma $ const AStop)
+
+-- | Get the 'ThreadId' of the current thread.
+myThreadId :: Conc t ThreadId
+myThreadId = C $ cont AMyTId
 
 -- | Run the provided 'MonadSTM' transaction atomically. If 'retry' is
 -- called, it will be blocked until any of the touched 'CTVar's have
@@ -123,6 +156,77 @@ takeCVar cvar = C $ cont $ ATake $ unV cvar
 -- | Read a value from a 'CVar' if there is one, without blocking.
 tryTakeCVar :: CVar t a -> Conc t (Maybe a)
 tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
+
+-- | Raise an exception in the 'Conc' monad. The exception is raised
+-- when the action is run, not when it is applied. It short-citcuits
+-- the rest of the computation:
+--
+-- > throw e >> x == throw e
+throw :: Exception e => e -> Conc t a
+throw e = C $ cont $ \_ -> AThrow (SomeException e)
+
+-- | Throw an exception to the target thread. This blocks until the
+-- exception is delivered, and it is just as if the target thread had
+-- raised it with 'throw'. This can interrupt a blocked action.
+throwTo :: Exception e => ThreadId -> e -> Conc t ()
+throwTo tid e = C $ cont $ \c -> AThrowTo tid (SomeException e) $ c ()
+
+-- | Raise the 'ThreadKilled' exception in the target thread. Note
+-- that if the thread is prepared to catch this exception, it won't
+-- actually kill it.
+killThread :: ThreadId => Conc t ()
+killThread = C.killThread
+
+-- | Catch an exception raised by 'throw'. This __cannot__ catch
+-- errors, such as evaluating 'undefined', or division by zero. If you
+-- need that, use Control.Exception.catch and 'ConcIO'.
+catch :: Exception e => Conc t a -> (e -> Conc t a) -> Conc t a
+catch ma h = C $ cont $ ACatching (unC . h) (unC ma)
+
+-- | Fork a thread and call the supplied function when the thread is
+-- about to terminate, with an exception or a returned value. The
+-- function is called with asynchronous exceptions masked.
+--
+-- This function is useful for informing the parent when a child
+-- terminates, for example.
+forkFinally :: Conc t a -> (Either SomeException a -> Conc t ()) -> Conc t ThreadId
+forkFinally action and_then =
+  mask $ \restore ->
+    fork $ Ca.try (restore action) >>= and_then
+
+-- | Like 'fork', but the child thread is passed a function that can
+-- be used to unmask asynchronous exceptions. This function should not
+-- be used within a 'mask' or 'uninterruptibleMask'.
+forkWithUnmask :: ((forall a. Conc t a -> Conc t a) -> Conc t ()) -> Conc t ThreadId
+forkWithUnmask ma = C $ cont $ AFork (\umask -> runCont (unC $ ma $ wrap umask) $ const AStop)
+
+-- | Executes a computation with asynchronous exceptions
+-- /masked/. That is, any thread which attempts to raise an exception
+-- in the current thread with 'throwTo' will be blocked until
+-- asynchronous exceptions are unmasked again.
+--
+-- The argument passed to mask is a function that takes as its
+-- argument another function, which can be used to restore the
+-- prevailing masking state within the context of the masked
+-- computation. This function should not be used within an
+-- 'uninterruptibleMask'.
+mask :: ((forall a. Conc t a -> Conc t a) -> Conc t b) -> Conc t b
+-- Can't avoid the lambda here (and in uninterruptibleMask and in
+-- ConcIO) because RankNTypes inference is scary.
+mask mb = C $ cont $ AMasking MaskedInterruptible (\f -> unC $ mb $ wrap f)
+
+-- | Like 'mask', but the masked computation is not
+-- interruptible. THIS SHOULD BE USED WITH GREAT CARE, because if a
+-- thread executing in 'uninterruptibleMask' blocks for any reason,
+-- then the thread (and possibly the program, if this is the main
+-- thread) will be unresponsive and unkillable. This function should
+-- only be necessary if you need to mask exceptions around an
+-- interruptible operation, and you can guarantee that the
+-- interruptible operation will only block for a short period of
+-- time. The supplied unmasking function should not be used within a
+-- 'mask'.
+uninterruptibleMask :: ((forall a. Conc t a -> Conc t a) -> Conc t b) -> Conc t b
+uninterruptibleMask mb = C $ cont $ AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f)
 
 -- | Run the argument in one step. If the argument fails, the whole
 -- computation will fail.

@@ -1,18 +1,21 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE Rank2Types                #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 
 -- | Concurrent monads with a fixed scheduler: internal types and
 -- functions.
 module Test.DejaFu.Deterministic.Internal where
 
+import Control.Applicative ((<$>))
 import Control.DeepSeq (NFData(..))
-import Control.Monad (liftM, when)
-import Control.Monad.Cont (Cont, runCont)
+import Control.Exception (Exception, MaskingState(..), SomeException(..), fromException)
+import Control.Monad (when)
+import Control.Monad.Cont (Cont, cont, runCont)
 import Control.State
 import Data.List (intersect)
 import Data.List.Extra
 import Data.Map (Map)
-import Data.Maybe (fromJust, isJust, isNothing)
+import Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
 import Test.DejaFu.STM (CTVarId, Result(..))
 
 import qualified Data.Map as M
@@ -36,7 +39,8 @@ type Fixed n r s = Wrapper n r (Cont (Action n r s))
 -- primitives of the concurrency. 'spawn' is absent as it is
 -- implemented in terms of 'newEmptyCVar', 'fork', and 'putCVar'.
 data Action n r s =
-    AFork (Action n r s) (Action n r s)
+    AFork ((forall b. M n r s b -> M n r s b) -> Action n r s) (ThreadId -> Action n r s)
+  | AMyTId (ThreadId -> Action n r s)
   | forall a. APut     (R r a) a (Action n r s)
   | forall a. ATryPut  (R r a) a (Bool -> Action n r s)
   | forall a. AGet     (R r a) (a -> Action n r s)
@@ -46,6 +50,12 @@ data Action n r s =
   | forall a. AAtom    (s n r a) (a -> Action n r s)
   | ANew  (CVarId -> n (Action n r s))
   | ALift (n (Action n r s))
+  | AThrow SomeException
+  | AThrowTo ThreadId SomeException (Action n r s)
+  | forall a e. Exception e => ACatching (e -> M n r s a) (M n r s a) (a -> Action n r s)
+  | APopCatching (Action n r s)
+  | forall a. AMasking MaskingState ((forall b. M n r s b -> M n r s b) -> M n r s a) (a -> Action n r s)
+  | AResetMask Bool Bool MaskingState (Action n r s)
   | AStop
 
 -- | Every live thread has a unique identitifer.
@@ -102,6 +112,8 @@ instance NFData Decision where
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
+  | MyThreadId
+  -- ^ Get the 'ThreadId' of the current thread.
   | New CVarId
   -- ^ Create a new 'CVar'.
   | Put CVarId [ThreadId]
@@ -128,6 +140,26 @@ data ThreadAction =
   | NoTest
   -- ^ A computation annotated with '_concNoTest' was executed in a
   -- single step.
+  | Catching
+  -- ^ Register a new exception handler
+  | PopCatching
+  -- ^ Pop the innermost exception handler from the stack.
+  | Throw
+  -- ^ Throw an exception.
+  | ThrowTo ThreadId
+  -- ^ Throw an exception to a thread.
+  | BlockedThrowTo ThreadId
+  -- ^ Get blocked on a 'throwTo'.
+  | Killed
+  -- ^ Killed by an uncaught exception.
+  | SetMasking Bool MaskingState
+  -- ^ Set the masking state. If 'True', this is being used to set the
+  -- masking state to the original state in the argument passed to a
+  -- 'mask'ed function.
+  | ResetMasking Bool MaskingState
+  -- ^ Return to an earlier masking state.  If 'True', this is being
+  -- used to return to the state of the masked block in the argument
+  -- passed to a 'mask'ed function.
   | Lift
   -- ^ Lift an action from the underlying monad. Note that the
   -- penultimate action in a trace will always be a @Lift@, this is an
@@ -139,9 +171,12 @@ data ThreadAction =
 instance NFData ThreadAction where
   rnf (TryTake c b tids) = rnf (c, b, tids)
   rnf (TryPut  c b tids) = rnf (c, b, tids)
+  rnf (SetMasking   b m) = m `seq` b `seq` ()
+  rnf (ResetMasking b m) = m `seq` b `seq` ()
   rnf (BlockedRead c) = rnf c
   rnf (BlockedTake c) = rnf c
   rnf (BlockedPut  c) = rnf c
+  rnf (ThrowTo tid) = rnf tid
   rnf (Take c tids) = rnf (c, tids)
   rnf (Put  c tids) = rnf (c, tids)
   rnf (STM  tids) = rnf tids
@@ -160,6 +195,8 @@ data Failure =
   -- ^ The computation became blocked indefinitely on @CVar@s.
   | STMDeadlock
   -- ^ The computation became blocked indefinitely on @CTVar@s.
+  | UncaughtException
+  -- ^ An uncaught exception bubbled to the top of the computation.
   | FailureInNoTest
   -- ^ A computation annotated with '_concNoTest' produced a failure,
   -- rather than a result.
@@ -172,18 +209,18 @@ instance NFData Failure where
 -- state, returning a 'Just' if it terminates, and 'Nothing' if a
 -- deadlock is detected. Also returned is the final state of the
 -- scheduler, and an execution trace.
-runFixed :: Monad n => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
+runFixed :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
          -> Scheduler g -> g -> M n r s a -> n (Either Failure a, g, Trace)
-runFixed fixed runstm sched s ma = (\(e,g,_,t) -> (e,g,t)) `liftM` runFixed' fixed runstm sched s initialIdSource ma
+runFixed fixed runstm sched s ma = (\(e,g,_,t) -> (e,g,t)) <$> runFixed' fixed runstm sched s initialIdSource ma
 
 -- | Same as 'runFixed', be parametrised by an 'IdSource'.
-runFixed' :: Monad n => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
+runFixed' :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
           -> Scheduler g -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace)
 runFixed' fixed runstm sched s idSource ma = do
   ref <- newRef (wref fixed) Nothing
 
   let c       = ma >>= liftN fixed . writeRef (wref fixed) ref . Just . Right
-  let threads = M.fromList [(0, (runCont c $ const AStop, Nothing))]
+  let threads = launch' Unmasked 0 (const $ runCont c $ const AStop) M.empty
 
   (s', idSource', trace) <- runThreads fixed runstm sched s threads idSource ref
   out <- readRef (wref fixed) ref
@@ -194,17 +231,41 @@ runFixed' fixed runstm sched s idSource ma = do
 
 -- | A @BlockedOn@ is used to determine what sort of variable a thread
 -- is blocked on.
-data BlockedOn = OnCVarFull CVarId | OnCVarEmpty CVarId | OnCTVar [CTVarId] deriving Eq
+data BlockedOn = OnCVarFull CVarId | OnCVarEmpty CVarId | OnCTVar [CTVarId] | OnMask ThreadId deriving Eq
 
 -- | Determine if a thread is blocked in a certainw ay.
-(~=) :: (a, Maybe BlockedOn) -> BlockedOn -> Bool
-(_, Just (OnCVarFull  _)) ~= (OnCVarFull  _) = True
-(_, Just (OnCVarEmpty _)) ~= (OnCVarEmpty _) = True
-(_, Just (OnCTVar    _))  ~= (OnCTVar     _) = True
-_ ~= _ = False
+(~=) :: Thread n r s -> BlockedOn -> Bool
+thread ~= theblock = case (_blocking thread, theblock) of
+  (Just (OnCVarFull  _), OnCVarFull  _) -> True
+  (Just (OnCVarEmpty _), OnCVarEmpty _) -> True
+  (Just (OnCTVar     _), OnCTVar     _) -> True
+  (Just (OnMask      _), OnMask      _) -> True
+  _ -> False
 
--- | Threads are represented as a tuple of (next action, is blocked).
-type Threads n r s = Map ThreadId (Action n r s, Maybe BlockedOn)
+-- | Threads are stored in a map index by 'ThreadId'.
+type Threads n r s = Map ThreadId (Thread n r s)
+
+-- | All the state of a thread.
+data Thread n r s = Thread
+  { _continuation :: Action n r s
+  -- ^ The next action to execute.
+  , _blocking     :: Maybe BlockedOn
+  -- ^ The state of any blocks.
+  , _handlers     :: [Handler n r s]
+  -- ^ Stack of exception handlers
+  , _masking      :: MaskingState
+  -- ^ The exception masking state.
+  }
+
+-- | An exception handler.
+data Handler n r s = forall e. Exception e => Handler (e -> Action n r s)
+
+-- | Propagate an exception upwards, finding the closest handler
+-- which can deal with it.
+propagate :: SomeException -> [Handler n r s] -> Maybe (Action n r s, [Handler n r s])
+propagate _ [] = Nothing
+propagate e (Handler h:hs) = maybe (propagate e hs) (\act -> Just (act, hs)) $ h <$> e' where
+  e' = fromException e
 
 -- | The number of ID parameters was getting a bit unwieldy, so this
 -- hides them all away.
@@ -226,6 +287,10 @@ nextTId idsource = let newid = _nextTId idsource + 1 in (idsource { _nextTId = n
 initialIdSource :: IdSource
 initialIdSource = Id 0 0 0
 
+-- | Check if a thread can be interrupted by an exception.
+interruptible :: Thread n r s -> Bool
+interruptible thread = _masking thread == Unmasked || (_masking thread == MaskedInterruptible && isJust (_blocking thread))
+
 -- | Run a collection of threads, until there are no threads left.
 --
 -- A thread is represented as a tuple of (next action, is blocked).
@@ -234,7 +299,7 @@ initialIdSource = Id 0 0 0
 -- efficient to prepend to a list than append. As this function isn't
 -- exposed to users of the library, this is just an internal gotcha to
 -- watch out for.
-runThreads :: Monad n => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
+runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
            -> Scheduler g -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace)
 runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) origg origthreads where
   go idSource sofar prior g threads
@@ -244,27 +309,41 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) ori
     | isNonexistant = writeRef (wref fixed) ref (Just $ Left InternalError) >> return (g, idSource, sofar)
     | isBlocked     = writeRef (wref fixed) ref (Just $ Left InternalError) >> return (g, idSource, sofar)
     | otherwise = do
-      stepped <- stepThread fixed runconc runstm (fst $ fromJust thread) idSource chosen threads
+      stepped <- stepThread fixed runconc runstm (_continuation $ fromJust thread) idSource chosen threads
       case stepped of
         Right (threads', idSource', act) ->
           let sofar' = (decision, alternatives, act) : sofar
-          in  go idSource' sofar' chosen g' threads'
+              threads'' = if (interruptible <$> M.lookup chosen threads') == Just True then unblockWaitingOn chosen threads' else threads'
+          in  go idSource' sofar' chosen g' threads''
+
+        Left UncaughtException
+          | chosen == 0 -> writeRef (wref fixed) ref (Just $ Left UncaughtException) >> return (g, idSource, sofar)
+          | otherwise ->
+          let sofar' = (decision, alternatives, Killed) : sofar
+              threads' = unblockWaitingOn chosen $ kill chosen threads
+          in go idSource sofar' chosen g' threads'
 
         Left failure -> writeRef (wref fixed) ref (Just $ Left failure) >> return (g, idSource, sofar)
 
     where
       (chosen, g')  = if prior == -1 then (0, g) else sched g prior $ head runnable' :| tail runnable'
       runnable'     = M.keys runnable
-      runnable      = M.filter (isNothing . snd) threads
+      runnable      = M.filter (isNothing . _blocking) threads
       thread        = M.lookup chosen threads
-      isBlocked     = isJust . snd $ fromJust thread
+      isBlocked     = isJust . _blocking $ fromJust thread
       isNonexistant = isNothing thread
       isTerminated  = 0 `notElem` M.keys threads
-      isDeadlocked  = M.null runnable && (((~= OnCVarFull undefined) `fmap` M.lookup 0 threads) == Just True ||
-                                         ((~= OnCVarEmpty undefined) `fmap` M.lookup 0 threads) == Just True)
-      isSTMLocked   = M.null runnable && ((~= OnCTVar []) `fmap` M.lookup 0 threads) == Just True
+      isDeadlocked  = M.null runnable && (((~= OnCVarFull  undefined) <$> M.lookup 0 threads) == Just True ||
+                                         ((~= OnCVarEmpty undefined) <$> M.lookup 0 threads) == Just True ||
+                                         ((~= OnMask      undefined) <$> M.lookup 0 threads) == Just True)
+      isSTMLocked   = M.null runnable && ((~= OnCTVar []) <$> M.lookup 0 threads) == Just True
 
       runconc ma i = do { (a,_,i',_) <- runFixed' fixed runstm sched g i ma; return (a,i') }
+
+      unblockWaitingOn tid = M.map unblock where
+        unblock thrd = case _blocking thrd of
+          Just (OnMask t) | t == tid -> thrd { _blocking = Nothing }
+          _ -> thrd
 
       decision
         | chosen == prior         = Continue
@@ -278,7 +357,7 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) ori
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
-stepThread :: Monad n => Fixed n r s
+stepThread :: forall n r s. (Functor n, Monad n) => Fixed n r s
            -> (forall x. M n r s x -> IdSource -> n (Either Failure x, IdSource))
            -- ^ Run a 'MonadConc' computation atomically.
            -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
@@ -293,23 +372,33 @@ stepThread :: Monad n => Fixed n r s
            -- ^ Current state of threads
            -> n (Either Failure (Threads n r s, IdSource, ThreadAction))
 stepThread fixed runconc runstm action idSource tid threads = case action of
-  AFork    a b     -> stepFork    a b
-  APut     ref a c -> stepPut     ref a c
-  ATryPut  ref a c -> stepTryPut  ref a c
-  AGet     ref c   -> stepGet     ref c
-  ATake    ref c   -> stepTake    ref c
-  ATryTake ref c   -> stepTryTake ref c
-  AAtom    stm c   -> stepAtom    stm c
-  ANew     na      -> stepNew     na
-  ALift    na      -> stepLift    na
-  ANoTest  ma a    -> stepNoTest  ma a
+  AFork    a b     -> stepFork        a b
+  AMyTId   c       -> stepMyTId       c
+  APut     ref a c -> stepPut         ref a c
+  ATryPut  ref a c -> stepTryPut      ref a c
+  AGet     ref c   -> stepGet         ref c
+  ATake    ref c   -> stepTake        ref c
+  ATryTake ref c   -> stepTryTake     ref c
+  AAtom    stm c   -> stepAtom        stm c
+  ANew     na      -> stepNew         na
+  ALift    na      -> stepLift        na
+  AThrow   e       -> stepThrow       e
+  AThrowTo t e c   -> stepThrowTo     t e c
+  ACatching h ma c -> stepCatching    h ma c
+  APopCatching a   -> stepPopCatching a
+  AMasking m ma c  -> stepMasking     m ma c
+  AResetMask b1 b2 m c -> stepResetMask b1 b2 m c
+  ANoTest  ma a    -> stepNoTest      ma a
   AStop            -> stepStop
 
   where
     -- | Start a new thread, assigning it the next 'ThreadId'
-    stepFork a b = return $ Right (goto b tid threads', idSource', Fork newtid) where
-      threads' = launch newtid a threads
+    stepFork a b = return $ Right (goto (b newtid) tid threads', idSource', Fork newtid) where
+      threads' = launch tid newtid a threads
       (idSource', newtid) = nextTId idSource
+
+    -- | Get the 'ThreadId' of the current thread
+    stepMyTId c = return $ Right (goto (c tid) tid threads, idSource, MyThreadId)
 
     -- | Put a value into a @CVar@, blocking the thread until it's
     -- empty.
@@ -342,14 +431,73 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
     -- | Run a STM transaction atomically.
     stepAtom stm c = do
       (res, newctvid) <- runstm stm (_nextCTVId idSource)
-      return . Right $
-        case res of
-          Success touched val ->
-            let (threads', woken) = wake (OnCTVar touched) threads
-            in (goto (c val) tid threads', idSource { _nextCTVId = newctvid }, STM woken)
-          Retry touched ->
-            let threads' = block (OnCTVar touched) tid threads
-            in (threads', idSource { _nextCTVId = newctvid }, BlockedSTM)
+      case res of
+        Success touched val ->
+          let (threads', woken) = wake (OnCTVar touched) threads
+          in return $ Right (goto (c val) tid threads', idSource { _nextCTVId = newctvid }, STM woken)
+        Retry touched ->
+          let threads' = block (OnCTVar touched) tid threads
+          in return $ Right (threads', idSource { _nextCTVId = newctvid }, BlockedSTM)
+        Exception e -> stepThrow e
+
+    -- | Run a subcomputation in an exception-catching context.
+    stepCatching h ma c = return $ Right (threads', idSource, Catching) where
+      a     = runCont ma      (APopCatching . c)
+      e exc = runCont (h exc) (APopCatching . c)
+
+      threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = a, _handlers = Handler e : _handlers thread }) tid threads
+
+    -- | Pop the top exception handler from the thread's stack.
+    stepPopCatching a = return $ Right (threads', idSource, PopCatching) where
+      threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = a, _handlers = tail $_handlers thread }) tid threads
+
+    -- | Throw an exception, and propagate it to the appropriate
+    -- handler.
+    stepThrow e = return $
+      case propagate e . _handlers . fromJust $ M.lookup tid threads of
+        Just (act, hs) ->
+          let threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = act, _handlers = hs }) tid threads
+          in  Right (threads', idSource, Throw)
+        Nothing -> Left UncaughtException
+
+    -- | Throw an exception to the target thread, and propagate it to
+    -- the appropriate handler.
+    stepThrowTo t e c = return $
+      let threads' = goto c tid threads
+          blocked = M.alter (\(Just thread) -> Just $ thread { _blocking = Just (OnMask t) }) tid threads
+          interrupted act hs = M.alter (\(Just thread) -> Just $ thread { _continuation = act, _blocking = Nothing, _handlers = hs }) t
+      in case M.lookup t threads of
+           Just thread
+             | interruptible thread -> case propagate e $ _handlers thread of
+               Just (act, hs) -> Right (interrupted act hs threads', idSource, ThrowTo t)
+               Nothing
+                 | t == 0     -> Left UncaughtException
+                 | otherwise -> Right (kill t threads', idSource, ThrowTo t)
+             | otherwise -> Right (blocked, idSource, BlockedThrowTo t)
+           Nothing -> Right (threads', idSource, ThrowTo t)
+
+    -- | Execute a subcomputation with a new masking state, and give
+    -- it a function to run a computation with the current masking
+    -- state.
+    --
+    -- Explicit type sig necessary for checking in the prescence of
+    -- 'umask', sadly.
+    stepMasking :: MaskingState
+                -> ((forall b. M n r s b -> M n r s b) -> M n r s a)
+                -> (a -> Action n r s)
+                -> n (Either Failure (Threads n r s, IdSource, ThreadAction))
+    stepMasking m ma c = return $ Right (threads', idSource, SetMasking False m) where
+      a = runCont (ma umask) (AResetMask False False m' . c)
+
+      m' = _masking . fromJust $ M.lookup tid threads
+      umask mb = resetMask True m' >> mb >>= \b -> resetMask False m >> return b
+      resetMask typ mask = cont $ \k -> AResetMask typ True mask $ k ()
+
+      threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = a, _masking = m }) tid threads
+
+    -- | Reset the masking thread of the state.
+    stepResetMask b1 b2 m c = return $ Right (threads', idSource, (if b1 then SetMasking else ResetMasking) b2 m) where
+      threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = c, _masking = m }) tid threads
 
     -- | Create a new @CVar@, using the next 'CVarId'.
     stepNew na = do
@@ -424,11 +572,21 @@ readFromCVar emptying blocking (cvid, ref) c fixed threadid threads = do
 
 -- | Replace the @Action@ of a thread.
 goto :: Action n r s -> ThreadId -> Threads n r s -> Threads n r s
-goto a = M.alter $ \(Just (_, b)) -> Just (a, b)
+goto a = M.alter $ \(Just thread) -> Just (thread { _continuation = a })
 
--- | Start a thread with the given ID. This must not already be in use!
-launch :: ThreadId -> Action n r s -> Threads n r s -> Threads n r s
-launch tid a = M.insert tid (a, Nothing)
+-- | Start a thread with the given ID, inheriting the masking state
+-- from the parent thread. This must not already be in use!
+launch :: ThreadId -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
+launch parent tid a threads = launch' mask tid a threads where
+  mask = fromMaybe Unmasked $ _masking <$> M.lookup parent threads
+
+-- | Start a thread with the given ID and masking state. This must not already be in use!
+launch' :: MaskingState -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
+launch' mask tid a = M.insert tid thread where
+  thread = Thread { _continuation = a umask, _blocking = Nothing, _handlers = [], _masking = mask }
+
+  umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False mask >> return b
+  resetMask typ m = cont $ \k -> AResetMask typ True m $ k ()
 
 -- | Kill a thread.
 kill :: ThreadId -> Threads n r s -> Threads n r s
@@ -437,17 +595,17 @@ kill = M.delete
 -- | Block a thread.
 block :: BlockedOn -> ThreadId -> Threads n r s -> Threads n r s
 block blockedOn = M.alter doBlock where
-  doBlock (Just (a, _)) = Just (a, Just blockedOn)
+  doBlock (Just thread) = Just $ thread { _blocking = Just blockedOn }
 
 -- | Unblock all threads waiting on the appropriate block. For 'CTVar'
 -- blocks, this will wake all threads waiting on at least one of the
 -- given 'CTVar's.
 wake :: BlockedOn -> Threads n r s -> (Threads n r s, [ThreadId])
 wake blockedOn threads = (M.map unblock threads, M.keys $ M.filter isBlocked threads) where
-  unblock thread@(a, _)
-    | isBlocked thread = (a, Nothing)
+  unblock thread
+    | isBlocked thread = thread { _blocking = Nothing }
     | otherwise = thread
 
-  isBlocked (_, theblock) = case (theblock, blockedOn) of
+  isBlocked thread = case (_blocking thread, blockedOn) of
     (Just (OnCTVar ctvids), OnCTVar blockedOn') -> ctvids `intersect` blockedOn' /= []
-    _ -> theblock == Just blockedOn
+    (theblock, _) -> theblock == Just blockedOn

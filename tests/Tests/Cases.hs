@@ -1,8 +1,9 @@
 -- | Tests sourced from <https://github.com/sctbenchmarks>.
 module Tests.Cases where
 
-import Control.Monad (replicateM)
 import Control.Concurrent.CVar
+import Control.Exception (ArithException(..), ArrayException)
+import Control.Monad (replicateM)
 import Control.Monad.Conc.Class
 
 -- | Should deadlock on a minority of schedules.
@@ -107,3 +108,38 @@ raceyStack = do
       case val of
         Just x  -> t2 s (n-1) (total+x)
         Nothing -> return Nothing
+
+-- | Cause a deadlock sometimes by killing a thread.
+threadKill :: MonadConc m => m ()
+threadKill = do
+  x <- newEmptyCVar
+  tid <- fork $ putCVar x ()
+  killThread tid
+  readCVar x
+
+-- | Never deadlock by masking a thread.
+threadKillMask :: MonadConc m => m ()
+threadKillMask = do
+  x <- newEmptyCVar
+  y <- newEmptyCVar
+  tid <- fork . mask . const $ putCVar x () >> putCVar y ()
+  readCVar x
+  killThread tid
+  readCVar y
+
+-- | Test nested exception handlers.
+excNest :: MonadConc m => m Int
+excNest =
+  catch (catch (throw Overflow)
+               (\e -> return . const 1 $ (e :: ArrayException)))
+        (\e -> return . const 2 $ (e :: ArithException))
+
+-- | Test unmasking exceptions
+threadKillUmask :: MonadConc m => m ()
+threadKillUmask = do
+  x <- newEmptyCVar
+  y <- newEmptyCVar
+  tid <- fork . mask $ \umask -> putCVar x () >> umask (putCVar y ())
+  readCVar x
+  killThread tid
+  readCVar y

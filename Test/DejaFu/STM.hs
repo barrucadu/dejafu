@@ -16,6 +16,8 @@ module Test.DejaFu.STM
   , retry
   , orElse
   , check
+  , throwSTM
+  , catchSTM
 
   -- * @CTVar@s
   , CTVar
@@ -26,7 +28,9 @@ module Test.DejaFu.STM
   ) where
 
 import Control.Applicative (Applicative)
+import Control.Exception (Exception, SomeException(..), fromException)
 import Control.Monad (liftM)
+import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
 import Control.Monad.Cont (Cont, cont, runCont)
 import Control.Monad.ST (ST, runST)
 import Control.State
@@ -44,6 +48,12 @@ import qualified Control.Monad.STM.Class as C
 -- reason).
 newtype STMLike t n r a = S { unS :: Cont (STMAction t n r) a } deriving (Functor, Applicative, Monad)
 
+instance Monad n => MonadThrow (STMLike t n r) where
+  throwM = throwSTM
+
+instance Monad n => MonadCatch (STMLike t n r) where
+  catch = catchSTM
+
 instance Monad n => C.MonadSTM (STMLike t n r) where
   type CTVar (STMLike t n r) = CTVar t r
 
@@ -55,12 +65,14 @@ instance Monad n => C.MonadSTM (STMLike t n r) where
 
 -- | STM transactions are represented as a sequence of primitive
 -- actions.
-data STMAction t n r =
-    forall a. ARead  (CTVar t r a) (a -> STMAction t n r)
+data STMAction t n r
+  = forall a e. Exception e => ACatch (STMLike t n r a) (e -> STMLike t n r a) (a -> STMAction t n r)
+  | forall a. ARead  (CTVar t r a) (a -> STMAction t n r)
   | forall a. AWrite (CTVar t r a) a (STMAction t n r)
   | forall a. AOrElse (STMLike t n r a) (STMLike t n r a) (a -> STMAction t n r)
   | ANew (Ref n r -> CTVarId -> n (STMAction t n r))
   | ALift (n (STMAction t n r))
+  | AThrow SomeException
   | ARetry
   | AStop
 
@@ -90,11 +102,20 @@ retry = S $ cont $ const ARetry
 
 -- | Run the first transaction and, if it 'retry's, 
 orElse :: Monad n => STMLike t n r a -> STMLike t n r a -> STMLike t n r a
-orElse a b = S $ cont $ \c -> AOrElse a b c
+orElse a b = S $ cont $ AOrElse a b
 
 -- | Check whether a condition is true and, if not, call 'retry'.
 check :: Monad n => Bool -> STMLike t n r ()
 check = C.check
+
+-- | Throw an exception. This aborts the transaction and propagates
+-- the exception.
+throwSTM :: Exception e => e -> STMLike t n r a
+throwSTM e = S $ cont $ const $ AThrow (SomeException e)
+
+-- | Handling exceptions from 'throwSTM'.
+catchSTM :: Exception e => STMLike t n r a -> (e -> STMLike t n r a) -> STMLike t n r a
+catchSTM stm handler = S $ cont $ ACatch stm handler
 
 -- | Create a new 'CTVar' containing the given value.
 newCTVar :: Monad n => a -> STMLike t n r (CTVar t r a)
@@ -119,7 +140,9 @@ data Result a =
   -- ^ The transaction aborted by calling 'retry', and read the
   -- returned 'CTVar's. It should be retried when at least one of the
   -- 'CTVar's has been mutated.
-  deriving (Show, Eq)
+  | Exception SomeException
+  -- ^ The transaction aborted by throwing an exception.
+  deriving Show
 
 -- | Run a transaction in the 'ST' monad, starting from a clean
 -- environment, and discarding the environment afterwards. This is
@@ -136,8 +159,8 @@ runTransactionST ma ctvid = do
   (res, undo, ctvid') <- doTransaction fixedST ma ctvid
 
   case res of
-    Retry _ -> undo >> return (res, ctvid)
-    _ -> return (res, ctvid')
+    Success _ _ -> return (res, ctvid')
+    _ -> undo >> return (res, ctvid)
 
 -- | Run a transaction in the 'IO' monad, returning the result and new
 -- initial 'CTVarId'. If the transaction ended by calling 'retry', any
@@ -147,45 +170,68 @@ runTransactionIO ma ctvid = do
   (res, undo, ctvid') <- doTransaction fixedIO ma ctvid
 
   case res of
-    Retry _ -> undo >> return (res, ctvid)
-    _ -> return (res, ctvid')
+    Success _ _ -> return (res, ctvid')
+    _ -> undo >> return (res, ctvid)
 
 -- | Run a STM transaction, returning an action to undo its effects.
 doTransaction :: Monad n => Fixed t n r -> STMLike t n r a -> CTVarId -> n (Result a, n (), CTVarId)
 doTransaction fixed ma newctvid = do
   ref <- newRef (wref fixed) Nothing
 
-  let c = runCont (unS $ ma >>= liftN fixed . writeRef (wref fixed) ref . Just) $ const AStop
+  let c = runCont (unS $ ma >>= liftN fixed . writeRef (wref fixed) ref . Just . Right) $ const AStop
 
   (newctvid', undo, readen, written) <- go ref c (return ()) newctvid [] []
 
   res <- readRef (wref fixed) ref
 
   case res of
-    Just val -> return (Success (nub written) val, undo, newctvid')
-    Nothing  -> undo >> return (Retry $ nub readen, undo, newctvid')
+    Just (Right val) -> return (Success (nub written) val, undo, newctvid')
+
+    Just (Left  exc) -> undo >> return (Exception exc,      return (), newctvid)
+    Nothing          -> undo >> return (Retry $ nub readen, return (), newctvid)
 
   where
     go ref act undo nctvid readen written = do
       (act', undo', nctvid', readen', written') <- stepTrans fixed act nctvid
+      let ret = (nctvid', undo >> undo', readen' ++ readen, written' ++ written)
       case act' of
-        AStop  -> return (nctvid', undo >> undo', readen' ++ readen, written' ++ written)
-        ARetry -> writeRef (wref fixed) ref Nothing >> return (nctvid', undo >> undo', readen' ++ readen, written' ++ written)
-        _      -> go ref act' (undo >> undo') nctvid' (readen' ++ readen) (written' ++ written)
+        AStop      -> return ret
+        ARetry     -> writeRef (wref fixed) ref Nothing >> return ret
+        AThrow exc -> writeRef (wref fixed) ref (Just $ Left exc) >> return ret
+
+        _ -> go ref act' (undo >> undo') nctvid' (readen' ++ readen) (written' ++ written)
 
 -- | Run a transaction for one step.
 stepTrans :: forall t n r. Monad n => Fixed t n r -> STMAction t n r -> CTVarId -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
 stepTrans fixed act newctvid = case act of
+  ACatch  stm h c -> stepCatch stm h c
   ARead   ref c   -> stepRead ref c
   AWrite  ref a c -> stepWrite ref a c
   ANew    na      -> stepNew na
   AOrElse a b c   -> stepOrElse a b c
   ALift   na      -> stepLift na
-  ARetry -> return (ARetry, nothing, newctvid, [], [])
-  AStop  -> return (AStop, nothing, newctvid, [], [])
+
+  AThrow exc -> return (AThrow exc, nothing, newctvid, [], [])
+  ARetry     -> return (ARetry,     nothing, newctvid, [], [])
+  AStop      -> return (AStop,      nothing, newctvid, [], [])
 
   where
     nothing = return ()
+
+    stepCatch :: Exception e => STMLike t n r a -> (e -> STMLike t n r a) -> (a -> STMAction t n r) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
+    stepCatch stm h c = do
+      (res, undo, newctvid') <- doTransaction fixed stm newctvid
+      case res of
+        Success written val -> return (c val, undo, newctvid', [], written)
+        Retry readen -> return (ARetry, nothing, newctvid, readen, [])
+        Exception exc -> case fromException exc of
+          Just exc' -> do
+            (rese, undoe, newctvide') <- doTransaction fixed (h exc') newctvid
+            case rese of
+              Success written val -> return (c val, undoe, newctvide', [], written)
+              Exception exce -> return (AThrow exce, nothing, newctvid, [], [])
+              Retry readen -> return (ARetry, nothing, newctvid, readen, [])
+          Nothing -> return (AThrow exc, nothing, newctvid, [], [])
 
     stepRead :: CTVar t r a -> (a -> STMAction t n r) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepRead (V (ctvid, ref)) c = do
@@ -209,12 +255,13 @@ stepTrans fixed act newctvid = case act of
       (resa, undoa, newctvida') <- doTransaction fixed a newctvid
       case resa of
         Success written val -> return (c val, undoa, newctvida', [], written)
+        Exception exc -> return (AThrow exc, nothing, newctvid, [], [])
         Retry _ -> do
-          undoa
           (resb, undob, newctvidb') <- doTransaction fixed b newctvid
           case resb of
             Success written val -> return (c val, undob, newctvidb', [], written)
-            Retry readen -> return (ARetry, undob, newctvidb', readen, [])
+            Exception exc -> return (AThrow exc, nothing, newctvid, [], [])
+            Retry readen -> return (ARetry, nothing, newctvid, readen, [])
 
     stepLift :: n (STMAction t n r) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepLift na = do

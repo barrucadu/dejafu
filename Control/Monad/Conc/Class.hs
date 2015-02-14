@@ -1,16 +1,27 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes       #-}
 {-# LANGUAGE TypeFamilies     #-}
 
 -- | This module captures in a typeclass the interface of concurrency
 -- monads.
-module Control.Monad.Conc.Class where
+module Control.Monad.Conc.Class
+  ( MonadConc(..)
+  -- * Utilities
+  , spawn
+  , forkFinally
+  , killThread
+  ) where
 
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
-import Control.Monad (unless, void)
+import Control.Exception (Exception, AsyncException(ThreadKilled), SomeException)
+import Control.Monad (unless)
+import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import Control.Monad.STM (STM)
 import Control.Monad.STM.Class (MonadSTM)
 
+import qualified Control.Monad.Catch as Ca
+import qualified Control.Concurrent as C
 import qualified Control.Monad.STM as S
 
 -- | @MonadConc@ is like a combination of 'ParFuture' and 'ParIVar'
@@ -36,7 +47,9 @@ import qualified Control.Monad.STM as S
 -- 'takeCVar' and 'putCVar', however, are very inefficient, and should
 -- probably always be overridden to make use of
 -- implementation-specific blocking functionality.
-class (Monad m, MonadSTM (STMLike m)) => MonadConc m  where
+class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
+      , MonadSTM (STMLike m)
+      , Eq (ThreadId m), Show (ThreadId m)) => MonadConc m  where
   -- | The associated 'MonadSTM' for this class.
   type STMLike m :: * -> *
 
@@ -46,22 +59,20 @@ class (Monad m, MonadSTM (STMLike m)) => MonadConc m  where
   -- @CVar@ will block until it is empty.
   type CVar m :: * -> *
 
+  -- | An abstract handle to a thread
+  type ThreadId m :: *
+
   -- | Fork a computation to happen concurrently. Communication may
   -- happen over @CVar@s.
-  fork :: m () -> m ()
+  fork :: m () -> m (ThreadId m)
 
-  -- | Create a concurrent computation for the provided action, and
-  -- return a @CVar@ which can be used to query the result.
-  --
-  -- > spawn ma = do
-  -- >   cvar <- newEmptyCVar
-  -- >   fork $ ma >>= putCVar cvar
-  -- >   return cvar
-  spawn :: m a -> m (CVar m a)
-  spawn ma = do
-    cvar <- newEmptyCVar
-    fork $ ma >>= putCVar cvar
-    return cvar
+  -- | Like 'fork', but the child thread is passed a function that can
+  -- be used to unmask asynchronous exceptions. This function should
+  -- not be used within a 'mask' or 'uninterruptibleMask'.
+  forkWithUnmask :: ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
+
+  -- | Get the @ThreadId@ of the current thread.
+  myThreadId :: m (ThreadId m)
 
   -- | Create a new empty @CVar@.
   newEmptyCVar :: m (CVar m a)
@@ -100,6 +111,58 @@ class (Monad m, MonadSTM (STMLike m)) => MonadConc m  where
   -- | Perform a series of STM actions atomically.
   atomically :: STMLike m a -> m a
 
+  -- | Throw an exception. This will \"bubble up\" looking for an
+  -- exception handler capable of dealing with it and, if one is not
+  -- found, the thread is killed.
+  --
+  -- > throw = Control.Monad.Catch.throwM
+  throw :: Exception e => e -> m a
+  throw = Ca.throwM
+
+  -- | Catch an exception. This is only required to be able to catch
+  -- exceptions raised by 'throw', unlike the more general
+  -- Control.Exception.catch function. If you need to be able to catch
+  -- /all/ errors, you will have to use 'IO'.
+  --
+  -- > catch = Control.Monad.Catch.catch
+  catch :: Exception e => m a -> (e -> m a) -> m a
+  catch = Ca.catch
+
+  -- | Throw an exception to the target thread. This blocks until the
+  -- exception is delivered, and it is just as if the target thread
+  -- had raised it with 'throw'. This can interrupt a blocked action.
+  throwTo :: Exception e => ThreadId m => e -> m ()
+
+  -- | Executes a computation with asynchronous exceptions
+  -- /masked/. That is, any thread which attempts to raise an
+  -- exception in the current thread with 'throwTo' will be blocked
+  -- until asynchronous exceptions are unmasked again.
+  --
+  -- The argument passed to mask is a function that takes as its
+  -- argument another function, which can be used to restore the
+  -- prevailing masking state within the context of the masked
+  -- computation. This function should not be used within an
+  -- 'uninterruptibleMask'.
+  --
+  -- > mask = Control.Monad.Catch.mask
+  mask :: ((forall a. m a -> m a) -> m b) -> m b
+  mask = Ca.mask
+
+  -- | Like 'mask', but the masked computation is not
+  -- interruptible. THIS SHOULD BE USED WITH GREAT CARE, because if a
+  -- thread executing in 'uninterruptibleMask' blocks for any reason,
+  -- then the thread (and possibly the program, if this is the main
+  -- thread) will be unresponsive and unkillable. This function should
+  -- only be necessary if you need to mask exceptions around an
+  -- interruptible operation, and you can guarantee that the
+  -- interruptible operation will only block for a short period of
+  -- time. The supplied unmasking function should not be used within a
+  -- 'mask'.
+  --
+  -- > uninterruptibleMask = Control.Monad.Catch.uninterruptibleMask
+  uninterruptibleMask :: ((forall a. m a -> m a) -> m b) -> m b
+  uninterruptibleMask = Ca.uninterruptibleMask
+
   -- | Runs its argument, just as if the @_concNoTest@ weren't there.
   --
   -- > _concNoTest x = x
@@ -122,14 +185,43 @@ class (Monad m, MonadSTM (STMLike m)) => MonadConc m  where
   _concNoTest = id
 
 instance MonadConc IO where
-  type STMLike IO = STM
-  type CVar    IO = MVar
+  type STMLike IO  = STM
+  type CVar    IO  = MVar
+  type ThreadId IO = C.ThreadId
 
-  readCVar     = readMVar
-  fork         = void . forkIO
-  newEmptyCVar = newEmptyMVar
-  putCVar      = putMVar
-  tryPutCVar   = tryPutMVar
-  takeCVar     = takeMVar
-  tryTakeCVar  = tryTakeMVar
-  atomically   = S.atomically
+  readCVar       = readMVar
+  fork           = forkIO
+  forkWithUnmask = C.forkIOWithUnmask
+  myThreadId     = C.myThreadId
+  throwTo        = C.throwTo
+  newEmptyCVar   = newEmptyMVar
+  putCVar        = putMVar
+  tryPutCVar     = tryPutMVar
+  takeCVar       = takeMVar
+  tryTakeCVar    = tryTakeMVar
+  atomically     = S.atomically
+
+-- | Create a concurrent computation for the provided action, and
+-- return a @CVar@ which can be used to query the result.
+spawn :: MonadConc m => m a -> m (CVar m a)
+spawn ma = do
+  cvar <- newEmptyCVar
+  _ <- fork $ ma >>= putCVar cvar
+  return cvar
+
+-- | Fork a thread and call the supplied function when the thread is
+-- about to terminate, with an exception or a returned value. The
+-- function is called with asynchronous exceptions masked.
+--
+-- This function is useful for informing the parent when a child
+-- terminates, for example.
+forkFinally :: MonadConc m => m a -> (Either SomeException a -> m ()) -> m (ThreadId m)
+forkFinally action and_then =
+  mask $ \restore ->
+    fork $ Ca.try (restore action) >>= and_then
+
+-- | Raise the 'ThreadKilled' exception in the target thread. Note
+-- that if the thread is prepared to catch this exception, it won't
+-- actually kill it.
+killThread :: MonadConc m => ThreadId m => m ()
+killThread tid = throwTo tid ThreadKilled

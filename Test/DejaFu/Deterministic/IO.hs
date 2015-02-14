@@ -1,5 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE Rank2Types                 #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
 
 -- | Deterministic traced execution of concurrent computations which
@@ -18,8 +18,17 @@ module Test.DejaFu.Deterministic.IO
   , runConcIO
   , liftIO
   , fork
+  , forkFinally
+  , forkWithUnmask
+  , myThreadId
   , spawn
   , atomically
+  , throw
+  , throwTo
+  , killThread
+  , catch
+  , mask
+  , uninterruptibleMask
 
   -- * Communication: CVars
   , CVar
@@ -38,6 +47,7 @@ module Test.DejaFu.Deterministic.IO
   , Decision(..)
   , ThreadAction(..)
   , CVarId
+  , MaskingState(..)
   , showTrace
 
   -- * Scheduling
@@ -45,6 +55,7 @@ module Test.DejaFu.Deterministic.IO
   ) where
 
 import Control.Applicative (Applicative(..), (<$>))
+import Control.Exception (Exception, MaskingState(..), SomeException(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.State (Wrapper(..), refIO)
 import Data.IORef (IORef, newIORef)
@@ -52,28 +63,46 @@ import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
 import Test.DejaFu.STM (STMLike, runTransactionIO)
 
+import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
 import qualified Control.Monad.IO.Class as IO
 
 -- | The 'IO' variant of Test.DejaFu.Deterministic's @Conc@ monad.
 newtype ConcIO t a = C { unC :: M IO IORef (STMLike t) a } deriving (Functor, Applicative, Monad)
 
+wrap :: (M IO IORef (STMLike t) a -> M IO IORef (STMLike t) a) -> (ConcIO t a -> ConcIO t a)
+wrap f = C . f . unC
+
+instance Ca.MonadCatch (ConcIO t) where
+  catch = catch
+
+instance Ca.MonadThrow (ConcIO t) where
+  throwM = throw
+
+instance Ca.MonadMask (ConcIO t) where
+  mask = mask
+  uninterruptibleMask = uninterruptibleMask
+
 instance IO.MonadIO (ConcIO t) where
   liftIO = liftIO
 
 instance C.MonadConc (ConcIO t) where
-  type CVar    (ConcIO t) = CVar t
-  type STMLike (ConcIO t) = STMLike t IO IORef
+  type CVar     (ConcIO t) = CVar t
+  type STMLike  (ConcIO t) = STMLike t IO IORef
+  type ThreadId (ConcIO t) = Int
 
-  fork         = fork
-  newEmptyCVar = newEmptyCVar
-  putCVar      = putCVar
-  tryPutCVar   = tryPutCVar
-  readCVar     = readCVar
-  takeCVar     = takeCVar
-  tryTakeCVar  = tryTakeCVar
-  atomically   = atomically
-  _concNoTest  = _concNoTest
+  fork           = fork
+  forkWithUnmask = forkWithUnmask
+  myThreadId     = myThreadId
+  throwTo        = throwTo
+  newEmptyCVar   = newEmptyCVar
+  putCVar        = putCVar
+  tryPutCVar     = tryPutCVar
+  readCVar       = readCVar
+  takeCVar       = takeCVar
+  tryTakeCVar    = tryTakeCVar
+  atomically     = atomically
+  _concNoTest    = _concNoTest
 
 fixed :: Fixed IO IORef (STMLike t)
 fixed = Wrapper refIO $ unC . liftIO
@@ -97,8 +126,12 @@ readCVar :: CVar t a -> ConcIO t a
 readCVar cvar = C $ cont $ AGet $ unV cvar
 
 -- | Run the provided computation concurrently.
-fork :: ConcIO t () -> ConcIO t ()
-fork (C ma) = C $ cont $ \c -> AFork (runCont ma $ const AStop) $ c ()
+fork :: ConcIO t () -> ConcIO t ThreadId
+fork (C ma) = C $ cont $ AFork (const $ runCont ma $ const AStop)
+
+-- | Get the 'ThreadId' of the current thread.
+myThreadId :: ConcIO t ThreadId
+myThreadId = C $ cont AMyTId
 
 -- | Run the provided 'MonadSTM' transaction atomically. If 'retry' is
 -- called, it will be blocked until any of the touched 'CTVar's have
@@ -128,6 +161,75 @@ takeCVar cvar = C $ cont $ ATake $ unV cvar
 -- | Read a value from a 'CVar' if there is one, without blocking.
 tryTakeCVar :: CVar t a -> ConcIO t (Maybe a)
 tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
+
+-- | Raise an exception in the 'ConcIO' monad. The exception is raised
+-- when the action is run, not when it is applied. It short-citcuits
+-- the rest of the computation:
+--
+-- > throw e >> x == throw e
+throw :: Exception e => e -> ConcIO t a
+throw e = C $ cont $ \_ -> AThrow (SomeException e)
+
+-- | Throw an exception to the target thread. This blocks until the
+-- exception is delivered, and it is just as if the target thread had
+-- raised it with 'throw'. This can interrupt a blocked action.
+throwTo :: Exception e => ThreadId -> e -> ConcIO t ()
+throwTo tid e = C $ cont $ \c -> AThrowTo tid (SomeException e) $ c ()
+
+-- | Raise the 'ThreadKilled' exception in the target thread. Note
+-- that if the thread is prepared to catch this exception, it won't
+-- actually kill it.
+killThread :: ThreadId => ConcIO t ()
+killThread = C.killThread
+
+-- | Catch an exception raised by 'throw'. This __cannot__ catch
+-- errors, such as evaluating 'undefined', or division by zero. If you
+-- need that, use Control.Exception.catch and 'liftIO'.
+catch :: Exception e => ConcIO t a -> (e -> ConcIO t a) -> ConcIO t a
+catch ma h = C $ cont $ ACatching (unC . h) (unC ma)
+
+-- | Fork a thread and call the supplied function when the thread is
+-- about to terminate, with an exception or a returned value. The
+-- function is called with asynchronous exceptions masked.
+--
+-- This function is useful for informing the parent when a child
+-- terminates, for example.
+forkFinally :: ConcIO t a -> (Either SomeException a -> ConcIO t ()) -> ConcIO t ThreadId
+forkFinally action and_then =
+  mask $ \restore ->
+    fork $ Ca.try (restore action) >>= and_then
+
+-- | Like 'fork', but the child thread is passed a function that can
+-- be used to unmask asynchronous exceptions. This function should not
+-- be used within a 'mask' or 'uninterruptibleMask'.
+forkWithUnmask :: ((forall a. ConcIO t a -> ConcIO t a) -> ConcIO t ()) -> ConcIO t ThreadId
+forkWithUnmask ma = C $ cont $ AFork (\umask -> runCont (unC $ ma $ wrap umask) $ const AStop)
+
+-- | Executes a computation with asynchronous exceptions
+-- /masked/. That is, any thread which attempts to raise an exception
+-- in the current thread with 'throwTo' will be blocked until
+-- asynchronous exceptions are unmasked again.
+--
+-- The argument passed to mask is a function that takes as its
+-- argument another function, which can be used to restore the
+-- prevailing masking state within the context of the masked
+-- computation. This function should not be used within an
+-- 'uninterruptibleMask'.
+mask :: ((forall a. ConcIO t a -> ConcIO t a) -> ConcIO t b) -> ConcIO t b
+mask mb = C $ cont $ AMasking MaskedInterruptible (\f -> unC $ mb $ wrap f)
+
+-- | Like 'mask', but the masked computation is not
+-- interruptible. THIS SHOULD BE USED WITH GREAT CARE, because if a
+-- thread executing in 'uninterruptibleMask' blocks for any reason,
+-- then the thread (and possibly the program, if this is the main
+-- thread) will be unresponsive and unkillable. This function should
+-- only be necessary if you need to mask exceptions around an
+-- interruptible operation, and you can guarantee that the
+-- interruptible operation will only block for a short period of
+-- time. The supplied unmasking function should not be used within a
+-- 'mask'.
+uninterruptibleMask :: ((forall a. ConcIO t a -> ConcIO t a) -> ConcIO t b) -> ConcIO t b
+uninterruptibleMask mb = C $ cont $ AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f)
 
 -- | Run the argument in one step. If the argument fails, the whole
 -- computation will fail.

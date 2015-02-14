@@ -6,7 +6,9 @@ module Control.Monad.STM.Class where
 
 import Control.Concurrent.STM (STM)
 import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
+import Control.Exception (Exception)
 import Control.Monad (unless)
+import Control.Monad.Catch (MonadCatch, MonadThrow, throwM, catch)
 
 import qualified Control.Monad.STM as S
 
@@ -19,7 +21,7 @@ import qualified Control.Monad.STM as S
 --
 -- A minimal implementation consists of 'retry', 'orElse', 'newCTVar',
 -- 'readCTVar', and 'writeCTVar'.
-class Monad m => MonadSTM m where
+class (Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
   -- | The mutable reference type. These behave like 'TVar's, in that
   -- they always contain a value and updates are non-blocking and
   -- synchronised.
@@ -51,6 +53,19 @@ class Monad m => MonadSTM m where
 
   -- | Write the supplied value into the @CTVar@.
   writeCTVar :: CTVar m a -> a -> m ()
+
+  -- | Throw an exception. This aborts the transaction and propagates
+  -- the exception.
+  --
+  -- > throwSTM = throwM
+  throwSTM :: Exception e => e -> m a
+  throwSTM = throwM
+
+  -- | Handling exceptions from 'throwSTM'.
+  --
+  -- > catchSTM = catch
+  catchSTM :: Exception e => m a -> (e -> m a) -> m a
+  catchSTM = catch
 
 instance MonadSTM STM where
   type CTVar STM = TVar

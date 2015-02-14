@@ -19,6 +19,10 @@ runTests =
        ,dejafu  C.forgottenUnlock ("Forgotten Unlock",  deadlocksAlways)
        ,dejafu  C.simple2Race     ("Simple 2-Race",     notAlwaysSame)
        ,dejafu  C.raceyStack      ("Racey Stack",       notAlwaysSame)
+       ,dejafu  C.threadKill      ("killThread",        deadlocksSometimes)
+       ,dejafu  C.threadKillMask  ("killThread+mask 1", deadlocksNever)
+       ,dejafu  C.threadKillUmask ("killThread+mask 2", deadlocksSometimes)
+       ,dejafu  C.excNest         ("Nested Excs",       alwaysSame)
        ,dejafus L.badLogger      [("Logger (Valid)",    L.validResult)
                                  ,("Logger (Good)",     L.isGood)
                                  ,("Logger (Bad",       L.isBad)]]
