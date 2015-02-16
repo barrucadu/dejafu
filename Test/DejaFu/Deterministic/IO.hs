@@ -27,7 +27,7 @@ module Test.DejaFu.Deterministic.IO
   , throw
   , throwTo
   , killThread
-  , catch
+  , Test.DejaFu.Deterministic.IO.catch
   , mask
   , uninterruptibleMask
 
@@ -75,7 +75,7 @@ wrap :: (M IO IORef (STMLike t) a -> M IO IORef (STMLike t) a) -> (ConcIO t a ->
 wrap f = C . f . unC
 
 instance Ca.MonadCatch (ConcIO t) where
-  catch = catch
+  catch = Test.DejaFu.Deterministic.IO.catch
 
 instance Ca.MonadThrow (ConcIO t) where
   throwM = throw

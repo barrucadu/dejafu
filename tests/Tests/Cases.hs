@@ -52,7 +52,7 @@ philosophers n = do
 thresholdValue :: MonadConc m => m Bool
 thresholdValue = do
   l <- newEmptyCVar
-  x <- newCVar 0
+  x <- newCVar (0::Int)
 
   fork $ lock l >> modifyCVar_ x (return . (+1)) >> unlock l
   fork $ lock l >> modifyCVar_ x (return . (+2)) >> unlock l
@@ -90,7 +90,7 @@ raceyStack = do
   s <- newCVar []
 
   fork $ t1 s [1..10]
-  j <- spawn $ t2 s 10 0
+  j <- spawn $ t2 s (10::Int) 0
 
   takeCVar j
 
@@ -133,9 +133,11 @@ threadKillMask = do
 -- | Test nested exception handlers.
 excNest :: MonadConc m => m Int
 excNest =
-  catch (catch (throw Overflow)
-               (\e -> return . const 1 $ (e :: ArrayException)))
-        (\e -> return . const 2 $ (e :: ArithException))
+  Control.Monad.Conc.Class.catch
+    (Control.Monad.Conc.Class.catch
+      (throw Overflow)
+      (\e -> return . const 1 $ (e :: ArrayException)))
+    (\e -> return . const 2 $ (e :: ArithException))
 
 -- | Test unmasking exceptions
 threadKillUmask :: MonadConc m => m ()
