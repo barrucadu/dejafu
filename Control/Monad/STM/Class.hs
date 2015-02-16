@@ -65,7 +65,7 @@ class (Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
   --
   -- > catchSTM = catch
   catchSTM :: Exception e => m a -> (e -> m a) -> m a
-  catchSTM = catch
+  catchSTM = Control.Monad.Catch.catch
 
 instance MonadSTM STM where
   type CTVar STM = TVar
