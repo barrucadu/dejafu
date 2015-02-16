@@ -71,7 +71,7 @@ library
                      , Data.List.Extra
 
   -- other-extensions:    
-  build-depends:       base >=4.6 && <5
+  build-depends:       base >=4.5 && <5
                      , containers
                      , deepseq
                      , exceptions >=0.7
