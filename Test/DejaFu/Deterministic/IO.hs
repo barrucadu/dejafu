@@ -179,7 +179,7 @@ throwTo tid e = C $ cont $ \c -> AThrowTo tid (SomeException e) $ c ()
 -- | Raise the 'ThreadKilled' exception in the target thread. Note
 -- that if the thread is prepared to catch this exception, it won't
 -- actually kill it.
-killThread :: ThreadId => ConcIO t ()
+killThread :: ThreadId -> ConcIO t ()
 killThread = C.killThread
 
 -- | Catch an exception raised by 'throw'. This __cannot__ catch

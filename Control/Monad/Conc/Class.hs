@@ -131,7 +131,7 @@ class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
   -- | Throw an exception to the target thread. This blocks until the
   -- exception is delivered, and it is just as if the target thread
   -- had raised it with 'throw'. This can interrupt a blocked action.
-  throwTo :: Exception e => ThreadId m => e -> m ()
+  throwTo :: Exception e => ThreadId m -> e -> m ()
 
   -- | Executes a computation with asynchronous exceptions
   -- /masked/. That is, any thread which attempts to raise an
@@ -223,5 +223,5 @@ forkFinally action and_then =
 -- | Raise the 'ThreadKilled' exception in the target thread. Note
 -- that if the thread is prepared to catch this exception, it won't
 -- actually kill it.
-killThread :: MonadConc m => ThreadId m => m ()
+killThread :: MonadConc m => ThreadId m -> m ()
 killThread tid = throwTo tid ThreadKilled
