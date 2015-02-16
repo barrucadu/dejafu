@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImpredicativeTypes         #-}
-{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE Rank2Types                 #-}
 {-# LANGUAGE TypeFamilies               #-}
 
 -- | Deterministic traced execution of concurrent computations which
@@ -213,7 +213,7 @@ forkWithUnmask ma = C $ cont $ AFork (\umask -> runCont (unC $ ma $ wrap umask) 
 -- 'uninterruptibleMask'.
 mask :: ((forall a. Conc t a -> Conc t a) -> Conc t b) -> Conc t b
 -- Can't avoid the lambda here (and in uninterruptibleMask and in
--- ConcIO) because RankNTypes inference is scary.
+-- ConcIO) because higher-ranked type inference is scary.
 mask mb = C $ cont $ AMasking MaskedInterruptible (\f -> unC $ mb $ wrap f)
 
 -- | Like 'mask', but the masked computation is not

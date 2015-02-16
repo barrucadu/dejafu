@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImpredicativeTypes         #-}
-{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE Rank2Types                 #-}
 {-# LANGUAGE TypeFamilies               #-}
 
 -- | Deterministic traced execution of concurrent computations which

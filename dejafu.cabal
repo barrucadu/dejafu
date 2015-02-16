@@ -61,6 +61,9 @@ library
                      , Test.DejaFu.STM
 
   other-modules:       Test.DejaFu.Deterministic.Internal
+                     , Test.DejaFu.Deterministic.Internal.Common
+                     , Test.DejaFu.Deterministic.Internal.CVar
+                     , Test.DejaFu.Deterministic.Internal.Threading
                      , Test.DejaFu.SCT.Bounding
                      , Test.DejaFu.SCT.Internal
 

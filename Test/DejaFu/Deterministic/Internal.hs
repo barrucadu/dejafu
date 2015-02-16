@@ -1,210 +1,51 @@
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE ImpredicativeTypes        #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE ImpredicativeTypes  #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Concurrent monads with a fixed scheduler: internal types and
 -- functions.
-module Test.DejaFu.Deterministic.Internal where
+module Test.DejaFu.Deterministic.Internal
+ ( -- * Execution
+   runFixed
+ , runFixed'
+
+ -- * The @Conc@ Monad
+ , M
+ , R
+ , Fixed
+
+ -- * Primitive Actions
+ , Action(..)
+
+ -- * Identifiers
+ , ThreadId
+ , CVarId
+
+ -- * Scheduling & Traces
+ , Scheduler
+ , Trace
+ , Decision(..)
+ , ThreadAction(..)
+ , showTrace
+
+ -- * Failures
+ , Failure(..)
+ ) where
 
 import Control.Applicative ((<$>))
-import Control.DeepSeq (NFData(..))
-import Control.Exception (Exception, MaskingState(..), SomeException(..), fromException)
-import Control.Monad (when)
-import Control.Monad.Cont (Cont, cont, runCont)
+import Control.Exception (MaskingState(..))
+import Control.Monad.Cont (cont, runCont)
 import Control.State
-import Data.List (intersect)
 import Data.List.Extra
-import Data.Map (Map)
-import Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
+import Data.Maybe (fromJust, isJust, isNothing)
 import Test.DejaFu.STM (CTVarId, Result(..))
+import Test.DejaFu.Deterministic.Internal.Common
+import Test.DejaFu.Deterministic.Internal.CVar
+import Test.DejaFu.Deterministic.Internal.Threading
 
 import qualified Data.Map as M
 
--- * The @Conc@ Monad
-
--- | The underlying monad is based on continuations over Actions.
-type M n r s a = Cont (Action n r s) a
-
--- | CVars are represented as a unique numeric identifier, and a
--- reference containing a Maybe value.
-type R r a = (CVarId, r (Maybe a))
-
--- | Dict of methods for implementations to override.
-type Fixed n r s = Wrapper n r (Cont (Action n r s))
-
--- * Running @Conc@ Computations
-
--- | Scheduling is done in terms of a trace of 'Action's. Blocking can
--- only occur as a result of an action, and they cover (most of) the
--- primitives of the concurrency. 'spawn' is absent as it is
--- implemented in terms of 'newEmptyCVar', 'fork', and 'putCVar'.
-data Action n r s =
-    AFork ((forall b. M n r s b -> M n r s b) -> Action n r s) (ThreadId -> Action n r s)
-  | AMyTId (ThreadId -> Action n r s)
-  | forall a. APut     (R r a) a (Action n r s)
-  | forall a. ATryPut  (R r a) a (Bool -> Action n r s)
-  | forall a. AGet     (R r a) (a -> Action n r s)
-  | forall a. ATake    (R r a) (a -> Action n r s)
-  | forall a. ATryTake (R r a) (Maybe a -> Action n r s)
-  | forall a. ANoTest  (M n r s a) (a -> Action n r s)
-  | forall a. AAtom    (s n r a) (a -> Action n r s)
-  | ANew  (CVarId -> n (Action n r s))
-  | ALift (n (Action n r s))
-  | AThrow SomeException
-  | AThrowTo ThreadId SomeException (Action n r s)
-  | forall a e. Exception e => ACatching (e -> M n r s a) (M n r s a) (a -> Action n r s)
-  | APopCatching (Action n r s)
-  | forall a. AMasking MaskingState ((forall b. M n r s b -> M n r s b) -> M n r s a) (a -> Action n r s)
-  | AResetMask Bool Bool MaskingState (Action n r s)
-  | AStop
-
--- | Every live thread has a unique identitifer.
-type ThreadId = Int
-
--- | Every 'CVar' also has a unique identifier.
-type CVarId = Int
-
--- | A @Scheduler@ maintains some internal state, @s@, takes the
--- 'ThreadId' of the last thread scheduled, and the list of runnable
--- threads. It produces a 'ThreadId' to schedule, and a new state.
---
--- Note: In order to prevent computation from hanging, the runtime
--- will assume that a deadlock situation has arisen if the scheduler
--- attempts to (a) schedule a blocked thread, or (b) schedule a
--- nonexistent thread. In either of those cases, the computation will
--- be halted.
-type Scheduler s = s -> ThreadId -> NonEmpty ThreadId -> (ThreadId, s)
-
--- | One of the outputs of the runner is a @Trace@, which is a log of
--- decisions made, alternative decisions, and the action a thread took
--- in its step.
-type Trace = [(Decision, [Decision], ThreadAction)]
-
--- | Pretty-print a trace.
-showTrace :: Trace -> String
-showTrace = trace "" 0 where
-  trace prefix num ((Start tid,_,_):ds)    = thread prefix num ++ trace ("S" ++ show tid) 1 ds
-  trace prefix num ((SwitchTo tid,_,_):ds) = thread prefix num ++ trace ("P" ++ show tid) 1 ds
-  trace prefix num ((Continue,_,_):ds)     = trace prefix (num + 1) ds
-  trace prefix num []                      = thread prefix num
-
-  thread prefix num = prefix ++ replicate num '-'
-
--- | Scheduling decisions are based on the state of the running
--- program, and so we can capture some of that state in recording what
--- specific decision we made.
-data Decision =
-    Start ThreadId
-  -- ^ Start a new thread, because the last was blocked (or it's the
-  -- start of computation).
-  | Continue
-  -- ^ Continue running the last thread for another step.
-  | SwitchTo ThreadId
-  -- ^ Pre-empt the running thread, and switch to another.
-  deriving (Eq, Show)
-
-instance NFData Decision where
-  rnf (Start    tid) = rnf tid
-  rnf (SwitchTo tid) = rnf tid
-  rnf Continue = ()
-
--- | All the actions that a thread can perform.
-data ThreadAction =
-    Fork ThreadId
-  -- ^ Start a new thread.
-  | MyThreadId
-  -- ^ Get the 'ThreadId' of the current thread.
-  | New CVarId
-  -- ^ Create a new 'CVar'.
-  | Put CVarId [ThreadId]
-  -- ^ Put into a 'CVar', possibly waking up some threads.
-  | BlockedPut CVarId
-  -- ^ Get blocked on a put.
-  | TryPut CVarId Bool [ThreadId]
-  -- ^ Try to put into a 'CVar', possibly waking up some threads.
-  | Read CVarId
-  -- ^ Read from a 'CVar'.
-  | BlockedRead CVarId
-  -- ^ Get blocked on a read.
-  | Take CVarId [ThreadId]
-  -- ^ Take from a 'CVar', possibly waking up some threads.
-  | BlockedTake CVarId
-  -- ^ Get blocked on a take.
-  | TryTake CVarId Bool [ThreadId]
-  -- ^ Try to take from a 'CVar', possibly waking up some threads.
-  | STM [ThreadId]
-  -- ^ An STM transaction was executed, possibly waking up some
-  -- threads.
-  | BlockedSTM
-  -- ^ Got blocked in an STM transaction.
-  | NoTest
-  -- ^ A computation annotated with '_concNoTest' was executed in a
-  -- single step.
-  | Catching
-  -- ^ Register a new exception handler
-  | PopCatching
-  -- ^ Pop the innermost exception handler from the stack.
-  | Throw
-  -- ^ Throw an exception.
-  | ThrowTo ThreadId
-  -- ^ Throw an exception to a thread.
-  | BlockedThrowTo ThreadId
-  -- ^ Get blocked on a 'throwTo'.
-  | Killed
-  -- ^ Killed by an uncaught exception.
-  | SetMasking Bool MaskingState
-  -- ^ Set the masking state. If 'True', this is being used to set the
-  -- masking state to the original state in the argument passed to a
-  -- 'mask'ed function.
-  | ResetMasking Bool MaskingState
-  -- ^ Return to an earlier masking state.  If 'True', this is being
-  -- used to return to the state of the masked block in the argument
-  -- passed to a 'mask'ed function.
-  | Lift
-  -- ^ Lift an action from the underlying monad. Note that the
-  -- penultimate action in a trace will always be a @Lift@, this is an
-  -- artefact of how the runner works.
-  | Stop
-  -- ^ Cease execution and terminate.
-  deriving (Eq, Show)
-
-instance NFData ThreadAction where
-  rnf (TryTake c b tids) = rnf (c, b, tids)
-  rnf (TryPut  c b tids) = rnf (c, b, tids)
-  rnf (SetMasking   b m) = m `seq` b `seq` ()
-  rnf (ResetMasking b m) = m `seq` b `seq` ()
-  rnf (BlockedRead c) = rnf c
-  rnf (BlockedTake c) = rnf c
-  rnf (BlockedPut  c) = rnf c
-  rnf (ThrowTo tid) = rnf tid
-  rnf (Take c tids) = rnf (c, tids)
-  rnf (Put  c tids) = rnf (c, tids)
-  rnf (STM  tids) = rnf tids
-  rnf (Fork tid)  = rnf tid
-  rnf (New  c) = rnf c
-  rnf (Read c) = rnf c
-  rnf ta = ta `seq` ()
-
--- | An indication of how a concurrent computation failed.
-data Failure =
-    InternalError
-  -- ^ Will be raised if the scheduler does something bad. This should
-  -- never arise unless you write your own, faulty, scheduler! If it
-  -- does, please file a bug report.
-  | Deadlock
-  -- ^ The computation became blocked indefinitely on @CVar@s.
-  | STMDeadlock
-  -- ^ The computation became blocked indefinitely on @CTVar@s.
-  | UncaughtException
-  -- ^ An uncaught exception bubbled to the top of the computation.
-  | FailureInNoTest
-  -- ^ A computation annotated with '_concNoTest' produced a failure,
-  -- rather than a result.
-  deriving (Eq, Show)
-
-instance NFData Failure where
-  rnf f = f `seq` () -- WHNF == NF
+--------------------------------------------------------------------------------
+-- * Execution
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a 'Just' if it terminates, and 'Nothing' if a
@@ -228,73 +69,7 @@ runFixed' fixed runstm sched s idSource ma = do
 
   return (fromJust out, s', idSource', reverse trace)
 
--- * Running threads
-
--- | A @BlockedOn@ is used to determine what sort of variable a thread
--- is blocked on.
-data BlockedOn = OnCVarFull CVarId | OnCVarEmpty CVarId | OnCTVar [CTVarId] | OnMask ThreadId deriving Eq
-
--- | Determine if a thread is blocked in a certainw ay.
-(~=) :: Thread n r s -> BlockedOn -> Bool
-thread ~= theblock = case (_blocking thread, theblock) of
-  (Just (OnCVarFull  _), OnCVarFull  _) -> True
-  (Just (OnCVarEmpty _), OnCVarEmpty _) -> True
-  (Just (OnCTVar     _), OnCTVar     _) -> True
-  (Just (OnMask      _), OnMask      _) -> True
-  _ -> False
-
--- | Threads are stored in a map index by 'ThreadId'.
-type Threads n r s = Map ThreadId (Thread n r s)
-
--- | All the state of a thread.
-data Thread n r s = Thread
-  { _continuation :: Action n r s
-  -- ^ The next action to execute.
-  , _blocking     :: Maybe BlockedOn
-  -- ^ The state of any blocks.
-  , _handlers     :: [Handler n r s]
-  -- ^ Stack of exception handlers
-  , _masking      :: MaskingState
-  -- ^ The exception masking state.
-  }
-
--- | An exception handler.
-data Handler n r s = forall e. Exception e => Handler (e -> Action n r s)
-
--- | Propagate an exception upwards, finding the closest handler
--- which can deal with it.
-propagate :: SomeException -> [Handler n r s] -> Maybe (Action n r s, [Handler n r s])
-propagate _ [] = Nothing
-propagate e (Handler h:hs) = maybe (propagate e hs) (\act -> Just (act, hs)) $ h <$> e' where
-  e' = fromException e
-
--- | The number of ID parameters was getting a bit unwieldy, so this
--- hides them all away.
-data IdSource = Id { _nextCVId :: CVarId, _nextCTVId :: CTVarId, _nextTId :: ThreadId }
-
--- | Get the next free 'CVarId'.
-nextCVId :: IdSource -> (IdSource, CVarId)
-nextCVId idsource = let newid = _nextCVId idsource + 1 in (idsource { _nextCVId = newid }, newid)
-
--- | Get the next free 'CTVarId'.
-nextCTVId :: IdSource -> (IdSource, CTVarId)
-nextCTVId idsource = let newid = _nextCTVId idsource + 1 in (idsource { _nextCTVId = newid }, newid)
-
--- | Get the next free 'ThreadId'.
-nextTId :: IdSource -> (IdSource, ThreadId)
-nextTId idsource = let newid = _nextTId idsource + 1 in (idsource { _nextTId = newid }, newid)
-
--- | The initial ID source.
-initialIdSource :: IdSource
-initialIdSource = Id 0 0 0
-
--- | Check if a thread can be interrupted by an exception.
-interruptible :: Thread n r s -> Bool
-interruptible thread = _masking thread == Unmasked || (_masking thread == MaskedInterruptible && isJust (_blocking thread))
-
 -- | Run a collection of threads, until there are no threads left.
---
--- A thread is represented as a tuple of (next action, is blocked).
 --
 -- Note: this returns the trace in reverse order, because it's more
 -- efficient to prepend to a list than append. As this function isn't
@@ -355,6 +130,9 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) ori
         | chosen == prior         = map SwitchTo $ filter (/=prior) runnable'
         | prior `elem` runnable' = Continue : map SwitchTo (filter (\t -> t /= prior && t /= chosen) runnable')
         | otherwise              = map Start $ filter (/=chosen) runnable'
+
+--------------------------------------------------------------------------------
+-- * Single-step execution
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
@@ -522,91 +300,3 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
 
     -- | Kill the current thread.
     stepStop = return $ Right (kill tid threads, idSource, Stop)
-
--- * Manipulating @CVar@s
-
--- | Put a value into a @CVar@, in either a blocking or nonblocking
--- way.
-putIntoCVar :: Monad n
-            => Bool -> R r a -> a -> (Bool -> Action n r s)
-            -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-putIntoCVar blocking (cvid, ref) a c fixed threadid threads = do
-  val <- readRef (wref fixed) ref
-
-  case val of
-    Just _
-      | blocking ->
-        let threads' = block (OnCVarEmpty cvid) threadid threads
-        in return (False, threads', [])
-
-      | otherwise ->
-        return (False, goto (c False) threadid threads, [])
-
-    Nothing -> do
-      writeRef (wref fixed) ref $ Just a
-      let (threads', woken) = wake (OnCVarFull cvid) threads
-      return (True, goto (c True) threadid threads', woken)
-
--- | Take a value from a @CVar@, in either a blocking or nonblocking
--- way.
-readFromCVar :: Monad n
-             => Bool -> Bool -> R r a -> (Maybe a -> Action n r s)
-             -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-readFromCVar emptying blocking (cvid, ref) c fixed threadid threads = do
-  val <- readRef (wref fixed) ref
-
-  case val of
-    Just _ -> do
-      when emptying $ writeRef (wref fixed) ref Nothing
-      let (threads', woken) = wake (OnCVarEmpty cvid) threads
-      return (True, goto (c val) threadid threads', woken)
-
-    Nothing
-      | blocking ->
-        let threads' = block (OnCVarFull cvid) threadid threads
-        in return (False, threads', [])
-
-      | otherwise ->
-        return (False, goto (c Nothing) threadid threads, [])
-
--- * Manipulating threads
-
--- | Replace the @Action@ of a thread.
-goto :: Action n r s -> ThreadId -> Threads n r s -> Threads n r s
-goto a = M.alter $ \(Just thread) -> Just (thread { _continuation = a })
-
--- | Start a thread with the given ID, inheriting the masking state
--- from the parent thread. This must not already be in use!
-launch :: ThreadId -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
-launch parent tid a threads = launch' mask tid a threads where
-  mask = fromMaybe Unmasked $ _masking <$> M.lookup parent threads
-
--- | Start a thread with the given ID and masking state. This must not already be in use!
-launch' :: MaskingState -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
-launch' mask tid a = M.insert tid thread where
-  thread = Thread { _continuation = a umask, _blocking = Nothing, _handlers = [], _masking = mask }
-
-  umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False mask >> return b
-  resetMask typ m = cont $ \k -> AResetMask typ True m $ k ()
-
--- | Kill a thread.
-kill :: ThreadId -> Threads n r s -> Threads n r s
-kill = M.delete
-
--- | Block a thread.
-block :: BlockedOn -> ThreadId -> Threads n r s -> Threads n r s
-block blockedOn = M.alter doBlock where
-  doBlock (Just thread) = Just $ thread { _blocking = Just blockedOn }
-
--- | Unblock all threads waiting on the appropriate block. For 'CTVar'
--- blocks, this will wake all threads waiting on at least one of the
--- given 'CTVar's.
-wake :: BlockedOn -> Threads n r s -> (Threads n r s, [ThreadId])
-wake blockedOn threads = (M.map unblock threads, M.keys $ M.filter isBlocked threads) where
-  unblock thread
-    | isBlocked thread = thread { _blocking = Nothing }
-    | otherwise = thread
-
-  isBlocked thread = case (_blocking thread, blockedOn) of
-    (Just (OnCTVar ctvids), OnCTVar blockedOn') -> ctvids `intersect` blockedOn' /= []
-    (theblock, _) -> theblock == Just blockedOn
