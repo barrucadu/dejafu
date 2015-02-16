@@ -1,3 +1,5 @@
+{-# LANGUAGE ImpredicativeTypes #-}
+
 -- | Tests sourced from <https://github.com/sctbenchmarks>.
 module Tests.Cases where
 
@@ -148,27 +150,27 @@ threadKillUmask = do
 -- | Test atomicity of STM.
 stmAtomic :: MonadConc m => m Int
 stmAtomic = do
-  x <- atomically $ newCTVar 0
+  x <- atomically $ newCTVar (0::Int)
   atomically $ writeCTVar x 1 >> writeCTVar x 2
   atomically $ readCTVar x
 
 -- | Test STM retry
 stmRetry :: MonadConc m => m Bool
 stmRetry = do
-  x <- atomically $ newCTVar 0
+  x <- atomically $ newCTVar (0::Int)
   fork . atomically $ writeCTVar x 1 >> retry
   (==0) `liftM` atomically (readCTVar x)
 
 -- | Test STM orElse
 stmOrElse :: MonadConc m => m Bool
 stmOrElse = do
-  x <- atomically $ newCTVar 0
+  x <- atomically $ newCTVar (0::Int)
   atomically $ (writeCTVar x 1 >> retry) `orElse` writeCTVar x 2
   (==2) `liftM` atomically (readCTVar x)
 
 -- | Test STM exceptions
 stmExc :: MonadConc m => m Bool
 stmExc = do
-  x <- atomically $ newCTVar 0
+  x <- atomically $ newCTVar (0::Int)
   atomically $ writeCTVar x 1 >> throwSTM Overflow
   (==0) `liftM` atomically (readCTVar x)
