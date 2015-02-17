@@ -73,6 +73,9 @@ module Test.DejaFu
   , deadlocksNever
   , deadlocksAlways
   , deadlocksSometimes
+  , exceptionsNever
+  , exceptionsAlways
+  , exceptionsSometimes
   , alwaysSame
   , notAlwaysSame
   , alwaysTrue
@@ -85,6 +88,7 @@ import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when)
+import Data.List (nub)
 import Data.List.Extra
 import Data.Monoid (mconcat)
 import Test.DejaFu.Deterministic
@@ -182,7 +186,7 @@ runTestIO' pb predicate conc = do
 
 -- | Strip out duplicates
 uniques :: Eq a => [(a, Trace)] -> [(a, Trace)]
-uniques = sortNubBy simplicity
+uniques = nub . sortNubBy simplicity
 
 -- | Determine which of two failures is simpler, if they are comparable.
 simplicity :: Eq a => (a, Trace) -> (a, Trace) -> Maybe Ordering
@@ -218,15 +222,27 @@ type Predicate a = [(Either Failure a, Trace)] -> Result a
 
 -- | Check that a computation never deadlocks.
 deadlocksNever :: Predicate a
-deadlocksNever = alwaysTrue (not . either (==Deadlock) (const False))
+deadlocksNever = alwaysTrue (not . either (`elem` [Deadlock, STMDeadlock]) (const False))
 
 -- | Check that a computation always deadlocks.
 deadlocksAlways :: Predicate a
-deadlocksAlways = alwaysTrue $ either (==Deadlock) (const False)
+deadlocksAlways = alwaysTrue $ either (`elem` [Deadlock, STMDeadlock]) (const False)
 
 -- | Check that a computation deadlocks at least once.
 deadlocksSometimes :: Predicate a
-deadlocksSometimes = somewhereTrue $ either (==Deadlock) (const False)
+deadlocksSometimes = somewhereTrue $ either (`elem` [Deadlock, STMDeadlock]) (const False)
+
+-- | Check that a computation never fails with an uncaught exception.
+exceptionsNever :: Predicate a
+exceptionsNever = alwaysTrue (not . either (==UncaughtException) (const False))
+
+-- | Check that a computation always fails with an uncaught exception.
+exceptionsAlways :: Predicate a
+exceptionsAlways = alwaysTrue $ either (==UncaughtException) (const False)
+
+-- | Check that a computation fails with an uncaught exception at least once.
+exceptionsSometimes :: Predicate a
+exceptionsSometimes = somewhereTrue $ either (==UncaughtException) (const False)
 
 -- | Check that the result of a computation is always the same. In
 -- particular this means either: (a) it always deadlocks, or (b) the
