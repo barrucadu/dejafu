@@ -36,6 +36,7 @@
 -- > [fail] Never Deadlocks (checked: 4)
 -- >         [deadlock] S0---------S1-P2--S1-
 -- >         [deadlock] S0---------S2-P1--S2-
+-- > [pass] No Exceptions (checked: 89)
 -- > [fail] Consistent Result (checked: 3)
 -- >         [deadlock] S0---------S1-P2--S1-
 -- >         0 S0---------S1--------S2--------S0-----
@@ -122,10 +123,11 @@ dejafusIO concio tests = do
   return $ and results
 
 -- | Automatically test a computation. In particular, look for
--- deadlocks and multiple return values.
+-- deadlocks, uncaught exceptions, and multiple return values.
 autocheck :: (Eq a, Show a) => (forall t. Conc t a) -> IO Bool
 autocheck conc = dejafus conc cases where
   cases = [ ("Never Deadlocks",   deadlocksNever)
+          , ("No Exceptions",     exceptionsNever)
           , ("Consistent Result", alwaysSame)
           ]
 
@@ -133,6 +135,7 @@ autocheck conc = dejafus conc cases where
 autocheckIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> IO Bool
 autocheckIO concio = dejafusIO concio cases where
   cases = [ ("Never Deadlocks",   deadlocksNever)
+          , ("No Exceptions",     exceptionsNever)
           , ("Consistent Result", alwaysSame)
           ]
 
