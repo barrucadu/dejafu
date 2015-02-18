@@ -41,12 +41,6 @@ import qualified Control.Monad.STM as S
 --
 -- Every @MonadConc@ has an associated 'MonadSTM', transactions of
 -- which can be run atomically.
---
--- A minimal implementation consists of 'fork', 'newEmptyCVar',
--- 'tryPutCVar', and 'tryTakeCVar'. The default implementations of
--- 'takeCVar' and 'putCVar', however, are very inefficient, and should
--- probably always be overridden to make use of
--- implementation-specific blocking functionality.
 class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STMLike m)
       , Eq (ThreadId m), Show (ThreadId m)) => MonadConc m  where
@@ -71,6 +65,16 @@ class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
   -- not be used within a 'mask' or 'uninterruptibleMask'.
   forkWithUnmask :: ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
 
+  -- | Fork a computation to happen on a specific processor. The
+  -- specified int is the /capability number/, typically capabilities
+  -- correspond to physical processors but this is implementation
+  -- dependent. The int is interpreted modulo to the total number of
+  -- capabilities as returned by 'getNumCapabilities'.
+  forkOn :: Int -> m () -> m (ThreadId m)
+
+  -- | Get the number of Haskell threads that can run simultaneously.
+  getNumCapabilities :: m Int
+
   -- | Get the @ThreadId@ of the current thread.
   myThreadId :: m (ThreadId m)
 
@@ -79,7 +83,9 @@ class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
 
   -- | Put a value into a @CVar@. If there is already a value there,
   -- this will block until that value has been taken, at which point
-  -- the value will be stored.
+  -- the value will be stored. The default implementation is very bad,
+  -- as it does not make use of any blocking functionality, and should
+  -- probably b overridden.
   --
   -- > putCVar cvar a = tryPutCVar cvar a >>= \b -> unless b $ putCVar cvar a
   putCVar :: CVar m a -> a -> m ()
@@ -97,7 +103,9 @@ class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
 
   -- | Take a value from a @CVar@. This \"empties\" the @CVar@,
   -- allowing a new value to be put in. This will block if there is no
-  -- value in the @CVar@ already, until one has been put.
+  -- value in the @CVar@ already, until one has been put. The default
+  -- implementation is very bad, as it does not make use of any
+  -- blocking functionality, and should probably b overridden.
   --
   -- > takeCVar cvar = tryTakeCVar cvar >>= maybe (takeCVar cvar) return
   takeCVar :: CVar m a -> m a
@@ -192,6 +200,8 @@ instance MonadConc IO where
   readCVar       = readMVar
   fork           = forkIO
   forkWithUnmask = C.forkIOWithUnmask
+  forkOn         = C.forkOn
+  getNumCapabilities = C.getNumCapabilities
   myThreadId     = C.myThreadId
   throwTo        = C.throwTo
   newEmptyCVar   = newEmptyMVar

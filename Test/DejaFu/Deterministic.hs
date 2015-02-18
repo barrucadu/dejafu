@@ -17,6 +17,8 @@ module Test.DejaFu.Deterministic
   , fork
   , forkFinally
   , forkWithUnmask
+  , forkOn
+  , getNumCapabilities
   , myThreadId
   , spawn
   , atomically
@@ -90,6 +92,8 @@ instance C.MonadConc (Conc t) where
 
   fork           = fork
   forkWithUnmask = forkWithUnmask
+  forkOn         = forkOn
+  getNumCapabilities = getNumCapabilities
   myThreadId     = myThreadId
   throwTo        = throwTo
   newEmptyCVar   = newEmptyCVar
@@ -228,6 +232,16 @@ mask mb = C $ cont $ AMasking MaskedInterruptible (\f -> unC $ mb $ wrap f)
 -- 'mask'.
 uninterruptibleMask :: ((forall a. Conc t a -> Conc t a) -> Conc t b) -> Conc t b
 uninterruptibleMask mb = C $ cont $ AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f)
+
+-- | Fork a computation to happen on a specific processor. This
+-- implementation only has a single processor.
+forkOn :: Int -> Conc t () -> Conc t ThreadId
+forkOn _ = fork
+
+-- | Get the number of Haskell threads that can run
+-- simultaneously. This implementation always returns 1.
+getNumCapabilities :: Conc t Int
+getNumCapabilities = return 1
 
 -- | Run the argument in one step. If the argument fails, the whole
 -- computation will fail.
