@@ -19,7 +19,7 @@ import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import Control.Monad.STM (STM)
 import Control.Monad.STM.Class (MonadSTM)
-import Data.IORef (IORef, atomicModifyIORef, atomicWriteIORef, newIORef, readIORef)
+import Data.IORef (IORef, atomicModifyIORef, newIORef, readIORef)
 
 import qualified Control.Monad.Catch as Ca
 import qualified Control.Concurrent as C
@@ -234,7 +234,6 @@ instance MonadConc IO where
   newCRef        = newIORef
   readCRef       = readIORef
   modifyCRef     = atomicModifyIORef
-  writeCRef      = atomicWriteIORef
   atomically     = S.atomically
 
 -- | Create a concurrent computation for the provided action, and
