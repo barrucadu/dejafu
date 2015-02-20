@@ -20,7 +20,11 @@ type M n r s a = Cont (Action n r s) a
 
 -- | CVars are represented as a unique numeric identifier, and a
 -- reference containing a Maybe value.
-type R r a = (CVarId, r (Maybe a))
+type V r a = (CVarId, r (Maybe a))
+
+-- | CRefs are represented as a unique numeric identifier, and a
+-- reference containing a value.
+type R r a = (CRefId, r a)
 
 -- | Dict of methods for implementations to override.
 type Fixed n r s = Wrapper n r (Cont (Action n r s))
@@ -35,14 +39,17 @@ type Fixed n r s = Wrapper n r (Cont (Action n r s))
 data Action n r s =
     AFork ((forall b. M n r s b -> M n r s b) -> Action n r s) (ThreadId -> Action n r s)
   | AMyTId (ThreadId -> Action n r s)
-  | forall a. APut     (R r a) a (Action n r s)
-  | forall a. ATryPut  (R r a) a (Bool -> Action n r s)
-  | forall a. AGet     (R r a) (a -> Action n r s)
-  | forall a. ATake    (R r a) (a -> Action n r s)
-  | forall a. ATryTake (R r a) (Maybe a -> Action n r s)
+  | forall a. APut     (V r a) a (Action n r s)
+  | forall a. ATryPut  (V r a) a (Bool -> Action n r s)
+  | forall a. AGet     (V r a) (a -> Action n r s)
+  | forall a. ATake    (V r a) (a -> Action n r s)
+  | forall a. ATryTake (V r a) (Maybe a -> Action n r s)
+  | forall a. AReadRef (R r a) (a -> Action n r s)
+  | forall a b. AModRef  (R r a) (a -> (a, b)) (b -> Action n r s)
   | forall a. ANoTest  (M n r s a) (a -> Action n r s)
   | forall a. AAtom    (s n r a) (a -> Action n r s)
   | ANew  (CVarId -> n (Action n r s))
+  | ANewRef (CRefId -> n (Action n r s))
   | ALift (n (Action n r s))
   | AThrow SomeException
   | AThrowTo ThreadId SomeException (Action n r s)
@@ -60,6 +67,9 @@ type ThreadId = Int
 
 -- | Every 'CVar' also has a unique identifier.
 type CVarId = Int
+
+-- | Every 'CRef' also has a unique identifier.
+type CRefId = Int
 
 -- | The number of ID parameters was getting a bit unwieldy, so this
 -- hides them all away.

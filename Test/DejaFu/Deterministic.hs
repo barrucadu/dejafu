@@ -29,7 +29,7 @@ module Test.DejaFu.Deterministic
   , mask
   , uninterruptibleMask
 
-  -- * Communication: CVars
+  -- * @CVar@s
   , CVar
   , newEmptyCVar
   , putCVar
@@ -37,6 +37,13 @@ module Test.DejaFu.Deterministic
   , readCVar
   , takeCVar
   , tryTakeCVar
+
+  -- * @CRef@s
+  , CRef
+  , newCRef
+  , readCRef
+  , writeCRef
+  , modifyCRef
 
   -- * Testing
   , _concNoTest
@@ -46,6 +53,7 @@ module Test.DejaFu.Deterministic
   , Decision(..)
   , ThreadAction(..)
   , CVarId
+  , CRefId
   , MaskingState(..)
   , showTrace
 
@@ -87,6 +95,7 @@ instance Ca.MonadMask (Conc t) where
 
 instance C.MonadConc (Conc t) where
   type CVar     (Conc t) = CVar t
+  type CRef     (Conc t) = CRef t
   type STMLike  (Conc t) = STMLike t (ST t) (STRef t)
   type ThreadId (Conc t) = Int
 
@@ -102,6 +111,10 @@ instance C.MonadConc (Conc t) where
   readCVar       = readCVar
   takeCVar       = takeCVar
   tryTakeCVar    = tryTakeCVar
+  newCRef        = newCRef
+  readCRef       = readCRef
+  writeCRef      = writeCRef
+  modifyCRef     = modifyCRef
   atomically     = atomically
   _concNoTest    = _concNoTest
 
@@ -114,7 +127,12 @@ fixed = Wrapper refST $ \ma -> cont (\c -> ALift $ c <$> ma)
 -- wakes up all threads blocked on reading it, and it is up to the
 -- scheduler which one runs next. Taking from a @CVar@ behaves
 -- analogously.
-newtype CVar t a = V { unV :: R (STRef t) a } deriving Eq
+newtype CVar t a = Var { unV :: V (STRef t) a } deriving Eq
+
+-- | The mutable non-blocking reference type. These are like 'IORef's,
+-- but don't have the potential re-ordering problem mentioned in
+-- Data.IORef.
+newtype CRef t a = Ref { unR :: R (STRef t) a } deriving Eq
 
 -- | Run the provided computation concurrently, returning the result.
 spawn :: Conc t a -> Conc t (CVar t a)
@@ -143,7 +161,7 @@ atomically stm = C $ cont $ AAtom stm
 newEmptyCVar :: Conc t (CVar t a)
 newEmptyCVar = C $ cont lifted where
   lifted c = ANew $ \cvid -> c <$> newEmptyCVar' cvid
-  newEmptyCVar' cvid = (\ref -> V (cvid, ref)) <$> newSTRef Nothing
+  newEmptyCVar' cvid = (\ref -> Var (cvid, ref)) <$> newSTRef Nothing
 
 -- | Block on a 'CVar' until it is empty, then write to it.
 putCVar :: CVar t a -> a -> Conc t ()
@@ -161,6 +179,24 @@ takeCVar cvar = C $ cont $ ATake $ unV cvar
 -- | Read a value from a 'CVar' if there is one, without blocking.
 tryTakeCVar :: CVar t a -> Conc t (Maybe a)
 tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
+
+-- | Create a new 'CRef'.
+newCRef :: a -> Conc t (CRef t a)
+newCRef a = C $ cont lifted where
+  lifted c = ANewRef $ \crid -> c <$> newCRef' crid
+  newCRef' crid = (\ref -> Ref (crid, ref)) <$> newSTRef a
+
+-- | Read the value from a 'CRef'.
+readCRef :: CRef t a -> Conc t a
+readCRef ref = C $ cont $ AReadRef $ unR ref
+
+-- | Atomically modify the value inside a 'CRef'.
+modifyCRef :: CRef t a -> (a -> (a, b)) -> Conc t b
+modifyCRef ref f = C $ cont $ AModRef (unR ref) f
+
+-- | Replace the value stored inside a 'CRef'.
+writeCRef :: CRef t a -> a -> Conc t ()
+writeCRef ref a = modifyCRef ref $ const (a, ())
 
 -- | Raise an exception in the 'Conc' monad. The exception is raised
 -- when the action is run, not when it is applied. It short-citcuits

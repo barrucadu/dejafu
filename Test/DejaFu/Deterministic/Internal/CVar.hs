@@ -12,7 +12,7 @@ import Test.DejaFu.Deterministic.Internal.Threading
 -- | Put a value into a @CVar@, in either a blocking or nonblocking
 -- way.
 putIntoCVar :: Monad n
-            => Bool -> R r a -> a -> (Bool -> Action n r s)
+            => Bool -> V r a -> a -> (Bool -> Action n r s)
             -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
 putIntoCVar blocking (cvid, ref) a c fixed threadid threads = do
   val <- readRef (wref fixed) ref
@@ -34,7 +34,7 @@ putIntoCVar blocking (cvid, ref) a c fixed threadid threads = do
 -- | Take a value from a @CVar@, in either a blocking or nonblocking
 -- way.
 readFromCVar :: Monad n
-             => Bool -> Bool -> R r a -> (Maybe a -> Action n r s)
+             => Bool -> Bool -> V r a -> (Maybe a -> Action n r s)
              -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
 readFromCVar emptying blocking (cvid, ref) c fixed threadid threads = do
   val <- readRef (wref fixed) ref

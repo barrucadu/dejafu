@@ -10,6 +10,7 @@ module Test.DejaFu.Deterministic.Internal
 
  -- * The @Conc@ Monad
  , M
+ , V
  , R
  , Fixed
 
@@ -19,6 +20,7 @@ module Test.DejaFu.Deterministic.Internal
  -- * Identifiers
  , ThreadId
  , CVarId
+ , CRefId
 
  -- * Scheduling & Traces
  , Scheduler
@@ -158,8 +160,11 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
   AGet     ref c   -> stepGet         ref c
   ATake    ref c   -> stepTake        ref c
   ATryTake ref c   -> stepTryTake     ref c
+  AReadRef ref c   -> error "'AReadRef' not yet implemented in 'stepThread'"
+  AModRef  ref f c -> error "'AModRef' not yet implemented in 'stepThread'"
   AAtom    stm c   -> stepAtom        stm c
   ANew     na      -> stepNew         na
+  ANewRef  na      -> error "'ANewRef' not yet implemented in 'stepThread'"
   ALift    na      -> stepLift        na
   AThrow   e       -> stepThrow       e
   AThrowTo t e c   -> stepThrowTo     t e c

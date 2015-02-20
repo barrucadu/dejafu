@@ -33,7 +33,7 @@ module Test.DejaFu.Deterministic.IO
   , mask
   , uninterruptibleMask
 
-  -- * Communication: CVars
+  -- * @CVar@s
   , CVar
   , newEmptyCVar
   , putCVar
@@ -41,6 +41,13 @@ module Test.DejaFu.Deterministic.IO
   , readCVar
   , takeCVar
   , tryTakeCVar
+
+  -- * @CRef@s
+  , CRef
+  , newCRef
+  , readCRef
+  , writeCRef
+  , modifyCRef
 
   -- * Testing
   , _concNoTest
@@ -91,6 +98,7 @@ instance IO.MonadIO (ConcIO t) where
 
 instance C.MonadConc (ConcIO t) where
   type CVar     (ConcIO t) = CVar t
+  type CRef     (ConcIO t) = CRef t
   type STMLike  (ConcIO t) = STMLike t IO IORef
   type ThreadId (ConcIO t) = Int
 
@@ -106,6 +114,10 @@ instance C.MonadConc (ConcIO t) where
   readCVar       = readCVar
   takeCVar       = takeCVar
   tryTakeCVar    = tryTakeCVar
+  newCRef        = newCRef
+  readCRef       = readCRef
+  writeCRef      = writeCRef
+  modifyCRef     = modifyCRef
   atomically     = atomically
   _concNoTest    = _concNoTest
 
@@ -114,7 +126,11 @@ fixed = Wrapper refIO $ unC . liftIO
 
 -- | The concurrent variable type used with the 'ConcIO' monad. These
 -- behave the same as @Conc@'s @CVar@s
-newtype CVar t a = V { unV :: R IORef a } deriving Eq
+newtype CVar t a = Var { unV :: V IORef a } deriving Eq
+
+-- | The mutable non-blocking reference type. These behave the same as
+-- @Conc@'s @CRef@s
+newtype CRef t a = Ref { unR :: R IORef a } deriving Eq
 
 -- | Lift an 'IO' action into the 'ConcIO' monad.
 liftIO :: IO a -> ConcIO t a
@@ -148,7 +164,7 @@ atomically stm = C $ cont $ AAtom stm
 newEmptyCVar :: ConcIO t (CVar t a)
 newEmptyCVar = C $ cont lifted where
   lifted c = ANew $ \cvid -> c <$> newEmptyCVar' cvid
-  newEmptyCVar' cvid = (\ref -> V (cvid, ref)) <$> newIORef Nothing
+  newEmptyCVar' cvid = (\ref -> Var (cvid, ref)) <$> newIORef Nothing
 
 -- | Block on a 'CVar' until it is empty, then write to it.
 putCVar :: CVar t a -> a -> ConcIO t ()
@@ -166,6 +182,24 @@ takeCVar cvar = C $ cont $ ATake $ unV cvar
 -- | Read a value from a 'CVar' if there is one, without blocking.
 tryTakeCVar :: CVar t a -> ConcIO t (Maybe a)
 tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
+
+-- | Create a new 'CRef'.
+newCRef :: a -> ConcIO t (CRef t a)
+newCRef a = C $ cont lifted where
+  lifted c = ANewRef $ \crid -> c <$> newCRef' crid
+  newCRef' crid = (\ref -> Ref (crid, ref)) <$> newIORef a
+
+-- | Read the value from a 'CRef'.
+readCRef :: CRef t a -> ConcIO t a
+readCRef ref = C $ cont $ AReadRef $ unR ref
+
+-- | Atomically modify the value inside a 'CRef'.
+modifyCRef :: CRef t a -> (a -> (a, b)) -> ConcIO t b
+modifyCRef ref f = C $ cont $ AModRef (unR ref) f
+
+-- | Replace the value stored inside a 'CRef'.
+writeCRef :: CRef t a -> a -> ConcIO t ()
+writeCRef ref a = modifyCRef ref $ const (a, ())
 
 -- | Raise an exception in the 'ConcIO' monad. The exception is raised
 -- when the action is run, not when it is applied. It short-citcuits
