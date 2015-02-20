@@ -73,7 +73,11 @@ type CRefId = Int
 
 -- | The number of ID parameters was getting a bit unwieldy, so this
 -- hides them all away.
-data IdSource = Id { _nextCVId :: CVarId, _nextCTVId :: CTVarId, _nextTId :: ThreadId }
+data IdSource = Id { _nextCRId :: CRefId, _nextCVId :: CVarId, _nextCTVId :: CTVarId, _nextTId :: ThreadId }
+
+-- | Get the next free 'CRefId'.
+nextCRId :: IdSource -> (IdSource, CRefId)
+nextCRId idsource = let newid = _nextCRId idsource + 1 in (idsource { _nextCRId = newid }, newid)
 
 -- | Get the next free 'CVarId'.
 nextCVId :: IdSource -> (IdSource, CVarId)
@@ -89,7 +93,7 @@ nextTId idsource = let newid = _nextTId idsource + 1 in (idsource { _nextTId = n
 
 -- | The initial ID source.
 initialIdSource :: IdSource
-initialIdSource = Id 0 0 0
+initialIdSource = Id 0 0 0 0
 
 --------------------------------------------------------------------------------
 -- * Scheduling & Traces
@@ -162,6 +166,12 @@ data ThreadAction =
   -- ^ Get blocked on a take.
   | TryTake CVarId Bool [ThreadId]
   -- ^ Try to take from a 'CVar', possibly waking up some threads.
+  | NewRef CRefId
+  -- ^ Create a new 'CRef'.
+  | ReadRef CRefId
+  -- ^ Read from a 'CRef'.
+  | ModRef CRefId
+  -- ^ Modify a 'CRef'.
   | STM [ThreadId]
   -- ^ An STM transaction was executed, possibly waking up some
   -- threads.

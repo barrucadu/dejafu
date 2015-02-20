@@ -160,11 +160,11 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
   AGet     ref c   -> stepGet         ref c
   ATake    ref c   -> stepTake        ref c
   ATryTake ref c   -> stepTryTake     ref c
-  AReadRef ref c   -> error "'AReadRef' not yet implemented in 'stepThread'"
-  AModRef  ref f c -> error "'AModRef' not yet implemented in 'stepThread'"
+  AReadRef ref c   -> stepReadRef     ref c
+  AModRef  ref f c -> stepModRef      ref f c
   AAtom    stm c   -> stepAtom        stm c
   ANew     na      -> stepNew         na
-  ANewRef  na      -> error "'ANewRef' not yet implemented in 'stepThread'"
+  ANewRef  na      -> stepNewRef      na
   ALift    na      -> stepLift        na
   AThrow   e       -> stepThrow       e
   AThrowTo t e c   -> stepThrowTo     t e c
@@ -211,6 +211,17 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
     stepTryTake cvar@(cvid, _) c = do
       (success, threads', woken) <- readFromCVar True False cvar c fixed tid threads
       return $ Right (threads', idSource, TryTake cvid success woken)
+
+    -- | Read from a @CRef@.
+    stepReadRef (crid, ref) c = do
+      val <- readRef (wref fixed) ref
+      return $ Right (goto (c val) tid threads, idSource, ReadRef crid)
+
+    -- | Modify a @CRef@.
+    stepModRef (crid, ref) f c = do
+      (new, val) <- f <$> readRef (wref fixed) ref
+      writeRef (wref fixed) ref new
+      return $ Right (goto (c val) tid threads, idSource, ModRef crid)
 
     -- | Run a STM transaction atomically.
     stepAtom stm c = do
@@ -288,6 +299,12 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
       let (idSource', newcvid) = nextCVId idSource
       a <- na newcvid
       return $ Right (goto a tid threads, idSource', New newcvid)
+
+    -- | Create a new @CRef@, using the next 'CRefId'.
+    stepNewRef na = do
+      let (idSource', newcrid) = nextCRId idSource
+      a <- na newcrid
+      return $ Right (goto a tid threads, idSource', NewRef newcrid)
 
     -- | Lift an action from the underlying monad into the @Conc@
     -- computation.
