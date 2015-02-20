@@ -19,6 +19,7 @@ import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import Control.Monad.STM (STM)
 import Control.Monad.STM.Class (MonadSTM)
+import Data.IORef (IORef, atomicModifyIORef, atomicWriteIORef, newIORef, readIORef)
 
 import qualified Control.Monad.Catch as Ca
 import qualified Control.Concurrent as C
@@ -52,6 +53,11 @@ class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
   -- block until it is full, and attempting to put to a \"full\"
   -- @CVar@ will block until it is empty.
   type CVar m :: * -> *
+
+  -- | The mutable non-blocking reference type. These are like
+  -- 'IORef's, but don't have the potential re-ordering problem
+  -- mentioned in Data.IORef.
+  type CRef m :: * -> *
 
   -- | An abstract handle to a thread
   type ThreadId m :: *
@@ -115,6 +121,21 @@ class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
   -- emptying the @CVar@) if there was something there, otherwise
   -- returning 'Nothing'.
   tryTakeCVar :: CVar m a -> m (Maybe a)
+
+  -- | Create a new reference.
+  newCRef :: a -> m (CRef m a)
+
+  -- | Read the current value stored in a reference.
+  readCRef :: CRef m a -> m a
+
+  -- | Atomically modify the value stored in a reference.
+  modifyCRef :: CRef m a -> (a -> (a, b)) -> m b
+
+  -- | Replace the value stored in a reference.
+  --
+  -- > writeCRef r a = modifyCRef r $ const (a, ())
+  writeCRef :: CRef m a -> a -> m ()
+  writeCRef r a = modifyCRef r $ const (a, ())
 
   -- | Perform a series of STM actions atomically.
   atomically :: STMLike m a -> m a
@@ -193,8 +214,9 @@ class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
   _concNoTest = id
 
 instance MonadConc IO where
-  type STMLike IO  = STM
-  type CVar    IO  = MVar
+  type STMLike  IO = STM
+  type CVar     IO = MVar
+  type CRef     IO = IORef
   type ThreadId IO = C.ThreadId
 
   readCVar       = readMVar
@@ -209,6 +231,10 @@ instance MonadConc IO where
   tryPutCVar     = tryPutMVar
   takeCVar       = takeMVar
   tryTakeCVar    = tryTakeMVar
+  newCRef        = newIORef
+  readCRef       = readIORef
+  modifyCRef     = atomicModifyIORef
+  writeCRef      = atomicWriteIORef
   atomically     = S.atomically
 
 -- | Create a concurrent computation for the provided action, and
