@@ -180,9 +180,6 @@ data ThreadAction =
   -- threads.
   | BlockedSTM
   -- ^ Got blocked in an STM transaction.
-  | NoTest
-  -- ^ A computation annotated with '_concNoTest' was executed in a
-  -- single step.
   | Catching
   -- ^ Register a new exception handler
   | PopCatching
@@ -207,6 +204,15 @@ data ThreadAction =
   -- ^ Lift an action from the underlying monad. Note that the
   -- penultimate action in a trace will always be a @Lift@, this is an
   -- artefact of how the runner works.
+  | NoTest
+  -- ^ A computation annotated with '_concNoTest' was executed in a
+  -- single step.
+  | KnowsAbout
+  -- ^ A '_concKnowsAbout' annotation was processed.
+  | Forgets
+  -- ^ A '_concForgets' annotation was processed.
+  | AllKnown
+  -- ^ A '_concALlKnown' annotation was processed.
   | Stop
   -- ^ Cease execution and terminate.
   deriving (Eq, Show)

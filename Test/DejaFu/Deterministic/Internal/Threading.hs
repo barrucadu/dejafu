@@ -116,14 +116,14 @@ wake blockedOn threads = (M.map unblock threads, M.keys $ M.filter isBlocked thr
     (theblock, _) -> theblock == Just blockedOn
 
 -- | Record that a thread knows about a shared variable.
-knows :: Either CVarId CTVarId -> ThreadId -> Threads n r s -> Threads n r s
-knows theid = M.alter go where
-  go (Just thread) = Just $ thread { _known = if theid `elem` _known thread then _known thread else theid : _known thread }
+knows :: [Either CVarId CTVarId] -> ThreadId -> Threads n r s -> Threads n r s
+knows theids = M.alter go where
+  go (Just thread) = Just $ thread { _known = nub $ theids ++ _known thread }
 
 -- | Forget about a shared variable.
-forgets :: Either CVarId CTVarId -> ThreadId -> Threads n r s -> Threads n r s
-forgets theid = M.alter go where
-  go (Just thread) = Just $ thread { _known = filter (/=theid) $ _known thread }
+forgets :: [Either CVarId CTVarId] -> ThreadId -> Threads n r s -> Threads n r s
+forgets theids = M.alter go where
+  go (Just thread) = Just $ thread { _known = filter (`notElem` theids) $ _known thread }
 
 -- | Record that a thread's shared variable state is fully known.
 fullknown :: ThreadId -> Threads n r s -> Threads n r s

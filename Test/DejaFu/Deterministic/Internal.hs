@@ -232,7 +232,7 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
       case res of
         Success touched val ->
           let (threads', woken) = wake (OnCTVar touched) threads
-          in return $ Right (goto (c val) tid threads', idSource { _nextCTVId = newctvid }, STM woken)
+          in return $ Right (knows (map Right touched) tid $ goto (c val) tid threads', idSource { _nextCTVId = newctvid }, STM woken)
         Retry touched ->
           let threads' = block (OnCTVar touched) tid threads
           in return $ Right (threads', idSource { _nextCTVId = newctvid }, BlockedSTM)
@@ -301,7 +301,7 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
     stepNew na = do
       let (idSource', newcvid) = nextCVId idSource
       a <- na newcvid
-      return $ Right (goto a tid threads, idSource', New newcvid)
+      return $ Right (knows [Left newcvid] tid $ goto a tid threads, idSource', New newcvid)
 
     -- | Create a new @CRef@, using the next 'CRefId'.
     stepNewRef na = do
@@ -324,13 +324,13 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
           _ -> Left FailureInNoTest
 
     -- | Record that a variable is known about.
-    stepKnowsAbout v c = error "'stepKnowsAbout' not yet implemented."
+    stepKnowsAbout v c = return $ Right (knows [v] tid $ goto c tid threads, idSource, KnowsAbout)
 
     -- | Record that a variable will never be touched again.
-    stepForgets v c = error "'stepForgets' not yet implemented."
+    stepForgets v c = return $ Right (forgets [v] tid $ goto c tid threads, idSource, Forgets)
 
     -- | Record that all shared variables are known.
-    stepAllKnown c = error "'stepAllKnown' not yet implemented."
+    stepAllKnown c = return $ Right (fullknown tid $ goto c tid threads, idSource, AllKnown)
 
     -- | Kill the current thread.
     stepStop = return $ Right (kill tid threads, idSource, Stop)
