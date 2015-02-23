@@ -18,7 +18,7 @@ import Control.Exception (Exception, AsyncException(ThreadKilled), SomeException
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import Control.Monad.STM (STM)
-import Control.Monad.STM.Class (MonadSTM)
+import Control.Monad.STM.Class (MonadSTM, CTVar)
 import Data.IORef (IORef, atomicModifyIORef, newIORef, readIORef)
 
 import qualified Control.Monad.Catch as Ca
@@ -213,6 +213,52 @@ class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
   _concNoTest :: m a -> m a
   _concNoTest = id
 
+  -- | Does nothing.
+  --
+  -- > _concKnowsAbout _ = return ()
+  --
+  -- This function is purely for testing purposes, and indicates that
+  -- the thread has a reference to the provided @CVar@ or
+  -- @CTVar@. This function may be called multiple times, to add new
+  -- knowledge to the system. It does not need to be called when
+  -- @CVar@s or @CTVar@s are created, these get recorded
+  -- automatically.
+  --
+  -- Gathering this information allows detection of cases where the
+  -- main thread is blocked on a variable no runnable thread has a
+  -- reference to, which is a deadlock situation.
+  _concKnowsAbout :: Either (CVar m a) (CTVar (STMLike m) a) -> m ()
+  _concKnowsAbout _ = return ()
+
+  -- | Does nothing.
+  --
+  -- > _concForgets _ = return ()
+  --
+  -- The counterpart to '_concKnowsAbout'. Indicates that the
+  -- referenced variable will never be touched again by the current
+  -- thread.
+  --
+  -- Note that inappropriate use of @_concForgets@ can result in false
+  -- positives! Be very sure that the current thread will /never/
+  -- refer to the variable again, for instance when leaving its scope.
+  _concForgets :: Either (CVar m a) (CTVar (STMLike m) a) -> m ()
+
+  -- | Does nothing.
+  --
+  -- > _concAllKnown = return ()
+  --
+  -- Indicates to the test runner that all variables which have been
+  -- passed in to this thread have been recorded by calls to
+  -- '_concKnowsAbout'. If every thread has called '_concAllKnown',
+  -- then detection of nonglobal deadlock is turned on.
+  --
+  -- If a thread receives references to @CVar@s or @CTVar@s in the
+  -- future (for instance, if one was sent over a channel), then
+  -- '_concKnowsAbout' should be called immediately, otherwise there
+  -- is a risk of identifying false positives.
+  _concAllKnown :: m ()
+  _concAllKnown = return ()
+
 instance MonadConc IO where
   type STMLike  IO = STM
   type CVar     IO = MVar
@@ -241,7 +287,7 @@ instance MonadConc IO where
 spawn :: MonadConc m => m a -> m (CVar m a)
 spawn ma = do
   cvar <- newEmptyCVar
-  _ <- fork $ ma >>= putCVar cvar
+  _ <- fork $ _concKnowsAbout (Left cvar) >> ma >>= putCVar cvar
   return cvar
 
 -- | Fork a thread and call the supplied function when the thread is
