@@ -9,7 +9,7 @@ import Control.Exception (Exception, MaskingState(..), SomeException(..), fromEx
 import Control.Monad.Cont (cont)
 import Data.List (intersect, nub)
 import Data.Map (Map)
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust, isNothing)
 import Test.DejaFu.STM (CTVarId)
 import Test.DejaFu.Deterministic.Internal.Common
 
@@ -56,13 +56,14 @@ thread ~= theblock = case (_blocking thread, theblock) of
   _ -> False
 
 -- | Determine if a thread is deadlocked. If at least one thread is
--- not in a fully-known state, this will return 'False'.
+-- not in a fully-known state, this will only check for global
+-- deadlock.
 isLocked :: ThreadId -> Threads n r a -> Bool
 isLocked tid ts
   | allKnown = case M.lookup tid ts of
     Just thread -> noRefs $ _blocking thread
     Nothing -> False
-  | otherwise = False
+  | otherwise = M.null $ M.filter (isNothing . _blocking) ts
 
   where
     -- | Check if all threads are in a fully-known state.
