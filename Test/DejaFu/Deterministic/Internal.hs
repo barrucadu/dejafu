@@ -173,6 +173,9 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
   AMasking m ma c  -> stepMasking     m ma c
   AResetMask b1 b2 m c -> stepResetMask b1 b2 m c
   ANoTest  ma a    -> stepNoTest      ma a
+  AKnowsAbout v c  -> stepKnowsAbout  v c
+  AForgets    v c  -> stepForgets v c
+  AAllKnown   c    -> stepAllKnown c
   AStop            -> stepStop
 
   where
@@ -319,6 +322,15 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
         case a of
           Right a' -> Right (goto (c a') tid threads, idSource', NoTest)
           _ -> Left FailureInNoTest
+
+    -- | Record that a variable is known about.
+    stepKnowsAbout v c = error "'stepKnowsAbout' not yet implemented."
+
+    -- | Record that a variable will never be touched again.
+    stepForgets v c = error "'stepForgets' not yet implemented."
+
+    -- | Record that all shared variables are known.
+    stepAllKnown c = error "'stepAllKnown' not yet implemented."
 
     -- | Kill the current thread.
     stepStop = return $ Right (kill tid threads, idSource, Stop)

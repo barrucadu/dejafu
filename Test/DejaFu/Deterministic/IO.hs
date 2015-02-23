@@ -51,6 +51,9 @@ module Test.DejaFu.Deterministic.IO
 
   -- * Testing
   , _concNoTest
+  , _concKnowsAbout
+  , _concForgets
+  , _concAllKnown
 
   -- * Execution traces
   , Trace
@@ -72,6 +75,7 @@ import Data.IORef (IORef, newIORef)
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
 import Test.DejaFu.STM (STMLike, runTransactionIO)
+import Test.DejaFu.STM.Internal (CTVar(..))
 
 import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
@@ -120,6 +124,9 @@ instance C.MonadConc (ConcIO t) where
   modifyCRef     = modifyCRef
   atomically     = atomically
   _concNoTest    = _concNoTest
+  _concKnowsAbout = _concKnowsAbout
+  _concForgets   = _concForgets
+  _concAllKnown  = _concAllKnown
 
 fixed :: Fixed IO IORef (STMLike t)
 fixed = Wrapper refIO $ unC . liftIO
@@ -284,6 +291,22 @@ getNumCapabilities = return 1
 -- computation will fail.
 _concNoTest :: ConcIO t a -> ConcIO t a
 _concNoTest ma = C $ cont $ \c -> ANoTest (unC ma) c
+
+-- | Record that the referenced variable is known by the current thread.
+_concKnowsAbout :: Either (CVar t a) (CTVar t IORef a) -> ConcIO t ()
+_concKnowsAbout (Left  (Var (cvarid,  _))) = C $ cont $ \c -> AKnowsAbout (Left  cvarid)  (c ())
+_concKnowsAbout (Right (V   (ctvarid, _))) = C $ cont $ \c -> AKnowsAbout (Right ctvarid) (c ())
+
+-- | Record that the referenced variable will never be touched by the
+-- current thread.
+_concForgets :: Either (CVar t a) (CTVar t IORef a) -> ConcIO t ()
+_concForgets (Left  (Var (cvarid,  _))) = C $ cont $ \c -> AForgets (Left  cvarid)  (c ())
+_concForgets (Right (V   (ctvarid, _))) = C $ cont $ \c -> AForgets (Right ctvarid) (c ())
+
+-- | Record that all 'CVar's and 'CTVar's known by the current thread
+-- have been passed to '_concKnowsAbout'.
+_concAllKnown :: ConcIO t ()
+_concAllKnown = C $ cont $ \c -> AAllKnown (c ())
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning an failure reason on error. Also returned is the

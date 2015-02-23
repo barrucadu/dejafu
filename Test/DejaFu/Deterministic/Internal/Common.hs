@@ -57,6 +57,9 @@ data Action n r s =
   | APopCatching (Action n r s)
   | forall a. AMasking MaskingState ((forall b. M n r s b -> M n r s b) -> M n r s a) (a -> Action n r s)
   | AResetMask Bool Bool MaskingState (Action n r s)
+  | AKnowsAbout (Either CVarId CTVarId) (Action n r s)
+  | AForgets (Either CVarId CTVarId) (Action n r s)
+  | AAllKnown (Action n r s)
   | AStop
 
 --------------------------------------------------------------------------------

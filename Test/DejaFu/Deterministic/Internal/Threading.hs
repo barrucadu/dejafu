@@ -31,6 +31,12 @@ data Thread n r s = Thread
   -- ^ Stack of exception handlers
   , _masking      :: MaskingState
   -- ^ The exception masking state.
+  , _known        :: [Either CVarId CTVarId]
+  -- ^ Shared variables the thread knows about.
+  , _fullknown    :: Bool
+  -- ^ Whether the referenced variables of the thread are completely
+  -- known. If every thread has _fullknown == True, then turn on
+  -- detection of nonglobal deadlock.
   }
 
 --------------------------------------------------------------------------------
@@ -82,7 +88,7 @@ launch parent tid a threads = launch' mask tid a threads where
 -- | Start a thread with the given ID and masking state. This must not already be in use!
 launch' :: MaskingState -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
 launch' mask tid a = M.insert tid thread where
-  thread = Thread { _continuation = a umask, _blocking = Nothing, _handlers = [], _masking = mask }
+  thread = Thread { _continuation = a umask, _blocking = Nothing, _handlers = [], _masking = mask, _known = [], _fullknown = False }
 
   umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False mask >> return b
   resetMask typ m = cont $ \k -> AResetMask typ True m $ k ()
@@ -108,3 +114,18 @@ wake blockedOn threads = (M.map unblock threads, M.keys $ M.filter isBlocked thr
   isBlocked thread = case (_blocking thread, blockedOn) of
     (Just (OnCTVar ctvids), OnCTVar blockedOn') -> ctvids `intersect` blockedOn' /= []
     (theblock, _) -> theblock == Just blockedOn
+
+-- | Record that a thread knows about a shared variable.
+knows :: Either CVarId CTVarId -> ThreadId -> Threads n r s -> Threads n r s
+knows theid = M.alter go where
+  go (Just thread) = Just $ thread { _known = if theid `elem` _known thread then _known thread else theid : _known thread }
+
+-- | Forget about a shared variable.
+forgets :: Either CVarId CTVarId -> ThreadId -> Threads n r s -> Threads n r s
+forgets theid = M.alter go where
+  go (Just thread) = Just $ thread { _known = filter (/=theid) $ _known thread }
+
+-- | Record that a thread's shared variable state is fully known.
+fullknown :: ThreadId -> Threads n r s -> Threads n r s
+fullknown = M.alter go where
+  go (Just thread) = Just $ thread { _fullknown = True }
