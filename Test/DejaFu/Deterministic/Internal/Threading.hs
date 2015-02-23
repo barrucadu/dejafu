@@ -69,7 +69,8 @@ isLocked tid ts
     -- | Check if all threads are in a fully-known state.
     allKnown = M.keys (M.filter _fullknown ts) == M.keys ts
 
-    -- | Check if no other thread has a reference to anything the block references
+    -- | Check if no other runnable thread has a reference to anything
+    -- the block references.
     noRefs (Just (OnCVarFull  cvarid)) = null $ findCVar   cvarid
     noRefs (Just (OnCVarEmpty cvarid)) = null $ findCVar   cvarid
     noRefs (Just (OnCTVar     ctvids)) = null $ findCTVars ctvids
@@ -79,7 +80,7 @@ isLocked tid ts
     -- consideration) which reference a 'CVar'.
     findCVar cvarid = M.keys $ M.filterWithKey (check [Left cvarid]) ts
 
-    -- | Get IDs of all threads (other than the one under
+    -- | Get IDs of all runnable threads (other than the one under
     -- consideration) which reference some 'CTVar's.
     findCTVars ctvids = M.keys $ M.filterWithKey (check (map Right ctvids)) ts
 
@@ -87,7 +88,7 @@ isLocked tid ts
     -- thread under consideration.
     check lookingfor thetid thethread
       | thetid == tid = False
-      | otherwise    = not . null $ lookingfor `intersect` _known thethread
+      | otherwise    = (not . null $ lookingfor `intersect` _known thethread) && isNothing (_blocking thethread)
 
 --------------------------------------------------------------------------------
 -- * Exceptions
