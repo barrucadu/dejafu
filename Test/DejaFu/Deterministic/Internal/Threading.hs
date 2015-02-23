@@ -7,7 +7,7 @@ module Test.DejaFu.Deterministic.Internal.Threading where
 import Control.Applicative ((<$>))
 import Control.Exception (Exception, MaskingState(..), SomeException(..), fromException)
 import Control.Monad.Cont (cont)
-import Data.List (intersect)
+import Data.List (intersect, nub)
 import Data.Map (Map)
 import Data.Maybe (fromMaybe, isJust)
 import Test.DejaFu.STM (CTVarId)
@@ -46,7 +46,7 @@ data Thread n r s = Thread
 -- is blocked on.
 data BlockedOn = OnCVarFull CVarId | OnCVarEmpty CVarId | OnCTVar [CTVarId] | OnMask ThreadId deriving Eq
 
--- | Determine if a thread is blocked in a certainw ay.
+-- | Determine if a thread is blocked in a certain way.
 (~=) :: Thread n r s -> BlockedOn -> Bool
 thread ~= theblock = case (_blocking thread, theblock) of
   (Just (OnCVarFull  _), OnCVarFull  _) -> True
@@ -54,6 +54,39 @@ thread ~= theblock = case (_blocking thread, theblock) of
   (Just (OnCTVar     _), OnCTVar     _) -> True
   (Just (OnMask      _), OnMask      _) -> True
   _ -> False
+
+-- | Determine if a thread is deadlocked. If at least one thread is
+-- not in a fully-known state, this will return 'False'.
+isLocked :: ThreadId -> Threads n r a -> Bool
+isLocked tid ts
+  | allKnown = case M.lookup tid ts of
+    Just thread -> noRefs $ _blocking thread
+    Nothing -> False
+  | otherwise = False
+
+  where
+    -- | Check if all threads are in a fully-known state.
+    allKnown = M.keys (M.filter _fullknown ts) == M.keys ts
+
+    -- | Check if no other thread has a reference to anything the block references
+    noRefs (Just (OnCVarFull  cvarid)) = null $ findCVar   cvarid
+    noRefs (Just (OnCVarEmpty cvarid)) = null $ findCVar   cvarid
+    noRefs (Just (OnCTVar     ctvids)) = null $ findCTVars ctvids
+    noRefs _ = True
+
+    -- | Get IDs of all threads (other than the one under
+    -- consideration) which reference a 'CVar'.
+    findCVar cvarid = M.keys $ M.filterWithKey (check [Left cvarid]) ts
+
+    -- | Get IDs of all threads (other than the one under
+    -- consideration) which reference some 'CTVar's.
+    findCTVars ctvids = M.keys $ M.filterWithKey (check (map Right ctvids)) ts
+
+    -- | Check if a thread references a variable, and if it's not the
+    -- thread under consideration.
+    check lookingfor thetid thethread
+      | thetid == tid = False
+      | otherwise    = not . null $ lookingfor `intersect` _known thethread
 
 --------------------------------------------------------------------------------
 -- * Exceptions

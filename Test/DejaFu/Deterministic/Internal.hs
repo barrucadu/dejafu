@@ -111,10 +111,10 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) ori
       isBlocked     = isJust . _blocking $ fromJust thread
       isNonexistant = isNothing thread
       isTerminated  = 0 `notElem` M.keys threads
-      isDeadlocked  = M.null runnable && (((~= OnCVarFull  undefined) <$> M.lookup 0 threads) == Just True ||
-                                         ((~= OnCVarEmpty undefined) <$> M.lookup 0 threads) == Just True ||
-                                         ((~= OnMask      undefined) <$> M.lookup 0 threads) == Just True)
-      isSTMLocked   = M.null runnable && ((~= OnCTVar []) <$> M.lookup 0 threads) == Just True
+      isDeadlocked  = isLocked 0 threads && (((~= OnCVarFull  undefined) <$> M.lookup 0 threads) == Just True ||
+                                           ((~=  OnCVarEmpty undefined) <$> M.lookup 0 threads) == Just True ||
+                                           ((~=  OnMask      undefined) <$> M.lookup 0 threads) == Just True)
+      isSTMLocked   = isLocked 0 threads && ((~=  OnCTVar    []) <$> M.lookup 0 threads) == Just True
 
       runconc ma i = do { (a,_,i',_) <- runFixed' fixed runstm sched g i ma; return (a,i') }
 
