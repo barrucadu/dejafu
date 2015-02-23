@@ -66,6 +66,7 @@ library
                      , Test.DejaFu.Deterministic.Internal.Threading
                      , Test.DejaFu.SCT.Bounding
                      , Test.DejaFu.SCT.Internal
+                     , Test.DejaFu.STM.Internal
 
                      , Control.State
                      , Data.List.Extra
