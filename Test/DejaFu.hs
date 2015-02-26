@@ -85,7 +85,6 @@ module Test.DejaFu
   , somewhereTrue2
   ) where
 
-import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when)
@@ -113,13 +112,15 @@ dejafuIO concio test = dejafusIO concio [test]
 -- | Run a collection of tests, returning 'True' if all pass.
 dejafus :: (Eq a, Show a) => (forall t. Conc t a) -> [(String, Predicate a)] -> IO Bool
 dejafus conc tests = do
-  results <- mapM (\(name, test) -> doTest name $ runTest test conc) tests
+  let traces = sctPreBound 2 conc
+  results <- mapM (\(name, test) -> doTest name $ runTest'' test traces) tests
   return $ and results
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
 dejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
 dejafusIO concio tests = do
-  results <- mapM (\(name, test) -> doTest name =<< runTestIO test concio) tests
+  traces  <- sctPreBoundIO 2 concio
+  results <- mapM (\(name, test) -> doTest name $ runTest'' test traces) tests
   return $ and results
 
 -- | Automatically test a computation. In particular, look for
@@ -178,14 +179,18 @@ runTestIO = runTestIO' 2
 
 -- | Variant of 'runTest' which takes a pre-emption bound.
 runTest' :: Eq a => Int -> Predicate a -> (forall t. Conc t a) -> Result a
-runTest' pb predicate conc = r { _failures = uniques $ _failures r } where
-  r = predicate $ sctPreBound pb conc
+runTest' pb predicate conc = runTest'' predicate $ sctPreBound pb conc
+
+-- | Variant of 'runTest'' which takes a list of results.
+runTest'' :: Eq a => Predicate a -> [(Either Failure a, Trace)] -> Result a
+runTest'' predicate results = r { _failures = uniques $ _failures r } where
+  r = predicate results
 
 -- | Variant of 'runTest'' for computations which do 'IO'.
-runTestIO' :: Eq a => Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result  a)
+runTestIO' :: Eq a => Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
 runTestIO' pb predicate conc = do
-  r <- predicate <$> sctPreBoundIO pb conc
-  return $ r { _failures = uniques $ _failures r }
+  results <- sctPreBoundIO pb conc
+  return $ runTest'' predicate results
 
 -- | Strip out duplicates
 uniques :: Eq a => [(a, Trace)] -> [(a, Trace)]
