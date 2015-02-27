@@ -283,9 +283,12 @@ forkOn :: Int -> ConcIO t () -> ConcIO t ThreadId
 forkOn _ = fork
 
 -- | Get the number of Haskell threads that can run
--- simultaneously. This implementation always returns 1.
+-- simultaneously. This implementation lies and always returns
+-- 4. There is no way to verify in the computation that this is a lie,
+-- and will potentially avoid special-case behaviour for 1 capability,
+-- so it seems a sane choice.
 getNumCapabilities :: ConcIO t Int
-getNumCapabilities = return 1
+getNumCapabilities = return 4
 
 -- | Run the argument in one step. If the argument fails, the whole
 -- computation will fail.
