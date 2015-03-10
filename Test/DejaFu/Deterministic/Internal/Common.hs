@@ -178,6 +178,9 @@ data ThreadAction =
   | STM [ThreadId]
   -- ^ An STM transaction was executed, possibly waking up some
   -- threads.
+  | FreshSTM
+  -- ^ An STM transaction was executed, and all it did was create and
+  -- write to new 'CTVar's, no existing 'CTVar's were touched.
   | BlockedSTM
   -- ^ Got blocked in an STM transaction.
   | Catching
