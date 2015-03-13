@@ -34,7 +34,7 @@ description:
   details.
 
 homepage:            https://github.com/barrucadu/dejafu
-license:             WTFPL
+license:             MIT
 license-file:        LICENSE
 author:              Michael Walker
 maintainer:          mike@barrucadu.co.uk
