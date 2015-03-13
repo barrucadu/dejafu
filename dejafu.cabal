@@ -44,6 +44,15 @@ build-type:          Simple
 -- extra-source-files:  
 cabal-version:       >=1.10
 
+source-repository head
+  type:     git
+  location: https://github.com/barrucadu/dejafu.git
+
+-- source-repository this
+--   type:     git
+--   location: https://github.com/barrucadu/dejafu.git
+--   tag:      
+
 library
   exposed-modules:     Control.Monad.Conc.Class
                      , Control.Monad.STM.Class
