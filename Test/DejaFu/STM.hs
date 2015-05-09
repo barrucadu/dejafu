@@ -7,6 +7,8 @@
 module Test.DejaFu.STM
   ( -- * The @STMLike@ Monad
     STMLike
+  , STMST
+  , STMIO
   , Result(..)
   , runTransaction
   , runTransactionST
@@ -45,6 +47,12 @@ import qualified Control.Monad.STM.Class as C
 -- really get an aggregate of them (if you ever wanted to for some
 -- reason).
 newtype STMLike t n r a = S { unS :: M t n r a } deriving (Functor, Applicative, Monad)
+
+-- | A convenience wrapper around 'STMLike' using 'STRef's.
+type STMST t a = STMLike t (ST t) (STRef t) a
+
+-- | A convenience wrapper around 'STMLike' using 'IORef's.
+type STMIO t a = STMLike t IO IORef a
 
 instance Monad n => MonadThrow (STMLike t n r) where
   throwM = throwSTM
@@ -101,13 +109,13 @@ writeCTVar ctvar a = S $ cont $ \c -> AWrite ctvar a $ c ()
 -- environment, and discarding the environment afterwards. This is
 -- suitable for testing individual transactions, but not for composing
 -- multiple ones.
-runTransaction :: (forall t. STMLike t (ST t) (STRef t) a) -> Result a
+runTransaction :: (forall t. STMST t a) -> Result a
 runTransaction ma = fst $ runST $ runTransactionST ma 0
 
 -- | Run a transaction in the 'ST' monad, returning the result and new
 -- initial 'CTVarId'. If the transaction ended by calling 'retry', any
 -- 'CTVar' modifications are undone.
-runTransactionST :: STMLike t (ST t) (STRef t) a -> CTVarId -> ST t (Result a, CTVarId)
+runTransactionST :: STMST t a -> CTVarId -> ST t (Result a, CTVarId)
 runTransactionST ma ctvid = do
   (res, undo, ctvid') <- doTransaction fixedST (unS ma) ctvid
 
@@ -122,7 +130,7 @@ runTransactionST ma ctvid = do
 -- | Run a transaction in the 'IO' monad, returning the result and new
 -- initial 'CTVarId'. If the transaction ended by calling 'retry', any
 -- 'CTVar' modifications are undone.
-runTransactionIO :: STMLike t IO IORef a -> CTVarId -> IO (Result a, CTVarId)
+runTransactionIO :: STMIO t a -> CTVarId -> IO (Result a, CTVarId)
 runTransactionIO ma ctvid = do
   (res, undo, ctvid') <- doTransaction fixedIO (unS ma) ctvid
 
