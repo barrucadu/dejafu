@@ -59,9 +59,11 @@ module Test.DejaFu
   ( autocheck
   , dejafu
   , dejafus
+  , dejafus'
   , autocheckIO
   , dejafuIO
   , dejafusIO
+  , dejafusIO'
   -- * Test cases
   , Result(..)
   , Failure(..)
@@ -111,15 +113,23 @@ dejafuIO concio test = dejafusIO concio [test]
 
 -- | Run a collection of tests, returning 'True' if all pass.
 dejafus :: (Eq a, Show a) => (forall t. Conc t a) -> [(String, Predicate a)] -> IO Bool
-dejafus conc tests = do
-  let traces = sctPreBound 2 conc
+dejafus = dejafus' 2
+
+-- | Variant of 'dejafus' which takes a pre-emption bound.
+dejafus' :: (Eq a, Show a) => Int -> (forall t. Conc t a) -> [(String, Predicate a)] -> IO Bool
+dejafus' pb conc tests = do
+  let traces = sctPreBound pb conc
   results <- mapM (\(name, test) -> doTest name $ runTest'' test traces) tests
   return $ and results
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
 dejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
-dejafusIO concio tests = do
-  traces  <- sctPreBoundIO 2 concio
+dejafusIO = dejafusIO' 2
+
+-- | Variant of 'dejafus'' for computations which do 'IO'.
+dejafusIO' :: (Eq a, Show a) => Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
+dejafusIO' pb concio tests = do
+  traces  <- sctPreBoundIO pb concio
   results <- mapM (\(name, test) -> doTest name $ runTest'' test traces) tests
   return $ and results
 
