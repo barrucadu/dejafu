@@ -17,12 +17,14 @@ import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVa
 import Control.Exception (Exception, AsyncException(ThreadKilled), SomeException)
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
+import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Control.Monad.STM (STM)
 import Control.Monad.STM.Class (MonadSTM, CTVar)
+import Control.Monad.Trans (lift)
 import Data.IORef (IORef, atomicModifyIORef, newIORef, readIORef)
 
-import qualified Control.Monad.Catch as Ca
 import qualified Control.Concurrent as C
+import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.STM as S
 
 -- | @MonadConc@ is like a combination of 'ParFuture' and 'ParIVar'
@@ -306,3 +308,30 @@ forkFinally action and_then =
 -- actually kill it.
 killThread :: MonadConc m => ThreadId m -> m ()
 killThread tid = throwTo tid ThreadKilled
+
+-------------------------------------------------------------------------------
+-- Transformer instances
+
+instance MonadConc m => MonadConc (ReaderT r m) where
+  type STMLike  (ReaderT r m) = STMLike m
+  type CVar     (ReaderT r m) = CVar m
+  type CRef     (ReaderT r m) = CRef m
+  type ThreadId (ReaderT r m) = ThreadId m
+
+  readCVar       = lift . readCVar
+  fork ma        = ReaderT $ \r -> fork (runReaderT ma r)
+  forkWithUnmask ma = ReaderT $ \r -> forkWithUnmask (\f -> runReaderT (ma $ go f) r)where
+    go f mx = ReaderT $ \r -> f (runReaderT mx r)
+  forkOn i ma    = ReaderT $ \r -> forkOn i (runReaderT ma r)
+  getNumCapabilities = lift getNumCapabilities
+  myThreadId     = lift myThreadId
+  throwTo t      = lift . throwTo t
+  newEmptyCVar   = lift newEmptyCVar
+  putCVar v      = lift . putCVar v
+  tryPutCVar v   = lift . tryPutCVar v
+  takeCVar       = lift . takeCVar
+  tryTakeCVar    = lift . tryTakeCVar
+  newCRef        = lift . newCRef
+  readCRef       = lift . readCRef
+  modifyCRef r   = lift . modifyCRef r
+  atomically     = lift . atomically

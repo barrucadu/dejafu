@@ -9,6 +9,12 @@ import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
 import Control.Exception (Exception)
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, throwM, catch)
+import Control.Monad.Reader (ReaderT(..), runReaderT)
+import Control.Monad.Writer (WriterT(..), runWriterT)
+import Control.Monad.State (StateT(..), runStateT)
+import Control.Monad.RWS (RWST(..), runRWST)
+import Control.Monad.Trans (lift)
+import Data.Monoid (Monoid)
 
 import qualified Control.Monad.STM as S
 
@@ -75,3 +81,46 @@ instance MonadSTM STM where
   newCTVar   = newTVar
   readCTVar  = readTVar
   writeCTVar = writeTVar
+
+-------------------------------------------------------------------------------
+-- Transformer instances
+
+instance MonadSTM m => MonadSTM (ReaderT r m) where
+  type CTVar (ReaderT r m) = CTVar m
+
+  retry        = lift retry
+  orElse ma mb = ReaderT $ \r -> orElse (runReaderT ma r) (runReaderT mb r)
+  check        = lift . check
+  newCTVar     = lift . newCTVar
+  readCTVar    = lift . readCTVar
+  writeCTVar v = lift . writeCTVar v
+
+instance (MonadSTM m, Monoid w) => MonadSTM (WriterT w m) where
+  type CTVar (WriterT w m) = CTVar m
+
+  retry        = lift retry
+  orElse ma mb = WriterT $ orElse (runWriterT ma) (runWriterT mb)
+  check        = lift . check
+  newCTVar     = lift . newCTVar
+  readCTVar    = lift . readCTVar
+  writeCTVar v = lift . writeCTVar v
+
+instance MonadSTM m => MonadSTM (StateT s m) where
+  type CTVar (StateT s m) = CTVar m
+
+  retry        = lift retry
+  orElse ma mb = StateT $ \s -> orElse (runStateT ma s) (runStateT mb s)
+  check        = lift . check
+  newCTVar     = lift . newCTVar
+  readCTVar    = lift . readCTVar
+  writeCTVar v = lift . writeCTVar v
+
+instance (MonadSTM m, Monoid w) => MonadSTM (RWST r w s m) where
+  type CTVar (RWST r w s m) = CTVar m
+
+  retry        = lift retry
+  orElse ma mb = RWST $ \r s -> orElse (runRWST ma r s) (runRWST mb r s)
+  check        = lift . check
+  newCTVar     = lift . newCTVar
+  readCTVar    = lift . readCTVar
+  writeCTVar v = lift . writeCTVar v
