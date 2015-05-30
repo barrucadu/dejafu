@@ -10,13 +10,16 @@ import Control.Exception (Exception)
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, throwM, catch)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
-import Control.Monad.Writer (WriterT(..), runWriterT)
-import Control.Monad.State (StateT(..), runStateT)
-import Control.Monad.RWS (RWST(..), runRWST)
 import Control.Monad.Trans (lift)
 import Data.Monoid (Monoid)
 
+import qualified Control.Monad.RWS.Lazy as RL
+import qualified Control.Monad.RWS.Strict as RS
 import qualified Control.Monad.STM as S
+import qualified Control.Monad.State.Lazy as SL
+import qualified Control.Monad.State.Strict as SS
+import qualified Control.Monad.Writer.Lazy as WL
+import qualified Control.Monad.Writer.Strict as WS
 
 -- | @MonadSTM@ is an abstraction over 'STM', in the same spirit as
 -- 'MonadConc' is an abstraction over 'IO's concurrency.
@@ -95,31 +98,61 @@ instance MonadSTM m => MonadSTM (ReaderT r m) where
   readCTVar    = lift . readCTVar
   writeCTVar v = lift . writeCTVar v
 
-instance (MonadSTM m, Monoid w) => MonadSTM (WriterT w m) where
-  type CTVar (WriterT w m) = CTVar m
+instance (MonadSTM m, Monoid w) => MonadSTM (WL.WriterT w m) where
+  type CTVar (WL.WriterT w m) = CTVar m
 
   retry        = lift retry
-  orElse ma mb = WriterT $ orElse (runWriterT ma) (runWriterT mb)
+  orElse ma mb = WL.WriterT $ orElse (WL.runWriterT ma) (WL.runWriterT mb)
   check        = lift . check
   newCTVar     = lift . newCTVar
   readCTVar    = lift . readCTVar
   writeCTVar v = lift . writeCTVar v
 
-instance MonadSTM m => MonadSTM (StateT s m) where
-  type CTVar (StateT s m) = CTVar m
+instance (MonadSTM m, Monoid w) => MonadSTM (WS.WriterT w m) where
+  type CTVar (WS.WriterT w m) = CTVar m
 
   retry        = lift retry
-  orElse ma mb = StateT $ \s -> orElse (runStateT ma s) (runStateT mb s)
+  orElse ma mb = WS.WriterT $ orElse (WS.runWriterT ma) (WS.runWriterT mb)
   check        = lift . check
   newCTVar     = lift . newCTVar
   readCTVar    = lift . readCTVar
   writeCTVar v = lift . writeCTVar v
 
-instance (MonadSTM m, Monoid w) => MonadSTM (RWST r w s m) where
-  type CTVar (RWST r w s m) = CTVar m
+instance MonadSTM m => MonadSTM (SL.StateT s m) where
+  type CTVar (SL.StateT s m) = CTVar m
 
   retry        = lift retry
-  orElse ma mb = RWST $ \r s -> orElse (runRWST ma r s) (runRWST mb r s)
+  orElse ma mb = SL.StateT $ \s -> orElse (SL.runStateT ma s) (SL.runStateT mb s)
+  check        = lift . check
+  newCTVar     = lift . newCTVar
+  readCTVar    = lift . readCTVar
+  writeCTVar v = lift . writeCTVar v
+
+instance MonadSTM m => MonadSTM (SS.StateT s m) where
+  type CTVar (SS.StateT s m) = CTVar m
+
+  retry        = lift retry
+  orElse ma mb = SS.StateT $ \s -> orElse (SS.runStateT ma s) (SS.runStateT mb s)
+  check        = lift . check
+  newCTVar     = lift . newCTVar
+  readCTVar    = lift . readCTVar
+  writeCTVar v = lift . writeCTVar v
+
+instance (MonadSTM m, Monoid w) => MonadSTM (RL.RWST r w s m) where
+  type CTVar (RL.RWST r w s m) = CTVar m
+
+  retry        = lift retry
+  orElse ma mb = RL.RWST $ \r s -> orElse (RL.runRWST ma r s) (RL.runRWST mb r s)
+  check        = lift . check
+  newCTVar     = lift . newCTVar
+  readCTVar    = lift . readCTVar
+  writeCTVar v = lift . writeCTVar v
+
+instance (MonadSTM m, Monoid w) => MonadSTM (RS.RWST r w s m) where
+  type CTVar (RS.RWST r w s m) = CTVar m
+
+  retry        = lift retry
+  orElse ma mb = RS.RWST $ \r s -> orElse (RS.runRWST ma r s) (RS.runRWST mb r s)
   check        = lift . check
   newCTVar     = lift . newCTVar
   readCTVar    = lift . readCTVar

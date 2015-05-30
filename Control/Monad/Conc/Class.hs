@@ -15,17 +15,24 @@ module Control.Monad.Conc.Class
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
 import Control.Exception (Exception, AsyncException(ThreadKilled), SomeException)
-import Control.Monad (unless)
+import Control.Monad (liftM, unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Control.Monad.STM (STM)
 import Control.Monad.STM.Class (MonadSTM, CTVar)
 import Control.Monad.Trans (lift)
 import Data.IORef (IORef, atomicModifyIORef, newIORef, readIORef)
+import Data.Monoid (Monoid, mempty)
 
 import qualified Control.Concurrent as C
 import qualified Control.Monad.Catch as Ca
+import qualified Control.Monad.RWS.Lazy as RL
+import qualified Control.Monad.RWS.Strict as RS
 import qualified Control.Monad.STM as S
+import qualified Control.Monad.State.Lazy as SL
+import qualified Control.Monad.State.Strict as SS
+import qualified Control.Monad.Writer.Lazy as WL
+import qualified Control.Monad.Writer.Strict as WS
 
 -- | @MonadConc@ is like a combination of 'ParFuture' and 'ParIVar'
 -- from the abstract-par package. It captures the interface of
@@ -318,20 +325,213 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   type CRef     (ReaderT r m) = CRef m
   type ThreadId (ReaderT r m) = ThreadId m
 
-  readCVar       = lift . readCVar
-  fork ma        = ReaderT $ \r -> fork (runReaderT ma r)
-  forkWithUnmask ma = ReaderT $ \r -> forkWithUnmask (\f -> runReaderT (ma $ go f) r)where
-    go f mx = ReaderT $ \r -> f (runReaderT mx r)
-  forkOn i ma    = ReaderT $ \r -> forkOn i (runReaderT ma r)
+  fork              = reader fork
+  forkOn i          = reader (forkOn i)
+  forkWithUnmask ma = ReaderT $ \r -> forkWithUnmask (\f -> runReaderT (ma $ reader f) r)
+  _concNoTest       = reader _concNoTest
+
   getNumCapabilities = lift getNumCapabilities
-  myThreadId     = lift myThreadId
-  throwTo t      = lift . throwTo t
-  newEmptyCVar   = lift newEmptyCVar
-  putCVar v      = lift . putCVar v
-  tryPutCVar v   = lift . tryPutCVar v
-  takeCVar       = lift . takeCVar
-  tryTakeCVar    = lift . tryTakeCVar
-  newCRef        = lift . newCRef
-  readCRef       = lift . readCRef
-  modifyCRef r   = lift . modifyCRef r
-  atomically     = lift . atomically
+  myThreadId         = lift myThreadId
+  throwTo t          = lift . throwTo t
+  newEmptyCVar       = lift newEmptyCVar
+  readCVar           = lift . readCVar
+  putCVar v          = lift . putCVar v
+  tryPutCVar v       = lift . tryPutCVar v
+  takeCVar           = lift . takeCVar
+  tryTakeCVar        = lift . tryTakeCVar
+  newCRef            = lift . newCRef
+  readCRef           = lift . readCRef
+  modifyCRef r       = lift . modifyCRef r
+  atomically         = lift . atomically
+  _concKnowsAbout    = lift . _concKnowsAbout
+  _concForgets       = lift . _concForgets
+  _concAllKnown      = lift _concAllKnown
+
+reader :: Monad m => (m a -> m b) -> ReaderT r m a -> ReaderT r m b
+reader f ma = ReaderT $ \r -> f (runReaderT ma r)
+
+instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
+  type STMLike  (WL.WriterT w m) = STMLike m
+  type CVar     (WL.WriterT w m) = CVar m
+  type CRef     (WL.WriterT w m) = CRef m
+  type ThreadId (WL.WriterT w m) = ThreadId m
+
+  fork              = writerlazy fork
+  forkOn i          = writerlazy (forkOn i)
+  forkWithUnmask ma = lift $ forkWithUnmask (\f -> fst `liftM` WL.runWriterT (ma $ writerlazy f))
+  _concNoTest       = writerlazy _concNoTest
+
+  getNumCapabilities = lift getNumCapabilities
+  myThreadId         = lift myThreadId
+  throwTo t          = lift . throwTo t
+  newEmptyCVar       = lift newEmptyCVar
+  readCVar           = lift . readCVar
+  putCVar v          = lift . putCVar v
+  tryPutCVar v       = lift . tryPutCVar v
+  takeCVar           = lift . takeCVar
+  tryTakeCVar        = lift . tryTakeCVar
+  newCRef            = lift . newCRef
+  readCRef           = lift . readCRef
+  modifyCRef r       = lift . modifyCRef r
+  atomically         = lift . atomically
+  _concKnowsAbout    = lift . _concKnowsAbout
+  _concForgets       = lift . _concForgets
+  _concAllKnown      = lift _concAllKnown
+
+writerlazy :: (Monad m, Monoid w) => (m a -> m b) -> WL.WriterT w m a -> WL.WriterT w m b
+writerlazy f ma = lift . f $ fst `liftM` WL.runWriterT ma
+
+instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
+  type STMLike  (WS.WriterT w m) = STMLike m
+  type CVar     (WS.WriterT w m) = CVar m
+  type CRef     (WS.WriterT w m) = CRef m
+  type ThreadId (WS.WriterT w m) = ThreadId m
+
+  fork              = writerstrict fork
+  forkOn i          = writerstrict (forkOn i)
+  forkWithUnmask ma = lift $ forkWithUnmask (\f -> fst `liftM` WS.runWriterT (ma $ writerstrict f))
+  _concNoTest       = writerstrict _concNoTest
+
+  getNumCapabilities = lift getNumCapabilities
+  myThreadId         = lift myThreadId
+  throwTo t          = lift . throwTo t
+  newEmptyCVar       = lift newEmptyCVar
+  readCVar           = lift . readCVar
+  putCVar v          = lift . putCVar v
+  tryPutCVar v       = lift . tryPutCVar v
+  takeCVar           = lift . takeCVar
+  tryTakeCVar        = lift . tryTakeCVar
+  newCRef            = lift . newCRef
+  readCRef           = lift . readCRef
+  modifyCRef r       = lift . modifyCRef r
+  atomically         = lift . atomically
+  _concKnowsAbout    = lift . _concKnowsAbout
+  _concForgets       = lift . _concForgets
+  _concAllKnown      = lift _concAllKnown
+
+writerstrict :: (Monad m, Monoid w) => (m a -> m b) -> WS.WriterT w m a -> WS.WriterT w m b
+writerstrict f ma = lift . f $ fst `liftM` WS.runWriterT ma
+
+instance MonadConc m => MonadConc (SL.StateT s m) where
+  type STMLike  (SL.StateT s m) = STMLike m
+  type CVar     (SL.StateT s m) = CVar m
+  type CRef     (SL.StateT s m) = CRef m
+  type ThreadId (SL.StateT s m) = ThreadId m
+
+  fork              = statelazy fork
+  forkOn i          = statelazy (forkOn i)
+  forkWithUnmask ma = SL.StateT $ \s -> (\a -> (a,s)) `liftM` forkWithUnmask (\f -> SL.evalStateT (ma $ statelazy f) s)
+  _concNoTest       = statelazy _concNoTest
+
+  getNumCapabilities = lift getNumCapabilities
+  myThreadId         = lift myThreadId
+  throwTo t          = lift . throwTo t
+  newEmptyCVar       = lift newEmptyCVar
+  readCVar           = lift . readCVar
+  putCVar v          = lift . putCVar v
+  tryPutCVar v       = lift . tryPutCVar v
+  takeCVar           = lift . takeCVar
+  tryTakeCVar        = lift . tryTakeCVar
+  newCRef            = lift . newCRef
+  readCRef           = lift . readCRef
+  modifyCRef r       = lift . modifyCRef r
+  atomically         = lift . atomically
+  _concKnowsAbout    = lift . _concKnowsAbout
+  _concForgets       = lift . _concForgets
+  _concAllKnown      = lift _concAllKnown
+
+statelazy :: Monad m => (m a -> m b) -> SL.StateT s m a -> SL.StateT s m b
+statelazy f ma = SL.StateT $ \s -> (\b -> (b,s)) `liftM` f (SL.evalStateT ma s)
+
+instance MonadConc m => MonadConc (SS.StateT s m) where
+  type STMLike  (SS.StateT s m) = STMLike m
+  type CVar     (SS.StateT s m) = CVar m
+  type CRef     (SS.StateT s m) = CRef m
+  type ThreadId (SS.StateT s m) = ThreadId m
+
+  fork              = statestrict fork
+  forkOn i          = statestrict (forkOn i)
+  forkWithUnmask ma = SS.StateT $ \s -> (\a -> (a,s)) `liftM` forkWithUnmask (\f -> SS.evalStateT (ma $ statestrict f) s)
+  _concNoTest       = statestrict _concNoTest
+
+  getNumCapabilities = lift getNumCapabilities
+  myThreadId         = lift myThreadId
+  throwTo t          = lift . throwTo t
+  newEmptyCVar       = lift newEmptyCVar
+  readCVar           = lift . readCVar
+  putCVar v          = lift . putCVar v
+  tryPutCVar v       = lift . tryPutCVar v
+  takeCVar           = lift . takeCVar
+  tryTakeCVar        = lift . tryTakeCVar
+  newCRef            = lift . newCRef
+  readCRef           = lift . readCRef
+  modifyCRef r       = lift . modifyCRef r
+  atomically         = lift . atomically
+  _concKnowsAbout    = lift . _concKnowsAbout
+  _concForgets       = lift . _concForgets
+  _concAllKnown      = lift _concAllKnown
+
+statestrict :: Monad m => (m a -> m b) -> SS.StateT s m a -> SS.StateT s m b
+statestrict f ma = SS.StateT $ \s -> (\b -> (b,s)) `liftM` f (SS.evalStateT ma s)
+
+instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
+  type STMLike  (RL.RWST r w s m) = STMLike m
+  type CVar     (RL.RWST r w s m) = CVar m
+  type CRef     (RL.RWST r w s m) = CRef m
+  type ThreadId (RL.RWST r w s m) = ThreadId m
+
+  fork              = rwslazy fork
+  forkOn i          = rwslazy (forkOn i)
+  forkWithUnmask ma = RL.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkWithUnmask (\f -> fst `liftM` RL.evalRWST (ma $ rwslazy f) r s)
+  _concNoTest       = rwslazy _concNoTest
+
+  getNumCapabilities = lift getNumCapabilities
+  myThreadId         = lift myThreadId
+  throwTo t          = lift . throwTo t
+  newEmptyCVar       = lift newEmptyCVar
+  readCVar           = lift . readCVar
+  putCVar v          = lift . putCVar v
+  tryPutCVar v       = lift . tryPutCVar v
+  takeCVar           = lift . takeCVar
+  tryTakeCVar        = lift . tryTakeCVar
+  newCRef            = lift . newCRef
+  readCRef           = lift . readCRef
+  modifyCRef r       = lift . modifyCRef r
+  atomically         = lift . atomically
+  _concKnowsAbout    = lift . _concKnowsAbout
+  _concForgets       = lift . _concForgets
+  _concAllKnown      = lift _concAllKnown
+
+rwslazy :: (Monad m, Monoid w) => (m a -> m b) -> RL.RWST r w s m a -> RL.RWST r w s m b
+rwslazy f ma = RL.RWST $ \r s -> (\b -> (b,s,mempty)) `liftM` f (fst `liftM` RL.evalRWST ma r s)
+
+instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
+  type STMLike  (RS.RWST r w s m) = STMLike m
+  type CVar     (RS.RWST r w s m) = CVar m
+  type CRef     (RS.RWST r w s m) = CRef m
+  type ThreadId (RS.RWST r w s m) = ThreadId m
+
+  fork              = rwsstrict fork
+  forkOn i          = rwsstrict (forkOn i)
+  forkWithUnmask ma = RS.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkWithUnmask (\f -> fst `liftM` RS.evalRWST (ma $ rwsstrict f) r s)
+  _concNoTest       = rwsstrict _concNoTest
+
+  getNumCapabilities = lift getNumCapabilities
+  myThreadId         = lift myThreadId
+  throwTo t          = lift . throwTo t
+  newEmptyCVar       = lift newEmptyCVar
+  readCVar           = lift . readCVar
+  putCVar v          = lift . putCVar v
+  tryPutCVar v       = lift . tryPutCVar v
+  takeCVar           = lift . takeCVar
+  tryTakeCVar        = lift . tryTakeCVar
+  newCRef            = lift . newCRef
+  readCRef           = lift . readCRef
+  modifyCRef r       = lift . modifyCRef r
+  atomically         = lift . atomically
+  _concKnowsAbout    = lift . _concKnowsAbout
+  _concForgets       = lift . _concForgets
+  _concAllKnown      = lift _concAllKnown
+
+rwsstrict :: (Monad m, Monoid w) => (m a -> m b) -> RS.RWST r w s m a -> RS.RWST r w s m b
+rwsstrict f ma = RS.RWST $ \r s -> (\b -> (b,s,mempty)) `liftM` f (fst `liftM` RS.evalRWST ma r s)
