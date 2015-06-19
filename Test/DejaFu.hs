@@ -84,15 +84,13 @@ module Test.DejaFu
   , alwaysTrue
   , alwaysTrue2
   , somewhereTrue
-  , somewhereTrue2
   ) where
 
+import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when)
-import Data.List (nub)
 import Data.List.Extra
-import Data.Monoid (mconcat)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.IO (ConcIO)
 import Test.DejaFu.SCT
@@ -118,8 +116,8 @@ dejafus = dejafus' 2
 -- | Variant of 'dejafus' which takes a pre-emption bound.
 dejafus' :: (Eq a, Show a) => Int -> (forall t. Conc t a) -> [(String, Predicate a)] -> IO Bool
 dejafus' pb conc tests = do
-  let traces = sctPreBound pb conc
-  results <- mapM (\(name, test) -> doTest name $ runTest'' test traces) tests
+  let traces = sctPreBound conc
+  results <- mapM (\(name, test) -> doTest name $ runTest'' pb test traces) tests
   return $ and results
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
@@ -129,8 +127,9 @@ dejafusIO = dejafusIO' 2
 -- | Variant of 'dejafus'' for computations which do 'IO'.
 dejafusIO' :: (Eq a, Show a) => Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
 dejafusIO' pb concio tests = do
-  traces  <- sctPreBoundIO pb concio
-  results <- mapM (\(name, test) -> doTest name $ runTest'' test traces) tests
+  traces  <- sctPreBoundIO concio
+  traces' <- mapM (sequenceIOTree $ Just pb) traces
+  results <- mapM (\(name, test) -> doTest name $ runTest'' pb test traces') tests
   return $ and results
 
 -- | Automatically test a computation. In particular, look for
@@ -152,23 +151,19 @@ autocheckIO concio = dejafusIO concio cases where
 
 -- * Test cases
 
--- | The results of a test, including information on the number of
--- cases checked, and number of total cases. Be careful if using the
--- total number of cases, as that value may be very big, and (due to
--- laziness) will actually force a lot more computation!.
+-- | The results of a test, including the number of cases checked to
+-- determine the final boolean outcome.
 data Result a = Result
   { _pass         :: Bool
   -- ^ Whether the test passed or not.
   , _casesChecked :: Int
   -- ^ The number of cases checked.
-  , _casesTotal   :: Int
-  -- ^ The total number of cases.
   , _failures :: [(Either Failure a, Trace)]
   -- ^ The failed cases, if any.
   } deriving (Show, Eq)
 
 instance NFData a => NFData (Result a) where
-  rnf r = rnf (_pass r, _casesChecked r, _casesTotal r, _failures r)
+  rnf r = rnf (_pass r, _casesChecked r, _failures r)
 
 instance Functor Result where
   fmap f r = r { _failures = map (first $ fmap f) $ _failures r }
@@ -189,54 +184,25 @@ runTestIO = runTestIO' 2
 
 -- | Variant of 'runTest' which takes a pre-emption bound.
 runTest' :: Eq a => Int -> Predicate a -> (forall t. Conc t a) -> Result a
-runTest' pb predicate conc = runTest'' predicate $ sctPreBound pb conc
+runTest' pb predicate conc = runTest'' pb predicate $ sctPreBound conc
 
--- | Variant of 'runTest'' which takes a list of results.
-runTest'' :: Eq a => Predicate a -> [(Either Failure a, Trace)] -> Result a
-runTest'' predicate results = r { _failures = uniques $ _failures r } where
-  r = predicate results
+-- | Variant of 'runTest'' which takes a tree of results and a depth limit.
+runTest'' :: Eq a => Int -> Predicate a -> [SCTTree a] -> Result a
+runTest'' pb predicate results = predicate $ map (bound pb) results where
+  bound 0 (SCTTree a t _)  = SCTTree a t []
+  bound n (SCTTree a t os) = SCTTree a t $ map (bound $ n - 1) os
 
 -- | Variant of 'runTest'' for computations which do 'IO'.
 runTestIO' :: Eq a => Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
 runTestIO' pb predicate conc = do
-  results <- sctPreBoundIO pb conc
-  return $ runTest'' predicate results
-
--- | Strip out duplicates
-uniques :: Eq a => [(a, Trace)] -> [(a, Trace)]
-uniques = nub . sortNubBy simplicity
-
--- | Determine which of two failures is simpler, if they are comparable.
-simplicity :: Eq a => (a, Trace) -> (a, Trace) -> Maybe Ordering
-simplicity (r, t) (s, u)
-  | r /= s = Nothing
-  | otherwise = Just $ mconcat
-    [ preEmpCount t' `compare` preEmpCount u'
-    , contextSwitchCount t' `compare` contextSwitchCount u'
-    , lexicographic t' u'
-    ]
-
-  where
-    t' = map (\(d,_,_) -> d) t
-    u' = map (\(d,_,_) -> d) u
-
-    contextSwitchCount (Start _:ss) = 1 + contextSwitchCount ss
-    contextSwitchCount (_:ss) = contextSwitchCount ss
-    contextSwitchCount _ = 0::Int
-
-    lexicographic (SwitchTo i:_) (SwitchTo j:_) = i `compare` j
-    lexicographic (Start i:_) (Start j:_) = i `compare` j
-    lexicographic (Continue:as) (b:bs) = if b /= Continue then LT else lexicographic as bs
-    lexicographic (_:as) (_:bs) = lexicographic as bs
-    lexicographic [] [] = EQ
-    lexicographic [] _  = LT
-    lexicographic _ []  = GT
+  results <- sctPreBoundIO conc
+  runTest'' pb predicate <$> mapM (sequenceIOTree $ Just pb) results
 
 -- * Predicates
 
 -- | A @Predicate@ is a function which collapses a list of results
 -- into a 'Result'.
-type Predicate a = [(Either Failure a, Trace)] -> Result a
+type Predicate a = [SCTTree a] -> Result a
 
 -- | Check that a computation never deadlocks.
 deadlocksNever :: Predicate a
@@ -270,71 +236,69 @@ alwaysSame = alwaysTrue2 (==)
 
 -- | Check that the result of a computation is not always the same.
 notAlwaysSame :: Eq a => Predicate a
-notAlwaysSame = somewhereTrue2 (/=)
+notAlwaysSame ts = go ts Result { _pass = False, _casesChecked = 0, _failures = [] } where
+  go (SCTTree a t offs:sibs) res = case (offs, sibs) of
+    (SCTTree o u _:_, SCTTree s v _:_) -> case (a /= o, a /= s) of
+      (True, True)   -> incCC . incCC $ res { _pass = True }
+      (True, False)  -> incCC . incCC $ res { _pass = True, _failures = (a, t) : (s, v) : _failures res }
+      (False, True)  -> incCC . incCC $ res { _pass = True, _failures = (a, t) : (o, u) : _failures res }
+      (False, False) -> go sibs . incCC . incCC $ res { _failures = (a, t) : (s, v) : (o, u) : _failures res }
+
+    (SCTTree o u _:_, [])
+      | a /= o     -> incCC $ res { _pass = True }
+      | otherwise -> go (offs++sibs) . incCC $ res { _failures = (a, t) : (o, u) : _failures res }
+
+    ([], SCTTree s v _:_)
+      | a /= s     -> incCC $ res { _pass = True }
+      | otherwise -> go (offs++sibs) . incCC $ res { _failures = (a, t) : (s, v) : _failures res }
+
+    ([], []) -> incCC res
+
+  go [] res = res
 
 -- | Check that the result of a unary boolean predicate is always
 -- true.
 alwaysTrue :: (Either Failure a -> Bool) -> Predicate a
-alwaysTrue p xs = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = len, _failures = failures } where
+alwaysTrue p ts = go ts Result { _pass = True, _casesChecked = 0, _failures = [] } where
+  go (SCTTree a t offs:sibs) res
+    | p a       = go (offs++sibs) . incCC $ res
+    | otherwise = (go sibs res { _failures = (a, t) : _failures res }) { _pass = False, _casesChecked = 1+_casesChecked res }
   go [] res = res
-  go ((y,_):ys) res
-    | p y = go ys $ incCC res
-    | otherwise = incCC res { _pass = False }
 
-  (len, failures) = findFailures1 p xs
-
--- | Check that the result of a binary boolean predicate is always
--- true between adjacent pairs of results. In general, it is probably
--- best to only check properties here which are transitive and
--- symmetric, in order to draw conclusions about the entire collection
--- of executions.
+-- | Check that the result of a binary boolean predicate is true
+-- between all pairs of results. Only properties which are transitive
+-- and symmetric should be used here.
 --
 -- If the predicate fails, /both/ (result,trace) tuples will be added
 -- to the failures list.
 alwaysTrue2 :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
-alwaysTrue2 _ [_] = Result { _pass = True, _casesChecked = 1, _casesTotal = 1, _failures = [] }
-alwaysTrue2 p xs  = go xs Result { _pass = True, _casesChecked = 0, _casesTotal = len, _failures = failures } where
-  go [] = id
-  go [(y1,_),(y2,_)]    = check y1 y2 []
-  go ((y1,_):(y2,t):ys) = check y1 y2 ((y2,t) : ys)
+alwaysTrue2 p ts  = go ts Result { _pass = True, _casesChecked = 0, _failures = [] } where
+  go (SCTTree a t offs:sibs) res = case (offs, sibs) of
+    (SCTTree o u _:_, SCTTree s v _:_) -> case (p a o, p a s) of
+      (True, True)   -> go (offs++sibs) . incCC . incCC $ res
+      (True, False)  -> (go (offs++sibs) $ res { _failures = (a, t) : (s, v) : _failures res }) { _pass = False, _casesChecked = 2+_casesChecked res }
+      (False, True)  -> (go sibs $ res { _failures = (a, t) : (o, u) : _failures res }) { _pass = False, _casesChecked = 2+_casesChecked res }
+      (False, False) -> (go sibs $ res { _failures = (a, t) : (s, v) : (o, u) : _failures res }) { _pass = False, _casesChecked = 2+_casesChecked res }
 
-  check y1 y2 ys res
-    | p y1 y2   = go ys $ incCC res
-    | otherwise = incCC res { _pass = False }
+    (SCTTree o u _:_, [])
+      | p a o     -> go offs . incCC $ res
+      | otherwise -> incCC res { _pass = False, _failures = (a, t) : (o, u) : _failures res }
 
-  (len, failures) = findFailures2 p xs
+    ([], SCTTree s v _:_)
+      | p a s     -> go sibs . incCC $ res
+      | otherwise -> incCC res { _pass = False, _failures = (a, t) : (s, v) : _failures res }
+
+    ([], []) -> incCC res
+  go [] res = res
 
 -- | Check that the result of a unary boolean predicate is true at
 -- least once.
 somewhereTrue :: (Either Failure a -> Bool) -> Predicate a
-somewhereTrue p xs = go xs Result { _pass = False, _casesChecked = 0, _casesTotal = len, _failures = failures } where
+somewhereTrue p ts = go ts Result { _pass = False, _casesChecked = 0, _failures = [] } where
+  go (SCTTree a t offs:sibs) res
+    | p a       = incCC res { _pass = True }
+    | otherwise = go (offs++sibs) $ incCC res { _failures = (a, t) : _failures res }
   go [] res = res
-  go ((y,_):ys) res
-    | p y = incCC res { _pass = True }
-    | otherwise = go ys $ incCC res
-
-  (len, failures) = findFailures1 p xs
-
--- | Check that the result of a binary boolean predicate is true
--- between at least one adjacent pair of results. In general, it is
--- probably best to only check properties here which are transitive
--- and symmetric, in order to draw conclusions about the entire
--- collection of executions.
---
--- If the predicate fails, /both/ (result,trace) tuples will be added
--- to the failures list.
-somewhereTrue2 :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
-somewhereTrue2 _ [x] = Result { _pass = False, _casesChecked = 1, _casesTotal = 1, _failures = [x] }
-somewhereTrue2 p xs  = go xs Result { _pass = False, _casesChecked = 0, _casesTotal = len, _failures = failures } where
-  go [] = id
-  go [(y1,_),(y2,_)]    = check y1 y2 []
-  go ((y1,_):(y2,t):ys) = check y1 y2 ((y2,t) : ys)
-
-  check y1 y2 ys res
-    | p y1 y2   = incCC res { _pass = True }
-    | otherwise = go ys $ incCC res
-
-  (len, failures) = findFailures2 p xs
 
 -- * Internal
 
@@ -356,28 +320,9 @@ doTest name result = do
 
   return $ _pass result
 
--- | Increment the cases checked
+-- | Increment the cases
 incCC :: Result a -> Result a
 incCC r = r { _casesChecked = _casesChecked r + 1 }
-
--- | Get the length of the list and find the failing cases in one
--- traversal.
-findFailures1 :: (Either Failure a -> Bool) -> [(Either Failure a, Trace)] -> (Int, [(Either Failure a, Trace)])
-findFailures1 p xs = findFailures xs 0 [] where
-  findFailures [] l fs = (l, fs)
-  findFailures ((z,t):zs) l fs
-    | p z = findFailures zs (l+1) fs
-    | otherwise = findFailures zs (l+1) ((z,t):fs)
-
--- | Get the length of the list and find the failing cases in one
--- traversal.
-findFailures2 :: (Either Failure a -> Either Failure a -> Bool) -> [(Either Failure a, Trace)] -> (Int, [(Either Failure a, Trace)])
-findFailures2 p xs = findFailures xs 0 [] where
-  findFailures [] l fs = (l, fs)
-  findFailures [_] l fs = (l+1, fs)
-  findFailures ((z1,t1):(z2,t2):zs) l fs
-    | p z1 z2 = findFailures ((z2,t2):zs) (l+1) fs
-    | otherwise = findFailures ((z2,t2):zs) (l+1) ((z1,t1):(z2,t2):fs)
 
 -- | Pretty-print a failure
 showfail :: Failure -> String

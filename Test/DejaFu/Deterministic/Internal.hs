@@ -79,7 +79,7 @@ runFixed' fixed runstm sched s idSource ma = do
 -- watch out for.
 runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
            -> Scheduler g -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace)
-runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) origg origthreads where
+runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads where
   go idSource sofar prior g threads
     | isTerminated  = return (g, idSource, sofar)
     | isDeadlocked  = writeRef (wref fixed) ref (Just $ Left Deadlock) >> return (g, idSource, sofar)
@@ -92,19 +92,19 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) ori
         Right (threads', idSource', act) ->
           let sofar' = (decision, alternatives, act) : sofar
               threads'' = if (interruptible <$> M.lookup chosen threads') == Just True then unblockWaitingOn chosen threads' else threads'
-          in  go idSource' sofar' chosen g' threads''
+          in  go idSource' sofar' (Just chosen) g' threads''
 
         Left UncaughtException
           | chosen == 0 -> writeRef (wref fixed) ref (Just $ Left UncaughtException) >> return (g, idSource, sofar)
           | otherwise ->
           let sofar' = (decision, alternatives, Killed) : sofar
               threads' = unblockWaitingOn chosen $ kill chosen threads
-          in go idSource sofar' chosen g' threads'
+          in go idSource sofar' (Just chosen) g' threads'
 
         Left failure -> writeRef (wref fixed) ref (Just $ Left failure) >> return (g, idSource, sofar)
 
     where
-      (chosen, g')  = if prior == -1 then (0, g) else sched g prior $ head runnable' :| tail runnable'
+      (chosen, g')  = sched g prior $ head runnable' :| tail runnable'
       runnable'     = M.keys runnable
       runnable      = M.filter (isNothing . _blocking) threads
       thread        = M.lookup chosen threads
@@ -124,14 +124,14 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] (-1) ori
           _ -> thrd
 
       decision
-        | chosen == prior         = Continue
-        | prior `elem` runnable' = SwitchTo chosen
-        | otherwise              = Start chosen
+        | Just chosen == prior = Continue
+        | prior `elem` map Just runnable' = SwitchTo chosen
+        | otherwise           = Start chosen
 
       alternatives
-        | chosen == prior         = map SwitchTo $ filter (/=prior) runnable'
-        | prior `elem` runnable' = Continue : map SwitchTo (filter (\t -> t /= prior && t /= chosen) runnable')
-        | otherwise              = map Start $ filter (/=chosen) runnable'
+        | Just chosen == prior = map SwitchTo $ filter (\t -> Just t /= prior) $ runnable'
+        | prior `elem` map Just runnable' = Continue : map SwitchTo (filter (\t -> Just t /= prior && t /= chosen) runnable')
+        | otherwise           = map Start $ filter (/=chosen) runnable'
 
 --------------------------------------------------------------------------------
 -- * Single-step execution

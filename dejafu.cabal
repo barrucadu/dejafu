@@ -73,8 +73,6 @@ library
                      , Test.DejaFu.Deterministic.Internal.Common
                      , Test.DejaFu.Deterministic.Internal.CVar
                      , Test.DejaFu.Deterministic.Internal.Threading
-                     , Test.DejaFu.SCT.Bounding
-                     , Test.DejaFu.SCT.Internal
                      , Test.DejaFu.STM.Internal
 
                      , Control.State
