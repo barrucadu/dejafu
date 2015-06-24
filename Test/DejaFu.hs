@@ -90,6 +90,7 @@ import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when)
+import Data.List (partition)
 import Data.List.Extra
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.IO (ConcIO)
@@ -273,22 +274,28 @@ alwaysTrue p ts = go ts Result { _pass = True, _casesChecked = 0, _failures = []
 -- to the failures list.
 alwaysTrue2 :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
 alwaysTrue2 p ts  = go ts Result { _pass = True, _casesChecked = 0, _failures = [] } where
-  go (SCTTree a t offs:sibs) res = case (offs, sibs) of
-    (SCTTree o u _:_, SCTTree s v _:_) -> case (p a o, p a s) of
-      (True, True)   -> go (offs++sibs) . incCC . incCC $ res
-      (True, False)  -> (go (offs++sibs) $ res { _failures = (a, t) : (s, v) : _failures res }) { _pass = False, _casesChecked = 2+_casesChecked res }
-      (False, True)  -> (go sibs $ res { _failures = (a, t) : (o, u) : _failures res }) { _pass = False, _casesChecked = 2+_casesChecked res }
-      (False, False) -> (go sibs $ res { _failures = (a, t) : (s, v) : (o, u) : _failures res }) { _pass = False, _casesChecked = 2+_casesChecked res }
+  go (SCTTree a t offs:sibs) res =
+    let r' = dosibs res
+    in if _pass r' then dooffs r' else dooffs r' { _casesChecked = _casesChecked r' }
 
-    (SCTTree o u _:_, [])
-      | p a o     -> go offs . incCC $ res
-      | otherwise -> incCC res { _pass = False, _failures = (a, t) : (o, u) : _failures res }
+    where
+    dosibs r = case partition (\(SCTTree x _ _) -> p a x) sibs of
+      (good, [])  -> go good (r  { _casesChecked = length good + _casesChecked r })
+      ([], bad)   -> r { _casesChecked = 1 + _casesChecked r
+                      , _failures = [(a,t)| _pass r] ++ map (\(SCTTree x y _) -> (x,y)) bad ++ _failures r
+                      , _pass = False }
+      (good, bad) -> (go good r) { _casesChecked = length good + _casesChecked r
+                                , _failures = [(a,t)| _pass r] ++ map (\(SCTTree x y _) -> (x,y)) bad ++ _failures r
+                                , _pass = False }
 
-    ([], SCTTree s v _:_)
-      | p a s     -> go sibs . incCC $ res
-      | otherwise -> incCC res { _pass = False, _failures = (a, t) : (s, v) : _failures res }
-
-    ([], []) -> incCC res
+    dooffs r = case partition (\(SCTTree x _ _) -> p a x) offs of
+      (good, [])  -> go good (r  { _casesChecked = length good + _casesChecked r })
+      ([], bad)   -> r { _casesChecked = 1 + _casesChecked r
+                      , _failures = [(a,t)| _pass r] ++ map (\(SCTTree x y _) -> (x,y)) bad ++ _failures r
+                      , _pass = False }
+      (good, bad) -> (go good r) { _casesChecked = length good + _casesChecked r
+                                , _failures = [(a,t)| _pass r] ++ map (\(SCTTree x y _) -> (x,y)) bad ++ _failures r
+                                , _pass = False }
   go [] res = res
 
 -- | Check that the result of a unary boolean predicate is true at
