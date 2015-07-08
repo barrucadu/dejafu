@@ -90,22 +90,51 @@ sctPreBoundIO = sctBoundedIO pbSiblings (pbOffspring True)
 -- | Return all modifications to this schedule which do not introduce
 -- extra pre-emptions.
 pbSiblings :: [(CVarId, Bool)] -> Trace -> [[Decision]]
-pbSiblings _ = siblings . map (\(d,a,_) -> (d,map fst a)) where
-  siblings ((Start    i, alts):ds) = [[a] | a@(Start    _) <- alts] ++ [Start    i : o | o <- siblings ds, not $ null o]
-  siblings ((SwitchTo i, alts):ds) = [[a] | a@(SwitchTo _) <- alts] ++ [SwitchTo i : o | o <- siblings ds, not $ null o]
-  siblings ((d, _):ds) = [d : o | o <- siblings ds, not $ null o]
-  siblings [] = []
+pbSiblings cvstate = siblings [] where
+  siblings pref (t@(Start i, alts, _):ds) =
+    let alters  = [[a] | (a@(Start _), act) <- alts, doesntBlock pref act]
+        balters = [[a] | (a@(Start _), act) <- alts, not $ doesntBlock pref act]
+    in (if null alters then balters else alters) ++
+       [Start i : o | o <- siblings (pref++[t]) ds, not $ null o]
+
+  siblings pref (t@(SwitchTo i, alts, _):ds) =
+    let alters  = [[a] | (a@(SwitchTo _), act) <- alts, doesntBlock pref act]
+        balters = [[a] | (a@(SwitchTo _), act) <- alts, not $ doesntBlock pref act]
+    in (if null alters then balters else alters) ++
+       [SwitchTo i : o | o <- siblings (pref++[t]) ds, not $ null o]
+
+  siblings pref (t@(d, _, _):ds) = [d : o | o <- siblings (pref++[t]) ds, not $ null o]
+  siblings _ [] = []
+
+  -- TODO: Include also blocking on throwing exceptions to masked
+  -- threads.
+  doesntBlock pref (Put' c)  = (c, False) `elem` updateCVState cvstate pref
+  doesntBlock pref (Read' c) = (c, True)  `elem` updateCVState cvstate pref
+  doesntBlock pref (Take' c) = (c, True)  `elem` updateCVState cvstate pref
+  doesntBlock _ _ = True
 
 -- | Return all modifications to this schedule which do introduce an
 -- extra pre-emption. Only introduce pre-emptions around CVar actions
 -- and lifts.
 pbOffspring :: Bool -> [(CVarId, Bool)] -> Trace -> [[Decision]]
-pbOffspring lifts _ = offspring where
-  offspring ((Continue, alts, ta):ds)
-    | interesting lifts ta = [[n] | (n@(SwitchTo _), _) <- alts] ++ [Continue : n | n <- offspring ds, not $ null n]
-    | otherwise = [Continue : n | n <- offspring ds, not $ null n]
-  offspring ((d, _, _):ds) = [d : n | n <- offspring ds, not $ null n]
-  offspring [] = []
+pbOffspring lifts cvstate = offspring [] where
+  offspring pref (t@(Continue, alts, ta):ds)
+    | interesting lifts ta =
+      let alters  = [[n] | (n@(SwitchTo _), act) <- alts, doesntBlock pref act]
+          balters = [[n] | (n@(SwitchTo _), act) <- alts, not $ doesntBlock pref act]
+      in (if null alters then balters else alters) ++
+         [Continue : n | n <- offspring (pref++[t]) ds, not $ null n]
+    | otherwise = [Continue : n | n <- offspring (pref++[t]) ds, not $ null n]
+
+  offspring pref (t@(d, _, _):ds) = [d : n | n <- offspring (pref++[t]) ds, not $ null n]
+  offspring _ [] = []
+
+  -- TODO: Include also blocking on throwing exceptions to masked
+  -- threads.
+  doesntBlock pref (Put' c)  = (c, False) `elem` updateCVState cvstate pref
+  doesntBlock pref (Read' c) = (c, True)  `elem` updateCVState cvstate pref
+  doesntBlock pref (Take' c) = (c, True)  `elem` updateCVState cvstate pref
+  doesntBlock _ _ = True
 
 -- | Check the pre-emption count of some scheduling decisions.
 preEmpCount :: [Decision] -> Int
@@ -202,7 +231,13 @@ sctBoundedIO siblings offspring c = go [] where
 -- prefix trace. This assumes that the trace is valid (no double-puts,
 -- etc).
 computeCVState :: Trace -> [(CVarId, Bool)]
-computeCVState = foldl' go [] where
+computeCVState = updateCVState []
+
+-- | Compute the state of every 'CVar' from the given starting point
+-- after executing the given prefix trace. This assumes that the trace
+-- is valid.
+updateCVState :: [(CVarId, Bool)] -> Trace -> [(CVarId, Bool)]
+updateCVState = foldl' go where
   go state (_, _, New  c)   = (c, False) : state
   go state (_, _, Put  c _) = (c, True)  : filter ((/=c) . fst) state
   go state (_, _, Take c _) = (c, False) : filter ((/=c) . fst) state
