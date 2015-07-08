@@ -114,9 +114,10 @@ initialIdSource = Id 0 0 0 0
 type Scheduler s = s -> Maybe ThreadId -> NonEmpty ThreadId -> (ThreadId, s)
 
 -- | One of the outputs of the runner is a @Trace@, which is a log of
--- decisions made, alternative decisions, and the action a thread took
--- in its step.
-type Trace = [(Decision, [Decision], ThreadAction)]
+-- decisions made, alternative decisions (including what action would
+-- have been performed had that decision been taken), and the action a
+-- thread took in its step.
+type Trace = [(Decision, [(Decision, ThreadAction')], ThreadAction)]
 
 -- | Pretty-print a trace.
 showTrace :: Trace -> String
@@ -236,6 +237,80 @@ instance NFData ThreadAction where
   rnf (Fork tid)  = rnf tid
   rnf (New  c) = rnf c
   rnf (Read c) = rnf c
+  rnf ta = ta `seq` ()
+
+-- | A simplified view of the actions that a thread can perform.
+data ThreadAction' =
+    Fork'
+  -- ^ Start a new thread.
+  | MyThreadId'
+  -- ^ Get the 'ThreadId' of the current thread.
+  | New'
+  -- ^ Create a new 'CVar'.
+  | Put' CVarId
+  -- ^ Put into a 'CVar', possibly waking up some threads.
+  | TryPut' CVarId
+  -- ^ Try to put into a 'CVar', possibly waking up some threads.
+  | Read' CVarId
+  -- ^ Read from a 'CVar'.
+  | Take' CVarId
+  -- ^ Take from a 'CVar', possibly waking up some threads.
+  | TryTake' CVarId
+  -- ^ Try to take from a 'CVar', possibly waking up some threads.
+  | NewRef'
+  -- ^ Create a new 'CRef'.
+  | ReadRef' CRefId
+  -- ^ Read from a 'CRef'.
+  | ModRef' CRefId
+  -- ^ Modify a 'CRef'.
+  | STM'
+  -- ^ An STM transaction was executed, possibly waking up some
+  -- threads.
+  | Catching'
+  -- ^ Register a new exception handler
+  | PopCatching'
+  -- ^ Pop the innermost exception handler from the stack.
+  | Throw'
+  -- ^ Throw an exception.
+  | ThrowTo' ThreadId
+  -- ^ Throw an exception to a thread.
+  | Killed'
+  -- ^ Killed by an uncaught exception.
+  | SetMasking' Bool MaskingState
+  -- ^ Set the masking state. If 'True', this is being used to set the
+  -- masking state to the original state in the argument passed to a
+  -- 'mask'ed function.
+  | ResetMasking' Bool MaskingState
+  -- ^ Return to an earlier masking state.  If 'True', this is being
+  -- used to return to the state of the masked block in the argument
+  -- passed to a 'mask'ed function.
+  | Lift'
+  -- ^ Lift an action from the underlying monad. Note that the
+  -- penultimate action in a trace will always be a @Lift@, this is an
+  -- artefact of how the runner works.
+  | NoTest'
+  -- ^ A computation annotated with '_concNoTest' was executed in a
+  -- single step.
+  | KnowsAbout'
+  -- ^ A '_concKnowsAbout' annotation was processed.
+  | Forgets'
+  -- ^ A '_concForgets' annotation was processed.
+  | AllKnown'
+  -- ^ A '_concALlKnown' annotation was processed.
+  | Stop'
+  -- ^ Cease execution and terminate.
+  deriving (Eq, Show)
+
+instance NFData ThreadAction' where
+  rnf (SetMasking'   b ms) = b `seq` ms `seq` ()
+  rnf (ResetMasking' b ms) = b `seq` ms `seq` ()
+  rnf (Put'     c) = rnf c
+  rnf (TryPut'  c) = rnf c
+  rnf (Read'    c) = rnf c
+  rnf (Take'    c) = rnf c
+  rnf (TryTake' c) = rnf c
+  rnf (ReadRef' c) = rnf c
+  rnf (ModRef'  c) = rnf c
   rnf ta = ta `seq` ()
 
 --------------------------------------------------------------------------------

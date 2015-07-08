@@ -89,7 +89,7 @@ sctPreBoundIO = sctBoundedIO pbSiblings (pbOffspring True)
 -- | Return all modifications to this schedule which do not introduce
 -- extra pre-emptions.
 pbSiblings :: Trace -> [[Decision]]
-pbSiblings = siblings . map (\(d,a,_) -> (d,a)) where
+pbSiblings = siblings . map (\(d,a,_) -> (d,map fst a)) where
   siblings ((Start    i, alts):ds) = [[a] | a@(Start    _) <- alts] ++ [Start    i : o | o <- siblings ds, not $ null o]
   siblings ((SwitchTo i, alts):ds) = [[a] | a@(SwitchTo _) <- alts] ++ [SwitchTo i : o | o <- siblings ds, not $ null o]
   siblings ((d, _):ds) = [d : o | o <- siblings ds, not $ null o]
@@ -100,7 +100,7 @@ pbSiblings = siblings . map (\(d,a,_) -> (d,a)) where
 -- and lifts.
 pbOffspring :: Bool -> Trace -> [[Decision]]
 pbOffspring lifts ((Continue, alts, ta):ds)
-  | interesting lifts ta = [[n] | n@(SwitchTo _) <- alts] ++ [Continue : n | n <- pbOffspring lifts ds, not $ null n]
+  | interesting lifts ta = [[n] | (n@(SwitchTo _), _) <- alts] ++ [Continue : n | n <- pbOffspring lifts ds, not $ null n]
   | otherwise = [Continue : n | n <- pbOffspring lifts ds, not $ null n]
 
 pbOffspring lifts ((d, _, _):ds) = [d : n | n <- pbOffspring lifts ds, not $ null n]
@@ -126,7 +126,7 @@ sctDelayBoundIO = sctBoundedIO (const []) (dbOffspring True)
 -- delay. Only introduce delays around CVar actions and lifts.
 dbOffspring :: Bool -> Trace -> [[Decision]]
 dbOffspring lifts ((d, alts, ta):ds)
-  | interesting lifts ta = [[n] | n <- alts] ++ [d : n | n <- dbOffspring lifts ds, not $ null n]
+  | interesting lifts ta = [[fst n] | n <- alts] ++ [d : n | n <- dbOffspring lifts ds, not $ null n]
   | otherwise = [d : n | n <- dbOffspring lifts ds, not $ null n]
 
 dbOffspring _ [] = []

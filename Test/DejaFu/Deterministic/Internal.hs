@@ -129,9 +129,35 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing 
         | otherwise           = Start chosen
 
       alternatives
-        | Just chosen == prior = map SwitchTo $ filter (\t -> Just t /= prior) $ runnable'
-        | prior `elem` map Just runnable' = Continue : map SwitchTo (filter (\t -> Just t /= prior && t /= chosen) runnable')
-        | otherwise           = map Start $ filter (/=chosen) runnable'
+        | Just chosen == prior = [(SwitchTo t, nextAction t) | t <- runnable', Just t /= prior]
+        | prior `elem` map Just runnable' = (Continue, nextAction $ fromJust prior) : [(SwitchTo t, nextAction t) | t <- runnable', Just t /= prior, t /= chosen]
+        | otherwise           = [(Start t, nextAction t) | t <- runnable', t /= chosen]
+
+      nextAction t = case _continuation . fromJust $ M.lookup t threads of
+        AFork _ _             -> Fork'
+        AMyTId _              -> MyThreadId'
+        ANew _                -> New'
+        APut (c, _) _ _       -> Put' c
+        ATryPut (c, _) _ _    -> TryPut' c
+        AGet (c, _) _         -> Read' c
+        ATake (c, _) _        -> Take' c
+        ATryTake (c, _) _     -> TryTake' c
+        ANewRef _             -> NewRef'
+        AReadRef (r, _) _     -> ReadRef' r
+        AModRef (r, _) _ _    -> ModRef' r
+        AAtom _ _             -> STM'
+        AThrow _              -> Throw'
+        AThrowTo t _ _        -> ThrowTo' t
+        ACatching _ _ _       -> Catching'
+        APopCatching _        -> PopCatching'
+        AMasking ms _ _       -> SetMasking' False ms
+        AResetMask b1 b2 ms _ -> (if b1 then SetMasking' else ResetMasking') b2 ms
+        ALift _               -> Lift'
+        ANoTest _ _           -> NoTest'
+        AKnowsAbout _ _       -> KnowsAbout'
+        AForgets _ _          -> Forgets'
+        AAllKnown _           -> AllKnown'
+        AStop                 -> Stop'
 
 --------------------------------------------------------------------------------
 -- * Single-step execution
