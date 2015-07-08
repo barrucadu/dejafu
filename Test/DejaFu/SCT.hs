@@ -28,6 +28,7 @@ module Test.DejaFu.SCT
 import Control.Applicative ((<$>), (<*>), pure)
 import Control.DeepSeq (NFData(..), force)
 import Data.Foldable (Foldable(foldMap))
+import Data.List (foldl')
 import Data.Maybe (fromMaybe)
 import Data.Traversable (Traversable(traverse), fmapDefault, foldMapDefault)
 import Test.DejaFu.Deterministic
@@ -88,8 +89,8 @@ sctPreBoundIO = sctBoundedIO pbSiblings (pbOffspring True)
 
 -- | Return all modifications to this schedule which do not introduce
 -- extra pre-emptions.
-pbSiblings :: Trace -> [[Decision]]
-pbSiblings = siblings . map (\(d,a,_) -> (d,map fst a)) where
+pbSiblings :: [(CVarId, Bool)] -> Trace -> [[Decision]]
+pbSiblings _ = siblings . map (\(d,a,_) -> (d,map fst a)) where
   siblings ((Start    i, alts):ds) = [[a] | a@(Start    _) <- alts] ++ [Start    i : o | o <- siblings ds, not $ null o]
   siblings ((SwitchTo i, alts):ds) = [[a] | a@(SwitchTo _) <- alts] ++ [SwitchTo i : o | o <- siblings ds, not $ null o]
   siblings ((d, _):ds) = [d : o | o <- siblings ds, not $ null o]
@@ -98,13 +99,13 @@ pbSiblings = siblings . map (\(d,a,_) -> (d,map fst a)) where
 -- | Return all modifications to this schedule which do introduce an
 -- extra pre-emption. Only introduce pre-emptions around CVar actions
 -- and lifts.
-pbOffspring :: Bool -> Trace -> [[Decision]]
-pbOffspring lifts ((Continue, alts, ta):ds)
-  | interesting lifts ta = [[n] | (n@(SwitchTo _), _) <- alts] ++ [Continue : n | n <- pbOffspring lifts ds, not $ null n]
-  | otherwise = [Continue : n | n <- pbOffspring lifts ds, not $ null n]
-
-pbOffspring lifts ((d, _, _):ds) = [d : n | n <- pbOffspring lifts ds, not $ null n]
-pbOffspring _ [] = []
+pbOffspring :: Bool -> [(CVarId, Bool)] -> Trace -> [[Decision]]
+pbOffspring lifts _ = offspring where
+  offspring ((Continue, alts, ta):ds)
+    | interesting lifts ta = [[n] | (n@(SwitchTo _), _) <- alts] ++ [Continue : n | n <- offspring ds, not $ null n]
+    | otherwise = [Continue : n | n <- offspring ds, not $ null n]
+  offspring ((d, _, _):ds) = [d : n | n <- offspring ds, not $ null n]
+  offspring [] = []
 
 -- | Check the pre-emption count of some scheduling decisions.
 preEmpCount :: [Decision] -> Int
@@ -116,20 +117,20 @@ preEmpCount [] = 0
 
 -- | An SCT runner using a delay-bounding scheduler.
 sctDelayBound :: (forall t. Conc t a) -> [SCTTree a]
-sctDelayBound = sctBounded (const []) (dbOffspring False)
+sctDelayBound = sctBounded (\_ _ -> []) (dbOffspring False)
 
 -- | Variant of 'sctDelayBound' for computations which do 'IO'.
 sctDelayBoundIO :: (forall t. ConcIO t a) -> IO [SCTTreeIO a]
-sctDelayBoundIO = sctBoundedIO (const []) (dbOffspring True)
+sctDelayBoundIO = sctBoundedIO (\_ _ -> []) (dbOffspring True)
 
 -- | Return all modifications to the schedule which introduce an extra
 -- delay. Only introduce delays around CVar actions and lifts.
-dbOffspring :: Bool -> Trace -> [[Decision]]
-dbOffspring lifts ((d, alts, ta):ds)
-  | interesting lifts ta = [[fst n] | n <- alts] ++ [d : n | n <- dbOffspring lifts ds, not $ null n]
-  | otherwise = [d : n | n <- dbOffspring lifts ds, not $ null n]
-
-dbOffspring _ [] = []
+dbOffspring :: Bool -> [(CVarId, Bool)] -> Trace -> [[Decision]]
+dbOffspring lifts _ = offspring where
+  offspring ((d, alts, ta):ds)
+    | interesting lifts ta = [[fst n] | n <- alts] ++ [d : n | n <- offspring ds, not $ null n]
+    | otherwise = [d : n | n <- dbOffspring lifts [] ds, not $ null n]
+  offspring [] = []
 
 -- * SCT runners
 
@@ -145,15 +146,18 @@ dbOffspring _ [] = []
 -- the bound has been increased by one). It is important that siblings
 -- and offspring are unique, and that the same
 -- prefix+sibling/offspring cannot arise from two distinct traces, as
--- otherwise the runner may loop.
+-- otherwise the runner may loop. In addition to the trace, the
+-- sibling and offspring functions take a list of whether each 'CVar'
+-- existing at this point is full or not, allowing blocking behaviour
+-- to be factored into decision-making.
 --
 -- For example, the siblings in the pre-emption bounding runner are
 -- those schedule fragments which, when appended to the prefix, form
 -- the prefix of a new schedule which does not introduce any new
 -- pre-emptions; and the offspring do introduce one new pre-emption.
-sctBounded :: (Trace -> [[Decision]])
+sctBounded :: ([(CVarId, Bool)] -> Trace -> [[Decision]])
            -- ^ Sibling generation function.
-           -> (Trace -> [[Decision]])
+           -> ([(CVarId, Bool)] -> Trace -> [[Decision]])
            -- ^ Child generation function.
            -> (forall t. Conc t a) -> [SCTTree a]
 sctBounded siblings offspring c = go [] where
@@ -164,29 +168,47 @@ sctBounded siblings offspring c = go [] where
     where
       (res, _, trace) = runConc prefixSched ds c
 
-      (pref, suff) = let (p, s) = splitAt (length ds) trace in (map (\(a,_,_) -> a) p, s)
+      (p, suff) = splitAt (length ds) trace
+      pref      = map (\(a,_,_) -> a) p
 
-      sibs = [ pref ++ y | y <- siblings  suff]
-      offs = [ pref ++ y | y <- offspring suff]
+      cvstate = computeCVState p
+
+      sibs = [ pref ++ y | y <- siblings  cvstate suff]
+      offs = [ pref ++ y | y <- offspring cvstate suff]
 
 -- | Variant of 'sctBounded' for computations which do 'IO'.
-sctBoundedIO :: (Trace -> [[Decision]])
-             -> (Trace -> [[Decision]])
+sctBoundedIO :: ([(CVarId, Bool)] -> Trace -> [[Decision]])
+             -> ([(CVarId, Bool)] -> Trace -> [[Decision]])
              -> (forall t. ConcIO t a) -> IO [SCTTreeIO a]
 sctBoundedIO siblings offspring c = go [] where
   go ds = do
     (res, _, trace) <- runConcIO prefixSched ds c
 
-    let (pref, suff) = let (p, s) = splitAt (length ds + 1) trace in (map (\(a,_,_) -> a) p, s)
+    let (p, suff) = splitAt (length ds + 1) trace
+    let pref      = map (\(a,_,_) -> a) p
 
-    let sibs = [ pref ++ y | y <- siblings  suff]
-    let offs = [ pref ++ y | y <- offspring suff]
+    let cvstate = computeCVState p
+
+    let sibs = [ pref ++ y | y <- siblings  cvstate suff]
+    let offs = [ pref ++ y | y <- offspring cvstate suff]
 
     sibs' <- concat <$> mapM go sibs
 
     return $ case res of
       Left  f -> SCTTreeIO (Left f)  trace (return []) : sibs'
       Right a -> SCTTreeIO (Right a) trace (concat <$> mapM go offs) : sibs'
+
+-- | Compute the state of every 'CVar' after executing the given
+-- prefix trace. This assumes that the trace is valid (no double-puts,
+-- etc).
+computeCVState :: Trace -> [(CVarId, Bool)]
+computeCVState = foldl' go [] where
+  go state (_, _, New  c)   = (c, False) : state
+  go state (_, _, Put  c _) = (c, True)  : filter ((/=c) . fst) state
+  go state (_, _, Take c _) = (c, False) : filter ((/=c) . fst) state
+  go state (_, _, TryPut  c b _) = (c, b)   : filter ((/=c) . fst) state
+  go state (_, _, TryTake c b _) = (c, not b) : filter ((/=c) . fst) state
+  go state _ = state
 
 -- * Prefix scheduler
 
