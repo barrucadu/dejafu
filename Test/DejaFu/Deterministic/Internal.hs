@@ -27,6 +27,7 @@ module Test.DejaFu.Deterministic.Internal
  , Trace
  , Decision(..)
  , ThreadAction(..)
+ , ThreadAction'(..)
  , showTrace
 
  -- * Failures
