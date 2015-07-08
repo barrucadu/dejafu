@@ -231,12 +231,12 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
       let oldctvid = _nextCTVId idSource
       (res, newctvid) <- runstm stm oldctvid
       case res of
-        Success touched val
-          | any (<=oldctvid) touched ->
-            let (threads', woken) = wake (OnCTVar touched) threads
-            in return $ Right (knows (map Right touched) tid $ goto (c val) tid threads', idSource { _nextCTVId = newctvid }, STM woken)
+        Success readen written val
+          | any (<oldctvid) readen || any (<oldctvid) written ->
+            let (threads', woken) = wake (OnCTVar written) threads
+            in return $ Right (knows (map Right written) tid $ goto (c val) tid threads', idSource { _nextCTVId = newctvid }, STM woken)
           | otherwise ->
-           return $ Right (knows (map Right touched) tid $ goto (c val) tid threads, idSource { _nextCTVId = newctvid }, FreshSTM)
+           return $ Right (knows (map Right written) tid $ goto (c val) tid threads, idSource { _nextCTVId = newctvid }, FreshSTM)
         Retry touched ->
           let threads' = block (OnCTVar touched) tid threads
           in return $ Right (threads', idSource { _nextCTVId = newctvid }, BlockedSTM)

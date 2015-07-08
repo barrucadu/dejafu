@@ -55,8 +55,9 @@ type CTVarId = Int
 -- | The result of an STM transaction, along with which 'CTVar's it
 -- touched whilst executing.
 data Result a =
-    Success [CTVarId] a
-  -- ^ The transaction completed successfully, and mutated the returned 'CTVar's.
+    Success [CTVarId] [CTVarId] a
+  -- ^ The transaction completed successfully, reading the first list
+  -- 'CTVar's and writing to the second.
   | Retry   [CTVarId]
   -- ^ The transaction aborted by calling 'retry', and read the
   -- returned 'CTVar's. It should be retried when at least one of the
@@ -80,7 +81,7 @@ doTransaction fixed ma newctvid = do
   res <- readRef (wref fixed) ref
 
   case res of
-    Just (Right val) -> return (Success (nub written) val, undo, newctvid')
+    Just (Right val) -> return (Success (nub readen) (nub written) val, undo, newctvid')
 
     Just (Left  exc) -> undo >> return (Exception exc,      return (), newctvid)
     Nothing          -> undo >> return (Retry $ nub readen, return (), newctvid)
@@ -117,13 +118,13 @@ stepTrans fixed act newctvid = case act of
     stepCatch stm h c = do
       (res, undo, newctvid') <- doTransaction fixed stm newctvid
       case res of
-        Success written val -> return (c val, undo, newctvid', [], written)
+        Success readen written val -> return (c val, undo, newctvid', readen, written)
         Retry readen -> return (ARetry, nothing, newctvid, readen, [])
         Exception exc -> case fromException exc of
           Just exc' -> do
             (rese, undoe, newctvide') <- doTransaction fixed (h exc') newctvid
             case rese of
-              Success written val -> return (c val, undoe, newctvide', [], written)
+              Success readen written val -> return (c val, undoe, newctvide', readen, written)
               Exception exce -> return (AThrow exce, nothing, newctvid, [], [])
               Retry readen -> return (ARetry, nothing, newctvid, readen, [])
           Nothing -> return (AThrow exc, nothing, newctvid, [], [])
@@ -149,12 +150,12 @@ stepTrans fixed act newctvid = case act of
     stepOrElse a b c = do
       (resa, undoa, newctvida') <- doTransaction fixed a newctvid
       case resa of
-        Success written val -> return (c val, undoa, newctvida', [], written)
+        Success readen written val -> return (c val, undoa, newctvida', readen, written)
         Exception exc -> return (AThrow exc, nothing, newctvid, [], [])
         Retry _ -> do
           (resb, undob, newctvidb') <- doTransaction fixed b newctvid
           case resb of
-            Success written val -> return (c val, undob, newctvidb', [], written)
+            Success readen written val -> return (c val, undob, newctvidb', readen, written)
             Exception exc -> return (AThrow exc, nothing, newctvid, [], [])
             Retry readen -> return (ARetry, nothing, newctvid, readen, [])
 

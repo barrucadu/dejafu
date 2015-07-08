@@ -120,7 +120,7 @@ runTransactionST ma ctvid = do
   (res, undo, ctvid') <- doTransaction fixedST (unS ma) ctvid
 
   case res of
-    Success _ _ -> return (res, ctvid')
+    Success _ _ _ -> return (res, ctvid')
     _ -> undo >> return (res, ctvid)
 
   where
@@ -135,7 +135,7 @@ runTransactionIO ma ctvid = do
   (res, undo, ctvid') <- doTransaction fixedIO (unS ma) ctvid
 
   case res of
-    Success _ _ -> return (res, ctvid')
+    Success _ _ _ -> return (res, ctvid')
     _ -> undo >> return (res, ctvid)
 
   where
