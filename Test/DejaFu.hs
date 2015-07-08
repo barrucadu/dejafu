@@ -273,6 +273,7 @@ alwaysTrue p ts = go ts Result { _pass = True, _casesChecked = 0, _failures = []
 -- If the predicate fails, /both/ (result,trace) tuples will be added
 -- to the failures list.
 alwaysTrue2 :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
+alwaysTrue2 _ [_] = Result { _pass = True, _casesChecked = 1, _failures = [] }
 alwaysTrue2 p ts  = go ts Result { _pass = True, _casesChecked = 0, _failures = [] } where
   go (SCTTree a t offs:sibs) res =
     let r' = dosibs res
