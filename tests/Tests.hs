@@ -22,7 +22,7 @@ runTests =
        ,dejafu  C.threadKill      ("killThread",        deadlocksSometimes)
        ,dejafu  C.threadKillMask  ("killThread+mask 1", deadlocksNever)
        ,dejafu  C.threadKillUmask ("killThread+mask 2", deadlocksSometimes)
-       ,dejafu  C.stmAtomic       ("STM Atomicity",     alwaysSame)
+       ,dejafu  C.stmAtomic       ("STM Atomicity",     alwaysTrue (\r -> fmap (`elem` [0,2]) r == Right True))
        ,dejafu  C.stmRetry        ("STM Retry",         alwaysSame)
        ,dejafu  C.stmOrElse       ("STM orElse",        alwaysSame)
        ,dejafu  C.stmExc          ("STM Exceptions",    alwaysSame)

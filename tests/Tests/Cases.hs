@@ -153,7 +153,7 @@ threadKillUmask = do
 stmAtomic :: MonadConc m => m Int
 stmAtomic = do
   x <- atomically $ newCTVar (0::Int)
-  atomically $ writeCTVar x 1 >> writeCTVar x 2
+  fork . atomically $ writeCTVar x 1 >> writeCTVar x 2
   atomically $ readCTVar x
 
 -- | Test STM retry
