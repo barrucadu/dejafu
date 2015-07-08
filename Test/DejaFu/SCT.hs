@@ -39,7 +39,7 @@ import Test.DejaFu.Deterministic.IO (ConcIO, runConcIO)
 -- trace and a result. The children of a node represent those
 -- schedules obtainable from it on the next bounding level.
 data SCTTree a = SCTTree (Either Failure a) Trace [SCTTree a]
-  deriving (Eq)
+  deriving (Eq, Show)
 
 instance Functor SCTTree where
   fmap = fmapDefault
