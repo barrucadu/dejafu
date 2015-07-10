@@ -38,6 +38,7 @@ import Control.Applicative ((<$>))
 import Control.Exception (MaskingState(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.State
+import Data.List (sort)
 import Data.List.Extra
 import Data.Maybe (fromJust, isJust, isNothing)
 import Test.DejaFu.STM (CTVarId, Result(..))
@@ -106,7 +107,7 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing 
 
     where
       (chosen, g')  = sched g prior $ head runnable' :| tail runnable'
-      runnable'     = M.keys runnable
+      runnable'     = [(t, nextAction t) | t <- sort $ M.keys runnable]
       runnable      = M.filter (isNothing . _blocking) threads
       thread        = M.lookup chosen threads
       isBlocked     = isJust . _blocking $ fromJust thread
@@ -126,13 +127,13 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing 
 
       decision
         | Just chosen == prior = Continue
-        | prior `elem` map Just runnable' = SwitchTo chosen
-        | otherwise           = Start chosen
+        | prior `notElem` map (Just . fst) runnable' = Start chosen
+        | otherwise = SwitchTo chosen
 
       alternatives
-        | Just chosen == prior = [(SwitchTo t, nextAction t) | t <- runnable', Just t /= prior]
-        | prior `elem` map Just runnable' = (Continue, nextAction $ fromJust prior) : [(SwitchTo t, nextAction t) | t <- runnable', Just t /= prior, t /= chosen]
-        | otherwise           = [(Start t, nextAction t) | t <- runnable', t /= chosen]
+        | Just chosen == prior = [(SwitchTo t, na) | (t, na) <- runnable', Just t /= prior]
+        | prior `notElem` map (Just . fst) runnable' = [(Start t, na) | (t, na) <- runnable', t /= chosen]
+        | otherwise = [(if Just t == prior then Continue else SwitchTo t, na) | (t, na) <- runnable', t /= chosen]
 
       nextAction t = case _continuation . fromJust $ M.lookup t threads of
         AFork _ _             -> Fork'
@@ -148,7 +149,7 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing 
         AModRef (r, _) _ _    -> ModRef' r
         AAtom _ _             -> STM'
         AThrow _              -> Throw'
-        AThrowTo t _ _        -> ThrowTo' t
+        AThrowTo tid _ _      -> ThrowTo' tid
         ACatching _ _ _       -> Catching'
         APopCatching _        -> PopCatching'
         AMasking ms _ _       -> SetMasking' False ms

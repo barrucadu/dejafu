@@ -23,7 +23,7 @@ import Test.DejaFu.Deterministic.Internal
 randomSched :: RandomGen g => Scheduler g
 randomSched g _ threads = (threads' !! choice, g') where
   (choice, g') = randomR (0, length threads' - 1) g
-  threads' = toList threads
+  threads' = map fst $ toList threads
 
 -- | A random scheduler which doesn't pre-empt the running
 -- thread. That is, if the last thread scheduled is still runnable,
@@ -40,7 +40,7 @@ roundRobinSched _ (Just prior) threads
   | otherwise = (minimum $ filter (>prior) threads', ())
 
   where
-    threads' = toList threads
+    threads' = map fst $ toList threads
 
 -- | A round-robin scheduler which doesn't pre-empt the running
 -- thread.
@@ -52,6 +52,6 @@ roundRobinSchedNP = makeNP roundRobinSched
 makeNP :: Scheduler s -> Scheduler s
 makeNP sched = newsched where
   newsched s (Just prior) threads
-    | prior `elem` toList threads = (prior, s)
+    | prior `elem` map fst (toList threads) = (prior, s)
     | otherwise = sched s (Just prior) threads
   newsched s Nothing threads = sched s Nothing threads

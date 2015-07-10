@@ -250,7 +250,7 @@ updateCVState = foldl' go where
 -- | Scheduler which uses a list of scheduling decisions to drive the
 -- initial decisions.
 prefixSched :: Scheduler [Decision]
-prefixSched = force $ \s prior threads@(next:|_) -> case s of
+prefixSched = force $ \s prior threads@((next,_):|_) -> case s of
   -- If we have a decision queued, make it.
   (Start t:ds)    -> (t, ds)
   (Continue:ds)   -> (fromMaybe 0 prior, ds)
@@ -258,7 +258,7 @@ prefixSched = force $ \s prior threads@(next:|_) -> case s of
 
   -- Otherwise just use a non-pre-emptive scheduler.
   [] -> case prior of
-    Just prior' | prior' `elem` toList threads -> (prior', [])
+    Just prior' | prior' `elem` map fst (toList threads) -> (prior', [])
     _ -> (next, [])
 
 -- * Utils

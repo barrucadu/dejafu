@@ -103,15 +103,16 @@ initialIdSource = Id 0 0 0 0
 
 -- | A @Scheduler@ maintains some internal state, @s@, takes the
 -- 'ThreadId' of the last thread scheduled, or 'Nothing' if this is
--- the first decision, and the list of runnable threads. It produces a
--- 'ThreadId' to schedule, and a new state.
+-- the first decision, and the list of runnable threads along with
+-- what each will do in its next step. It produces a 'ThreadId' to
+-- schedule, and a new state.
 --
 -- Note: In order to prevent computation from hanging, the runtime
 -- will assume that a deadlock situation has arisen if the scheduler
 -- attempts to (a) schedule a blocked thread, or (b) schedule a
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
-type Scheduler s = s -> Maybe ThreadId -> NonEmpty ThreadId -> (ThreadId, s)
+type Scheduler s = s -> Maybe ThreadId -> NonEmpty (ThreadId, ThreadAction') -> (ThreadId, s)
 
 -- | One of the outputs of the runner is a @Trace@, which is a log of
 -- decisions made, alternative decisions (including what action would
