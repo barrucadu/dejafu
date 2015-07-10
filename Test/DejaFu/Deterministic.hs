@@ -79,13 +79,15 @@ import Test.DejaFu.STM.Internal (CTVar(..))
 import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
 
+{-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
+
 -- | The @Conc@ monad itself. This uses the same
 -- universally-quantified indexing state trick as used by 'ST' and
 -- 'STRef's to prevent mutable references from leaking out of the
 -- monad.
 newtype Conc t a = C { unC :: M (ST t) (STRef t) (STMLike t) a } deriving (Functor, Applicative, Monad)
 
-wrap :: (M (ST t) (STRef t) (STMLike t) a -> M (ST t) (STRef t) (STMLike t) a) -> (Conc t a -> Conc t a)
+wrap :: (M (ST t) (STRef t) (STMLike t) a -> M (ST t) (STRef t) (STMLike t) a) -> Conc t a -> Conc t a
 wrap f = C . f . unC
 
 instance Ca.MonadCatch (Conc t) where

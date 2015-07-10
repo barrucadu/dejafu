@@ -34,6 +34,8 @@ import Data.Traversable (Traversable(traverse), fmapDefault, foldMapDefault)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.IO (ConcIO, runConcIO)
 
+{-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
+
 -- * Result trees
 
 -- | Results are presented in a lazy tree, where each node contains a

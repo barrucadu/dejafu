@@ -40,6 +40,8 @@ import Test.DejaFu.STM.Internal
 
 import qualified Control.Monad.STM.Class as C
 
+{-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
+
 -- | The 'MonadSTM' implementation, it encapsulates a single atomic
 -- transaction. The environment, that is, the collection of defined
 -- 'CTVar's is implicit, there is no list of them, they exist purely

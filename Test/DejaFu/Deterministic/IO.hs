@@ -82,10 +82,12 @@ import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
 import qualified Control.Monad.IO.Class as IO
 
+{-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
+
 -- | The 'IO' variant of Test.DejaFu.Deterministic's @Conc@ monad.
 newtype ConcIO t a = C { unC :: M IO IORef (STMLike t) a } deriving (Functor, Applicative, Monad)
 
-wrap :: (M IO IORef (STMLike t) a -> M IO IORef (STMLike t) a) -> (ConcIO t a -> ConcIO t a)
+wrap :: (M IO IORef (STMLike t) a -> M IO IORef (STMLike t) a) -> ConcIO t a -> ConcIO t a
 wrap f = C . f . unC
 
 instance Ca.MonadCatch (ConcIO t) where

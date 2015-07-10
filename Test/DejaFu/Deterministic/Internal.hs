@@ -48,6 +48,8 @@ import Test.DejaFu.Deterministic.Internal.Threading
 
 import qualified Data.Map as M
 
+{-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
+
 --------------------------------------------------------------------------------
 -- * Execution
 
