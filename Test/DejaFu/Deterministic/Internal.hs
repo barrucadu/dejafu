@@ -34,13 +34,13 @@ module Test.DejaFu.Deterministic.Internal
  , Failure(..)
  ) where
 
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<*>))
 import Control.Exception (MaskingState(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.State
 import Data.List (sort)
 import Data.List.Extra
-import Data.Maybe (fromJust, isJust, isNothing)
+import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
 import Test.DejaFu.STM (CTVarId, Result(..))
 import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.Deterministic.Internal.CVar
@@ -108,7 +108,7 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing 
         Left failure -> writeRef (wref fixed) ref (Just $ Left failure) >> return (g, idSource, sofar)
 
     where
-      (chosen, g')  = sched g prior $ head runnable' :| tail runnable'
+      (chosen, g')  = sched g ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ head runnable' :| tail runnable'
       runnable'     = [(t, nextAction t) | t <- sort $ M.keys runnable]
       runnable      = M.filter (isNothing . _blocking) threads
       thread        = M.lookup chosen threads

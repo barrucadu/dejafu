@@ -35,7 +35,7 @@ randomSchedNP = makeNP randomSched
 -- thread with the next 'ThreadId'.
 roundRobinSched :: Scheduler ()
 roundRobinSched _ Nothing _ = (0, ())
-roundRobinSched _ (Just prior) threads
+roundRobinSched _ (Just (prior, _)) threads
   | prior >= maximum threads' = (minimum threads', ())
   | otherwise = (minimum $ filter (>prior) threads', ())
 
@@ -51,7 +51,7 @@ roundRobinSchedNP = makeNP roundRobinSched
 -- one.
 makeNP :: Scheduler s -> Scheduler s
 makeNP sched = newsched where
-  newsched s (Just prior) threads
+  newsched s p@(Just (prior, _)) threads
     | prior `elem` map fst (toList threads) = (prior, s)
-    | otherwise = sched s (Just prior) threads
+    | otherwise = sched s p threads
   newsched s Nothing threads = sched s Nothing threads

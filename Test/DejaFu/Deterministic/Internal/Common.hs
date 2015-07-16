@@ -112,7 +112,7 @@ initialIdSource = Id 0 0 0 0
 -- attempts to (a) schedule a blocked thread, or (b) schedule a
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
-type Scheduler s = s -> Maybe ThreadId -> NonEmpty (ThreadId, ThreadAction') -> (ThreadId, s)
+type Scheduler s = s -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, ThreadAction') -> (ThreadId, s)
 
 -- | One of the outputs of the runner is a @Trace@, which is a log of
 -- decisions made, alternative decisions (including what action would
