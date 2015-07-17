@@ -35,16 +35,10 @@ module Test.DejaFu.SCT
   ) where
 
 import Control.Applicative ((<$>), (<*>))
-import Control.Arrow (first)
-import Control.DeepSeq (NFData(..), force)
-import Data.List (nub)
-import Data.Map (Map)
-import Data.Maybe (mapMaybe, fromJust)
+import Control.DeepSeq (force)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.IO (ConcIO, runConcIO)
 import Test.DejaFu.SCT.Internal
-
-import qualified Data.Map as M
 
 -- * Pre-emption bounding
 
@@ -65,14 +59,14 @@ pbBv pb ds = preEmpCount ds <= pb
 -- the same state being reached multiple times, but is needed because
 -- of the artificial dependency imposed by the bound.
 pbBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
-pbBacktrack bs i tid = backtrack (backtrack bs i tid) (maximum js) tid where
-  js = 0:[j | ((_,t1), (j,t2)) <- (zip <*> tail) . zip [0..] $ tidTag (fst . _decision) 0 bs, t1 /= t2, j < i]
+pbBacktrack bs i tid = backtrack True (backtrack False bs i tid) (maximum js) tid where
+  js = 0:[j | ((_,(t1,_)), (j,(t2,_))) <- (zip <*> tail) . zip [0..] $ tidTag (fst . _decision) 0 bs, t1 /= t2, j < i]
 
-  backtrack (b:bs) 0 t
-    | t `elem` _runnable b = b { _backtrack = nub $ t : _backtrack b } : bs
-    | otherwise = b { _backtrack = _runnable b } : bs
-  backtrack (b:bs) n t = b : backtrack bs (n-1) t
-  backtrack [] _ _ = error "Ran out of schedule whilst backtracking!"
+  backtrack c (b:bs) 0 t
+    | t `elem` _runnable b = b { _backtrack = (if any ((==t) . fst) $ _backtrack b then id else (++[(t,c)])) $ _backtrack b } : bs
+    | otherwise = b { _backtrack = [(t,c) | t <- _runnable b] } : bs
+  backtrack c (b:bs) n t = b : backtrack c bs (n-1) t
+  backtrack _ [] _ _ = error "Ran out of schedule whilst backtracking!"
 
 -- | Pick a new thread to run. Choose the current thread if available,
 -- otherwise add all runnable threads.
@@ -109,13 +103,13 @@ sctBounded :: ([Decision] -> Bool)
            -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
 sctBounded bv backtrack initialise c = go initialState where
   go bpor = case next bpor of
-    Just (sched, bpor') ->
+    Just (sched, conservative, bpor') ->
       -- Run the computation
       let (res, (_, bs), trace) = runConc (bporSched initialise) (sched, []) c
       -- Identify the backtracking points
-          bpoints = findBacktrack False backtrack bs trace
+          bpoints = findBacktrack backtrack bs trace
       -- Add new nodes to the tree
-          bpor''  = grow trace bpor'
+          bpor''  = grow conservative trace bpor'
       -- Add new backtracking information
           bpor''' = todo bv bpoints bpor''
       -- Loop
@@ -130,11 +124,11 @@ sctBoundedIO :: ([Decision] -> Bool)
              -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
 sctBoundedIO bv backtrack initialise c = go initialState where
   go bpor = case next bpor of
-    Just (sched, bpor') -> do
+    Just (sched, conservative, bpor') -> do
       (res, (_, bs), trace) <- runConcIO (bporSched initialise) (sched, []) c
 
-      let bpoints = findBacktrack True backtrack bs trace
-      let bpor''  = grow trace bpor'
+      let bpoints = findBacktrack backtrack bs trace
+      let bpor''  = grow conservative trace bpor'
       let bpor''' = todo bv bpoints bpor''
 
       ((res, trace):) <$> go bpor'''

@@ -2,7 +2,6 @@
 module Test.DejaFu.SCT.Internal where
 
 import Control.Applicative ((<$>), (<*>))
-import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Data.List (foldl', nub, sortBy)
 import Data.Ord (Down(..), comparing)
@@ -22,8 +21,9 @@ data BacktrackStep = BacktrackStep
   -- ^ What happened at this step.
   , _runnable  :: [ThreadId]
   -- ^ The threads runnable at this step
-  , _backtrack :: [ThreadId]
-  -- ^ The list of alternative threads to run.
+  , _backtrack :: [(ThreadId, Bool)]
+  -- ^ The list of alternative threads to run, and whether those
+  -- alternatives were added conservatively due to the bound.
   } deriving (Eq, Show)
 
 instance NFData BacktrackStep where
@@ -34,43 +34,56 @@ instance NFData BacktrackStep where
 data BPOR = BPOR
   { _brunnable :: [ThreadId]
   -- ^ What threads are runnable at this step.
-  , _btodo     :: [ThreadId]
-  -- ^ Follow-on decisions still to make.
+  , _btodo     :: [(ThreadId, Bool)]
+  -- ^ Follow-on decisions still to make, and whether that decision
+  -- was added conservatively due to the bound.
   , _bdone     :: Map ThreadId BPOR
+  -- ^ Follow-on decisions that have been made.
+  , _bsleep    :: [(ThreadId, ThreadAction)]
+  -- ^ Transitions to ignore (in this node and children) until a
+  -- dependent transition happens.
+  , _btaken    :: [(ThreadId, ThreadAction)]
+  -- ^ Transitions which have been taken, excluding
+  -- conservatively-added ones, in the (reverse) order that they were
+  -- taken, as the 'Map' doesn't preserve insertion order. This is
+  -- used in implementing sleep sets.
   }
 
 -- | Initial BPOR state.
 initialState :: BPOR
 initialState = BPOR
   { _brunnable = [0]
-  , _btodo     = [0]
+  , _btodo     = [(0, False)]
   , _bdone     = M.empty
+  , _bsleep    = []
+  , _btaken    = []
   }
 
 -- | Produce a new schedule from a BPOR tree. If there are no new
--- schedules remaining, return 'Nothing'.
+-- schedules remaining, return 'Nothing'. Also returns whether the
+-- decision made was added conservatively.
 --
--- This returns the prefix with the most preemptions in, on the
--- assumption that preemptions are likely to exhibit bugs, and so lead
--- to earlier test failures.
-next :: BPOR -> Maybe ([ThreadId], BPOR)
+-- This returns the longest prefix, on the assumption that this will
+-- lead to lots of backtracking points being identified before
+-- higher-up decisions are reconsidered, so enlarging the sleep sets.
+next :: BPOR -> Maybe ([ThreadId], Bool, BPOR)
 next = go 0 where
   go tid bpor =
         -- All the possible prefix traces from this point, with
         -- updated BPOR subtrees if taken from the done list.
     let prefixes = [Left t | t <- _btodo bpor] ++ mapMaybe go' (M.toList $ _bdone bpor)
         -- Sort by number of preemptions, in descending order.
-        sorted   = sortBy (comparing $ Down . preEmps tid bpor . either (:[]) fst) prefixes
+        sorted   = sortBy (comparing $ Down . preEmps tid bpor . either (\(a,_) -> [a]) (\(a,_,_) -> a)) prefixes
 
     in case sorted of
-         -- If the schedule with the most preemptions is from the done list, update that.
-         (Right (ts@(t:_), b):_) -> Just (ts, bpor { _bdone = M.insert t b $ _bdone bpor })
+         -- If the prefix with the most preemptions is from the done list, update that.
+         (Right (ts@(t:_), c, b):_) -> Just (ts, c, bpor { _bdone = M.insert t b $ _bdone bpor })
          -- If from the todo list, remove it.
-         (Left t:_) -> Just ([t],  bpor { _btodo = filter (/=t) $ _btodo bpor })
+         (Left (t,c):_) -> Just ([t], c, bpor { _btodo = filter (/=(t,c)) $ _btodo bpor })
 
          _ -> Nothing
 
-  go' (tid, bpor) = Right . first (tid:) <$> go tid bpor
+  go' (tid, bpor) = (\(ts,c,b) -> Right (tid:ts, c, b)) <$> next bpor
 
   preEmps tid bpor (t:ts) =
     let rest = preEmps t (fromJust . M.lookup t $ _bdone bpor) ts
@@ -79,14 +92,13 @@ next = go 0 where
 
 -- | Produce a list of new backtracking points from an execution
 -- trace.
-findBacktrack :: Bool
-              -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
+findBacktrack :: ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
               -> [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])]
               -> Trace
               -> [BacktrackStep]
-findBacktrack deplifts backtrack = go [] where
+findBacktrack backtrack = go [] where
   go bs ((e,i):is) ((d,_,a):ts) =
-    let this = BacktrackStep { _decision  = (d, a), _runnable = map fst . toList $ e, _backtrack = i }
+    let this = BacktrackStep { _decision = (d, a), _runnable = map fst . toList $ e, _backtrack = map (\i' -> (i', False)) i }
         bs'  = doBacktrack (toList e) bs
     in go (bs' ++ [this]) is ts
   go bs _ _ = bs
@@ -99,7 +111,7 @@ findBacktrack deplifts backtrack = go [] where
                , let is = [ i
                           | (i, (t, b)) <- zip [0..] $ tidTag (fst . _decision) 0 bs
                           , t == v
-                          , dependent deplifts (snd $ _decision b) (u, n)
+                          , dependent' (snd $ _decision b) (u, n)
                           ]
                , not $ null is] :: [(Int, ThreadId)]
     in foldl' (\bs (i, u) -> backtrack bs i u) bs idxs
@@ -107,24 +119,31 @@ findBacktrack deplifts backtrack = go [] where
   allThreads = nub . concatMap _runnable
 
 -- | Add a new trace to the tree, creating a new subtree.
-grow :: Trace -> BPOR -> BPOR
-grow = grow' 0 where
-  grow' tid trc@((d, _, _):rest) bpor =
-    let tid' = tidOf tid d
+grow :: Bool -> Trace -> BPOR -> BPOR
+grow conservative = grow' 0 where
+  grow' tid trc@((d, _, a):rest) bpor =
+    let tid'   = tidOf tid d
     in  case M.lookup tid' $ _bdone bpor of
-          Just bpor' -> bpor { _bdone = M.insert tid' (grow' tid' rest bpor') $ _bdone bpor }
-          Nothing    -> bpor { _bdone = M.insert tid' (subtree tid' trc)      $ _bdone bpor }
+          Just bpor' -> bpor { _bdone  = M.insert tid' (grow' tid' rest bpor') $ _bdone bpor }
+          Nothing    -> bpor { _btaken = if conservative then _btaken bpor else (tid', a) : _btaken bpor
+                            , _bdone  = M.insert tid' (subtree tid' (_bsleep bpor ++ _btaken bpor) trc) $ _bdone bpor }
   grow' _ [] bpor = bpor
 
-  subtree tid ((d, ts, a):rest) = BPOR
-    { _brunnable = tids tid d a ts
-    , _btodo     = []
-    , _bdone     = M.fromList $ case rest of
-      ((d', _, _):_) ->
-        let tid' = tidOf tid d'
-        in  [(tid', subtree tid' rest)]
-      [] -> []
-    }
+  subtree tid sleep ((d, ts, a):rest) =
+    let sleep' = filter (not . dependent a) sleep
+    in BPOR
+        { _brunnable = tids tid d a ts
+        , _btodo     = []
+        , _bdone     = M.fromList $ case rest of
+          ((d', _, _):_) ->
+            let tid' = tidOf tid d'
+            in  [(tid', subtree tid' sleep' rest)]
+          [] -> []
+        , _bsleep = sleep'
+        , _btaken = case rest of
+          ((d', _, a'):_) -> [(tidOf tid d', a')]
+          [] -> []
+        }
 
   tids tid d (Fork t)           ts = tidOf tid d : t : map (tidOf tid . fst) ts
   tids tid _ (BlockedPut _)     ts = map (tidOf tid . fst) ts
@@ -136,7 +155,7 @@ grow = grow' 0 where
   tids tid d _ ts = tidOf tid d : map (tidOf tid . fst) ts
 
 -- | Add new backtracking points, if they have not already been
--- visited and fit into the bound.
+-- visited, fit into the bound, and aren't in the sleep set.
 todo :: ([Decision] -> Bool) -> [BacktrackStep] -> BPOR -> BPOR
 todo bv = go 0 [] where
   go tid pref (b:bs) bpor =
@@ -146,10 +165,11 @@ todo bv = go 0 [] where
   go _ _ _ bpor = bpor
 
   backtrack pref b bpor =
-    let todo' = nub $ _btodo bpor ++ [ t
-                                     | t <- _backtrack b
+    let todo' = nub $ _btodo bpor ++ [ (t,c)
+                                     | (t,c) <- _backtrack b
                                      , bv $ pref ++ [decisionOf (Just $ activeTid pref) (_brunnable bpor) t]
                                      , t `notElem` M.keys (_bdone bpor)
+                                     , c || t `notElem` map fst (_bsleep bpor)
                                      ]
     in  bpor { _btodo = todo' }
 
@@ -196,10 +216,36 @@ preEmpCount [] = 0
 -- | Check if an action is dependent on another, assumes the actions
 -- are from different threads (two actions in the same thread are
 -- always dependent).
-dependent :: Bool -> ThreadAction -> (ThreadId, ThreadAction') -> Bool
-dependent deplifts Lift (_, Lift') = deplifts
-dependent _ (ThrowTo t) (t2, _) = t == t2
-dependent _ d1 (_, d2) = cref || cvar || ctvar where
+dependent :: ThreadAction -> (ThreadId, ThreadAction) -> Bool
+dependent Lift (_, Lift) = True
+dependent (ThrowTo t) (t2, _) = t == t2
+dependent d1 (_, d2) = cref || cvar || ctvar where
+  cref = Just True == ((\(r1, w1) (r2, w2) -> r1 == r2 && (w1 || w2)) <$> cref' d1 <*> cref' d2)
+  cref'  (ReadRef  r) = Just (r, False)
+  cref'  (ModRef   r) = Just (r, True)
+  cref'  _ = Nothing
+
+  cvar = Just True == ((==) <$> cvar' d1 <*> cvar' d2)
+  cvar'  (BlockedPut  _) = Nothing
+  cvar'  (BlockedRead _) = Nothing
+  cvar'  (BlockedTake _) = Nothing
+  cvar'  (TryPut  c _ _) = Just c
+  cvar'  (TryTake c _ _) = Just c
+  cvar'  (Put  c _) = Just c
+  cvar'  (Read c)   = Just c
+  cvar'  (Take c _) = Just c
+  cvar'  _ = Nothing
+
+  ctvar = ctvar' d1 && ctvar' d2
+  ctvar' (STM _)    = True
+  ctvar' BlockedSTM = False
+  ctvar' _ = False
+
+-- | Variant of 'dependent' to handle 'ThreadAction''s
+dependent' :: ThreadAction -> (ThreadId, ThreadAction') -> Bool
+dependent' Lift (_, Lift') = True
+dependent' (ThrowTo t) (t2, _) = t == t2
+dependent' d1 (_, d2) = cref || cvar || ctvar where
   cref = Just True == ((\(r1, w1) (r2, w2) -> r1 == r2 && (w1 || w2)) <$> cref' d1 <*> cref'' d2)
   cref'  (ReadRef  r) = Just (r, False)
   cref'  (ModRef   r) = Just (r, True)
