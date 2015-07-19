@@ -36,7 +36,7 @@ Bug reports, pull requests, and comments are very welcome!
 Feel free to contact me on GitHub, through IRC (#haskell on freenode),
 or email (mike@barrucadu.co.uk).
 
-[build-status]: https://travis-ci.org/barrucadu/dejafu.svg?branch=master
-[build-log]:    https://travis-ci.org/barrucadu/dejafu
-[abstract-par]: https://hackage.haskell.org/package/abstract-par/docs/Control-Monad-Par-Class.html
+[build-status]: http://ci.barrucadu.co.uk/job/dejafu/badge/icon?style=plastic
+[build-log]:    http://ci.barrucadu.co.uk/job/dejafu/
 [docs]:         https://barrucadu.github.io/dejafu
+[abstract-par]: https://hackage.haskell.org/package/abstract-par/docs/Control-Monad-Par-Class.html
