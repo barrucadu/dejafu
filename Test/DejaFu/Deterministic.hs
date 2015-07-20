@@ -14,6 +14,7 @@ module Test.DejaFu.Deterministic
     Conc
   , Failure(..)
   , runConc
+  , runConc'
   , fork
   , forkFinally
   , forkWithUnmask
@@ -59,7 +60,9 @@ module Test.DejaFu.Deterministic
   , CVarId
   , CRefId
   , MaskingState(..)
+  , Trace'
   , showTrace
+  , toTrace
 
   -- * Scheduling
   , module Test.DejaFu.Deterministic.Schedule
@@ -326,4 +329,10 @@ _concAllKnown = C $ cont $ \c -> AAllKnown (c ())
 -- making your head hurt, check out the \"How @runST@ works\" section
 -- of <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
 runConc :: Scheduler s -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace)
-runConc sched s ma = runST $ runFixed fixed runTransactionST sched s $ unC ma
+runConc sched s ma =
+  let (r, s, t') = runConc' sched s ma
+  in  (r, s, toTrace t')
+
+-- | Variant of 'runConc' which produces a 'Trace''.
+runConc' :: Scheduler s -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace')
+runConc' sched s ma = runST $ runFixed fixed runTransactionST sched s $ unC ma

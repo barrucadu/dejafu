@@ -104,21 +104,30 @@ initialIdSource = Id 0 0 0 0
 -- | A @Scheduler@ maintains some internal state, @s@, takes the
 -- 'ThreadId' of the last thread scheduled, or 'Nothing' if this is
 -- the first decision, and the list of runnable threads along with
--- what each will do in its next step. It produces a 'ThreadId' to
--- schedule, and a new state.
+-- what each will do in the next steps (as far as can be
+-- determined). It produces a 'ThreadId' to schedule, and a new state.
 --
 -- Note: In order to prevent computation from hanging, the runtime
 -- will assume that a deadlock situation has arisen if the scheduler
 -- attempts to (a) schedule a blocked thread, or (b) schedule a
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
-type Scheduler s = s -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, ThreadAction') -> (ThreadId, s)
+type Scheduler s = s -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, NonEmpty ThreadAction') -> (ThreadId, s)
 
 -- | One of the outputs of the runner is a @Trace@, which is a log of
 -- decisions made, alternative decisions (including what action would
 -- have been performed had that decision been taken), and the action a
 -- thread took in its step.
 type Trace = [(Decision, [(Decision, ThreadAction')], ThreadAction)]
+
+-- | Like a 'Trace', but gives more lookahead (where possible) for
+-- alternative decisions.
+type Trace' = [(Decision, [(Decision, NonEmpty ThreadAction')], ThreadAction)]
+
+-- | Throw away information from a 'Trace'' to get just a 'Trace'.
+toTrace :: Trace' -> Trace
+toTrace ((d, alters, a):ts) = (d, map (\(d, a:|_) -> (d, a)) alters, a) : toTrace ts
+toTrace [] = []
 
 -- | Pretty-print a trace.
 showTrace :: Trace -> String

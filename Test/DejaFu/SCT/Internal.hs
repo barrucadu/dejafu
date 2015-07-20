@@ -3,7 +3,7 @@ module Test.DejaFu.SCT.Internal where
 
 import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (NFData(..))
-import Data.List (foldl', nub, sortBy)
+import Data.List (foldl', nub, partition, sortBy)
 import Data.Ord (Down(..), comparing)
 import Data.Map (Map)
 import Data.Maybe (mapMaybe, fromJust)
@@ -100,7 +100,7 @@ next = go 0 where
 -- trace.
 findBacktrack :: ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
               -> [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])]
-              -> Trace
+              -> Trace'
               -> [BacktrackStep]
 findBacktrack backtrack = go [] where
   go bs ((e,i):is) ((d,_,a):ts) =
@@ -125,7 +125,7 @@ findBacktrack backtrack = go [] where
   allThreads = nub . concatMap _runnable
 
 -- | Add a new trace to the tree, creating a new subtree.
-grow :: Bool -> Trace -> BPOR -> BPOR
+grow :: Bool -> Trace' -> BPOR -> BPOR
 grow conservative = grow' initialCVState 0 where
   grow' cvstate tid trc@((d, _, a):rest) bpor =
     let tid'     = tidOf tid d
@@ -142,7 +142,7 @@ grow conservative = grow' initialCVState 0 where
     in BPOR
         { _brunnable = tids tid d a ts
         , _btodo     = []
-        , _bignore   = [tidOf tid d | (d,a) <- ts, willBlock cvstate' a]
+        , _bignore   = [tidOf tid d | (d,as) <- ts, willBlockSafely cvstate' $ toList as]
         , _bdone     = M.fromList $ case rest of
           ((d', _, _):_) ->
             let tid' = tidOf tid d'
@@ -166,22 +166,34 @@ grow conservative = grow' initialCVState 0 where
 -- | Add new backtracking points, if they have not already been
 -- visited, fit into the bound, and aren't in the sleep set.
 todo :: ([Decision] -> Bool) -> [BacktrackStep] -> BPOR -> BPOR
-todo bv = go 0 [] where
-  go tid pref (b:bs) bpor =
-    let bpor' = backtrack pref b bpor
-        tid' = tidOf tid . fst $ _decision b
-    in  bpor' { _bdone = M.adjust (go tid' (pref++[fst $ _decision b]) bs) tid' $ _bdone bpor' }
-  go _ _ _ bpor = bpor
+todo bv = step where
+  step bs bpor =
+    let (bpor', bs') = go 0 [] Nothing bs bpor
+    in  if all (null . _backtrack) bs'
+        then bpor'
+        else step bs' bpor'
+
+  go tid pref lastb (b:bs) bpor =
+    let (bpor', blocked) = backtrack pref b bpor
+        tid'   = tidOf tid . fst $ _decision b
+        (child, blocked')  = go tid' (pref++[fst $ _decision b]) (Just b) bs . fromJust $ M.lookup tid' (_bdone bpor)
+        bpor'' = bpor' { _bdone = M.insert tid' child $ _bdone bpor' }
+    in  case lastb of
+         Just b' -> (bpor'', b' { _backtrack = blocked } : blocked')
+         Nothing -> (bpor'', blocked')
+
+  go _ _ (Just b') _ bpor = (bpor, [b' { _backtrack = [] }])
+  go _ _ Nothing   _ bpor = (bpor, [])
 
   backtrack pref b bpor =
-    let todo' = nub $ _btodo bpor ++ [ (t,c)
-                                     | (t,c) <- _backtrack b
-                                     , bv $ pref ++ [decisionOf (Just $ activeTid pref) (_brunnable bpor) t]
-                                     , t `notElem` M.keys (_bdone bpor)
-                                     , t `notElem` _bignore bpor
-                                     , c || t `notElem` map fst (_bsleep bpor)
-                                     ]
-    in  bpor { _btodo = todo' }
+    let todo' = [ (t,c)
+                | (t,c) <- _backtrack b
+                , bv $ pref ++ [decisionOf (Just $ activeTid pref) (_brunnable bpor) t]
+                , t `notElem` M.keys (_bdone bpor)
+                , c || t `notElem` map fst (_bsleep bpor)
+                ]
+        (blocked, next) = partition (\(t,_) -> t `elem` _bignore bpor) todo'
+    in  (bpor { _btodo = nub $ _btodo bpor ++ next }, blocked)
 
 -- * Utilities
 
@@ -307,3 +319,14 @@ willBlock :: [(CVarId, Bool)] -> ThreadAction' -> Bool
 willBlock cvstate (Put'  c) = (c, True)  `elem` cvstate
 willBlock cvstate (Take' c) = (c, False) `elem` cvstate
 willBlock _ _ = False
+
+-- | Check if a list of actions will block safely (without modifying
+-- any global state). This allows further lookahead at, say, the
+-- 'spawn' of a thread (which always starts with 'KnowsAbout'.
+willBlockSafely :: [(CVarId, Bool)] -> [ThreadAction'] -> Bool
+willBlockSafely cvstate (KnowsAbout':as) = willBlockSafely cvstate as
+willBlockSafely cvstate (Forgets':as)    = willBlockSafely cvstate as
+willBlockSafely cvstate (AllKnown':as)   = willBlockSafely cvstate as
+willBlockSafely cvstate (Put'  c:_) = willBlock cvstate (Put'  c)
+willBlockSafely cvstate (Take' c:_) = willBlock cvstate (Take' c)
+willBlockSafely _ _ = False

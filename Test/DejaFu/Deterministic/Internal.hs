@@ -28,7 +28,9 @@ module Test.DejaFu.Deterministic.Internal
  , Decision(..)
  , ThreadAction(..)
  , ThreadAction'(..)
+ , Trace'
  , showTrace
+ , toTrace
 
  -- * Failures
  , Failure(..)
@@ -58,12 +60,12 @@ import qualified Data.Map as M
 -- deadlock is detected. Also returned is the final state of the
 -- scheduler, and an execution trace.
 runFixed :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
-         -> Scheduler g -> g -> M n r s a -> n (Either Failure a, g, Trace)
+         -> Scheduler g -> g -> M n r s a -> n (Either Failure a, g, Trace')
 runFixed fixed runstm sched s ma = (\(e,g,_,t) -> (e,g,t)) <$> runFixed' fixed runstm sched s initialIdSource ma
 
 -- | Same as 'runFixed', be parametrised by an 'IdSource'.
 runFixed' :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
-          -> Scheduler g -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace)
+          -> Scheduler g -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace')
 runFixed' fixed runstm sched s idSource ma = do
   ref <- newRef (wref fixed) Nothing
 
@@ -82,7 +84,7 @@ runFixed' fixed runstm sched s idSource ma = do
 -- exposed to users of the library, this is just an internal gotcha to
 -- watch out for.
 runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
-           -> Scheduler g -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace)
+           -> Scheduler g -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace')
 runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads where
   go idSource sofar prior g threads
     | isTerminated  = return (g, idSource, sofar)
@@ -109,7 +111,7 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing 
 
     where
       (chosen, g')  = sched g ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ unsafeToNonEmpty runnable'
-      runnable'     = [(t, nextAction t) | t <- sort $ M.keys runnable]
+      runnable'     = [(t, nextActions t) | t <- sort $ M.keys runnable]
       runnable      = M.filter (isNothing . _blocking) threads
       thread        = M.lookup chosen threads
       isBlocked     = isJust . _blocking $ fromJust thread
@@ -137,31 +139,31 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing 
         | prior `notElem` map (Just . fst) runnable' = [(Start t, na) | (t, na) <- runnable', t /= chosen]
         | otherwise = [(if Just t == prior then Continue else SwitchTo t, na) | (t, na) <- runnable', t /= chosen]
 
-      nextAction t = case _continuation . fromJust $ M.lookup t threads of
-        AFork _ _             -> Fork'
-        AMyTId _              -> MyThreadId'
-        ANew _                -> New'
-        APut (c, _) _ _       -> Put' c
-        ATryPut (c, _) _ _    -> TryPut' c
-        AGet (c, _) _         -> Read' c
-        ATake (c, _) _        -> Take' c
-        ATryTake (c, _) _     -> TryTake' c
-        ANewRef _             -> NewRef'
-        AReadRef (r, _) _     -> ReadRef' r
-        AModRef (r, _) _ _    -> ModRef' r
-        AAtom _ _             -> STM'
-        AThrow _              -> Throw'
-        AThrowTo tid _ _      -> ThrowTo' tid
-        ACatching _ _ _       -> Catching'
-        APopCatching _        -> PopCatching'
-        AMasking ms _ _       -> SetMasking' False ms
-        AResetMask b1 b2 ms _ -> (if b1 then SetMasking' else ResetMasking') b2 ms
-        ALift _               -> Lift'
-        ANoTest _ _           -> NoTest'
-        AKnowsAbout _ _       -> KnowsAbout'
-        AForgets _ _          -> Forgets'
-        AAllKnown _           -> AllKnown'
-        AStop                 -> Stop'
+      nextActions t = unsafeToNonEmpty . nextActions' . _continuation . fromJust $ M.lookup t threads
+      nextActions' (AFork _ _)             = [Fork']
+      nextActions' (AMyTId _)              = [MyThreadId']
+      nextActions' (ANew _)                = [New']
+      nextActions' (APut (c, _) _ k)       = Put' c : nextActions' k
+      nextActions' (ATryPut (c, _) _ _)    = [TryPut' c]
+      nextActions' (AGet (c, _) _)         = [Read' c]
+      nextActions' (ATake (c, _) _)        = [Take' c]
+      nextActions' (ATryTake (c, _) _)     = [TryTake' c]
+      nextActions' (ANewRef _)             = [NewRef']
+      nextActions' (AReadRef (r, _) _)     = [ReadRef' r]
+      nextActions' (AModRef (r, _) _ _)    = [ModRef' r]
+      nextActions' (AAtom _ _)             = [STM']
+      nextActions' (AThrow _)              = [Throw']
+      nextActions' (AThrowTo tid _ k)      = ThrowTo' tid : nextActions' k
+      nextActions' (ACatching _ _ _)       = [Catching']
+      nextActions' (APopCatching k)        = PopCatching' : nextActions' k
+      nextActions' (AMasking ms _ _)       = [SetMasking' False ms]
+      nextActions' (AResetMask b1 b2 ms k) = (if b1 then SetMasking' else ResetMasking') b2 ms : nextActions' k
+      nextActions' (ALift _)               = [Lift']
+      nextActions' (ANoTest _ _)           = [NoTest']
+      nextActions' (AKnowsAbout _ k)       = KnowsAbout' : nextActions' k
+      nextActions' (AForgets _ k)          = Forgets' : nextActions' k
+      nextActions' (AAllKnown k)           = AllKnown' : nextActions' k
+      nextActions' (AStop)                 = [Stop']
 
 --------------------------------------------------------------------------------
 -- * Single-step execution

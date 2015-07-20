@@ -17,6 +17,7 @@ module Test.DejaFu.Deterministic.IO
     ConcIO
   , Failure(..)
   , runConcIO
+  , runConcIO'
   , liftIO
   , fork
   , forkFinally
@@ -62,7 +63,9 @@ module Test.DejaFu.Deterministic.IO
   , ThreadAction'(..)
   , CVarId
   , MaskingState(..)
+  , Trace'
   , showTrace
+  , toTrace
 
   -- * Scheduling
   , module Test.DejaFu.Deterministic.Schedule
@@ -318,4 +321,10 @@ _concAllKnown = C $ cont $ \c -> AAllKnown (c ())
 -- state, returning an failure reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
 runConcIO :: Scheduler s -> s -> (forall t. ConcIO t a) -> IO (Either Failure a, s, Trace)
-runConcIO sched s ma = runFixed fixed runTransactionIO sched s $ unC ma
+runConcIO sched s ma = do
+  (r, s, t') <- runConcIO' sched s ma
+  return (r, s, toTrace t')
+
+-- | Variant of 'runConcIO' which produces a 'Trace''.
+runConcIO' :: Scheduler s -> s -> (forall t. ConcIO t a) -> IO (Either Failure a, s, Trace')
+runConcIO' sched s ma = runFixed fixed runTransactionIO sched s $ unC ma

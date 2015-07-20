@@ -35,13 +35,14 @@ module Test.DejaFu.SCT
   , initialCVState
   , updateCVState
   , willBlock
+  , willBlockSafely
   ) where
 
 import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (force)
 import Data.Maybe (maybeToList)
 import Test.DejaFu.Deterministic
-import Test.DejaFu.Deterministic.IO (ConcIO, runConcIO)
+import Test.DejaFu.Deterministic.IO (ConcIO, runConcIO')
 import Test.DejaFu.SCT.Internal
 
 -- * Pre-emption bounding
@@ -109,7 +110,7 @@ sctBounded bv backtrack initialise c = go initialState where
   go bpor = case next bpor of
     Just (sched, conservative, bpor') ->
       -- Run the computation
-      let (res, s, trace) = runConc (bporSched initialise) (initialSchedState sched) c
+      let (res, s, trace) = runConc' (bporSched initialise) (initialSchedState sched) c
       -- Identify the backtracking points
           bpoints = findBacktrack backtrack (_sbpoints s) trace
       -- Add new nodes to the tree
@@ -117,7 +118,7 @@ sctBounded bv backtrack initialise c = go initialState where
       -- Add new backtracking information
           bpor''' = todo bv bpoints bpor''
       -- Loop
-      in (res, trace) : go bpor'''
+      in (res, toTrace trace) : go bpor'''
 
     Nothing -> []
 
@@ -129,13 +130,13 @@ sctBoundedIO :: ([Decision] -> Bool)
 sctBoundedIO bv backtrack initialise c = go initialState where
   go bpor = case next bpor of
     Just (sched, conservative, bpor') -> do
-      (res, s, trace) <- runConcIO (bporSched initialise) (initialSchedState sched) c
+      (res, s, trace) <- runConcIO' (bporSched initialise) (initialSchedState sched) c
 
       let bpoints = findBacktrack backtrack (_sbpoints s) trace
       let bpor''  = grow conservative trace bpor'
       let bpor''' = todo bv bpoints bpor''
 
-      ((res, trace):) <$> go bpor'''
+      ((res, toTrace trace):) <$> go bpor'''
 
     Nothing -> return []
 
@@ -168,22 +169,24 @@ bporSched :: (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, ThreadAction
 bporSched initialise = force $ \s prior threads -> case _sprefix s of
   -- If there is a decision available, make it
   (d:ds) ->
-    let cvstate' = maybe (_scvstate s) (updateCVState (_scvstate s) . snd) prior
-    in  (d, s { _sprefix = ds, _sbpoints = _sbpoints s ++ [(threads, [])], _scvstate = cvstate' })
+    let threads' = fmap (\(t,a:|_) -> (t,a)) threads
+        cvstate' = maybe (_scvstate s) (updateCVState (_scvstate s) . snd) prior
+    in  (d, s { _sprefix = ds, _sbpoints = _sbpoints s ++ [(threads', [])], _scvstate = cvstate' })
 
   -- Otherwise query the initialise function for a list of possible
   -- choices, and make one of them arbitrarily (recording the others).
   [] ->
-    let choices  = initialise prior threads
+    let threads' = fmap (\(t,a:|_) -> (t,a)) threads
+        choices  = initialise prior threads'
         cvstate' = maybe (_scvstate s) (updateCVState (_scvstate s) . snd) prior
         choices' = [t
-                   | t <- toList choices
-                   , a <- maybeToList $ lookup t (toList threads)
-                   , not $ willBlock cvstate' a
+                   | t  <- toList choices
+                   , as <- maybeToList $ lookup t (toList threads)
+                   , not . willBlockSafely cvstate' $ toList as
                    ]
     in  case choices' of
-          (next:rest) -> (next, s { _sbpoints = _sbpoints s ++ [(threads, rest)], _scvstate = cvstate' })
+          (next:rest) -> (next, s { _sbpoints = _sbpoints s ++ [(threads', rest)], _scvstate = cvstate' })
 
           -- TODO: abort the execution here.
           [] -> case choices of
-                 (next:|_) -> (next, s { _sbpoints = _sbpoints s ++ [(threads, [])], _scvstate = cvstate' })
+                 (next:|_) -> (next, s { _sbpoints = _sbpoints s ++ [(threads', [])], _scvstate = cvstate' })
