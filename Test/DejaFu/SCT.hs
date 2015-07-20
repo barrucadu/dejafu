@@ -32,10 +32,14 @@ module Test.DejaFu.SCT
   , decisionOf
   , activeTid
   , preEmpCount
+  , initialCVState
+  , updateCVState
+  , willBlock
   ) where
 
 import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (force)
+import Data.Maybe (maybeToList)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.IO (ConcIO, runConcIO)
 import Test.DejaFu.SCT.Internal
@@ -105,7 +109,7 @@ sctBounded bv backtrack initialise c = go initialState where
   go bpor = case next bpor of
     Just (sched, conservative, bpor') ->
       -- Run the computation
-      let (res, (_, bs), trace) = runConc (bporSched initialise) (sched, []) c
+      let (res, (_, bs, _), trace) = runConc (bporSched initialise) (initialSchedState sched) c
       -- Identify the backtracking points
           bpoints = findBacktrack backtrack bs trace
       -- Add new nodes to the tree
@@ -125,7 +129,7 @@ sctBoundedIO :: ([Decision] -> Bool)
 sctBoundedIO bv backtrack initialise c = go initialState where
   go bpor = case next bpor of
     Just (sched, conservative, bpor') -> do
-      (res, (_, bs), trace) <- runConcIO (bporSched initialise) (sched, []) c
+      (res, (_, bs, _), trace) <- runConcIO (bporSched initialise) (initialSchedState sched) c
 
       let bpoints = findBacktrack backtrack bs trace
       let bpor''  = grow conservative trace bpor'
@@ -135,16 +139,34 @@ sctBoundedIO bv backtrack initialise c = go initialState where
 
     Nothing -> return []
 
+-- | Initial scheduler state for a given prefix
+initialSchedState :: [ThreadId] -> ([ThreadId], [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])], [(ThreadId, Bool)])
+initialSchedState prefix = (prefix, [], initialCVState)
+
 -- | BPOR scheduler: takes a list of decisions, and maintains a trace
 -- including the runnable threads, and the alternative choices allowed
 -- by the bound-specific initialise function.
 bporSched :: (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, ThreadAction') -> NonEmpty ThreadId)
-          -> Scheduler ([ThreadId], [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])])
+          -> Scheduler ([ThreadId], [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])], [(ThreadId, Bool)])
 bporSched initialise = force sched where
   -- If there is a decision available, make it
-  sched (d:ds, bs) _ threads = (d, (ds, bs ++ [(threads, [])]))
+  sched (d:ds, bs, cvstate) prior threads =
+    let cvstate' = maybe cvstate (updateCVState cvstate . snd) prior
+    in  (d, (ds, bs ++ [(threads, [])], cvstate'))
 
   -- Otherwise query the initialise function for a list of possible
   -- choices, and make one of them arbitrarily (recording the others).
-  sched ([], bs) prior threads = case initialise prior threads of
-    (next:|rest) -> (next, ([], bs ++ [(threads, rest)]))
+  sched ([], bs, cvstate) prior threads =
+    let choices  = initialise prior threads
+        cvstate' = maybe cvstate (updateCVState cvstate . snd) prior
+        choices' = [t
+                   | t <- toList choices
+                   , a <- maybeToList $ lookup t (toList threads)
+                   , not $ willBlock cvstate' a
+                   ]
+    in  case choices' of
+          (next:rest) -> (next, ([], bs ++ [(threads, rest)], cvstate'))
+
+          -- TODO: abort the execution here.
+          [] -> case choices of
+                 (next:|_) -> (next, ([], bs ++ [(threads, [])], cvstate'))

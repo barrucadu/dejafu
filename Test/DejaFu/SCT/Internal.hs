@@ -37,6 +37,11 @@ data BPOR = BPOR
   , _btodo     :: [(ThreadId, Bool)]
   -- ^ Follow-on decisions still to make, and whether that decision
   -- was added conservatively due to the bound.
+  , _bignore :: [ThreadId]
+  -- ^ Follow-on decisions never to make, because they will result in
+  -- the chosen thread immediately blocking without achieving
+  -- anything, which can't have any effect on the result of the
+  -- program.
   , _bdone     :: Map ThreadId BPOR
   -- ^ Follow-on decisions that have been made.
   , _bsleep    :: [(ThreadId, ThreadAction)]
@@ -54,6 +59,7 @@ initialState :: BPOR
 initialState = BPOR
   { _brunnable = [0]
   , _btodo     = [(0, False)]
+  , _bignore   = []
   , _bdone     = M.empty
   , _bsleep    = []
   , _btaken    = []
@@ -120,24 +126,27 @@ findBacktrack backtrack = go [] where
 
 -- | Add a new trace to the tree, creating a new subtree.
 grow :: Bool -> Trace -> BPOR -> BPOR
-grow conservative = grow' 0 where
-  grow' tid trc@((d, _, a):rest) bpor =
-    let tid'   = tidOf tid d
+grow conservative = grow' initialCVState 0 where
+  grow' cvstate tid trc@((d, _, a):rest) bpor =
+    let tid'     = tidOf tid d
+        cvstate' = updateCVState cvstate a
     in  case M.lookup tid' $ _bdone bpor of
-          Just bpor' -> bpor { _bdone  = M.insert tid' (grow' tid' rest bpor') $ _bdone bpor }
+          Just bpor' -> bpor { _bdone  = M.insert tid' (grow' cvstate' tid' rest bpor') $ _bdone bpor }
           Nothing    -> bpor { _btaken = if conservative then _btaken bpor else (tid', a) : _btaken bpor
-                            , _bdone  = M.insert tid' (subtree tid' (_bsleep bpor ++ _btaken bpor) trc) $ _bdone bpor }
-  grow' _ [] bpor = bpor
+                            , _bdone  = M.insert tid' (subtree cvstate' tid' (_bsleep bpor ++ _btaken bpor) trc) $ _bdone bpor }
+  grow' _ _ [] bpor = bpor
 
-  subtree tid sleep ((d, ts, a):rest) =
-    let sleep' = filter (not . dependent a) sleep
+  subtree cvstate tid sleep ((d, ts, a):rest) =
+    let cvstate' = updateCVState cvstate a
+        sleep'   = filter (not . dependent a) sleep
     in BPOR
         { _brunnable = tids tid d a ts
         , _btodo     = []
+        , _bignore   = [tidOf tid d | (d,a) <- ts, willBlock cvstate' a]
         , _bdone     = M.fromList $ case rest of
           ((d', _, _):_) ->
             let tid' = tidOf tid d'
-            in  [(tid', subtree tid' sleep' rest)]
+            in  [(tid', subtree cvstate' tid' sleep' rest)]
           [] -> []
         , _bsleep = sleep'
         , _btaken = case rest of
@@ -169,6 +178,7 @@ todo bv = go 0 [] where
                                      | (t,c) <- _backtrack b
                                      , bv $ pref ++ [decisionOf (Just $ activeTid pref) (_brunnable bpor) t]
                                      , t `notElem` M.keys (_bdone bpor)
+                                     , t `notElem` _bignore bpor
                                      , c || t `notElem` map fst (_bsleep bpor)
                                      ]
     in  bpor { _btodo = todo' }
@@ -277,3 +287,23 @@ dependent' d1 (_, d2) = cref || cvar || ctvar where
   ctvar' _ = False
   ctvar'' STM' = True
   ctvar'' _ = False
+
+-- * Keeping track of 'CVar' full/empty states
+
+-- | Initial global 'CVar' state
+initialCVState :: [(CVarId, Bool)]
+initialCVState = []
+
+-- | Update the 'CVar' state with the action that has just happened.
+updateCVState :: [(CVarId, Bool)] -> ThreadAction -> [(CVarId, Bool)]
+updateCVState cvstate (Put  c _) = (c,True)  : filter (/=(c,False)) cvstate
+updateCVState cvstate (Take c _) = (c,False) : filter (/=(c,True))  cvstate
+updateCVState cvstate (TryPut  c True _) = (c,True)  : filter (/=(c,False)) cvstate
+updateCVState cvstate (TryTake c True _) = (c,False) : filter (/=(c,True))  cvstate
+updateCVState cvstate _ = cvstate
+
+-- | Check if an action will block.
+willBlock :: [(CVarId, Bool)] -> ThreadAction' -> Bool
+willBlock cvstate (Put'  c) = (c, True)  `elem` cvstate
+willBlock cvstate (Take' c) = (c, False) `elem` cvstate
+willBlock _ _ = False
