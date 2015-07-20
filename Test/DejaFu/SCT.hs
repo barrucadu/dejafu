@@ -109,9 +109,9 @@ sctBounded bv backtrack initialise c = go initialState where
   go bpor = case next bpor of
     Just (sched, conservative, bpor') ->
       -- Run the computation
-      let (res, (_, bs, _), trace) = runConc (bporSched initialise) (initialSchedState sched) c
+      let (res, s, trace) = runConc (bporSched initialise) (initialSchedState sched) c
       -- Identify the backtracking points
-          bpoints = findBacktrack backtrack bs trace
+          bpoints = findBacktrack backtrack (_sbpoints s) trace
       -- Add new nodes to the tree
           bpor''  = grow conservative trace bpor'
       -- Add new backtracking information
@@ -129,9 +129,9 @@ sctBoundedIO :: ([Decision] -> Bool)
 sctBoundedIO bv backtrack initialise c = go initialState where
   go bpor = case next bpor of
     Just (sched, conservative, bpor') -> do
-      (res, (_, bs, _), trace) <- runConcIO (bporSched initialise) (initialSchedState sched) c
+      (res, s, trace) <- runConcIO (bporSched initialise) (initialSchedState sched) c
 
-      let bpoints = findBacktrack backtrack bs trace
+      let bpoints = findBacktrack backtrack (_sbpoints s) trace
       let bpor''  = grow conservative trace bpor'
       let bpor''' = todo bv bpoints bpor''
 
@@ -139,34 +139,51 @@ sctBoundedIO bv backtrack initialise c = go initialState where
 
     Nothing -> return []
 
+-- * BPOR Scheduler
+
+-- | The scheduler state
+data SchedState = SchedState
+  { _sprefix  :: [ThreadId]
+  -- ^ Decisions still to make
+  , _sbpoints :: [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])]
+  -- ^ Which threads are runnable at each step, and the alternative
+  -- decisions still to make.
+  , _scvstate :: [(ThreadId, Bool)]
+  -- ^ The 'CVar' block state.
+  }
+
 -- | Initial scheduler state for a given prefix
-initialSchedState :: [ThreadId] -> ([ThreadId], [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])], [(ThreadId, Bool)])
-initialSchedState prefix = (prefix, [], initialCVState)
+initialSchedState :: [ThreadId] -> SchedState
+initialSchedState prefix = SchedState
+  { _sprefix  = prefix
+  , _sbpoints = []
+  , _scvstate = initialCVState
+  }
 
 -- | BPOR scheduler: takes a list of decisions, and maintains a trace
 -- including the runnable threads, and the alternative choices allowed
 -- by the bound-specific initialise function.
 bporSched :: (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, ThreadAction') -> NonEmpty ThreadId)
-          -> Scheduler ([ThreadId], [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])], [(ThreadId, Bool)])
-bporSched initialise = force sched where
+          -> Scheduler SchedState
+bporSched initialise = force $ \s prior threads -> case _sprefix s of
   -- If there is a decision available, make it
-  sched (d:ds, bs, cvstate) prior threads =
-    let cvstate' = maybe cvstate (updateCVState cvstate . snd) prior
-    in  (d, (ds, bs ++ [(threads, [])], cvstate'))
+  (d:ds) ->
+    let cvstate' = maybe (_scvstate s) (updateCVState (_scvstate s) . snd) prior
+    in  (d, s { _sprefix = ds, _sbpoints = _sbpoints s ++ [(threads, [])], _scvstate = cvstate' })
 
   -- Otherwise query the initialise function for a list of possible
   -- choices, and make one of them arbitrarily (recording the others).
-  sched ([], bs, cvstate) prior threads =
+  [] ->
     let choices  = initialise prior threads
-        cvstate' = maybe cvstate (updateCVState cvstate . snd) prior
+        cvstate' = maybe (_scvstate s) (updateCVState (_scvstate s) . snd) prior
         choices' = [t
                    | t <- toList choices
                    , a <- maybeToList $ lookup t (toList threads)
                    , not $ willBlock cvstate' a
                    ]
     in  case choices' of
-          (next:rest) -> (next, ([], bs ++ [(threads, rest)], cvstate'))
+          (next:rest) -> (next, s { _sbpoints = _sbpoints s ++ [(threads, rest)], _scvstate = cvstate' })
 
           -- TODO: abort the execution here.
           [] -> case choices of
-                 (next:|_) -> (next, ([], bs ++ [(threads, [])], cvstate'))
+                 (next:|_) -> (next, s { _sbpoints = _sbpoints s ++ [(threads, [])], _scvstate = cvstate' })
