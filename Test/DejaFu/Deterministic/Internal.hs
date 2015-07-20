@@ -108,7 +108,7 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing 
         Left failure -> writeRef (wref fixed) ref (Just $ Left failure) >> return (g, idSource, sofar)
 
     where
-      (chosen, g')  = sched g ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ head runnable' :| tail runnable'
+      (chosen, g')  = sched g ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ unsafeToNonEmpty runnable'
       runnable'     = [(t, nextAction t) | t <- sort $ M.keys runnable]
       runnable      = M.filter (isNothing . _blocking) threads
       thread        = M.lookup chosen threads

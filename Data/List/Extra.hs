@@ -29,3 +29,9 @@ instance NFData a => NFData (NonEmpty a) where
 -- | Convert a 'NonEmpty' to a regular non-empty list.
 toList :: NonEmpty a -> [a]
 toList (a :| as) = a : as
+
+-- | Convert a regular non-empty list to a 'NonEmpty'. This is
+-- necessarily partial.
+unsafeToNonEmpty :: [a] -> NonEmpty a
+unsafeToNonEmpty (a:as) = a :| as
+unsafeToNonEmpty [] = error "Cannot convert [] to NonEmpty!"
