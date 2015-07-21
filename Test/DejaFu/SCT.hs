@@ -23,6 +23,7 @@ module Test.DejaFu.SCT
   , sctPreBoundIO
 
   , BacktrackStep(..)
+  , First(..)
   , sctBounded
   , sctBoundedIO
 
@@ -41,9 +42,12 @@ module Test.DejaFu.SCT
 import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (force)
 import Data.Maybe (maybeToList)
+import Data.Ord.Extra (First(..))
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.IO (ConcIO, runConcIO')
 import Test.DejaFu.SCT.Internal
+
+import qualified Data.Set as S
 
 -- * Pre-emption bounding
 
@@ -68,8 +72,8 @@ pbBacktrack bs i tid = backtrack True (backtrack False bs i tid) (maximum js) ti
   js = 0:[j | ((_,(t1,_)), (j,(t2,_))) <- (zip <*> tail) . zip [0..] $ tidTag (fst . _decision) 0 bs, t1 /= t2, j < i]
 
   backtrack c (b:bs) 0 t
-    | t `elem` _runnable b = b { _backtrack = (if any ((==t) . fst) $ _backtrack b then id else (++[(t,c)])) $ _backtrack b } : bs
-    | otherwise = b { _backtrack = [(t,c) | t <- _runnable b] } : bs
+    | t `S.member` _runnable b = b { _backtrack = (if First (t,c) `S.member` _backtrack b then id else S.insert $ First (t,c)) $ _backtrack b } : bs
+    | otherwise = b { _backtrack = S.map (\t -> First (t,c)) $ _runnable b } : bs
   backtrack c (b:bs) n t = b : backtrack c bs (n-1) t
   backtrack _ [] _ _ = error "Ran out of schedule whilst backtracking!"
 
