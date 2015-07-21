@@ -330,8 +330,8 @@ _concAllKnown = C $ cont $ \c -> AAllKnown (c ())
 -- of <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
 runConc :: Scheduler s -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace)
 runConc sched s ma =
-  let (r, s, t') = runConc' sched s ma
-  in  (r, s, toTrace t')
+  let (r, s', t') = runConc' sched s ma
+  in  (r, s', toTrace t')
 
 -- | Variant of 'runConc' which produces a 'Trace''.
 runConc' :: Scheduler s -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace')

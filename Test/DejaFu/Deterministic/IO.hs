@@ -322,8 +322,8 @@ _concAllKnown = C $ cont $ \c -> AAllKnown (c ())
 -- final state of the scheduler, and an execution trace.
 runConcIO :: Scheduler s -> s -> (forall t. ConcIO t a) -> IO (Either Failure a, s, Trace)
 runConcIO sched s ma = do
-  (r, s, t') <- runConcIO' sched s ma
-  return (r, s, toTrace t')
+  (r, s', t') <- runConcIO' sched s ma
+  return (r, s', toTrace t')
 
 -- | Variant of 'runConcIO' which produces a 'Trace''.
 runConcIO' :: Scheduler s -> s -> (forall t. ConcIO t a) -> IO (Either Failure a, s, Trace')
