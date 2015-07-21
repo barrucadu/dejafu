@@ -69,11 +69,30 @@ pbBv pb ds = preEmpCount ds <= pb
 -- of the artificial dependency imposed by the bound.
 pbBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
 pbBacktrack bs i tid = backtrack True (backtrack False bs i tid) (maximum js) tid where
-  js = 0:[j | ((_,(t1,_)), (j,(t2,_))) <- (zip <*> tail) . zip [0..] $ tidTag (fst . _decision) 0 bs, t1 /= t2, j < i]
+  -- Index of the conservative point
+  js = 0 : [ j
+           | ((_,(t1,_)), (j,(t2,_))) <- pairs . zip [0..] $ tidTag (fst . _decision) 0 bs
+           , t1 /= t2
+           , j < i
+           ]
 
-  backtrack c (b:bs) 0 t
-    | t `S.member` _runnable b = b { _backtrack = (if First (t,c) `S.member` _backtrack b then id else S.insert $ First (t,c)) $ _backtrack b } : bs
+  {-# INLINE pairs #-}
+  pairs = zip <*> tail
+
+  -- Add a backtracking point. If the thread isn't runnable, add all
+  -- runnable threads.
+  backtrack c bx@(b:bs) 0 t
+    -- If the backtracking point is already present, don't re-add it,
+    -- UNLESS this would force it to backtrack (it's conservative)
+    -- where before it might not.
+    | t `S.member` _runnable b =
+      if First (t,c) `S.member` _backtrack b && not c
+      then bx
+      else b { _backtrack = First (t,c) `S.insert` _backtrack b } : bs
+
+    -- Otherwise just backtrack to everything runnable.
     | otherwise = b { _backtrack = S.map (\t -> First (t,c)) $ _runnable b } : bs
+
   backtrack c (b:bs) n t = b : backtrack c bs (n-1) t
   backtrack _ [] _ _ = error "Ran out of schedule whilst backtracking!"
 
