@@ -111,8 +111,8 @@ findBacktrack backtrack = go [] [] where
   go _ bs _ _ = bs
 
   doBacktrack allThreads enabledThreads bs =
-    let tagged = zip [0..] $ tidTag (fst . _decision) 0 bs
-        idxs   = [ (maximum is, u)
+    let tagged = reverse . zip [0..] $ tidTag (fst . _decision) 0 bs
+        idxs   = [ (head is, u)
                  | (u, n) <- enabledThreads
                  , v <- allThreads
                  , u /= v
