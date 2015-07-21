@@ -248,9 +248,6 @@ dependent d1 (_, d2) = cref || cvar || ctvar where
   cref'  _ = Nothing
 
   cvar = Just True == ((==) <$> cvar' d1 <*> cvar' d2)
-  cvar'  (BlockedPut  _) = Nothing
-  cvar'  (BlockedRead _) = Nothing
-  cvar'  (BlockedTake _) = Nothing
   cvar'  (TryPut  c _ _) = Just c
   cvar'  (TryTake c _ _) = Just c
   cvar'  (Put  c _) = Just c
@@ -259,8 +256,7 @@ dependent d1 (_, d2) = cref || cvar || ctvar where
   cvar'  _ = Nothing
 
   ctvar = ctvar' d1 && ctvar' d2
-  ctvar' (STM _)    = True
-  ctvar' BlockedSTM = False
+  ctvar' (STM _) = True
   ctvar' _ = False
 
 -- | Variant of 'dependent' to handle 'ThreadAction''s
@@ -277,9 +273,6 @@ dependent' d1 (_, d2) = cref || cvar || ctvar where
   cref'' _ = Nothing
 
   cvar = Just True == ((==) <$> cvar' d1 <*> cvar'' d2)
-  cvar'  (BlockedPut  _) = Nothing
-  cvar'  (BlockedRead _) = Nothing
-  cvar'  (BlockedTake _) = Nothing
   cvar'  (TryPut  c _ _) = Just c
   cvar'  (TryTake c _ _) = Just c
   cvar'  (Put  c _) = Just c
@@ -294,8 +287,7 @@ dependent' d1 (_, d2) = cref || cvar || ctvar where
   cvar'' _ = Nothing
 
   ctvar = ctvar' d1 && ctvar'' d2
-  ctvar' (STM _)    = True
-  ctvar' BlockedSTM = False
+  ctvar' (STM _) = True
   ctvar' _ = False
   ctvar'' STM' = True
   ctvar'' _ = False
