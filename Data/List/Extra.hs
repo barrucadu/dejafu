@@ -1,7 +1,10 @@
 -- | Extra list functions and list-like types.
 module Data.List.Extra where
 
+import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (NFData(..))
+import Data.Foldable (Foldable(..))
+import Data.Traversable (Traversable(..), fmapDefault, foldMapDefault)
 
 -- * Regular lists
 
@@ -21,7 +24,13 @@ moreThan (_:xs) n = moreThan xs (n-1)
 data NonEmpty a = a :| [a] deriving (Eq, Ord, Read, Show)
 
 instance Functor NonEmpty where
-  fmap f (a :| as) = f a :| map f as
+  fmap = fmapDefault
+
+instance Foldable NonEmpty where
+  foldMap = foldMapDefault
+
+instance Traversable NonEmpty where
+  traverse f (a:|as) = (:|) <$> f a <*> traverse f as
 
 instance NFData a => NFData (NonEmpty a) where
   rnf (x:|xs) = rnf (x, xs)
