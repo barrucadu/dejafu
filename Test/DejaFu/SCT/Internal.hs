@@ -102,27 +102,27 @@ findBacktrack :: ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
               -> [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])]
               -> Trace'
               -> [BacktrackStep]
-findBacktrack backtrack = go [] where
-  go bs ((e,i):is) ((d,_,a):ts) =
-    let this = BacktrackStep { _decision = (d, a), _runnable = map fst . toList $ e, _backtrack = map (\i' -> (i', False)) i }
-        bs'  = doBacktrack (toList e) bs
-    in go (bs' ++ [this]) is ts
-  go bs _ _ = bs
+findBacktrack backtrack = go [] [] where
+  go allThreads bs ((e,i):is) ((d,_,a):ts) =
+    let this        = BacktrackStep { _decision = (d, a), _runnable = map fst . toList $ e, _backtrack = map (\i' -> (i', False)) i }
+        bs'         = doBacktrack allThreads (toList e) bs
+        allThreads' = nub $ allThreads ++ _runnable this
+    in go allThreads' (bs' ++ [this]) is ts
+  go _ bs _ _ = bs
 
-  doBacktrack enabledThreads bs =
-    let idxs = [ (maximum is, u)
-               | (u, n) <- enabledThreads
-               , v <- allThreads bs
-               , u /= v
-               , let is = [ i
-                          | (i, (t, b)) <- zip [0..] $ tidTag (fst . _decision) 0 bs
-                          , t == v
-                          , dependent' (snd $ _decision b) (u, n)
-                          ]
-               , not $ null is] :: [(Int, ThreadId)]
+  doBacktrack allThreads enabledThreads bs =
+    let tagged = zip [0..] $ tidTag (fst . _decision) 0 bs
+        idxs   = [ (maximum is, u)
+                 | (u, n) <- enabledThreads
+                 , v <- allThreads
+                 , u /= v
+                 , let is = [ i
+                            | (i, (t, b)) <- tagged
+                            , t == v
+                            , dependent' (snd $ _decision b) (u, n)
+                            ]
+                 , not $ null is] :: [(Int, ThreadId)]
     in foldl' (\bs (i, u) -> backtrack bs i u) bs idxs
-
-  allThreads = nub . concatMap _runnable
 
 -- | Add a new trace to the tree, creating a new subtree.
 grow :: Bool -> Trace' -> BPOR -> BPOR
