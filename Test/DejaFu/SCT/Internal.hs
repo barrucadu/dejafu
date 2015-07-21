@@ -89,7 +89,7 @@ next = go 0 where
 
          _ -> Nothing
 
-  go' (tid, bpor) = (\(ts,c,b) -> Right (tid:ts, c, b)) <$> next bpor
+  go' (tid, bpor) = (\(ts,c,b) -> Right (tid:ts, c, b)) <$> go tid bpor
 
   preEmps tid bpor (t:ts) =
     let rest = preEmps t (fromJust . M.lookup t $ _bdone bpor) ts
