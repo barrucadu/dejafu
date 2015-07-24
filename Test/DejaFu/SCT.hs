@@ -67,13 +67,13 @@ pbBv pb ds = preEmpCount ds <= pb
 -- the same state being reached multiple times, but is needed because
 -- of the artificial dependency imposed by the bound.
 pbBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
-pbBacktrack bs i tid = backtrack True (backtrack False bs i tid) (maximum js) tid where
+pbBacktrack bs i tid = maybe id (\j b -> backtrack True b j tid) j $ backtrack False bs i tid where
   -- Index of the conservative point
-  js = 0 : [ j
-           | ((_,b1), (j,b2)) <- pairs $ zip [0..] bs
-           , _threadid b1 /= _threadid b2
-           , j < i
-           ]
+  j = goJ . reverse . pairs $ zip [0..i-1] bs where
+    goJ (((_,b1), (j,b2)):rest)
+      | _threadid b1 /= _threadid b2 = Just j
+      | otherwise = goJ rest
+    goJ [] = Nothing
 
   {-# INLINE pairs #-}
   pairs = zip <*> tail
