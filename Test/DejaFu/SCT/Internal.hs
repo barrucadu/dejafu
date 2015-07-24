@@ -4,9 +4,9 @@ module Test.DejaFu.SCT.Internal where
 import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (NFData(..))
 import Data.IntMap.Strict (IntMap)
-import Data.List (foldl', partition, sortBy)
+import Data.List (foldl', partition, maximumBy)
 import Data.Maybe (mapMaybe, fromJust)
-import Data.Ord (Down(..), comparing)
+import Data.Ord (comparing)
 import Data.Set (Set)
 import Test.DejaFu.Deterministic
 
@@ -81,17 +81,18 @@ next = go 0 where
   go tid bpor =
         -- All the possible prefix traces from this point, with
         -- updated BPOR subtrees if taken from the done list.
-    let prefixes = [Left t | t <- I.toList $ _btodo bpor] ++ mapMaybe go' (I.toList $ _bdone bpor)
+    let prefixes = mapMaybe go' (I.toList $ _bdone bpor) ++ [Left t | t <- I.toList $ _btodo bpor]
         -- Sort by number of preemptions, in descending order.
-        sorted   = sortBy (comparing $ Down . preEmps tid bpor . either (\(a,_) -> [a]) (\(a,_,_) -> a)) prefixes
+        cmp   = comparing $ preEmps tid bpor . either (\(a,_) -> [a]) (\(a,_,_) -> a)
 
-    in case sorted of
-         -- If the prefix with the most preemptions is from the done list, update that.
-         (Right (ts@(t:_), c, b):_) -> Just (ts, c, bpor { _bdone = I.insert t b $ _bdone bpor })
-         -- If from the todo list, remove it.
-         (Left (t,c):_) -> Just ([t], c, bpor { _btodo = I.delete t $ _btodo bpor })
+    in if null prefixes
+       then Nothing
+       else case maximumBy cmp prefixes of
+              -- If the prefix with the most preemptions is from the done list, update that.
+              Right (ts@(t:_), c, b) -> Just (ts, c, bpor { _bdone = I.insert t b $ _bdone bpor })
 
-         _ -> Nothing
+              -- If from the todo list, remove it.
+              Left (t,c) -> Just ([t], c, bpor { _btodo = I.delete t $ _btodo bpor })
 
   go' (tid, bpor) = (\(ts,c,b) -> Right (tid:ts, c, b)) <$> go tid bpor
 
