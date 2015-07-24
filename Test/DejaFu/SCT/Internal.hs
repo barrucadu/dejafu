@@ -3,15 +3,14 @@ module Test.DejaFu.SCT.Internal where
 
 import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (NFData(..))
+import Data.IntMap.Strict (IntMap)
 import Data.List (foldl', partition, sortBy)
-import Data.Ord (Down(..), comparing)
-import Data.Ord.Extra
-import Data.Map (Map)
 import Data.Maybe (mapMaybe, fromJust)
+import Data.Ord (Down(..), comparing)
 import Data.Set (Set)
 import Test.DejaFu.Deterministic
 
-import qualified Data.Map as M
+import qualified Data.IntMap.Strict as I
 import qualified Data.Set as S
 
 -- * BPOR state
@@ -24,7 +23,7 @@ data BacktrackStep = BacktrackStep
   -- ^ What happened at this step.
   , _runnable  :: Set ThreadId
   -- ^ The threads runnable at this step
-  , _backtrack :: Set (First ThreadId Bool)
+  , _backtrack :: IntMap Bool
   -- ^ The list of alternative threads to run, and whether those
   -- alternatives were added conservatively due to the bound.
   } deriving (Eq, Show)
@@ -37,20 +36,20 @@ instance NFData BacktrackStep where
 data BPOR = BPOR
   { _brunnable :: Set ThreadId
   -- ^ What threads are runnable at this step.
-  , _btodo     :: Set (First ThreadId Bool)
+  , _btodo     :: IntMap Bool
   -- ^ Follow-on decisions still to make, and whether that decision
   -- was added conservatively due to the bound.
-  , _bignore :: Set ThreadId
+  , _bignore   :: Set ThreadId
   -- ^ Follow-on decisions never to make, because they will result in
   -- the chosen thread immediately blocking without achieving
   -- anything, which can't have any effect on the result of the
   -- program.
-  , _bdone     :: Map ThreadId BPOR
+  , _bdone     :: IntMap BPOR
   -- ^ Follow-on decisions that have been made.
-  , _bsleep    :: Set (First ThreadId ThreadAction)
+  , _bsleep    :: IntMap ThreadAction
   -- ^ Transitions to ignore (in this node and children) until a
   -- dependent transition happens.
-  , _btaken    :: Set (First ThreadId ThreadAction)
+  , _btaken    :: IntMap ThreadAction
   -- ^ Transitions which have been taken, excluding
   -- conservatively-added ones, in the (reverse) order that they were
   -- taken, as the 'Map' doesn't preserve insertion order. This is
@@ -61,11 +60,11 @@ data BPOR = BPOR
 initialState :: BPOR
 initialState = BPOR
   { _brunnable = S.singleton 0
-  , _btodo     = S.singleton $ First (0, False)
+  , _btodo     = I.singleton 0 False
   , _bignore   = S.empty
-  , _bdone     = M.empty
-  , _bsleep    = S.empty
-  , _btaken    = S.empty
+  , _bdone     = I.empty
+  , _bsleep    = I.empty
+  , _btaken    = I.empty
   }
 
 -- | Produce a new schedule from a BPOR tree. If there are no new
@@ -80,22 +79,22 @@ next = go 0 where
   go tid bpor =
         -- All the possible prefix traces from this point, with
         -- updated BPOR subtrees if taken from the done list.
-    let prefixes = [Left t | t <- S.toList $ _btodo bpor] ++ mapMaybe go' (M.toList $ _bdone bpor)
+    let prefixes = [Left t | t <- I.toList $ _btodo bpor] ++ mapMaybe go' (I.toList $ _bdone bpor)
         -- Sort by number of preemptions, in descending order.
-        sorted   = sortBy (comparing $ Down . preEmps tid bpor . either (\f -> [fst $ unFirst f]) (\(a,_,_) -> a)) prefixes
+        sorted   = sortBy (comparing $ Down . preEmps tid bpor . either (\(a,_) -> [a]) (\(a,_,_) -> a)) prefixes
 
     in case sorted of
          -- If the prefix with the most preemptions is from the done list, update that.
-         (Right (ts@(t:_), c, b):_) -> Just (ts, c, bpor { _bdone = M.insert t b $ _bdone bpor })
+         (Right (ts@(t:_), c, b):_) -> Just (ts, c, bpor { _bdone = I.insert t b $ _bdone bpor })
          -- If from the todo list, remove it.
-         (Left f:_) -> Just ([fst $ unFirst f], snd $ unFirst f, bpor { _btodo = S.filter (/=f) $ _btodo bpor })
+         (Left (t,c):_) -> Just ([t], c, bpor { _btodo = I.delete t $ _btodo bpor })
 
          _ -> Nothing
 
   go' (tid, bpor) = (\(ts,c,b) -> Right (tid:ts, c, b)) <$> go tid bpor
 
   preEmps tid bpor (t:ts) =
-    let rest = preEmps t (fromJust . M.lookup t $ _bdone bpor) ts
+    let rest = preEmps t (fromJust . I.lookup t $ _bdone bpor) ts
     in  if tid /= t && tid `S.member` _brunnable bpor then 1 + rest else rest
   preEmps _ _ [] = 0::Int
 
@@ -109,7 +108,7 @@ findBacktrack backtrack = go S.empty [] where
   go allThreads bs ((e,i):is) ((d,_,a):ts) =
     let this        = BacktrackStep { _decision = (d, a)
                                     , _runnable = S.fromList . map fst . toList $ e
-                                    , _backtrack = S.fromList $ map (\i' -> First (i', False)) i
+                                    , _backtrack = I.fromList $ map (\i' -> (i', False)) i
                                     }
         bs'         = doBacktrack allThreads (toList e) bs
         allThreads' = allThreads `S.union` _runnable this
@@ -136,28 +135,28 @@ grow conservative = grow' initialCVState 0 where
   grow' cvstate tid trc@((d, _, a):rest) bpor =
     let tid'     = tidOf tid d
         cvstate' = updateCVState cvstate a
-    in  case M.lookup tid' $ _bdone bpor of
-          Just bpor' -> bpor { _bdone  = M.insert tid' (grow' cvstate' tid' rest bpor') $ _bdone bpor }
-          Nothing    -> bpor { _btaken = if conservative then _btaken bpor else First (tid', a) `S.insert` _btaken bpor
-                            , _bdone  = M.insert tid' (subtree cvstate' tid' (_bsleep bpor `S.union` _btaken bpor) trc) $ _bdone bpor }
+    in  case I.lookup tid' $ _bdone bpor of
+          Just bpor' -> bpor { _bdone  = I.insert tid' (grow' cvstate' tid' rest bpor') $ _bdone bpor }
+          Nothing    -> bpor { _btaken = if conservative then _btaken bpor else I.insert tid' a $ _btaken bpor
+                            , _bdone  = I.insert tid' (subtree cvstate' tid' (_bsleep bpor `I.union` _btaken bpor) trc) $ _bdone bpor }
   grow' _ _ [] bpor = bpor
 
   subtree cvstate tid sleep ((d, ts, a):rest) =
     let cvstate' = updateCVState cvstate a
-        sleep'   = S.filter (not . dependent a . unFirst) sleep
+        sleep'   = I.filterWithKey (\t a' -> not $ dependent a (t,a')) sleep
     in BPOR
         { _brunnable = S.fromList $ tids tid d a ts
-        , _btodo     = S.empty
+        , _btodo     = I.empty
         , _bignore   = S.fromList [tidOf tid d | (d,as) <- ts, willBlockSafely cvstate' $ toList as]
-        , _bdone     = M.fromList $ case rest of
+        , _bdone     = I.fromList $ case rest of
           ((d', _, _):_) ->
             let tid' = tidOf tid d'
             in  [(tid', subtree cvstate' tid' sleep' rest)]
           [] -> []
         , _bsleep = sleep'
         , _btaken = case rest of
-          ((d', _, a'):_) -> S.singleton $ First (tidOf tid d', a')
-          [] -> S.empty
+          ((d', _, a'):_) -> I.singleton (tidOf tid d') a'
+          [] -> I.empty
         }
 
   tids tid d (Fork t)           ts = tidOf tid d : t : map (tidOf tid . fst) ts
@@ -175,31 +174,31 @@ todo :: ([Decision] -> Bool) -> [BacktrackStep] -> BPOR -> BPOR
 todo bv = step where
   step bs bpor =
     let (bpor', bs') = go 0 [] Nothing bs bpor
-    in  if all (S.null . _backtrack) bs'
+    in  if all (I.null . _backtrack) bs'
         then bpor'
         else step bs' bpor'
 
   go tid pref lastb (b:bs) bpor =
     let (bpor', blocked) = backtrack pref b bpor
         tid'   = tidOf tid . fst $ _decision b
-        (child, blocked')  = go tid' (pref++[fst $ _decision b]) (Just b) bs . fromJust $ M.lookup tid' (_bdone bpor)
-        bpor'' = bpor' { _bdone = M.insert tid' child $ _bdone bpor' }
+        (child, blocked')  = go tid' (pref++[fst $ _decision b]) (Just b) bs . fromJust $ I.lookup tid' (_bdone bpor)
+        bpor'' = bpor' { _bdone = I.insert tid' child $ _bdone bpor' }
     in  case lastb of
          Just b' -> (bpor'', b' { _backtrack = blocked } : blocked')
          Nothing -> (bpor'', blocked')
 
-  go _ _ (Just b') _ bpor = (bpor, [b' { _backtrack = S.empty }])
+  go _ _ (Just b') _ bpor = (bpor, [b' { _backtrack = I.empty }])
   go _ _ Nothing   _ bpor = (bpor, [])
 
   backtrack pref b bpor =
     let todo' = [ x
-                | x@(First (t,c)) <- S.toList $ _backtrack b
+                | x@(t,c) <- I.toList $ _backtrack b
                 , bv $ pref ++ [decisionOf (Just $ activeTid pref) (_brunnable bpor) t]
-                , t `notElem` M.keys (_bdone bpor)
-                , c || t `S.notMember` S.map (fst . unFirst) (_bsleep bpor)
+                , t `notElem` I.keys (_bdone bpor)
+                , c || I.notMember t (_bsleep bpor)
                 ]
-        (blocked, next) = partition (\(First (t,_)) -> t `S.member` _bignore bpor) todo'
-    in  (bpor { _btodo = _btodo bpor `S.union` S.fromList next }, S.fromList blocked)
+        (blocked, next) = partition (\(t,_) -> t `S.member` _bignore bpor) todo'
+    in  (bpor { _btodo = _btodo bpor `I.union` I.fromList next }, I.fromList blocked)
 
 -- * Utilities
 
@@ -301,27 +300,27 @@ dependent' d1 (_, d2) = cref || cvar || ctvar where
 -- * Keeping track of 'CVar' full/empty states
 
 -- | Initial global 'CVar' state
-initialCVState :: [(CVarId, Bool)]
-initialCVState = []
+initialCVState :: IntMap Bool
+initialCVState = I.empty
 
 -- | Update the 'CVar' state with the action that has just happened.
-updateCVState :: [(CVarId, Bool)] -> ThreadAction -> [(CVarId, Bool)]
-updateCVState cvstate (Put  c _) = (c,True)  : filter (/=(c,False)) cvstate
-updateCVState cvstate (Take c _) = (c,False) : filter (/=(c,True))  cvstate
-updateCVState cvstate (TryPut  c True _) = (c,True)  : filter (/=(c,False)) cvstate
-updateCVState cvstate (TryTake c True _) = (c,False) : filter (/=(c,True))  cvstate
+updateCVState :: IntMap Bool -> ThreadAction -> IntMap Bool
+updateCVState cvstate (Put  c _) = I.insert c True  cvstate
+updateCVState cvstate (Take c _) = I.insert c False cvstate
+updateCVState cvstate (TryPut  c True _) = I.insert c True  cvstate
+updateCVState cvstate (TryTake c True _) = I.insert c False cvstate
 updateCVState cvstate _ = cvstate
 
 -- | Check if an action will block.
-willBlock :: [(CVarId, Bool)] -> ThreadAction' -> Bool
-willBlock cvstate (Put'  c) = (c, True)  `elem` cvstate
-willBlock cvstate (Take' c) = (c, False) `elem` cvstate
+willBlock :: IntMap Bool -> ThreadAction' -> Bool
+willBlock cvstate (Put'  c) = I.lookup c cvstate == Just True
+willBlock cvstate (Take' c) = I.lookup c cvstate == Just False
 willBlock _ _ = False
 
 -- | Check if a list of actions will block safely (without modifying
 -- any global state). This allows further lookahead at, say, the
 -- 'spawn' of a thread (which always starts with 'KnowsAbout'.
-willBlockSafely :: [(CVarId, Bool)] -> [ThreadAction'] -> Bool
+willBlockSafely :: IntMap Bool -> [ThreadAction'] -> Bool
 willBlockSafely cvstate (KnowsAbout':as) = willBlockSafely cvstate as
 willBlockSafely cvstate (Forgets':as)    = willBlockSafely cvstate as
 willBlockSafely cvstate (AllKnown':as)   = willBlockSafely cvstate as

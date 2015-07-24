@@ -23,7 +23,6 @@ module Test.DejaFu.SCT
   , sctPreBoundIO
 
   , BacktrackStep(..)
-  , First(..)
   , sctBounded
   , sctBoundedIO
 
@@ -41,12 +40,13 @@ module Test.DejaFu.SCT
 
 import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (force)
-import Data.Maybe (maybeToList)
-import Data.Ord.Extra (First(..))
+import Data.IntMap.Strict (IntMap)
+import Data.Maybe (maybeToList, isNothing)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.IO (ConcIO, runConcIO')
 import Test.DejaFu.SCT.Internal
 
+import qualified Data.IntMap.Strict as I
 import qualified Data.Set as S
 
 -- * Pre-emption bounding
@@ -86,12 +86,13 @@ pbBacktrack bs i tid = backtrack True (backtrack False bs i tid) (maximum js) ti
     -- UNLESS this would force it to backtrack (it's conservative)
     -- where before it might not.
     | t `S.member` _runnable b =
-      if First (t,c) `S.member` _backtrack b && not c
-      then bx
-      else b { _backtrack = First (t,c) `S.insert` _backtrack b } : bs
+      let val = I.lookup t $ _backtrack b
+      in  if isNothing val || (val == Just False && c)
+          then b { _backtrack = I.insert t c $ _backtrack b } : bs
+          else bx
 
     -- Otherwise just backtrack to everything runnable.
-    | otherwise = b { _backtrack = S.map (\t -> First (t,c)) $ _runnable b } : bs
+    | otherwise = b { _backtrack = I.fromList [ (t,c) | t <- S.toList $ _runnable b ] } : bs
 
   backtrack c (b:bs) n t = b : backtrack c bs (n-1) t
   backtrack _ [] _ _ = error "Ran out of schedule whilst backtracking!"
@@ -172,7 +173,7 @@ data SchedState = SchedState
   , _sbpoints :: [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])]
   -- ^ Which threads are runnable at each step, and the alternative
   -- decisions still to make.
-  , _scvstate :: [(ThreadId, Bool)]
+  , _scvstate :: IntMap Bool
   -- ^ The 'CVar' block state.
   }
 
