@@ -7,10 +7,12 @@ import Data.IntMap.Strict (IntMap)
 import Data.List (foldl', partition, maximumBy)
 import Data.Maybe (mapMaybe, fromJust)
 import Data.Ord (comparing)
+import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
 import Test.DejaFu.Deterministic
 
 import qualified Data.IntMap.Strict as I
+import qualified Data.Sequence as Sq
 import qualified Data.Set as S
 
 -- * BPOR state
@@ -104,11 +106,11 @@ next = go 0 where
 -- | Produce a list of new backtracking points from an execution
 -- trace.
 findBacktrack :: ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
-              -> [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])]
+              -> Seq (NonEmpty (ThreadId, ThreadAction'), [ThreadId])
               -> Trace'
               -> [BacktrackStep]
-findBacktrack backtrack = go S.empty 0 [] where
-  go allThreads tid bs ((e,i):is) ((d,_,a):ts) =
+findBacktrack backtrack = go S.empty 0 [] . Sq.viewl where
+  go allThreads tid bs ((e,i):<is) ((d,_,a):ts) =
     let tid' = tidOf tid d
         this        = BacktrackStep { _threadid  = tid'
                                     , _decision  = (d, a)
@@ -117,7 +119,7 @@ findBacktrack backtrack = go S.empty 0 [] where
                                     }
         bs'         = doBacktrack allThreads (toList e) bs
         allThreads' = allThreads `S.union` _runnable this
-    in go allThreads' tid' (bs' ++ [this]) is ts
+    in go allThreads' tid' (bs' ++ [this]) (Sq.viewl is) ts
   go _ _ bs _ _ = bs
 
   doBacktrack allThreads enabledThreads bs =

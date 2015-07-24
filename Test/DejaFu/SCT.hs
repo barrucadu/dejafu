@@ -40,6 +40,7 @@ module Test.DejaFu.SCT
 import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (force)
 import Data.IntMap.Strict (IntMap)
+import Data.Sequence (Seq, (|>))
 import Data.Maybe (maybeToList, isNothing)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.IO (ConcIO, runConcIO')
@@ -47,6 +48,7 @@ import Test.DejaFu.SCT.Internal
 
 import qualified Data.IntMap.Strict as I
 import qualified Data.Set as S
+import qualified Data.Sequence as Sq
 
 -- * Pre-emption bounding
 
@@ -169,7 +171,7 @@ sctBoundedIO bv backtrack initialise c = go initialState where
 data SchedState = SchedState
   { _sprefix  :: [ThreadId]
   -- ^ Decisions still to make
-  , _sbpoints :: [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])]
+  , _sbpoints :: Seq (NonEmpty (ThreadId, ThreadAction'), [ThreadId])
   -- ^ Which threads are runnable at each step, and the alternative
   -- decisions still to make.
   , _scvstate :: IntMap Bool
@@ -180,7 +182,7 @@ data SchedState = SchedState
 initialSchedState :: [ThreadId] -> SchedState
 initialSchedState prefix = SchedState
   { _sprefix  = prefix
-  , _sbpoints = []
+  , _sbpoints = Sq.empty
   , _scvstate = initialCVState
   }
 
@@ -194,7 +196,7 @@ bporSched initialise = force $ \s prior threads -> case _sprefix s of
   (d:ds) ->
     let threads' = fmap (\(t,a:|_) -> (t,a)) threads
         cvstate' = maybe (_scvstate s) (updateCVState (_scvstate s) . snd) prior
-    in  (d, s { _sprefix = ds, _sbpoints = _sbpoints s ++ [(threads', [])], _scvstate = cvstate' })
+    in  (d, s { _sprefix = ds, _sbpoints = _sbpoints s |> (threads', []), _scvstate = cvstate' })
 
   -- Otherwise query the initialise function for a list of possible
   -- choices, and make one of them arbitrarily (recording the others).
@@ -208,8 +210,8 @@ bporSched initialise = force $ \s prior threads -> case _sprefix s of
                    , not . willBlockSafely cvstate' $ toList as
                    ]
     in  case choices' of
-          (next:rest) -> (next, s { _sbpoints = _sbpoints s ++ [(threads', rest)], _scvstate = cvstate' })
+          (next:rest) -> (next, s { _sbpoints = _sbpoints s |> (threads', rest), _scvstate = cvstate' })
 
           -- TODO: abort the execution here.
           [] -> case choices of
-                 (next:|_) -> (next, s { _sbpoints = _sbpoints s ++ [(threads', [])], _scvstate = cvstate' })
+                 (next:|_) -> (next, s { _sbpoints = _sbpoints s |> (threads', []), _scvstate = cvstate' })
