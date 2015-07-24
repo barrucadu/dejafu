@@ -28,7 +28,6 @@ module Test.DejaFu.SCT
 
   -- * Utilities
   , tidOf
-  , tidTag
   , decisionOf
   , activeTid
   , preEmpCount
@@ -71,8 +70,8 @@ pbBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
 pbBacktrack bs i tid = backtrack True (backtrack False bs i tid) (maximum js) tid where
   -- Index of the conservative point
   js = 0 : [ j
-           | ((_,(t1,_)), (j,(t2,_))) <- pairs . zip [0..] $ tidTag (fst . _decision) 0 bs
-           , t1 /= t2
+           | ((_,b1), (j,b2)) <- pairs $ zip [0..] bs
+           , _threadid b1 /= _threadid b2
            , j < i
            ]
 

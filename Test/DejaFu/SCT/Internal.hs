@@ -19,7 +19,9 @@ import qualified Data.Set as S
 -- purposes. This backtracking information is used to generate new
 -- schedules.
 data BacktrackStep = BacktrackStep
-  { _decision  :: (Decision, ThreadAction)
+  { _threadid  :: ThreadId
+  -- ^ The thread running at this step
+  , _decision  :: (Decision, ThreadAction)
   -- ^ What happened at this step.
   , _runnable  :: Set ThreadId
   -- ^ The threads runnable at this step
@@ -29,7 +31,7 @@ data BacktrackStep = BacktrackStep
   } deriving (Eq, Show)
 
 instance NFData BacktrackStep where
-  rnf b = rnf (_decision b, _runnable b, _backtrack b)
+  rnf b = rnf (_threadid b, _decision b, _runnable b, _backtrack b)
 
 -- | BPOR execution is represented as a tree of states, characterised
 -- by the decisions that lead to that state.
@@ -104,26 +106,28 @@ findBacktrack :: ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
               -> [(NonEmpty (ThreadId, ThreadAction'), [ThreadId])]
               -> Trace'
               -> [BacktrackStep]
-findBacktrack backtrack = go S.empty [] where
-  go allThreads bs ((e,i):is) ((d,_,a):ts) =
-    let this        = BacktrackStep { _decision = (d, a)
-                                    , _runnable = S.fromList . map fst . toList $ e
+findBacktrack backtrack = go S.empty 0 [] where
+  go allThreads tid bs ((e,i):is) ((d,_,a):ts) =
+    let tid' = tidOf tid d
+        this        = BacktrackStep { _threadid  = tid'
+                                    , _decision  = (d, a)
+                                    , _runnable  = S.fromList . map fst . toList $ e
                                     , _backtrack = I.fromList $ map (\i' -> (i', False)) i
                                     }
         bs'         = doBacktrack allThreads (toList e) bs
         allThreads' = allThreads `S.union` _runnable this
-    in go allThreads' (bs' ++ [this]) is ts
-  go _ bs _ _ = bs
+    in go allThreads' tid' (bs' ++ [this]) is ts
+  go _ _ bs _ _ = bs
 
   doBacktrack allThreads enabledThreads bs =
-    let tagged = reverse . zip [0..] $ tidTag (fst . _decision) 0 bs
+    let tagged = reverse $ zip [0..] bs
         idxs   = [ (head is, u)
                  | (u, n) <- enabledThreads
                  , v <- S.toList allThreads
                  , u /= v
                  , let is = [ i
-                            | (i, (t, b)) <- tagged
-                            , t == v
+                            | (i, b) <- tagged
+                            , _threadid b == v
                             , dependent' (snd $ _decision b) (u, n)
                             ]
                  , not $ null is] :: [(Int, ThreadId)]
@@ -208,15 +212,6 @@ tidOf :: ThreadId -> Decision -> ThreadId
 tidOf _ (Start t)    = t
 tidOf _ (SwitchTo t) = t
 tidOf tid Continue   = tid
-
--- | Tag a list of items encapsulating 'Decision's with 'ThreadId's,
--- with an initial default case for 'Continue'.
-tidTag :: (a -> Decision) -> ThreadId -> [a] -> [(ThreadId, a)]
-tidTag df = go where
-  go t (a:as) =
-    let t' = tidOf t $ df a
-    in (t', a) : go t' as
-  go _ [] = []
 
 -- | Get the 'Decision' that would have resulted in this 'ThreadId',
 -- given a prior 'ThreadId' (if any) and list of runnable threds.
