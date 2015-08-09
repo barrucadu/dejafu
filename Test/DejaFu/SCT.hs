@@ -39,6 +39,7 @@ module Test.DejaFu.SCT
 
 import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (force)
+import Data.Functor.Identity (Identity(..), runIdentity)
 import Data.IntMap.Strict (IntMap)
 import Data.Sequence (Seq, (|>))
 import Data.Maybe (maybeToList, isNothing)
@@ -131,31 +132,29 @@ sctBounded :: ([Decision] -> Bool)
            -- ^ Produce possible scheduling decisions, all will be
            -- tried.
            -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
-sctBounded bv backtrack initialise c = go initialState where
-  go bpor = case next bpor of
-    Just (sched, conservative, bpor') ->
-      -- Run the computation
-      let (res, s, trace) = runConc' (bporSched initialise) (initialSchedState sched) c
-      -- Identify the backtracking points
-          bpoints = findBacktrack backtrack (_sbpoints s) trace
-      -- Add new nodes to the tree
-          bpor''  = grow conservative trace bpor'
-      -- Add new backtracking information
-          bpor''' = todo bv bpoints bpor''
-      -- Loop
-      in (res, toTrace trace) : go bpor'''
-
-    Nothing -> []
+sctBounded bv backtrack initialise c = runIdentity $ sctBoundedM bv backtrack initialise run where
+  run sched s = Identity $ runConc' sched s c
 
 -- | Variant of 'sctBounded' for computations which do 'IO'.
 sctBoundedIO :: ([Decision] -> Bool)
              -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
              -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, ThreadAction') -> NonEmpty ThreadId)
              -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
-sctBoundedIO bv backtrack initialise c = go initialState where
+sctBoundedIO bv backtrack initialise c = sctBoundedM bv backtrack initialise run where
+  run sched s = runConcIO' sched s c
+
+-- | Generic SCT runner.
+sctBoundedM :: Monad m
+            => ([Decision] -> Bool)
+            -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
+            -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, ThreadAction') -> NonEmpty ThreadId)
+            -> (Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
+            -- ^ Monadic runner, with computation fixed.
+            -> m [(Either Failure a, Trace)]
+sctBoundedM bv backtrack initialise run = go initialState where
   go bpor = case next bpor of
     Just (sched, conservative, bpor') -> do
-      (res, s, trace) <- runConcIO' (bporSched initialise) (initialSchedState sched) c
+      (res, s, trace) <- run (bporSched initialise) (initialSchedState sched)
 
       let bpoints = findBacktrack backtrack (_sbpoints s) trace
       let bpor''  = grow conservative trace bpor'
