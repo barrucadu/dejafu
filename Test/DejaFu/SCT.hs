@@ -144,7 +144,7 @@ sctBoundedIO bv backtrack initialise c = sctBoundedM bv backtrack initialise run
   run sched s = runConcIO' sched s c
 
 -- | Generic SCT runner.
-sctBoundedM :: Monad m
+sctBoundedM :: (Functor m, Monad m)
             => ([Decision] -> Bool)
             -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
             -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, ThreadAction') -> NonEmpty ThreadId)
