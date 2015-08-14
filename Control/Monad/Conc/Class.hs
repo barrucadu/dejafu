@@ -12,6 +12,7 @@ module Control.Monad.Conc.Class
   , killThread
   ) where
 
+import Control.Applicative (Applicative)
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
 import Control.Exception (Exception, AsyncException(ThreadKilled), SomeException)
@@ -51,7 +52,8 @@ import qualified Control.Monad.Writer.Strict as WS
 --
 -- Every @MonadConc@ has an associated 'MonadSTM', transactions of
 -- which can be run atomically.
-class ( Monad m, MonadCatch m, MonadThrow m, MonadMask m
+class ( Applicative m, Monad m
+      , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STMLike m)
       , Eq (ThreadId m), Show (ThreadId m)) => MonadConc m  where
   -- | The associated 'MonadSTM' for this class.

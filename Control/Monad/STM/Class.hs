@@ -4,6 +4,7 @@
 -- with 'MonadConc'.
 module Control.Monad.STM.Class where
 
+import Control.Applicative (Applicative)
 import Control.Concurrent.STM (STM)
 import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
 import Control.Exception (Exception)
@@ -30,7 +31,7 @@ import qualified Control.Monad.Writer.Strict as WS
 --
 -- A minimal implementation consists of 'retry', 'orElse', 'newCTVar',
 -- 'readCTVar', and 'writeCTVar'.
-class (Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
+class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
   -- | The mutable reference type. These behave like 'TVar's, in that
   -- they always contain a value and updates are non-blocking and
   -- synchronised.
