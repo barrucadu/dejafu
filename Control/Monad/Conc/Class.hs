@@ -16,7 +16,7 @@ import Control.Applicative (Applicative)
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
 import Control.Exception (Exception, AsyncException(ThreadKilled), SomeException)
-import Control.Monad (liftM, unless)
+import Control.Monad (liftM)
 import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Control.Monad.STM (STM)
@@ -100,13 +100,8 @@ class ( Applicative m, Monad m
 
   -- | Put a value into a @CVar@. If there is already a value there,
   -- this will block until that value has been taken, at which point
-  -- the value will be stored. The default implementation is very bad,
-  -- as it does not make use of any blocking functionality, and should
-  -- probably b overridden.
-  --
-  -- > putCVar cvar a = tryPutCVar cvar a >>= \b -> unless b $ putCVar cvar a
+  -- the value will be stored.
   putCVar :: CVar m a -> a -> m ()
-  putCVar cvar a = tryPutCVar cvar a >>= \b -> unless b $ putCVar cvar a
 
   -- | Attempt to put a value in a @CVar@, returning 'True' (and
   -- filling the @CVar@) if there was nothing there, otherwise
@@ -120,13 +115,8 @@ class ( Applicative m, Monad m
 
   -- | Take a value from a @CVar@. This \"empties\" the @CVar@,
   -- allowing a new value to be put in. This will block if there is no
-  -- value in the @CVar@ already, until one has been put. The default
-  -- implementation is very bad, as it does not make use of any
-  -- blocking functionality, and should probably b overridden.
-  --
-  -- > takeCVar cvar = tryTakeCVar cvar >>= maybe (takeCVar cvar) return
+  -- value in the @CVar@ already, until one has been put.
   takeCVar :: CVar m a -> m a
-  takeCVar cvar = tryTakeCVar cvar >>= maybe (takeCVar cvar) return
 
   -- | Attempt to take a value from a @CVar@, returning a 'Just' (and
   -- emptying the @CVar@) if there was something there, otherwise
