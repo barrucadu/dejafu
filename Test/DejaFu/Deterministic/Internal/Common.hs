@@ -126,8 +126,8 @@ type Trace' = [(Decision, [(Decision, NonEmpty ThreadAction')], ThreadAction)]
 
 -- | Throw away information from a 'Trace'' to get just a 'Trace'.
 toTrace :: Trace' -> Trace
-toTrace ((d, alters, a):ts) = (d, map (\(d, a:|_) -> (d, a)) alters, a) : toTrace ts
-toTrace [] = []
+toTrace = map go where
+  go (dec, alters, act) = (dec, map (\(d, a:|_) -> (d, a)) alters, act)
 
 -- | Pretty-print a trace.
 showTrace :: Trace -> String

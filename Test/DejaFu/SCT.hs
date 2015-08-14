@@ -70,11 +70,11 @@ pbBv pb ds = preEmpCount ds <= pb
 -- the same state being reached multiple times, but is needed because
 -- of the artificial dependency imposed by the bound.
 pbBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
-pbBacktrack bs i tid = maybe id (\j b -> backtrack True b j tid) j $ backtrack False bs i tid where
+pbBacktrack bs i tid = maybe id (\j' b -> backtrack True b j' tid) j $ backtrack False bs i tid where
   -- Index of the conservative point
   j = goJ . reverse . pairs $ zip [0..i-1] bs where
-    goJ (((_,b1), (j,b2)):rest)
-      | _threadid b1 /= _threadid b2 = Just j
+    goJ (((_,b1), (j',b2)):rest)
+      | _threadid b1 /= _threadid b2 = Just j'
       | otherwise = goJ rest
     goJ [] = Nothing
 
@@ -83,29 +83,29 @@ pbBacktrack bs i tid = maybe id (\j b -> backtrack True b j tid) j $ backtrack F
 
   -- Add a backtracking point. If the thread isn't runnable, add all
   -- runnable threads.
-  backtrack c bx@(b:bs) 0 t
+  backtrack c bx@(b:rest) 0 t
     -- If the backtracking point is already present, don't re-add it,
     -- UNLESS this would force it to backtrack (it's conservative)
     -- where before it might not.
     | t `S.member` _runnable b =
       let val = I.lookup t $ _backtrack b
       in  if isNothing val || (val == Just False && c)
-          then b { _backtrack = I.insert t c $ _backtrack b } : bs
+          then b { _backtrack = I.insert t c $ _backtrack b } : rest
           else bx
 
     -- Otherwise just backtrack to everything runnable.
-    | otherwise = b { _backtrack = I.fromList [ (t,c) | t <- S.toList $ _runnable b ] } : bs
+    | otherwise = b { _backtrack = I.fromList [ (t',c) | t' <- S.toList $ _runnable b ] } : rest
 
-  backtrack c (b:bs) n t = b : backtrack c bs (n-1) t
+  backtrack c (b:rest) n t = b : backtrack c rest (n-1) t
   backtrack _ [] _ _ = error "Ran out of schedule whilst backtracking!"
 
 -- | Pick a new thread to run. Choose the current thread if available,
 -- otherwise add all runnable threads.
 pbInitialise :: Maybe (ThreadId, a) -> NonEmpty (ThreadId, b) -> NonEmpty ThreadId
-pbInitialise prior threads@((next, _):|rest) = case prior of
+pbInitialise prior threads@((nextTid, _):|rest) = case prior of
   Just (tid, _)
     | any (\(t, _) -> t == tid) $ toList threads -> tid:|[]
-  _ -> next:|map fst rest
+  _ -> nextTid:|map fst rest
 
 -- * BPOR
 
@@ -209,8 +209,8 @@ bporSched initialise = force $ \s prior threads -> case _sprefix s of
                    , not . willBlockSafely cvstate' $ toList as
                    ]
     in  case choices' of
-          (next:rest) -> (next, s { _sbpoints = _sbpoints s |> (threads', rest), _scvstate = cvstate' })
+          (nextTid:rest) -> (nextTid, s { _sbpoints = _sbpoints s |> (threads', rest), _scvstate = cvstate' })
 
           -- TODO: abort the execution here.
           [] -> case choices of
-                 (next:|_) -> (next, s { _sbpoints = _sbpoints s |> (threads', []), _scvstate = cvstate' })
+                 (nextTid:|_) -> (nextTid, s { _sbpoints = _sbpoints s |> (threads', []), _scvstate = cvstate' })

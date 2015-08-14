@@ -136,6 +136,7 @@ kill = M.delete
 block :: BlockedOn -> ThreadId -> Threads n r s -> Threads n r s
 block blockedOn = M.alter doBlock where
   doBlock (Just thread) = Just $ thread { _blocking = Just blockedOn }
+  doBlock _ = error "Invariant failure in 'block': thread does NOT exist!"
 
 -- | Unblock all threads waiting on the appropriate block. For 'CTVar'
 -- blocks, this will wake all threads waiting on at least one of the
@@ -154,13 +155,16 @@ wake blockedOn threads = (M.map unblock threads, M.keys $ M.filter isBlocked thr
 knows :: [Either CVarId CTVarId] -> ThreadId -> Threads n r s -> Threads n r s
 knows theids = M.alter go where
   go (Just thread) = Just $ thread { _known = nub $ theids ++ _known thread }
+  go _ = error "Invariant failure in 'knows': thread does NOT exist!"
 
 -- | Forget about a shared variable.
 forgets :: [Either CVarId CTVarId] -> ThreadId -> Threads n r s -> Threads n r s
 forgets theids = M.alter go where
   go (Just thread) = Just $ thread { _known = filter (`notElem` theids) $ _known thread }
+  go _ = error "Invariant failure in 'forgets': thread does NOT exist!"
 
 -- | Record that a thread's shared variable state is fully known.
 fullknown :: ThreadId -> Threads n r s -> Threads n r s
 fullknown = M.alter go where
   go (Just thread) = Just $ thread { _fullknown = True }
+  go _ = error "Invariant failure in 'fullknown': thread does NOT exist!"

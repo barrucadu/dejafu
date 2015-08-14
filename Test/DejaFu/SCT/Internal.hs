@@ -92,6 +92,7 @@ next = go 0 where
        else case maximumBy cmp prefixes of
               -- If the prefix with the most preemptions is from the done list, update that.
               Right (ts@(t:_), c, b) -> Just (ts, c, bpor { _bdone = I.insert t b $ _bdone bpor })
+              Right ([], _, _) -> error "Invariant failure in 'next': empty done prefix!"
 
               -- If from the todo list, remove it.
               Left (t,c) -> Just ([t], c, bpor { _btodo = I.delete t $ _btodo bpor })
@@ -134,7 +135,7 @@ findBacktrack backtrack = go S.empty 0 [] . Sq.viewl where
                             , dependent' (snd $ _decision b) (u, n)
                             ]
                  , not $ null is] :: [(Int, ThreadId)]
-    in foldl' (\bs (i, u) -> backtrack bs i u) bs idxs
+    in foldl' (\b (i, u) -> backtrack b i u) bs idxs
 
 -- | Add a new trace to the tree, creating a new subtree.
 grow :: Bool -> Trace' -> BPOR -> BPOR
@@ -154,7 +155,7 @@ grow conservative = grow' initialCVState 0 where
     in BPOR
         { _brunnable = S.fromList $ tids tid d a ts
         , _btodo     = I.empty
-        , _bignore   = S.fromList [tidOf tid d | (d,as) <- ts, willBlockSafely cvstate' $ toList as]
+        , _bignore   = S.fromList [tidOf tid d' | (d',as) <- ts, willBlockSafely cvstate' $ toList as]
         , _bdone     = I.fromList $ case rest of
           ((d', _, _):_) ->
             let tid' = tidOf tid d'
@@ -165,6 +166,7 @@ grow conservative = grow' initialCVState 0 where
           ((d', _, a'):_) -> I.singleton (tidOf tid d') a'
           [] -> I.empty
         }
+  subtree _ _ _ [] = error "Invariant failure in 'subtree': suffix empty!"
 
   tids tid d (Fork t)           ts = tidOf tid d : t : map (tidOf tid . fst) ts
   tids tid _ (BlockedPut _)     ts = map (tidOf tid . fst) ts
@@ -204,8 +206,8 @@ todo bv = step where
                 , t `notElem` I.keys (_bdone bpor)
                 , c || I.notMember t (_bsleep bpor)
                 ]
-        (blocked, next) = partition (\(t,_) -> t `S.member` _bignore bpor) todo'
-    in  (bpor { _btodo = _btodo bpor `I.union` I.fromList next }, I.fromList blocked)
+        (blocked, nxt) = partition (\(t,_) -> t `S.member` _bignore bpor) todo'
+    in  (bpor { _btodo = _btodo bpor `I.union` I.fromList nxt }, I.fromList blocked)
 
 -- * Utilities
 
