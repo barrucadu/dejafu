@@ -67,13 +67,13 @@ class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
   -- | Throw an exception. This aborts the transaction and propagates
   -- the exception.
   --
-  -- > throwSTM = throwM
+  -- > throwSTM = Control.Monad.Catch.throwM
   throwSTM :: Exception e => e -> m a
   throwSTM = throwM
 
   -- | Handling exceptions from 'throwSTM'.
   --
-  -- > catchSTM = catch
+  -- > catchSTM = Control.Monad.Catch.catch
   catchSTM :: Exception e => m a -> (e -> m a) -> m a
   catchSTM = Control.Monad.Catch.catch
 

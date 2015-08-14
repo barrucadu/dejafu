@@ -205,8 +205,6 @@ class ( Applicative m, Monad m
 
   -- | Runs its argument, just as if the @_concNoTest@ weren't there.
   --
-  -- > _concNoTest x = x
-  --
   -- This function is purely for testing purposes, and indicates that
   -- it's not worth considering more than one schedule here. This is
   -- useful if you have some larger computation built up out of
@@ -221,12 +219,12 @@ class ( Applicative m, Monad m
   -- scope. As a rule-of-thumb: if you can't define it as a top-level
   -- function taking no @CVar@ arguments, you probably shouldn't
   -- @_concNoTest@ it.
+  --
+  -- > _concNoTest x = x
   _concNoTest :: m a -> m a
   _concNoTest = id
 
   -- | Does nothing.
-  --
-  -- > _concKnowsAbout _ = return ()
   --
   -- This function is purely for testing purposes, and indicates that
   -- the thread has a reference to the provided @CVar@ or
@@ -238,12 +236,12 @@ class ( Applicative m, Monad m
   -- Gathering this information allows detection of cases where the
   -- main thread is blocked on a variable no runnable thread has a
   -- reference to, which is a deadlock situation.
+  --
+  -- > _concKnowsAbout _ = return ()
   _concKnowsAbout :: Either (CVar m a) (CTVar (STMLike m) a) -> m ()
   _concKnowsAbout _ = return ()
 
   -- | Does nothing.
-  --
-  -- > _concForgets _ = return ()
   --
   -- The counterpart to '_concKnowsAbout'. Indicates that the
   -- referenced variable will never be touched again by the current
@@ -252,11 +250,12 @@ class ( Applicative m, Monad m
   -- Note that inappropriate use of @_concForgets@ can result in false
   -- positives! Be very sure that the current thread will /never/
   -- refer to the variable again, for instance when leaving its scope.
+  --
+  -- > _concForgets _ = return ()
   _concForgets :: Either (CVar m a) (CTVar (STMLike m) a) -> m ()
+  _concForgets _ = return ()
 
   -- | Does nothing.
-  --
-  -- > _concAllKnown = return ()
   --
   -- Indicates to the test runner that all variables which have been
   -- passed in to this thread have been recorded by calls to
@@ -267,6 +266,8 @@ class ( Applicative m, Monad m
   -- future (for instance, if one was sent over a channel), then
   -- '_concKnowsAbout' should be called immediately, otherwise there
   -- is a risk of identifying false positives.
+  --
+  -- > _concAllKnown = return ()
   _concAllKnown :: m ()
   _concAllKnown = return ()
 
