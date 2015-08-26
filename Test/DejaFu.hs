@@ -1,4 +1,4 @@
-{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | Deterministic testing for concurrent computations.
 --
@@ -157,8 +157,8 @@ data Result a = Result
   -- ^ Whether the test passed or not.
   , _casesChecked :: Int
   -- ^ The number of cases checked.
-  , _failures :: [(Either Failure a, Trace)]
-  -- ^ The failed cases, if any.
+  , _failures     :: [(Either Failure a, Trace)]
+  -- ^ The failing cases, if any.
   } deriving (Show, Eq)
 
 instance NFData a => NFData (Result a) where
@@ -220,8 +220,8 @@ exceptionsSometimes :: Predicate a
 exceptionsSometimes = somewhereTrue $ either (==UncaughtException) (const False)
 
 -- | Check that the result of a computation is always the same. In
--- particular this means either: (a) it always deadlocks, or (b) the
--- result is always 'Just' @x@, for some fixed @x@.
+-- particular this means either: (a) it always fails in the same way,
+-- or (b) the result is always 'Just' @x@, for some fixed @x@.
 alwaysSame :: Eq a => Predicate a
 alwaysSame = alwaysTrue2 (==)
 
@@ -267,8 +267,6 @@ alwaysTrue2 p xs = go xs Result { _pass = True, _casesChecked = 0, _failures = f
     | p (fst y1) (fst y2) = failures (y2:ys)
     | otherwise = y1 : if null ys then [y2] else failures (y2:ys)
   failures _ = []
-
-  -- alwaysTrue2 almost certainly reports the number of cases checked incorrectly.
 
 -- | Check that the result of a unary boolean predicate is true at
 -- least once.

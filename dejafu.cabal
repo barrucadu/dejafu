@@ -13,10 +13,8 @@ description:
   bit of nondeterminism.
   .
   This package provides a class of monads for potentially
-  nondeterministic concurrency, with an interface very much in the
-  spirit of @Par@, but slightly more relaxed. Specifically,
-  @MonadConc@'s @IVar@ equivalent, @CVar@s, can be written to multiple
-  times.
+  nondeterministic concurrency, with an interface in the spirit of
+  GHC's normal concurrency abstraction.
   .
   == @MonadConc@ with 'IO':
   .
@@ -73,10 +71,10 @@ library
                      , Test.DejaFu.Deterministic.Internal.Common
                      , Test.DejaFu.Deterministic.Internal.CVar
                      , Test.DejaFu.Deterministic.Internal.Threading
+                     , Test.DejaFu.Internal
                      , Test.DejaFu.SCT.Internal
                      , Test.DejaFu.STM.Internal
 
-                     , Control.State
                      , Data.List.Extra
 
   -- other-extensions:    

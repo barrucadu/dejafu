@@ -7,10 +7,8 @@ deterministic parallelism, but sometimes we can tolerate a bit of
 nondeterminism.
 
 This package provides a class of monads for potentially
-nondeterministic concurrency, with an interface very much in the
-spirit of `Par`, but slightly more relaxed. Specifically,
-`MonadConc`'s `IVar` equivalent, `CVar`s, can be written to multiple
-times.
+nondeterministic concurrency, with an interface in the spirit of GHC's
+normal concurrency abstraction.
 
 The documentation of the latest developmental version is
 [available online][docs].

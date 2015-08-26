@@ -1,6 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ImpredicativeTypes         #-}
-{-# LANGUAGE Rank2Types                 #-}
+{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
 
 -- | Deterministic traced execution of concurrent computations which
@@ -72,10 +71,10 @@ import Control.Applicative (Applicative(..), (<$>))
 import Control.Exception (Exception, MaskingState(..), SomeException(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.Monad.ST (ST, runST)
-import Control.State (Wrapper(..), refST)
 import Data.STRef (STRef, newSTRef)
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
+import Test.DejaFu.Internal (refST)
 import Test.DejaFu.STM (STMLike, runTransactionST)
 import Test.DejaFu.STM.Internal (CTVar(..))
 
@@ -132,7 +131,7 @@ instance C.MonadConc (Conc t) where
   _concAllKnown  = _concAllKnown
 
 fixed :: Fixed (ST t) (STRef t) (STMLike t)
-fixed = Wrapper refST $ \ma -> cont (\c -> ALift $ c <$> ma)
+fixed = refST $ \ma -> cont (\c -> ALift $ c <$> ma)
 
 -- | The concurrent variable type used with the 'Conc' monad. One
 -- notable difference between these and 'MVar's is that 'MVar's are
@@ -158,7 +157,7 @@ readCVar cvar = C $ cont $ AGet $ unV cvar
 
 -- | Run the provided computation concurrently.
 fork :: Conc t () -> Conc t ThreadId
-fork (C ma) = C $ cont $ AFork (const $ runCont ma $ const AStop)
+fork (C ma) = C $ cont $ AFork (const' $ runCont ma $ const AStop)
 
 -- | Get the 'ThreadId' of the current thread.
 myThreadId :: Conc t ThreadId
@@ -244,15 +243,15 @@ catch ma h = C $ cont $ ACatching (unC . h) (unC ma)
 -- This function is useful for informing the parent when a child
 -- terminates, for example.
 forkFinally :: Conc t a -> (Either SomeException a -> Conc t ()) -> Conc t ThreadId
-forkFinally action and_then =
-  mask $ \restore ->
-    fork $ Ca.try (restore action) >>= and_then
+forkFinally action and_then = mask $ \restore ->
+  fork $ Ca.try (restore action) >>= and_then
 
 -- | Like 'fork', but the child thread is passed a function that can
 -- be used to unmask asynchronous exceptions. This function should not
 -- be used within a 'mask' or 'uninterruptibleMask'.
 forkWithUnmask :: ((forall a. Conc t a -> Conc t a) -> Conc t ()) -> Conc t ThreadId
-forkWithUnmask ma = C $ cont $ AFork (\umask -> runCont (unC $ ma $ wrap umask) $ const AStop)
+forkWithUnmask ma = C $ cont $
+  AFork (\umask -> runCont (unC $ ma $ wrap umask) $ const AStop)
 
 -- | Executes a computation with asynchronous exceptions
 -- /masked/. That is, any thread which attempts to raise an exception
@@ -280,7 +279,8 @@ mask mb = C $ cont $ AMasking MaskedInterruptible (\f -> unC $ mb $ wrap f)
 -- time. The supplied unmasking function should not be used within a
 -- 'mask'.
 uninterruptibleMask :: ((forall a. Conc t a -> Conc t a) -> Conc t b) -> Conc t b
-uninterruptibleMask mb = C $ cont $ AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f)
+uninterruptibleMask mb = C $ cont $
+  AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f)
 
 -- | Fork a computation to happen on a specific processor. This
 -- implementation only has a single processor.

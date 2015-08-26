@@ -1,5 +1,13 @@
-{-# LANGUAGE ImpredicativeTypes  #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+
+#if __GLASGOW_HASKELL < 710
+-- ImpredicativeTypes are needed for the const' function, as the
+-- type-checker can't otherwise unify the higher-ranked application.
+
+{-# LANGUAGE ImpredicativeTypes #-}
+#endif
 
 -- | Concurrent monads with a fixed scheduler: internal types and
 -- functions.
@@ -34,16 +42,19 @@ module Test.DejaFu.Deterministic.Internal
 
  -- * Failures
  , Failure(..)
+
+ -- * Utils
+ , const'
  ) where
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Exception (MaskingState(..))
 import Control.Monad.Cont (cont, runCont)
-import Control.State
 import Data.List (sort)
 import Data.List.Extra
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
 import Test.DejaFu.STM (CTVarId, Result(..))
+import Test.DejaFu.Internal
 import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.Deterministic.Internal.CVar
 import Test.DejaFu.Deterministic.Internal.Threading
@@ -51,6 +62,9 @@ import Test.DejaFu.Deterministic.Internal.Threading
 import qualified Data.Map as M
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
+
+const' :: a -> (forall b. M n r s b -> M n r s b) -> a
+const' = const
 
 --------------------------------------------------------------------------------
 -- * Execution
@@ -64,16 +78,17 @@ runFixed :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId
 runFixed fixed runstm sched s ma = (\(e,g,_,t) -> (e,g,t)) <$> runFixed' fixed runstm sched s initialIdSource ma
 
 -- | Same as 'runFixed', be parametrised by an 'IdSource'.
-runFixed' :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
-          -> Scheduler g -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace')
+runFixed' :: forall n r s g a. (Functor n, Monad n)
+  => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
+  -> Scheduler g -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace')
 runFixed' fixed runstm sched s idSource ma = do
-  ref <- newRef (wref fixed) Nothing
+  ref <- newRef fixed Nothing
 
-  let c       = ma >>= liftN fixed . writeRef (wref fixed) ref . Just . Right
-  let threads = launch' Unmasked 0 (const $ runCont c $ const AStop) M.empty
+  let c       = ma >>= liftN fixed . writeRef fixed ref . Just . Right
+  let threads = launch' Unmasked 0 (const' $ runCont c $ const AStop) M.empty
 
   (s', idSource', trace) <- runThreads fixed runstm sched s threads idSource ref
-  out <- readRef (wref fixed) ref
+  out <- readRef fixed ref
 
   return (fromJust out, s', idSource', reverse trace)
 
@@ -88,10 +103,10 @@ runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVar
 runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads where
   go idSource sofar prior g threads
     | isTerminated  = return (g, idSource, sofar)
-    | isDeadlocked  = writeRef (wref fixed) ref (Just $ Left Deadlock) >> return (g, idSource, sofar)
-    | isSTMLocked   = writeRef (wref fixed) ref (Just $ Left STMDeadlock) >> return (g, idSource, sofar)
-    | isNonexistant = writeRef (wref fixed) ref (Just $ Left InternalError) >> return (g, idSource, sofar)
-    | isBlocked     = writeRef (wref fixed) ref (Just $ Left InternalError) >> return (g, idSource, sofar)
+    | isDeadlocked  = writeRef fixed ref (Just $ Left Deadlock) >> return (g, idSource, sofar)
+    | isSTMLocked   = writeRef fixed ref (Just $ Left STMDeadlock) >> return (g, idSource, sofar)
+    | isNonexistant = writeRef fixed ref (Just $ Left InternalError) >> return (g, idSource, sofar)
+    | isBlocked     = writeRef fixed ref (Just $ Left InternalError) >> return (g, idSource, sofar)
     | otherwise = do
       stepped <- stepThread fixed runconc runstm (_continuation $ fromJust thread) idSource chosen threads
       case stepped of
@@ -101,13 +116,13 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing 
           in  go idSource' sofar' (Just chosen) g' threads''
 
         Left UncaughtException
-          | chosen == 0 -> writeRef (wref fixed) ref (Just $ Left UncaughtException) >> return (g, idSource, sofar)
+          | chosen == 0 -> writeRef fixed ref (Just $ Left UncaughtException) >> return (g, idSource, sofar)
           | otherwise ->
           let sofar' = (decision, alternatives, Killed) : sofar
               threads' = unblockWaitingOn chosen $ kill chosen threads
           in go idSource sofar' (Just chosen) g' threads'
 
-        Left failure -> writeRef (wref fixed) ref (Just $ Left failure) >> return (g, idSource, sofar)
+        Left failure -> writeRef fixed ref (Just $ Left failure) >> return (g, idSource, sofar)
 
     where
       (chosen, g')  = sched g ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ unsafeToNonEmpty runnable'
@@ -249,13 +264,13 @@ stepThread fixed runconc runstm action idSource tid threads = case action of
 
     -- | Read from a @CRef@.
     stepReadRef (crid, ref) c = do
-      val <- readRef (wref fixed) ref
+      val <- readRef fixed ref
       return $ Right (goto (c val) tid threads, idSource, ReadRef crid)
 
     -- | Modify a @CRef@.
     stepModRef (crid, ref) f c = do
-      (new, val) <- f <$> readRef (wref fixed) ref
-      writeRef (wref fixed) ref new
+      (new, val) <- f <$> readRef fixed ref
+      writeRef fixed ref new
       return $ Right (goto (c val) tid threads, idSource, ModRef crid)
 
     -- | Run a STM transaction atomically.

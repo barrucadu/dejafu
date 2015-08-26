@@ -2,7 +2,7 @@
 module Test.DejaFu.Deterministic.Internal.CVar where
 
 import Control.Monad (when)
-import Control.State
+import Test.DejaFu.Internal
 import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.Deterministic.Internal.Threading
 
@@ -15,7 +15,7 @@ putIntoCVar :: Monad n
             => Bool -> V r a -> a -> (Bool -> Action n r s)
             -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
 putIntoCVar blocking (cvid, ref) a c fixed threadid threads = do
-  val <- readRef (wref fixed) ref
+  val <- readRef fixed ref
 
   case val of
     Just _
@@ -27,7 +27,7 @@ putIntoCVar blocking (cvid, ref) a c fixed threadid threads = do
         return (False, goto (c False) threadid threads, [])
 
     Nothing -> do
-      writeRef (wref fixed) ref $ Just a
+      writeRef fixed ref $ Just a
       let (threads', woken) = wake (OnCVarFull cvid) threads
       return (True, goto (c True) threadid threads', woken)
 
@@ -37,11 +37,11 @@ readFromCVar :: Monad n
              => Bool -> Bool -> V r a -> (Maybe a -> Action n r s)
              -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
 readFromCVar emptying blocking (cvid, ref) c fixed threadid threads = do
-  val <- readRef (wref fixed) ref
+  val <- readRef fixed ref
 
   case val of
     Just _ -> do
-      when emptying $ writeRef (wref fixed) ref Nothing
+      when emptying $ writeRef fixed ref Nothing
       let (threads', woken) = wake (OnCVarEmpty cvid) threads
       return (True, goto (c val) threadid threads', woken)
 

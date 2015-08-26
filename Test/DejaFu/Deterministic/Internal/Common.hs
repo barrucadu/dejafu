@@ -8,8 +8,8 @@ module Test.DejaFu.Deterministic.Internal.Common where
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception, MaskingState(..), SomeException(..))
 import Control.Monad.Cont (Cont)
-import Control.State
 import Data.List.Extra
+import Test.DejaFu.Internal
 import Test.DejaFu.STM (CTVarId)
 
 --------------------------------------------------------------------------------
@@ -27,7 +27,7 @@ type V r a = (CVarId, r (Maybe a))
 type R r a = (CRefId, r a)
 
 -- | Dict of methods for implementations to override.
-type Fixed n r s = Wrapper n r (Cont (Action n r s))
+type Fixed n r s = Ref n r (Cont (Action n r s))
 
 --------------------------------------------------------------------------------
 -- * Primitive Actions

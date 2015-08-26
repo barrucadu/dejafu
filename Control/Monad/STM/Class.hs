@@ -22,11 +22,10 @@ import qualified Control.Monad.State.Strict as SS
 import qualified Control.Monad.Writer.Lazy as WL
 import qualified Control.Monad.Writer.Strict as WS
 
--- | @MonadSTM@ is an abstraction over 'STM', in the same spirit as
--- 'MonadConc' is an abstraction over 'IO's concurrency.
+-- | @MonadSTM@ is an abstraction over 'STM'.
 --
 -- This class does not provide any way to run transactions, rather
--- each 'MonadConc' has an associated 'MonadSTM' from which it can
+-- each 'MonadConc' has an associated @MonadSTM@ from which it can
 -- atomically run a transaction.
 --
 -- A minimal implementation consists of 'retry', 'orElse', 'newCTVar',
@@ -38,8 +37,8 @@ class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
   type CTVar m :: * -> *
 
   -- | Retry execution of this transaction because it has seen values
-  -- in @CTVar@s that it shouldn't have. This may result in the thread
-  -- running the transaction being blocked until any @CTVar@s
+  -- in @CTVar@s that it shouldn't have. This will result in the
+  -- thread running the transaction being blocked until any @CTVar@s
   -- referenced in it have been mutated.
   retry :: m a
 

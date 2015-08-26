@@ -67,7 +67,7 @@ isLocked tid ts
 
   where
     -- | Check if all threads are in a fully-known state.
-    allKnown = M.keys (M.filter _fullknown ts) == M.keys ts
+    allKnown = all _fullknown $ M.elems ts
 
     -- | Check if no other runnable thread has a reference to anything
     -- the block references.
@@ -115,7 +115,7 @@ goto :: Action n r s -> ThreadId -> Threads n r s -> Threads n r s
 goto a = M.alter $ \(Just thread) -> Just (thread { _continuation = a })
 
 -- | Start a thread with the given ID, inheriting the masking state
--- from the parent thread. This must not already be in use!
+-- from the parent thread. This ID must not already be in use!
 launch :: ThreadId -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
 launch parent tid a threads = launch' mask tid a threads where
   mask = fromMaybe Unmasked $ _masking <$> M.lookup parent threads

@@ -1,4 +1,4 @@
-{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | Systematic testing for concurrent computations.
 module Test.DejaFu.SCT

@@ -35,20 +35,22 @@ import qualified Control.Monad.State.Strict as SS
 import qualified Control.Monad.Writer.Lazy as WL
 import qualified Control.Monad.Writer.Strict as WS
 
--- | @MonadConc@ is like a combination of 'ParFuture' and 'ParIVar'
--- from the abstract-par package. It captures the interface of
--- concurrency monads in terms of how they can operate on shared
--- state.
+-- | @MonadConc@ is an abstraction over GHC's typical concurrency
+-- abstraction. It captures the interface of concurrency monads in
+-- terms of how they can operate on shared state and in the presence
+-- of exceptions.
 --
--- There are a few notable differences: firstly, @Par@ imposes
--- 'NFData' constraints on everything, as it achieves its speed-up by
--- forcing evaluation in separate threads. @MonadConc@ doesn't do
--- that, and so you need to be careful about where evaluation occurs,
--- just like with 'MVar's. Secondly, this builds on futures by
--- allowing @CVar@s which threads can read from and write to, possibly
--- multiple times, whereas with the @Par@ monads it is illegal to
--- write multiple times to the same @IVar@ (or to non-blockingly read
--- from it), which removes the possibility of data races.
+-- There are a few notable differences between this and the @Par@
+-- monad approach: firstly, @Par@ imposes 'NFData' constraints on
+-- everything, as it achieves its speed-up by forcing evaluation in
+-- separate threads. @MonadConc@ doesn't do that, and so you need to
+-- be careful about where evaluation occurs, just like with
+-- 'MVar's. Secondly, this builds on @Par@'s futures by allowing
+-- @CVar@s which threads can read from and write to, possibly multiple
+-- times, whereas with the @Par@ monads it is illegal to write
+-- multiple times to the same @IVar@ (or to non-blockingly read from
+-- it) which, when there are no exceptions, removes the possibility of
+-- data races.
 --
 -- Every @MonadConc@ has an associated 'MonadSTM', transactions of
 -- which can be run atomically.
@@ -59,10 +61,10 @@ class ( Applicative m, Monad m
   -- | The associated 'MonadSTM' for this class.
   type STMLike m :: * -> *
 
-  -- | The mutable reference type. This may contain one value at a
-  -- time, attempting to read or take from an \"empty\" @CVar@ will
-  -- block until it is full, and attempting to put to a \"full\"
-  -- @CVar@ will block until it is empty.
+  -- | The mutable reference type, like 'MVar's. This may contain one
+  -- value at a time, attempting to read or take from an \"empty\"
+  -- @CVar@ will block until it is full, and attempting to put to a
+  -- \"full\" @CVar@ will block until it is empty.
   type CVar m :: * -> *
 
   -- | The mutable non-blocking reference type. These are like
@@ -70,7 +72,7 @@ class ( Applicative m, Monad m
   -- mentioned in Data.IORef.
   type CRef m :: * -> *
 
-  -- | An abstract handle to a thread
+  -- | An abstract handle to a thread.
   type ThreadId m :: *
 
   -- | Fork a computation to happen concurrently. Communication may
@@ -84,9 +86,9 @@ class ( Applicative m, Monad m
 
   -- | Fork a computation to happen on a specific processor. The
   -- specified int is the /capability number/, typically capabilities
-  -- correspond to physical processors but this is implementation
-  -- dependent. The int is interpreted modulo to the total number of
-  -- capabilities as returned by 'getNumCapabilities'.
+  -- correspond to physical processors or cores but this is
+  -- implementation dependent. The int is interpreted modulo to the
+  -- total number of capabilities as returned by 'getNumCapabilities'.
   forkOn :: Int -> m () -> m (ThreadId m)
 
   -- | Get the number of Haskell threads that can run simultaneously.
@@ -103,9 +105,9 @@ class ( Applicative m, Monad m
   -- the value will be stored.
   putCVar :: CVar m a -> a -> m ()
 
-  -- | Attempt to put a value in a @CVar@, returning 'True' (and
-  -- filling the @CVar@) if there was nothing there, otherwise
-  -- returning 'False'.
+  -- | Attempt to put a value in a @CVar@ non-blockingly, returning
+  -- 'True' (and filling the @CVar@) if there was nothing there,
+  -- otherwise returning 'False'.
   tryPutCVar :: CVar m a -> a -> m Bool
 
   -- | Block until a value is present in the @CVar@, and then return
@@ -118,9 +120,9 @@ class ( Applicative m, Monad m
   -- value in the @CVar@ already, until one has been put.
   takeCVar :: CVar m a -> m a
 
-  -- | Attempt to take a value from a @CVar@, returning a 'Just' (and
-  -- emptying the @CVar@) if there was something there, otherwise
-  -- returning 'Nothing'.
+  -- | Attempt to take a value from a @CVar@ non-blockingly, returning
+  -- a 'Just' (and emptying the @CVar@) if there was something there,
+  -- otherwise returning 'Nothing'.
   tryTakeCVar :: CVar m a -> m (Maybe a)
 
   -- | Create a new reference.
@@ -138,7 +140,7 @@ class ( Applicative m, Monad m
   writeCRef :: CRef m a -> a -> m ()
   writeCRef r a = modifyCRef r $ const (a, ())
 
-  -- | Perform a series of STM actions atomically.
+  -- | Perform an STM transaction atomically.
   atomically :: STMLike m a -> m a
 
   -- | Throw an exception. This will \"bubble up\" looking for an
@@ -207,8 +209,8 @@ class ( Applicative m, Monad m
   -- /suppress/ bugs! For this reason it is recommended to use it only
   -- for things which don't make use of any state from a larger
   -- scope. As a rule-of-thumb: if you can't define it as a top-level
-  -- function taking no @CVar@ arguments, you probably shouldn't
-  -- @_concNoTest@ it.
+  -- function taking no @CVRef@, @CVar@, or @CTVar@ arguments, you
+  -- probably shouldn't @_concNoTest@ it.
   --
   -- > _concNoTest x = x
   _concNoTest :: m a -> m a

@@ -1,5 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE Rank2Types                #-}
+{-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 
 -- | 'MonadSTM' testing implementation, internal types and
@@ -8,8 +8,8 @@ module Test.DejaFu.STM.Internal where
 
 import Control.Exception (Exception, SomeException(..), fromException)
 import Control.Monad.Cont (Cont, runCont)
-import Control.State
 import Data.List (nub)
+import Test.DejaFu.Internal
 
 --------------------------------------------------------------------------------
 -- The @STMLike@ monad
@@ -19,7 +19,7 @@ import Data.List (nub)
 type M t n r a = Cont (STMAction t n r) a
 
 -- | Dict of methods for implementations to override.
-type Fixed t n r = Wrapper n r (Cont (STMAction t n r))
+type Fixed t n r = Ref n r (Cont (STMAction t n r))
 
 --------------------------------------------------------------------------------
 -- * Primitive actions
@@ -31,7 +31,7 @@ data STMAction t n r
   | forall a. ARead  (CTVar t r a) (a -> STMAction t n r)
   | forall a. AWrite (CTVar t r a) a (STMAction t n r)
   | forall a. AOrElse (M t n r a) (M t n r a) (a -> STMAction t n r)
-  | ANew (Ref n r -> CTVarId -> n (STMAction t n r))
+  | ANew (Fixed t n r -> CTVarId -> n (STMAction t n r))
   | ALift (n (STMAction t n r))
   | AThrow SomeException
   | ARetry
@@ -72,13 +72,13 @@ data Result a =
 -- | Run a STM transaction, returning an action to undo its effects.
 doTransaction :: Monad n => Fixed t n r -> M t n r a -> CTVarId -> n (Result a, n (), CTVarId)
 doTransaction fixed ma newctvid = do
-  ref <- newRef (wref fixed) Nothing
+  ref <- newRef fixed Nothing
 
-  let c = runCont (ma >>= liftN fixed . writeRef (wref fixed) ref . Just . Right) $ const AStop
+  let c = runCont (ma >>= liftN fixed . writeRef fixed ref . Just . Right) $ const AStop
 
   (newctvid', undo, readen, written) <- go ref c (return ()) newctvid [] []
 
-  res <- readRef (wref fixed) ref
+  res <- readRef fixed ref
 
   case res of
     Just (Right val) -> return (Success (nub readen) (nub written) val, undo, newctvid')
@@ -92,8 +92,8 @@ doTransaction fixed ma newctvid = do
       let ret = (nctvid', undo >> undo', readen' ++ readen, written' ++ written)
       case act' of
         AStop      -> return ret
-        ARetry     -> writeRef (wref fixed) ref Nothing >> return ret
-        AThrow exc -> writeRef (wref fixed) ref (Just $ Left exc) >> return ret
+        ARetry     -> writeRef fixed ref Nothing >> return ret
+        AThrow exc -> writeRef fixed ref (Just $ Left exc) >> return ret
 
         _ -> go ref act' (undo >> undo') nctvid' (readen' ++ readen) (written' ++ written)
 
@@ -131,19 +131,19 @@ stepTrans fixed act newctvid = case act of
 
     stepRead :: CTVar t r a -> (a -> STMAction t n r) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepRead (V (ctvid, ref)) c = do
-      val <- readRef (wref fixed) ref
+      val <- readRef fixed ref
       return (c val, nothing, newctvid, [ctvid], [])
 
     stepWrite :: CTVar t r a -> a -> STMAction t n r -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepWrite (V (ctvid, ref)) a c = do
-      old <- readRef (wref fixed) ref
-      writeRef (wref fixed) ref a
-      return (c, writeRef (wref fixed) ref old, newctvid, [], [ctvid])
+      old <- readRef fixed ref
+      writeRef fixed ref a
+      return (c, writeRef fixed ref old, newctvid, [], [ctvid])
 
-    stepNew :: (Ref n r -> CTVarId -> n (STMAction t n r)) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
+    stepNew :: (Fixed t n r -> CTVarId -> n (STMAction t n r)) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepNew na = do
       let newctvid' = newctvid + 1
-      a <- na (wref fixed) newctvid
+      a <- na fixed newctvid
       return (a, nothing, newctvid', [], [newctvid])
 
     stepOrElse :: M t n r a -> M t n r a -> (a -> STMAction t n r) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
