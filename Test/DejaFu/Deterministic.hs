@@ -14,6 +14,8 @@ module Test.DejaFu.Deterministic
   , Failure(..)
   , runConc
   , runConc'
+
+  -- * Concurrency
   , fork
   , forkFinally
   , forkWithUnmask
@@ -53,13 +55,13 @@ module Test.DejaFu.Deterministic
 
   -- * Execution traces
   , Trace
+  , Trace'
   , Decision(..)
   , ThreadAction(..)
   , Lookahead(..)
   , CVarId
   , CRefId
   , MaskingState(..)
-  , Trace'
   , showTrace
   , toTrace
 
@@ -323,11 +325,12 @@ _concAllKnown = C $ cont $ \c -> AAllKnown (c ())
 -- Note how the @t@ in 'Conc' is universally quantified, what this
 -- means in practice is that you can't do something like this:
 --
--- > runConc (\s _ (x:_) -> (x, s)) () newEmptyCVar
+-- > runConc roundRobinSched () newEmptyCVar
 --
--- So 'CVar's cannot leak out of the 'Conc' computation. If this is
--- making your head hurt, check out the \"How @runST@ works\" section
--- of <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
+-- So mutable references cannot leak out of the 'Conc' computation. If
+-- this is making your head hurt, check out the \"How @runST@ works\"
+-- section of
+-- <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
 runConc :: Scheduler s -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace)
 runConc sched s ma =
   let (r, s', t') = runConc' sched s ma

@@ -13,6 +13,8 @@ module Test.DejaFu.STM
   , runTransaction
   , runTransactionST
   , runTransactionIO
+
+  -- * Software Transactional Memory
   , retry
   , orElse
   , check
@@ -56,10 +58,10 @@ type STMST t a = STMLike t (ST t) (STRef t) a
 -- | A convenience wrapper around 'STMLike' using 'IORef's.
 type STMIO t a = STMLike t IO IORef a
 
-instance Monad n => MonadThrow (STMLike t n r) where
+instance MonadThrow (STMLike t n r) where
   throwM = throwSTM
 
-instance Monad n => MonadCatch (STMLike t n r) where
+instance MonadCatch (STMLike t n r) where
   catch = catchSTM
 
 instance Monad n => C.MonadSTM (STMLike t n r) where

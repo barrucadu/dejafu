@@ -219,7 +219,7 @@ tidOf _ (SwitchTo t) = t
 tidOf tid Continue   = tid
 
 -- | Get the 'Decision' that would have resulted in this 'ThreadId',
--- given a prior 'ThreadId' (if any) and list of runnable threds.
+-- given a prior 'ThreadId' (if any) and list of runnable threads.
 decisionOf :: Maybe ThreadId -> Set ThreadId -> ThreadId -> Decision
 decisionOf prior runnable chosen
   | prior == Just chosen = Continue
@@ -234,7 +234,7 @@ activeTid = foldl' go 0 where
   go _ (SwitchTo t) = t
   go t Continue     = t
 
--- | Count the number of preemptions in a schedule
+-- | Count the number of pre-emptions in a schedule
 preEmpCount :: [Decision] -> Int
 preEmpCount (SwitchTo _:ds) = 1 + preEmpCount ds
 preEmpCount (_:ds) = preEmpCount ds
@@ -319,7 +319,7 @@ willBlock _ _ = False
 
 -- | Check if a list of actions will block safely (without modifying
 -- any global state). This allows further lookahead at, say, the
--- 'spawn' of a thread (which always starts with 'KnowsAbout'.
+-- 'spawn' of a thread (which always starts with 'KnowsAbout').
 willBlockSafely :: IntMap Bool -> [Lookahead] -> Bool
 willBlockSafely cvstate (WillKnowsAbout:as) = willBlockSafely cvstate as
 willBlockSafely cvstate (WillForgets:as)    = willBlockSafely cvstate as

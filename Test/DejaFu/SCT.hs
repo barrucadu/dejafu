@@ -4,29 +4,42 @@
 module Test.DejaFu.SCT
   ( -- * Bounded Partial-order Reduction
 
-    -- | We can characterise the state of a concurrent computation by
-    -- considering the ordering of dependent events. This is a partial
-    -- order: independent events can be performed in any order without
-    -- affecting the result, and so are /not/ ordered.
-    --
-    -- Partial-order reduction is a technique for computing these
-    -- partial orders, and only testing one total order for each
-    -- partial order. This cuts down the amount of work to be done
-    -- significantly. /Bounded/ partial-order reduction is a further
-    -- optimisation, which only considers schedules within some bound.
-    --
-    -- This module provides both a generic function for BPOR, and also
-    -- a pre-emption bounding BPOR runner, which is used by the
-    -- "Test.DejaFu" module.
+  -- | We can characterise the state of a concurrent computation by
+  -- considering the ordering of dependent events. This is a partial
+  -- order: independent events can be performed in any order without
+  -- affecting the result, and so are /not/ ordered.
+  --
+  -- Partial-order reduction is a technique for computing these
+  -- partial orders, and only testing one total order for each partial
+  -- order. This cuts down the amount of work to be done
+  -- significantly. /Bounded/ partial-order reduction is a further
+  -- optimisation, which only considers schedules within some bound.
+  --
+  -- This module provides both a generic function for BPOR, and also a
+  -- pre-emption bounding BPOR runner, which is used by the
+  -- "Test.DejaFu" module.
+  --
+  -- See /Bounded partial-order reduction/, K. Coons, M. Musuvathi,
+  -- K. McKinley for more details.
 
-    sctPreBound
-  , sctPreBoundIO
-
-  , BacktrackStep(..)
+    BacktrackStep(..)
   , sctBounded
   , sctBoundedIO
 
+  -- * Pre-emption Bounding
+
+  -- | BPOR using pre-emption bounding. This adds conservative
+  -- backtracking points at the prior context switch whenever a
+  -- non-conervative backtracking point is added, as alternative
+  -- decisions can influence the reachability of different states.
+  --
+  -- See the BPOR paper for more details.
+
+  , sctPreBound
+  , sctPreBoundIO
+
   -- * Utilities
+
   , tidOf
   , decisionOf
   , activeTid
@@ -54,7 +67,13 @@ import qualified Data.Sequence as Sq
 -- * Pre-emption bounding
 
 -- | An SCT runner using a pre-emption bounding scheduler.
-sctPreBound :: Int -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
+sctPreBound ::
+    Int
+  -- ^ The maximum number of pre-emptions to allow in a single
+  -- execution
+  -> (forall t. Conc t a)
+  -- ^ The computation to run many times
+  -> [(Either Failure a, Trace)]
 sctPreBound pb = sctBounded (pbBv pb) pbBacktrack pbInitialise
 
 -- | Variant of 'sctPreBound' for computations which do 'IO'.

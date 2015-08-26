@@ -30,17 +30,15 @@
 -- thread 1 will have lock @a@ and be waiting on @b@, and thread 2
 -- will have @b@ and be waiting on @a@.
 --
--- Here is what @dejafu@ has to say about it:
+-- Here is what Deja Fu has to say about it:
 --
 -- > > autocheck bad
--- > [fail] Never Deadlocks (checked: 4)
--- >         [deadlock] S0---------S1-P2--S1-
--- >         [deadlock] S0---------S2-P1--S2-
--- > [pass] No Exceptions (checked: 89)
--- > [fail] Consistent Result (checked: 3)
--- >         [deadlock] S0---------S1-P2--S1-
--- >         0 S0---------S1--------S2--------S0-----
--- >         [deadlock] S0---------S2-P1--S2-
+-- > [fail] Never Deadlocks (checked: 2)
+-- >         [deadlock] S0---------S1--P2---S1-
+-- > [pass] No Exceptions (checked: 11)
+-- > [fail] Consistent Result (checked: 10)
+-- >         0 S0---------S1---------------S0--S2---------------S0----
+-- >         [deadlock] S0---------S1--P2---S1-
 -- > False
 --
 -- It identifies the deadlock, and also the possible results the
@@ -54,9 +52,20 @@
 --
 -- __Warning:__ If your computation under test does @IO@, the @IO@
 -- will be executed lots of times! Be sure that it is deterministic
--- enough not to invalidate your test results.
+-- enough not to invalidate your test results. Mocking may be useful
+-- where possible.
 module Test.DejaFu
-  ( autocheck
+  ( -- * Testing
+
+  -- | Testing in Deja Fu is similar to unit testing, the programmer
+  -- produces a self-contained monadic action to execute under
+  -- different schedules, and supplies a list of predicates to apply
+  -- to the list of results produced.
+  --
+  -- If you simply wish to check that something is deterministic, see
+  -- the 'autocheck' and 'autocheckIO' functions.
+
+    autocheck
   , dejafu
   , dejafus
   , dejafus'
@@ -64,14 +73,35 @@ module Test.DejaFu
   , dejafuIO
   , dejafusIO
   , dejafusIO'
-  -- * Test cases
+
+  -- * Results
+
+  -- | The results of a test can be pretty-printed to the console, as
+  -- with the above functions, or used in their original, much richer,
+  -- form for debugging purposes. These functions provide full access
+  -- to this data type which, most usefully, contains a detailed trace
+  -- of execution, showing what each thread did at each point.
+
   , Result(..)
   , Failure(..)
   , runTest
   , runTest'
   , runTestIO
   , runTestIO'
+
   -- * Predicates
+
+  -- | Predicates evaluate a list of results of execution and decide
+  -- whether some test case has passed or failed. They can be lazy and
+  -- make use of short-circuit evaluation to avoid needing to examine
+  -- the entire list of results, and can check any property which can
+  -- be defined for the return type of your monadic action.
+  --
+  -- A collection of common predicates are provided, along with the
+  -- helper functions 'alwaysTrue', 'alwaysTrue2' and 'somewhereTrue'
+  -- to lfit predicates over a single result to over a collection of
+  -- results.
+
   , Predicate
   , deadlocksNever
   , deadlocksAlways
@@ -90,50 +120,22 @@ import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when)
+import Data.Foldable (Foldable(..))
 import Data.List.Extra
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.IO (ConcIO)
 import Test.DejaFu.SCT
 
--- | Run a test and print the result to stdout, return 'True' if it
--- passes.
-dejafu :: (Eq a, Show a)
-       => (forall t. Conc t a)
-       -- ^ The computation to test
-       -> (String, Predicate a)
-       -- ^ The test case, as a (name, predicate) pair.
-       -> IO Bool
-dejafu conc test = dejafus conc [test]
-
--- | Variant of 'dejafu' for computations which do 'IO'.
-dejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
-dejafuIO concio test = dejafusIO concio [test]
-
--- | Run a collection of tests, returning 'True' if all pass.
-dejafus :: (Eq a, Show a) => (forall t. Conc t a) -> [(String, Predicate a)] -> IO Bool
-dejafus = dejafus' 2
-
--- | Variant of 'dejafus' which takes a pre-emption bound.
-dejafus' :: (Eq a, Show a) => Int -> (forall t. Conc t a) -> [(String, Predicate a)] -> IO Bool
-dejafus' pb conc tests = do
-  let traces = sctPreBound pb conc
-  results <- mapM (\(name, test) -> doTest name $ test traces) tests
-  return $ and results
-
--- | Variant of 'dejafus' for computations which do 'IO'.
-dejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
-dejafusIO = dejafusIO' 2
-
--- | Variant of 'dejafus'' for computations which do 'IO'.
-dejafusIO' :: (Eq a, Show a) => Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
-dejafusIO' pb concio tests = do
-  traces  <- sctPreBoundIO pb concio
-  results <- mapM (\(name, test) -> doTest name $ test traces) tests
-  return $ and results
-
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
-autocheck :: (Eq a, Show a) => (forall t. Conc t a) -> IO Bool
+--
+-- This uses the 'Conc' monad for testing, which is an instance of
+-- 'MonadConc'. If you need to test something which also uses
+-- 'MonadIO', use 'autocheckIO'.
+autocheck :: (Eq a, Show a)
+  => (forall t. Conc t a)
+  -- ^ The computation to test
+  -> IO Bool
 autocheck conc = dejafus conc cases where
   cases = [ ("Never Deadlocks",   deadlocksNever)
           , ("No Exceptions",     exceptionsNever)
@@ -147,6 +149,66 @@ autocheckIO concio = dejafusIO concio cases where
           , ("No Exceptions",     exceptionsNever)
           , ("Consistent Result", alwaysSame)
           ]
+
+-- | Check a predicate and print the result to stdout, return 'True'
+-- if it passes.
+dejafu :: (Eq a, Show a)
+  => (forall t. Conc t a)
+  -- ^ The computation to test
+  -> (String, Predicate a)
+  -- ^ The predicate (with a name) to check
+  -> IO Bool
+dejafu conc test = dejafus conc [test]
+
+-- | Variant of 'dejafu' which takes a collection of predicates to
+-- test, returning 'True' if all pass.
+dejafus :: (Eq a, Show a)
+  => (forall t. Conc t a)
+  -- ^ The computation to test
+  -> [(String, Predicate a)]
+  -- ^ The list of predicates (with names) to check
+  -> IO Bool
+dejafus = dejafus' 2
+
+-- | Variant of 'dejafus' which takes a pre-emption bound.
+--
+-- Pre-emption bounding is used to filter the large number of possible
+-- schedules, and can be iteratively increased for further coverage
+-- guarantees. Empirical studies (/Concurrency Testing Using Schedule Bounding: an Empirical Study/,
+-- P. Thompson, A. Donaldson, and A. Betts) have found that many
+-- concurrency bugs can be exhibited with as few as two threads and
+-- two pre-emptions, which is what 'dejafus' uses.
+--
+-- __Warning:__ Using a larger pre-emption bound will almost certainly
+-- significantly increase the time taken to test!
+dejafus' :: (Eq a, Show a)
+  => Int
+  -- ^ The maximum number of pre-emptions to allow in a single
+  -- execution
+  -> (forall t. Conc t a)
+  -- ^ The computation to test
+  -> [(String, Predicate a)]
+  -- ^ The list of predicates (with names) to check
+  -> IO Bool
+dejafus' pb conc tests = do
+  let traces = sctPreBound pb conc
+  results <- mapM (\(name, test) -> doTest name $ test traces) tests
+  return $ and results
+
+-- | Variant of 'dejafu' for computations which do 'IO'.
+dejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
+dejafuIO concio test = dejafusIO concio [test]
+
+-- | Variant of 'dejafus' for computations which do 'IO'.
+dejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
+dejafusIO = dejafusIO' 2
+
+-- | Variant of 'dejafus'' for computations which do 'IO'.
+dejafusIO' :: (Eq a, Show a) => Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
+dejafusIO' pb concio tests = do
+  traces  <- sctPreBoundIO pb concio
+  results <- mapM (\(name, test) -> doTest name $ test traces) tests
+  return $ and results
 
 -- * Test cases
 
@@ -167,26 +229,37 @@ instance NFData a => NFData (Result a) where
 instance Functor Result where
   fmap f r = r { _failures = map (first $ fmap f) $ _failures r }
 
+instance Foldable Result where
+  foldMap f r = foldMap f [a | (Right a, _) <- _failures r]
+
 -- | Run a predicate over all executions with two or fewer
--- pre-emptions. A pre-emption is a context switch where the old
--- thread was still runnable.
---
--- In the resultant traces, a pre-emption is displayed as \"Px\",
--- where @x@ is the ID of the thread being switched to, whereas a
--- regular context switch is displayed as \"Sx\" (for \"start\").
-runTest :: Eq a => Predicate a -> (forall t. Conc t a) -> Result a
+-- pre-emptions.
+runTest ::
+    Predicate a
+  -- ^ The predicate to check
+  -> (forall t. Conc t a)
+  -- ^ The computation to test
+  -> Result a
 runTest = runTest' 2
 
--- | Variant of 'runTest' for computations which do 'IO'.
-runTestIO :: Eq a => Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
-runTestIO = runTestIO' 2
-
 -- | Variant of 'runTest' which takes a pre-emption bound.
-runTest' :: Eq a => Int -> Predicate a -> (forall t. Conc t a) -> Result a
+runTest' ::
+    Int
+  -- ^ The maximum number of pre-emptions to allow in a single
+  -- execution
+  -> Predicate a
+  -- ^ The predicate to check
+  -> (forall t. Conc t a)
+  -- ^ The computation to test
+  -> Result a
 runTest' pb predicate conc = predicate $ sctPreBound pb conc
 
+-- | Variant of 'runTest' for computations which do 'IO'.
+runTestIO :: Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
+runTestIO = runTestIO' 2
+
 -- | Variant of 'runTest'' for computations which do 'IO'.
-runTestIO' :: Eq a => Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
+runTestIO' :: Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
 runTestIO' pb predicate conc = predicate <$> sctPreBoundIO pb conc
 
 -- * Predicates
@@ -221,7 +294,7 @@ exceptionsSometimes = somewhereTrue $ either (==UncaughtException) (const False)
 
 -- | Check that the result of a computation is always the same. In
 -- particular this means either: (a) it always fails in the same way,
--- or (b) the result is always 'Just' @x@, for some fixed @x@.
+-- or (b) it never fails and the values returned are all equal.
 alwaysSame :: Eq a => Predicate a
 alwaysSame = alwaysTrue2 (==)
 

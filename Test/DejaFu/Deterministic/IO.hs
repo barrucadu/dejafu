@@ -5,7 +5,7 @@
 -- | Deterministic traced execution of concurrent computations which
 -- may do @IO@.
 --
--- __Caution!__ Blocking on the action of another thread in 'liftIO'
+-- __Warning:__ Blocking on the action of another thread in 'liftIO'
 -- cannot be detected! So if you perform some potentially blocking
 -- action in a 'liftIO' the entire collection of threads may deadlock!
 -- You should therefore keep @IO@ blocks small, and only perform
@@ -18,6 +18,8 @@ module Test.DejaFu.Deterministic.IO
   , runConcIO
   , runConcIO'
   , liftIO
+
+  -- * Concurrency
   , fork
   , forkFinally
   , forkWithUnmask
@@ -57,12 +59,12 @@ module Test.DejaFu.Deterministic.IO
 
   -- * Execution traces
   , Trace
+  , Trace'
   , Decision(..)
   , ThreadAction(..)
   , Lookahead(..)
   , CVarId
   , MaskingState(..)
-  , Trace'
   , showTrace
   , toTrace
 
@@ -86,7 +88,8 @@ import qualified Control.Monad.IO.Class as IO
 
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
 
--- | The 'IO' variant of Test.DejaFu.Deterministic's @Conc@ monad.
+-- | The 'IO' variant of Test.DejaFu.Deterministic's
+-- 'Test.DejaFu.Deterministic.Conc' monad.
 newtype ConcIO t a = C { unC :: M IO IORef (STMLike t) a } deriving (Functor, Applicative, Monad)
 
 wrap :: (M IO IORef (STMLike t) a -> M IO IORef (STMLike t) a) -> ConcIO t a -> ConcIO t a

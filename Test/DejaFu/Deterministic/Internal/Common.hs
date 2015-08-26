@@ -68,10 +68,10 @@ data Action n r s =
 -- | Every live thread has a unique identitifer.
 type ThreadId = Int
 
--- | Every 'CVar' also has a unique identifier.
+-- | Every 'CVar' has a unique identifier.
 type CVarId = Int
 
--- | Every 'CRef' also has a unique identifier.
+-- | Every 'CRef' has a unique identifier.
 type CRefId = Int
 
 -- | The number of ID parameters was getting a bit unwieldy, so this
@@ -107,7 +107,7 @@ initialIdSource = Id 0 0 0 0
 -- what each will do in the next steps (as far as can be
 -- determined). It produces a 'ThreadId' to schedule, and a new state.
 --
--- Note: In order to prevent computation from hanging, the runtime
+-- __Note:__ In order to prevent computation from hanging, the runtime
 -- will assume that a deadlock situation has arisen if the scheduler
 -- attempts to (a) schedule a blocked thread, or (b) schedule a
 -- nonexistent thread. In either of those cases, the computation will

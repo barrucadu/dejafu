@@ -8,7 +8,9 @@ module Test.DejaFu.STM.Internal where
 
 import Control.Exception (Exception, SomeException(..), fromException)
 import Control.Monad.Cont (Cont, runCont)
+import Data.Foldable (Foldable(..))
 import Data.List (nub)
+import Data.Monoid (mempty)
 import Test.DejaFu.Internal
 
 --------------------------------------------------------------------------------
@@ -65,6 +67,15 @@ data Result a =
   | Exception SomeException
   -- ^ The transaction aborted by throwing an exception.
   deriving Show
+
+instance Functor Result where
+  fmap f (Success rs ws a) = Success rs ws $ f a
+  fmap _ (Retry rs)    = Retry rs
+  fmap _ (Exception e) = Exception e
+
+instance Foldable Result where
+  foldMap f (Success _ _ a) = f a
+  foldMap _ _ = mempty
 
 --------------------------------------------------------------------------------
 -- * Execution
