@@ -107,7 +107,7 @@ next = go 0 where
 -- | Produce a list of new backtracking points from an execution
 -- trace.
 findBacktrack :: ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
-              -> Seq (NonEmpty (ThreadId, ThreadAction'), [ThreadId])
+              -> Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
               -> Trace'
               -> [BacktrackStep]
 findBacktrack backtrack = go S.empty 0 [] . Sq.viewl where
@@ -265,16 +265,16 @@ dependent d1 (_, d2) = cref || cvar || ctvar where
   ctvar' _ = False
 
 -- | Variant of 'dependent' to handle 'ThreadAction''s
-dependent' :: ThreadAction -> (ThreadId, ThreadAction') -> Bool
-dependent' Lift (_, Lift') = True
+dependent' :: ThreadAction -> (ThreadId, Lookahead) -> Bool
+dependent' Lift (_, WillLift) = True
 dependent' (ThrowTo t) (t2, _) = t == t2
 dependent' d1 (_, d2) = cref || cvar || ctvar where
   cref = Just True == ((\(r1, w1) (r2, w2) -> r1 == r2 && (w1 || w2)) <$> cref' d1 <*> cref'' d2)
   cref'  (ReadRef  r) = Just (r, False)
   cref'  (ModRef   r) = Just (r, True)
   cref'  _ = Nothing
-  cref'' (ReadRef' r) = Just (r, False)
-  cref'' (ModRef'  r) = Just (r, True)
+  cref'' (WillReadRef r) = Just (r, False)
+  cref'' (WillModRef  r) = Just (r, True)
   cref'' _ = Nothing
 
   cvar = Just True == ((==) <$> cvar' d1 <*> cvar'' d2)
@@ -284,17 +284,17 @@ dependent' d1 (_, d2) = cref || cvar || ctvar where
   cvar'  (Read c)   = Just c
   cvar'  (Take c _) = Just c
   cvar'  _ = Nothing
-  cvar'' (TryPut'  c) = Just c
-  cvar'' (TryTake' c) = Just c
-  cvar'' (Put'  c) = Just c
-  cvar'' (Read' c) = Just c
-  cvar'' (Take' c) = Just c
+  cvar'' (WillTryPut  c) = Just c
+  cvar'' (WillTryTake c) = Just c
+  cvar'' (WillPut  c) = Just c
+  cvar'' (WillRead c) = Just c
+  cvar'' (WillTake c) = Just c
   cvar'' _ = Nothing
 
   ctvar = ctvar' d1 && ctvar'' d2
   ctvar' (STM _) = True
   ctvar' _ = False
-  ctvar'' STM' = True
+  ctvar'' WillSTM = True
   ctvar'' _ = False
 
 -- * Keeping track of 'CVar' full/empty states
@@ -312,18 +312,18 @@ updateCVState cvstate (TryTake c True _) = I.insert c False cvstate
 updateCVState cvstate _ = cvstate
 
 -- | Check if an action will block.
-willBlock :: IntMap Bool -> ThreadAction' -> Bool
-willBlock cvstate (Put'  c) = I.lookup c cvstate == Just True
-willBlock cvstate (Take' c) = I.lookup c cvstate == Just False
+willBlock :: IntMap Bool -> Lookahead -> Bool
+willBlock cvstate (WillPut  c) = I.lookup c cvstate == Just True
+willBlock cvstate (WillTake c) = I.lookup c cvstate == Just False
 willBlock _ _ = False
 
 -- | Check if a list of actions will block safely (without modifying
 -- any global state). This allows further lookahead at, say, the
 -- 'spawn' of a thread (which always starts with 'KnowsAbout'.
-willBlockSafely :: IntMap Bool -> [ThreadAction'] -> Bool
-willBlockSafely cvstate (KnowsAbout':as) = willBlockSafely cvstate as
-willBlockSafely cvstate (Forgets':as)    = willBlockSafely cvstate as
-willBlockSafely cvstate (AllKnown':as)   = willBlockSafely cvstate as
-willBlockSafely cvstate (Put'  c:_) = willBlock cvstate (Put'  c)
-willBlockSafely cvstate (Take' c:_) = willBlock cvstate (Take' c)
+willBlockSafely :: IntMap Bool -> [Lookahead] -> Bool
+willBlockSafely cvstate (WillKnowsAbout:as) = willBlockSafely cvstate as
+willBlockSafely cvstate (WillForgets:as)    = willBlockSafely cvstate as
+willBlockSafely cvstate (WillAllKnown:as)   = willBlockSafely cvstate as
+willBlockSafely cvstate (WillPut  c:_) = willBlock cvstate (WillPut  c)
+willBlockSafely cvstate (WillTake c:_) = willBlock cvstate (WillTake c)
 willBlockSafely _ _ = False

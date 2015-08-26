@@ -35,7 +35,7 @@ module Test.DejaFu.Deterministic.Internal
  , Trace
  , Decision(..)
  , ThreadAction(..)
- , ThreadAction'(..)
+ , Lookahead(..)
  , Trace'
  , showTrace
  , toTrace
@@ -155,30 +155,30 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing 
         | otherwise = [(if Just t == prior then Continue else SwitchTo t, na) | (t, na) <- runnable', t /= chosen]
 
       nextActions t = unsafeToNonEmpty . nextActions' . _continuation . fromJust $ M.lookup t threads
-      nextActions' (AFork _ _)             = [Fork']
-      nextActions' (AMyTId _)              = [MyThreadId']
-      nextActions' (ANew _)                = [New']
-      nextActions' (APut (c, _) _ k)       = Put' c : nextActions' k
-      nextActions' (ATryPut (c, _) _ _)    = [TryPut' c]
-      nextActions' (AGet (c, _) _)         = [Read' c]
-      nextActions' (ATake (c, _) _)        = [Take' c]
-      nextActions' (ATryTake (c, _) _)     = [TryTake' c]
-      nextActions' (ANewRef _)             = [NewRef']
-      nextActions' (AReadRef (r, _) _)     = [ReadRef' r]
-      nextActions' (AModRef (r, _) _ _)    = [ModRef' r]
-      nextActions' (AAtom _ _)             = [STM']
-      nextActions' (AThrow _)              = [Throw']
-      nextActions' (AThrowTo tid _ k)      = ThrowTo' tid : nextActions' k
-      nextActions' (ACatching _ _ _)       = [Catching']
-      nextActions' (APopCatching k)        = PopCatching' : nextActions' k
-      nextActions' (AMasking ms _ _)       = [SetMasking' False ms]
-      nextActions' (AResetMask b1 b2 ms k) = (if b1 then SetMasking' else ResetMasking') b2 ms : nextActions' k
-      nextActions' (ALift _)               = [Lift']
-      nextActions' (ANoTest _ _)           = [NoTest']
-      nextActions' (AKnowsAbout _ k)       = KnowsAbout' : nextActions' k
-      nextActions' (AForgets _ k)          = Forgets' : nextActions' k
-      nextActions' (AAllKnown k)           = AllKnown' : nextActions' k
-      nextActions' (AStop)                 = [Stop']
+      nextActions' (AFork _ _)             = [WillFork]
+      nextActions' (AMyTId _)              = [WillMyThreadId]
+      nextActions' (ANew _)                = [WillNew]
+      nextActions' (APut (c, _) _ k)       = WillPut c : nextActions' k
+      nextActions' (ATryPut (c, _) _ _)    = [WillTryPut c]
+      nextActions' (AGet (c, _) _)         = [WillRead c]
+      nextActions' (ATake (c, _) _)        = [WillTake c]
+      nextActions' (ATryTake (c, _) _)     = [WillTryTake c]
+      nextActions' (ANewRef _)             = [WillNewRef]
+      nextActions' (AReadRef (r, _) _)     = [WillReadRef r]
+      nextActions' (AModRef (r, _) _ _)    = [WillModRef r]
+      nextActions' (AAtom _ _)             = [WillSTM]
+      nextActions' (AThrow _)              = [WillThrow]
+      nextActions' (AThrowTo tid _ k)      = WillThrowTo tid : nextActions' k
+      nextActions' (ACatching _ _ _)       = [WillCatching]
+      nextActions' (APopCatching k)        = WillPopCatching : nextActions' k
+      nextActions' (AMasking ms _ _)       = [WillSetMasking False ms]
+      nextActions' (AResetMask b1 b2 ms k) = (if b1 then WillSetMasking else WillResetMasking) b2 ms : nextActions' k
+      nextActions' (ALift _)               = [WillLift]
+      nextActions' (ANoTest _ _)           = [WillNoTest]
+      nextActions' (AKnowsAbout _ k)       = WillKnowsAbout : nextActions' k
+      nextActions' (AForgets _ k)          = WillForgets : nextActions' k
+      nextActions' (AAllKnown k)           = WillAllKnown : nextActions' k
+      nextActions' (AStop)                 = [WillStop]
 
 --------------------------------------------------------------------------------
 -- * Single-step execution

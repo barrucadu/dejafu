@@ -128,7 +128,7 @@ sctBounded :: ([Decision] -> Bool)
            -- the execution so far, the index to insert the
            -- backtracking point, and the thread to backtrack to. This
            -- may insert more than one backtracking point.
-           -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, ThreadAction') -> NonEmpty ThreadId)
+           -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
            -- ^ Produce possible scheduling decisions, all will be
            -- tried.
            -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
@@ -138,7 +138,7 @@ sctBounded bv backtrack initialise c = runIdentity $ sctBoundedM bv backtrack in
 -- | Variant of 'sctBounded' for computations which do 'IO'.
 sctBoundedIO :: ([Decision] -> Bool)
              -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
-             -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, ThreadAction') -> NonEmpty ThreadId)
+             -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
              -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
 sctBoundedIO bv backtrack initialise c = sctBoundedM bv backtrack initialise run where
   run sched s = runConcIO' sched s c
@@ -147,7 +147,7 @@ sctBoundedIO bv backtrack initialise c = sctBoundedM bv backtrack initialise run
 sctBoundedM :: (Functor m, Monad m)
             => ([Decision] -> Bool)
             -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
-            -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, ThreadAction') -> NonEmpty ThreadId)
+            -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
             -> (Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
             -- ^ Monadic runner, with computation fixed.
             -> m [(Either Failure a, Trace)]
@@ -170,7 +170,7 @@ sctBoundedM bv backtrack initialise run = go initialState where
 data SchedState = SchedState
   { _sprefix  :: [ThreadId]
   -- ^ Decisions still to make
-  , _sbpoints :: Seq (NonEmpty (ThreadId, ThreadAction'), [ThreadId])
+  , _sbpoints :: Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
   -- ^ Which threads are runnable at each step, and the alternative
   -- decisions still to make.
   , _scvstate :: IntMap Bool
@@ -188,7 +188,7 @@ initialSchedState prefix = SchedState
 -- | BPOR scheduler: takes a list of decisions, and maintains a trace
 -- including the runnable threads, and the alternative choices allowed
 -- by the bound-specific initialise function.
-bporSched :: (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, ThreadAction') -> NonEmpty ThreadId)
+bporSched :: (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
           -> Scheduler SchedState
 bporSched initialise = force $ \s prior threads -> case _sprefix s of
   -- If there is a decision available, make it

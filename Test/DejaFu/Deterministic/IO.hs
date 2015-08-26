@@ -59,7 +59,7 @@ module Test.DejaFu.Deterministic.IO
   , Trace
   , Decision(..)
   , ThreadAction(..)
-  , ThreadAction'(..)
+  , Lookahead(..)
   , CVarId
   , MaskingState(..)
   , Trace'
