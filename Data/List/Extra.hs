@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- | Extra list functions and list-like types.
 module Data.List.Extra where
 
@@ -28,6 +29,11 @@ instance Functor NonEmpty where
 
 instance Foldable NonEmpty where
   foldMap = foldMapDefault
+
+#if __GLASGOW_HASKELL >= 710
+  -- toList isn't in Foldable until GHC 7.10
+  toList (a :| as) = a : as
+#endif
 
 instance Traversable NonEmpty where
   traverse f (a:|as) = (:|) <$> f a <*> traverse f as
