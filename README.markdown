@@ -1,6 +1,12 @@
 dejafu [![Build Status][build-status]][build-log]
 ======
 
+> [Déjà Fu is] A martial art in which the user's limbs move in time as
+> well as space, […] It is best described as "the feeling that you
+> have been kicked in the head this way before"
+>
+> -- Terry Pratchett, Thief of Time
+
 Concurrency is nice, deadlocks and race conditions not so much. The
 `Par` monad family, as defined in [abstract-par][] provides
 deterministic parallelism, but sometimes we can tolerate a bit of
