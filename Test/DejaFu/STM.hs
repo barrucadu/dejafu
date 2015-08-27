@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -29,7 +30,6 @@ module Test.DejaFu.STM
   , writeCTVar
   ) where
 
-import Control.Applicative (Applicative)
 import Control.Exception (Exception, SomeException(..))
 import Control.Monad (liftM)
 import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
@@ -41,6 +41,10 @@ import Test.DejaFu.Internal
 import Test.DejaFu.STM.Internal
 
 import qualified Control.Monad.STM.Class as C
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative (Applicative)
+#endif
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 

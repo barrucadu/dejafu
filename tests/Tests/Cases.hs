@@ -5,7 +5,7 @@ module Tests.Cases where
 
 import Control.Concurrent.CVar
 import Control.Exception (ArithException(..), ArrayException)
-import Control.Monad (liftM, replicateM)
+import Control.Monad (liftM, replicateM, void)
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
 
@@ -54,8 +54,8 @@ thresholdValue = do
   l <- newEmptyCVar
   x <- newCVar (0::Int)
 
-  fork $ lock l >> modifyCVar_ x (return . (+1)) >> unlock l
-  fork $ lock l >> modifyCVar_ x (return . (+2)) >> unlock l
+  void . fork $ lock l >> modifyCVar_ x (return . (+1)) >> unlock l
+  void . fork $ lock l >> modifyCVar_ x (return . (+2)) >> unlock l
   res <- spawn $ lock l >> readCVar x >>= \x' -> unlock l >> return (x' >= 3)
 
   takeCVar res
@@ -79,8 +79,8 @@ simple2Race :: MonadConc m => m Int
 simple2Race = do
   x <- newEmptyCVar
 
-  fork $ putCVar x 0
-  fork $ putCVar x 1
+  void . fork $ putCVar x 0
+  void . fork $ putCVar x 1
 
   readCVar x
 
@@ -89,7 +89,7 @@ raceyStack :: MonadConc m => m (Maybe Int)
 raceyStack = do
   s <- newCVar []
 
-  fork $ t1 s [1..10]
+  void . fork $ t1 s [1..10]
   j <- spawn $ t2 s (10::Int) 0
 
   takeCVar j
@@ -153,14 +153,14 @@ threadKillUmask = do
 stmAtomic :: MonadConc m => m Int
 stmAtomic = do
   x <- atomically $ newCTVar (0::Int)
-  fork . atomically $ writeCTVar x 1 >> writeCTVar x 2
+  void . fork . atomically $ writeCTVar x 1 >> writeCTVar x 2
   atomically $ readCTVar x
 
 -- | Test STM retry
 stmRetry :: MonadConc m => m Bool
 stmRetry = do
   x <- atomically $ newCTVar (0::Int)
-  fork . atomically $ writeCTVar x 1 >> retry
+  void . fork . atomically $ writeCTVar x 1 >> retry
   (==0) `liftM` atomically (readCTVar x)
 
 -- | Test STM orElse
@@ -174,5 +174,5 @@ stmOrElse = do
 stmExc :: MonadConc m => m Bool
 stmExc = do
   x <- atomically $ newCTVar (0::Int)
-  atomically $ writeCTVar x 1 >> throwSTM Overflow
+  void . atomically $ writeCTVar x 1 >> throwSTM Overflow
   (==0) `liftM` atomically (readCTVar x)

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP        #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | Deterministic testing for concurrent computations.
@@ -116,15 +117,18 @@ module Test.DejaFu
   , somewhereTrue
   ) where
 
-import Control.Applicative ((<$>))
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when)
-import Data.Foldable (Foldable(..))
 import Data.List.Extra
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.IO (ConcIO)
 import Test.DejaFu.SCT
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>))
+import Data.Foldable (Foldable(..))
+#endif
 
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.

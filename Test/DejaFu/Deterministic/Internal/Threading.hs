@@ -1,10 +1,10 @@
+{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 
 -- | Operations and types for threads.
 module Test.DejaFu.Deterministic.Internal.Threading where
 
-import Control.Applicative ((<$>))
 import Control.Exception (Exception, MaskingState(..), SomeException(..), fromException)
 import Control.Monad.Cont (cont)
 import Data.List (intersect, nub)
@@ -14,6 +14,10 @@ import Test.DejaFu.STM (CTVarId)
 import Test.DejaFu.Deterministic.Internal.Common
 
 import qualified Data.Map as M
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>))
+#endif
 
 --------------------------------------------------------------------------------
 -- * Threads

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -69,7 +70,6 @@ module Test.DejaFu.Deterministic
   , module Test.DejaFu.Deterministic.Schedule
   ) where
 
-import Control.Applicative (Applicative(..), (<$>))
 import Control.Exception (Exception, MaskingState(..), SomeException(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.Monad.ST (ST, runST)
@@ -82,6 +82,10 @@ import Test.DejaFu.STM.Internal (CTVar(..))
 
 import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative (Applicative(..), (<$>))
+#endif
 
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
 

@@ -2,7 +2,7 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-#if __GLASGOW_HASKELL < 710
+#if __GLASGOW_HASKELL__ < 710
 -- ImpredicativeTypes are needed for the const' function, as the
 -- type-checker can't otherwise unify the higher-ranked application.
 
@@ -47,7 +47,6 @@ module Test.DejaFu.Deterministic.Internal
  , const'
  ) where
 
-import Control.Applicative ((<$>), (<*>))
 import Control.Exception (MaskingState(..))
 import Control.Monad.Cont (cont, runCont)
 import Data.List (sort)
@@ -60,6 +59,10 @@ import Test.DejaFu.Deterministic.Internal.CVar
 import Test.DejaFu.Deterministic.Internal.Threading
 
 import qualified Data.Map as M
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>), (<*>))
+#endif
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP        #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | Systematic testing for concurrent computations.
@@ -50,7 +51,6 @@ module Test.DejaFu.SCT
   , willBlockSafely
   ) where
 
-import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (force)
 import Data.Functor.Identity (Identity(..), runIdentity)
 import Data.IntMap.Strict (IntMap)
@@ -63,6 +63,10 @@ import Test.DejaFu.SCT.Internal
 import qualified Data.IntMap.Strict as I
 import qualified Data.Set as S
 import qualified Data.Sequence as Sq
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>), (<*>))
+#endif
 
 -- * Pre-emption bounding
 

@@ -1,7 +1,8 @@
+{-# LANGUAGE CPP #-}
+
 -- | Internal utilities and types for BPOR.
 module Test.DejaFu.SCT.Internal where
 
-import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (NFData(..))
 import Data.IntMap.Strict (IntMap)
 import Data.List (foldl', partition, maximumBy)
@@ -14,6 +15,10 @@ import Test.DejaFu.Deterministic
 import qualified Data.IntMap.Strict as I
 import qualified Data.Sequence as Sq
 import qualified Data.Set as S
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>), (<*>))
+#endif
 
 -- * BPOR state
 

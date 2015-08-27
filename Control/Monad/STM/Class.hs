@@ -1,10 +1,10 @@
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | This module provides an abstraction over 'STM', which can be used
 -- with 'MonadConc'.
 module Control.Monad.STM.Class where
 
-import Control.Applicative (Applicative)
 import Control.Concurrent.STM (STM)
 import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
 import Control.Exception (Exception)
@@ -12,7 +12,6 @@ import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, throwM, catch)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Control.Monad.Trans (lift)
-import Data.Monoid (Monoid)
 
 import qualified Control.Monad.RWS.Lazy as RL
 import qualified Control.Monad.RWS.Strict as RS
@@ -21,6 +20,11 @@ import qualified Control.Monad.State.Lazy as SL
 import qualified Control.Monad.State.Strict as SS
 import qualified Control.Monad.Writer.Lazy as WL
 import qualified Control.Monad.Writer.Strict as WS
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative (Applicative)
+import Data.Monoid (Monoid)
+#endif
 
 -- | @MonadSTM@ is an abstraction over 'STM'.
 --

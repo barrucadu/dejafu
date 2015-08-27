@@ -2,10 +2,18 @@
 -- | Extra list functions and list-like types.
 module Data.List.Extra where
 
-import Control.Applicative ((<$>), (<*>))
 import Control.DeepSeq (NFData(..))
+import Data.Traversable (fmapDefault, foldMapDefault)
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>), (<*>))
 import Data.Foldable (Foldable(..))
-import Data.Traversable (Traversable(..), fmapDefault, foldMapDefault)
+import Data.Traversable (Traversable(..))
+#else
+-- Why does this give a redundancy warning? It's necessary in order to
+-- define the toList function in the Foldable instance for NonEmpty!
+import Data.Foldable (toList)
+#endif
 
 -- * Regular lists
 
@@ -30,7 +38,7 @@ instance Functor NonEmpty where
 instance Foldable NonEmpty where
   foldMap = foldMapDefault
 
-#if __GLASGOW_HASKELL >= 710
+#if __GLASGOW_HASKELL__ >= 710
   -- toList isn't in Foldable until GHC 7.10
   toList (a :| as) = a : as
 #endif

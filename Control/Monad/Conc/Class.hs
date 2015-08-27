@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP              #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes       #-}
 {-# LANGUAGE TypeFamilies     #-}
@@ -12,7 +13,6 @@ module Control.Monad.Conc.Class
   , killThread
   ) where
 
-import Control.Applicative (Applicative)
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
 import Control.Exception (Exception, AsyncException(ThreadKilled), SomeException)
@@ -23,7 +23,6 @@ import Control.Monad.STM (STM)
 import Control.Monad.STM.Class (MonadSTM, CTVar)
 import Control.Monad.Trans (lift)
 import Data.IORef (IORef, atomicModifyIORef, newIORef, readIORef)
-import Data.Monoid (Monoid, mempty)
 
 import qualified Control.Concurrent as C
 import qualified Control.Monad.Catch as Ca
@@ -34,6 +33,11 @@ import qualified Control.Monad.State.Lazy as SL
 import qualified Control.Monad.State.Strict as SS
 import qualified Control.Monad.Writer.Lazy as WL
 import qualified Control.Monad.Writer.Strict as WS
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative (Applicative)
+import Data.Monoid (Monoid, mempty)
+#endif
 
 -- | @MonadConc@ is an abstraction over GHC's typical concurrency
 -- abstraction. It captures the interface of concurrency monads in

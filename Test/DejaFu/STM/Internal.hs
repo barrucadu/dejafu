@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
@@ -8,10 +9,13 @@ module Test.DejaFu.STM.Internal where
 
 import Control.Exception (Exception, SomeException(..), fromException)
 import Control.Monad.Cont (Cont, runCont)
-import Data.Foldable (Foldable(..))
 import Data.List (nub)
-import Data.Monoid (mempty)
 import Test.DejaFu.Internal
+
+#if __GLASGOW_HASKELL__ < 710
+import Data.Foldable (Foldable(..))
+import Data.Monoid (mempty)
+#endif
 
 --------------------------------------------------------------------------------
 -- The @STMLike@ monad

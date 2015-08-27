@@ -6,6 +6,7 @@ module Tests.Logger
   ) where
 
 import Control.Concurrent.CVar
+import Control.Monad (void)
 import Control.Monad.Conc.Class
 import Test.DejaFu
 
@@ -17,19 +18,19 @@ data LogCommand = Message String | Stop
 initLogger :: MonadConc m => m (Logger m)
 initLogger = do
   cmd <- newEmptyCVar
-  log <- newCVar []
-  let l = Logger cmd log
-  fork $ logger l
+  logg <- newCVar []
+  let l = Logger cmd logg
+  void . fork $ logger l
   return l
 
 logger :: MonadConc m => Logger m -> m ()
-logger (Logger cmd log) = loop where
+logger (Logger cmd logg) = loop where
   loop = do
     command <- takeCVar cmd
     case command of
       Message str -> do
-        strs <- takeCVar log
-        putCVar log (strs ++ [str])
+        strs <- takeCVar logg
+        putCVar logg (strs ++ [str])
         loop
       Stop -> return ()
 
@@ -39,9 +40,9 @@ logMessage (Logger cmd _) str = putCVar cmd $ Message str
 
 -- | Stop the logger and return the contents of the log.
 logStop :: MonadConc m => Logger m -> m [String]
-logStop (Logger cmd log) = do
+logStop (Logger cmd logg) = do
   putCVar cmd Stop
-  readCVar log
+  readCVar logg
 
 -- | Race condition! Can you see where?
 badLogger :: MonadConc m => m [String]
