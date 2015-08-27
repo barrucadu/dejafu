@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                dejafu
-version:             0.0.0.0
+version:             0.1.0.0
 synopsis:            Overloadable primitives for testable, potentially non-deterministic, concurrency.
 
 description:
@@ -48,10 +48,10 @@ source-repository head
   type:     git
   location: https://github.com/barrucadu/dejafu.git
 
--- source-repository this
---   type:     git
---   location: https://github.com/barrucadu/dejafu.git
---   tag:      
+source-repository this
+  type:     git
+  location: https://github.com/barrucadu/dejafu.git
+  tag:      0.1.0.0
 
 library
   exposed-modules:     Control.Monad.Conc.Class
