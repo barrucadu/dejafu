@@ -46,6 +46,7 @@ module Test.DejaFu.Deterministic
   , newCRef
   , readCRef
   , writeCRef
+  , atomicWriteCRef
   , modifyCRef
 
   -- * Testing
@@ -129,6 +130,7 @@ instance C.MonadConc (Conc t) where
   newCRef        = newCRef
   readCRef       = readCRef
   writeCRef      = writeCRef
+  atomicWriteCRef = atomicWriteCRef
   modifyCRef     = modifyCRef
   atomically     = atomically
   _concNoTest    = _concNoTest
@@ -163,7 +165,7 @@ readCVar cvar = C $ cont $ AGet $ unV cvar
 
 -- | Run the provided computation concurrently.
 fork :: Conc t () -> Conc t ThreadId
-fork (C ma) = C $ cont $ AFork (const' $ runCont ma $ const AStop)
+fork (C ma) = C $ cont $ AFork ((\a _ -> a) $ runCont ma $ const AStop)
 
 -- | Get the 'ThreadId' of the current thread.
 myThreadId :: Conc t ThreadId
@@ -213,8 +215,17 @@ modifyCRef :: CRef t a -> (a -> (a, b)) -> Conc t b
 modifyCRef ref f = C $ cont $ AModRef (unR ref) f
 
 -- | Replace the value stored inside a 'CRef'.
+--
+-- TODO: relaxed memory
 writeCRef :: CRef t a -> a -> Conc t ()
-writeCRef ref a = modifyCRef ref $ const (a, ())
+writeCRef = atomicWriteCRef
+
+-- | Replace the value stored inside a 'CRef' with a barrier to
+-- re-ordering.
+--
+-- TODO: relaxed memory
+atomicWriteCRef :: CRef t a -> a -> Conc t ()
+atomicWriteCRef ref a = modifyCRef ref $ const (a, ())
 
 -- | Raise an exception in the 'Conc' monad. The exception is raised
 -- when the action is run, not when it is applied. It short-citcuits

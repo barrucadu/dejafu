@@ -22,7 +22,7 @@ import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Control.Monad.STM (STM)
 import Control.Monad.STM.Class (MonadSTM, CTVar)
 import Control.Monad.Trans (lift)
-import Data.IORef (IORef, atomicModifyIORef, newIORef, readIORef)
+import Data.IORef (IORef, atomicModifyIORef, newIORef, readIORef, writeIORef, atomicWriteIORef)
 
 import qualified Control.Concurrent as C
 import qualified Control.Monad.Catch as Ca
@@ -138,11 +138,16 @@ class ( Applicative m, Monad m
   -- | Atomically modify the value stored in a reference.
   modifyCRef :: CRef m a -> (a -> (a, b)) -> m b
 
-  -- | Replace the value stored in a reference.
-  --
-  -- > writeCRef r a = modifyCRef r $ const (a, ())
+  -- | Write a new value into an @CRef@, without imposing a memory
+  -- barrier. This means that relaxed memory effects can be observed.
   writeCRef :: CRef m a -> a -> m ()
-  writeCRef r a = modifyCRef r $ const (a, ())
+
+  -- | Replace the value stored in a reference, with the
+  -- barrier-to-reordering property that 'modifyCRef' has.
+  --
+  -- > atomicWriteCRef r a = modifyCRef r $ const (a, ())
+  atomicWriteCRef :: CRef m a -> a -> m ()
+  atomicWriteCRef r a = modifyCRef r $ const (a, ())
 
   -- | Perform an STM transaction atomically.
   atomically :: STMLike m a -> m a
@@ -288,6 +293,8 @@ instance MonadConc IO where
   newCRef        = newIORef
   readCRef       = readIORef
   modifyCRef     = atomicModifyIORef
+  writeCRef      = writeIORef
+  atomicWriteCRef = atomicWriteIORef
   atomically     = S.atomically
 
 -- | Create a concurrent computation for the provided action, and
@@ -341,6 +348,8 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   newCRef            = lift . newCRef
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
+  writeCRef r        = lift . writeCRef r
+  atomicWriteCRef r  = lift . atomicWriteCRef r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets
@@ -372,6 +381,8 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   newCRef            = lift . newCRef
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
+  writeCRef r        = lift . writeCRef r
+  atomicWriteCRef r  = lift . atomicWriteCRef r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets
@@ -403,6 +414,8 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   newCRef            = lift . newCRef
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
+  writeCRef r        = lift . writeCRef r
+  atomicWriteCRef r  = lift . atomicWriteCRef r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets
@@ -434,6 +447,8 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   newCRef            = lift . newCRef
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
+  writeCRef r        = lift . writeCRef r
+  atomicWriteCRef r  = lift . atomicWriteCRef r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets
@@ -465,6 +480,8 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   newCRef            = lift . newCRef
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
+  writeCRef r        = lift . writeCRef r
+  atomicWriteCRef r  = lift . atomicWriteCRef r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets
@@ -496,6 +513,8 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   newCRef            = lift . newCRef
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
+  writeCRef r        = lift . writeCRef r
+  atomicWriteCRef r  = lift . atomicWriteCRef r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets
@@ -527,6 +546,8 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   newCRef            = lift . newCRef
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
+  writeCRef r        = lift . writeCRef r
+  atomicWriteCRef r  = lift . atomicWriteCRef r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets

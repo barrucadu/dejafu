@@ -2,13 +2,6 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-#if __GLASGOW_HASKELL__ < 710
--- ImpredicativeTypes are needed for the const' function, as the
--- type-checker can't otherwise unify the higher-ranked application.
-
-{-# LANGUAGE ImpredicativeTypes #-}
-#endif
-
 -- | Concurrent monads with a fixed scheduler: internal types and
 -- functions.
 module Test.DejaFu.Deterministic.Internal
@@ -42,9 +35,6 @@ module Test.DejaFu.Deterministic.Internal
 
  -- * Failures
  , Failure(..)
-
- -- * Utils
- , const'
  ) where
 
 import Control.Exception (MaskingState(..))
@@ -66,9 +56,6 @@ import Control.Applicative ((<$>), (<*>))
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 
-const' :: a -> (forall b. M n r s b -> M n r s b) -> a
-const' = const
-
 --------------------------------------------------------------------------------
 -- * Execution
 
@@ -88,7 +75,7 @@ runFixed' fixed runstm sched s idSource ma = do
   ref <- newRef fixed Nothing
 
   let c       = ma >>= liftN fixed . writeRef fixed ref . Just . Right
-  let threads = launch' Unmasked 0 (const' $ runCont c $ const AStop) M.empty
+  let threads = launch' Unmasked 0 ((\a _ -> a) $ runCont c $ const AStop) M.empty
 
   (s', idSource', trace) <- runThreads fixed runstm sched s threads idSource ref
   out <- readRef fixed ref
