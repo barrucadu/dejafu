@@ -109,22 +109,23 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
         Right (threads', idSource', act, wb') ->
           let sofar' = (decision, alternatives, act) : sofar
               threads'' = if (interruptible <$> M.lookup chosen threads') == Just True then unblockWaitingOn chosen threads' else threads'
-          in  go idSource' sofar' (Just chosen) g' threads'' wb'
+          in  go idSource' sofar' (Just chosen) g' (exorcise threads'') wb'
 
         Left UncaughtException
           | chosen == 0 -> writeRef fixed ref (Just $ Left UncaughtException) >> return (g, idSource, sofar)
           | otherwise ->
           let sofar' = (decision, alternatives, Killed) : sofar
               threads' = unblockWaitingOn chosen $ kill chosen threads
-          in go idSource sofar' (Just chosen) g' threads' wb
+          in go idSource sofar' (Just chosen) g' (exorcise threads') wb
 
         Left failure -> writeRef fixed ref (Just $ Left failure) >> return (g, idSource, sofar)
 
     where
       (chosen, g')  = sched g ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ unsafeToNonEmpty runnable'
       runnable'     = [(t, nextActions t) | t <- sort $ M.keys runnable]
-      runnable      = M.filter (isNothing . _blocking) threads
-      thread        = M.lookup chosen threads
+      runnable      = M.filter (isNothing . _blocking) threadsc
+      thread        = M.lookup chosen threadsc
+      threadsc      = haunt wb threads
       isBlocked     = isJust . _blocking $ fromJust thread
       isNonexistant = isNothing thread
       isTerminated  = 0 `notElem` M.keys threads
@@ -150,7 +151,7 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
         | prior `notElem` map (Just . fst) runnable' = [(Start t, na) | (t, na) <- runnable', t /= chosen]
         | otherwise = [(if Just t == prior then Continue else SwitchTo t, na) | (t, na) <- runnable', t /= chosen]
 
-      nextActions t = unsafeToNonEmpty . nextActions' . _continuation . fromJust $ M.lookup t threads
+      nextActions t = unsafeToNonEmpty . nextActions' . _continuation . fromJust $ M.lookup t threadsc
       nextActions' (AFork _ _)             = [WillFork]
       nextActions' (AMyTId _)              = [WillMyThreadId]
       nextActions' (ANew _)                = [WillNew]

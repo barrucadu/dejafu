@@ -106,7 +106,7 @@ next = go 0 where
 
   preEmps tid bpor (t:ts) =
     let rest = preEmps t (fromJust . I.lookup t $ _bdone bpor) ts
-    in  if tid /= t && tid `S.member` _brunnable bpor then 1 + rest else rest
+    in  if t > 0 && tid /= t && tid `S.member` _brunnable bpor then 1 + rest else rest
   preEmps _ _ [] = 0::Int
 
 -- | Produce a list of new backtracking points from an execution
@@ -238,7 +238,9 @@ activeTid = foldl' tidOf 0
 
 -- | Count the number of pre-emptions in a schedule
 preEmpCount :: [Decision] -> Int
-preEmpCount (SwitchTo _:ds) = 1 + preEmpCount ds
+preEmpCount (SwitchTo t:ds)
+  | t >= 0 = 1 + preEmpCount ds
+  | otherwise = preEmpCount ds
 preEmpCount (_:ds) = preEmpCount ds
 preEmpCount [] = 0
 
@@ -274,9 +276,13 @@ dependent' d1 (_, d2) = cref || cvar || ctvar where
   cref = Just True == ((\(r1, w1) (r2, w2) -> r1 == r2 && (w1 || w2)) <$> cref' d1 <*> cref'' d2)
   cref'  (ReadRef  r) = Just (r, False)
   cref'  (ModRef   r) = Just (r, True)
+  cref'  (WriteRef r) = Just (r, True)
+  cref'  (CommitRef _ r) = Just (r, True)
   cref'  _ = Nothing
-  cref'' (WillReadRef r) = Just (r, False)
-  cref'' (WillModRef  r) = Just (r, True)
+  cref'' (WillReadRef  r) = Just (r, False)
+  cref'' (WillModRef   r) = Just (r, True)
+  cref'' (WillWriteRef r) = Just (r, True)
+  cref'' (WillCommitRef _ r) = Just (r, True)
   cref'' _ = Nothing
 
   cvar = Just True == ((==) <$> cvar' d1 <*> cvar'' d2)

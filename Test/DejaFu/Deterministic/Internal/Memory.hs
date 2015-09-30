@@ -6,12 +6,15 @@ module Test.DejaFu.Deterministic.Internal.Memory where
 
 import Control.Monad (when)
 import Data.IntMap.Strict (IntMap)
+import Data.Maybe (isJust, fromJust)
+import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..), (><), singleton, viewl)
 import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.Deterministic.Internal.Threading
 import Test.DejaFu.Internal
 
 import qualified Data.IntMap.Strict as I
+import qualified Data.Map as M
 
 #if __GLASGOW_HASKELL__ < 710
 import Data.Foldable (mapM_)
@@ -30,7 +33,7 @@ newtype WriteBuffer r = WriteBuffer { buffer :: IntMap (Seq (BufferedWrite r)) }
 -- write. Universally quantified over the value type so that the only
 -- thing which can be done with it is to write it to the reference.
 data BufferedWrite r where
-  BufferedWrite :: R r a -> a -> BufferedWrite r
+  BufferedWrite :: ThreadId -> R r a -> a -> BufferedWrite r
 
 -- | An empty write buffer.
 emptyBuffer :: WriteBuffer r
@@ -40,7 +43,7 @@ emptyBuffer = WriteBuffer I.empty
 bufferWrite :: Monad n => Fixed n r s -> WriteBuffer r -> Int -> R r a -> a -> ThreadId -> n (WriteBuffer r)
 bufferWrite fixed (WriteBuffer wb) i cref@(_, ref) new tid = do
   -- Construct the new write buffer
-  let write = singleton $ BufferedWrite cref new
+  let write = singleton $ BufferedWrite tid cref new
   let buffer' = I.insertWith (><) i write wb
 
   -- Write the thread-local value to the @CRef@'s update map.
@@ -52,7 +55,7 @@ bufferWrite fixed (WriteBuffer wb) i cref@(_, ref) new tid = do
 -- | Commit the write at the head of a buffer.
 commitWrite :: Monad n => Fixed n r s -> WriteBuffer r -> Int -> n (WriteBuffer r)
 commitWrite fixed w@(WriteBuffer wb) i = case maybe EmptyL viewl $ I.lookup i wb of
-  BufferedWrite cref a :< rest -> do
+  BufferedWrite _ cref a :< rest -> do
     writeImmediate fixed cref a
     return . WriteBuffer $ I.insert i rest wb
     
@@ -73,7 +76,18 @@ writeImmediate fixed (_, ref) a = writeRef fixed ref (I.empty, a)
 -- | Flush all writes in the buffer.
 writeBarrier :: Monad n => Fixed n r s -> WriteBuffer r -> n ()
 writeBarrier fixed (WriteBuffer wb) = mapM_ flush $ I.elems wb where
-  flush = mapM_ $ \(BufferedWrite cref a) -> writeImmediate fixed cref a
+  flush = mapM_ $ \(BufferedWrite _ cref a) -> writeImmediate fixed cref a
+
+-- | Add phantom threads to the thread list to commit pending writes.
+haunt :: WriteBuffer r -> Threads n r s -> Threads n r s
+haunt (WriteBuffer wb) ts = ts <> M.fromList phantoms where
+  phantoms = [(negate k, mkthread $ fromJust c) | (k, b) <- I.toList wb, let c = go $ viewl b, isJust c]
+  go (BufferedWrite tid (crid, _) _ :< _) = Just $ ACommit tid crid
+  go EmptyL = Nothing
+
+-- | Remove phantom threads.
+exorcise :: Threads n r s -> Threads n r s
+exorcise = M.filterWithKey $ \k _ -> k >= 0
 
 --------------------------------------------------------------------------------
 -- * Manipulating @CVar@s

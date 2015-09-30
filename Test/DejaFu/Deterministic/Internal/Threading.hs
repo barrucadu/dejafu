@@ -43,6 +43,10 @@ data Thread n r s = Thread
   -- detection of nonglobal deadlock.
   }
 
+-- | Construct a thread with just one action
+mkthread :: Action n r s -> Thread n r s
+mkthread c = Thread c Nothing [] Unmasked [] False
+
 --------------------------------------------------------------------------------
 -- * Blocking
 
