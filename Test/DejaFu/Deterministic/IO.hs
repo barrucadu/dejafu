@@ -222,15 +222,11 @@ modifyCRef :: CRef t a -> (a -> (a, b)) -> ConcIO t b
 modifyCRef ref f = C $ cont $ AModRef (unR ref) f
 
 -- | Replace the value stored inside a 'CRef'.
---
--- TODO: relaxed memory
 writeCRef :: CRef t a -> a -> ConcIO t ()
-writeCRef = atomicWriteCRef
+writeCRef ref a = C $ cont $ \c -> AWriteRef (unR ref) a $ c ()
 
 -- | Replace the value stored inside a 'CRef' with a barrier to
 -- re-ordering.
---
--- TODO: relaxed memory
 atomicWriteCRef :: CRef t a -> a -> ConcIO t ()
 atomicWriteCRef ref a = modifyCRef ref $ const (a, ())
 
