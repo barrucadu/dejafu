@@ -71,7 +71,7 @@ library
 
   other-modules:       Test.DejaFu.Deterministic.Internal
                      , Test.DejaFu.Deterministic.Internal.Common
-                     , Test.DejaFu.Deterministic.Internal.CVar
+                     , Test.DejaFu.Deterministic.Internal.Memory
                      , Test.DejaFu.Deterministic.Internal.Threading
                      , Test.DejaFu.Internal
                      , Test.DejaFu.SCT.Internal

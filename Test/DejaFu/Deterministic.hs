@@ -84,6 +84,7 @@ import Test.DejaFu.STM.Internal (CTVar(..))
 
 import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
+import qualified Data.IntMap.Strict as I
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative(..), (<$>))
@@ -206,7 +207,7 @@ tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 newCRef :: a -> Conc t (CRef t a)
 newCRef a = C $ cont lifted where
   lifted c = ANewRef $ \crid -> c <$> newCRef' crid
-  newCRef' crid = (\ref -> Ref (crid, ref)) <$> newSTRef a
+  newCRef' crid = (\ref -> Ref (crid, ref)) <$> newSTRef (I.empty, a)
 
 -- | Read the value from a 'CRef'.
 readCRef :: CRef t a -> Conc t a

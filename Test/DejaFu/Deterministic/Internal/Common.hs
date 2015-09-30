@@ -8,6 +8,7 @@ module Test.DejaFu.Deterministic.Internal.Common where
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception, MaskingState(..), SomeException(..))
 import Control.Monad.Cont (Cont)
+import Data.IntMap.Strict (IntMap)
 import Data.List.Extra
 import Test.DejaFu.Internal
 import Test.DejaFu.STM (CTVarId)
@@ -23,8 +24,10 @@ type M n r s a = Cont (Action n r s) a
 type V r a = (CVarId, r (Maybe a))
 
 -- | CRefs are represented as a unique numeric identifier, and a
--- reference containing a value.
-type R r a = (CRefId, r a)
+-- reference containing (a) any thread-local non-synchronised writes
+-- (so each thread sees its latest write) and the current value
+-- visible to all threads.
+type R r a = (CRefId, r (IntMap a, a))
 
 -- | Dict of methods for implementations to override.
 type Fixed n r s = Ref n r (Cont (Action n r s))
