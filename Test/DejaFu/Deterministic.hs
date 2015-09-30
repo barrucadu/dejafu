@@ -90,6 +90,7 @@ import Control.Applicative (Applicative(..), (<$>))
 #endif
 
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
+{-# ANN module ("HLint: ignore Use const"    :: String) #-}
 
 -- | The @Conc@ monad itself. This uses the same
 -- universally-quantified indexing state trick as used by 'ST' and

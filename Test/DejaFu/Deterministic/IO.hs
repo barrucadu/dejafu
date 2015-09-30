@@ -93,6 +93,7 @@ import Control.Applicative (Applicative(..), (<$>))
 #endif
 
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
+{-# ANN module ("HLint: ignore Use const"    :: String) #-}
 
 -- | The 'IO' variant of Test.DejaFu.Deterministic's
 -- 'Test.DejaFu.Deterministic.Conc' monad.

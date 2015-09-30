@@ -58,6 +58,7 @@ import Control.Applicative ((<$>), (<*>))
 #endif
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
+{-# ANN module ("HLint: ignore Use const"           :: String) #-}
 
 --------------------------------------------------------------------------------
 -- * Execution
