@@ -71,18 +71,21 @@ import Control.Applicative ((<$>), (<*>))
 -- * Pre-emption bounding
 
 -- | An SCT runner using a pre-emption bounding scheduler.
-sctPreBound ::
-    Int
+--
+-- This uses the 'SequentialConsistency' memory model.
+sctPreBound :: Int
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
   -> (forall t. Conc t a)
   -- ^ The computation to run many times
   -> [(Either Failure a, Trace)]
-sctPreBound pb = sctBounded (pbBv pb) pbBacktrack pbInitialise
+sctPreBound pb = sctBounded SequentialConsistency (pbBv pb) pbBacktrack pbInitialise
 
 -- | Variant of 'sctPreBound' for computations which do 'IO'.
+--
+-- This uses the 'SequentialConsistency' memory model.
 sctPreBoundIO :: Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
-sctPreBoundIO pb = sctBoundedIO (pbBv pb) pbBacktrack pbInitialise
+sctPreBoundIO pb = sctBoundedIO SequentialConsistency (pbBv pb) pbBacktrack pbInitialise
 
 -- | Check if a schedule is in the bound.
 pbBv :: Int -> [Decision] -> Bool
@@ -144,36 +147,38 @@ pbInitialise prior threads@((nextTid, _):|rest) = case prior of
 -- Note that unlike with non-bounded partial-order reduction, this may
 -- do some redundant work as the introduction of a bound can make
 -- previously non-interfering events interfere with each other.
-sctBounded :: ([Decision] -> Bool)
-           -- ^ Check if a prefix trace is within the bound.
-           -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
-           -- ^ Add a new backtrack point, this takes the history of
-           -- the execution so far, the index to insert the
-           -- backtracking point, and the thread to backtrack to. This
-           -- may insert more than one backtracking point.
-           -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
-           -- ^ Produce possible scheduling decisions, all will be
-           -- tried.
-           -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
-sctBounded bv backtrack initialise c = runIdentity $ sctBoundedM bv backtrack initialise run where
-  run sched s = Identity $ runConc' sched s c
+sctBounded :: MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> ([Decision] -> Bool)
+  -- ^ Check if a prefix trace is within the bound.
+  -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
+  -- ^ Add a new backtrack point, this takes the history of the
+  -- execution so far, the index to insert the backtracking point, and
+  -- the thread to backtrack to. This may insert more than one
+  -- backtracking point.
+  -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
+  -- ^ Produce possible scheduling decisions, all will be tried.
+  -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
+sctBounded memtype bv backtrack initialise c = runIdentity $ sctBoundedM bv backtrack initialise run where
+  run sched s = Identity $ runConc' sched memtype s c
 
 -- | Variant of 'sctBounded' for computations which do 'IO'.
-sctBoundedIO :: ([Decision] -> Bool)
-             -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
-             -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
-             -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
-sctBoundedIO bv backtrack initialise c = sctBoundedM bv backtrack initialise run where
-  run sched s = runConcIO' sched s c
+sctBoundedIO :: MemType
+  ->([Decision] -> Bool)
+  -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
+  -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
+  -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
+sctBoundedIO memtype bv backtrack initialise c = sctBoundedM bv backtrack initialise run where
+  run sched s = runConcIO' sched memtype s c
 
 -- | Generic SCT runner.
 sctBoundedM :: (Functor m, Monad m)
-            => ([Decision] -> Bool)
-            -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
-            -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
-            -> (Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
-            -- ^ Monadic runner, with computation fixed.
-            -> m [(Either Failure a, Trace)]
+  => ([Decision] -> Bool)
+  -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
+  -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
+  -> (Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
+  -- ^ Monadic runner, with computation fixed.
+  -> m [(Either Failure a, Trace)]
 sctBoundedM bv backtrack initialise run = go initialState where
   go bpor = case next bpor of
     Just (sched, conservative, bpor') -> do

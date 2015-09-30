@@ -43,6 +43,7 @@ module Test.DejaFu.Deterministic
 
   -- * @CRef@s
   , CRef
+  , MemType(..)
   , newCRef
   , readCRef
   , writeCRef
@@ -346,11 +347,13 @@ _concAllKnown = C $ cont $ \c -> AAllKnown (c ())
 -- this is making your head hurt, check out the \"How @runST@ works\"
 -- section of
 -- <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
+--
+-- This uses the 'SequentialConsistency' memory model.
 runConc :: Scheduler s -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace)
 runConc sched s ma =
-  let (r, s', t') = runConc' sched s ma
+  let (r, s', t') = runConc' sched SequentialConsistency s ma
   in  (r, s', toTrace t')
 
 -- | Variant of 'runConc' which produces a 'Trace''.
-runConc' :: Scheduler s -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace')
-runConc' sched s ma = runST $ runFixed fixed runTransactionST sched s $ unC ma
+runConc' :: Scheduler s -> MemType -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace')
+runConc' sched memtype s ma = runST $ runFixed fixed runTransactionST sched memtype s $ unC ma

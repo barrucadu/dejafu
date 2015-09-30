@@ -23,6 +23,9 @@ module Test.DejaFu.Deterministic.Internal
  , CVarId
  , CRefId
 
+ -- * Memory models
+ , MemType(..)
+
  -- * Scheduling & Traces
  , Scheduler
  , Trace
@@ -64,20 +67,20 @@ import Control.Applicative ((<$>), (<*>))
 -- deadlock is detected. Also returned is the final state of the
 -- scheduler, and an execution trace.
 runFixed :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
-         -> Scheduler g -> g -> M n r s a -> n (Either Failure a, g, Trace')
-runFixed fixed runstm sched s ma = (\(e,g,_,t) -> (e,g,t)) <$> runFixed' fixed runstm sched s initialIdSource ma
+         -> Scheduler g -> MemType -> g -> M n r s a -> n (Either Failure a, g, Trace')
+runFixed fixed runstm sched memtype s ma = (\(e,g,_,t) -> (e,g,t)) <$> runFixed' fixed runstm sched memtype s initialIdSource ma
 
 -- | Same as 'runFixed', be parametrised by an 'IdSource'.
 runFixed' :: forall n r s g a. (Functor n, Monad n)
   => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
-  -> Scheduler g -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace')
-runFixed' fixed runstm sched s idSource ma = do
+  -> Scheduler g -> MemType -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace')
+runFixed' fixed runstm sched memtype s idSource ma = do
   ref <- newRef fixed Nothing
 
   let c       = ma >>= liftN fixed . writeRef fixed ref . Just . Right
   let threads = launch' Unmasked 0 ((\a _ -> a) $ runCont c $ const AStop) M.empty
 
-  (s', idSource', trace) <- runThreads fixed runstm sched s threads idSource ref
+  (s', idSource', trace) <- runThreads fixed runstm sched memtype s threads idSource ref
   out <- readRef fixed ref
 
   return (fromJust out, s', idSource', reverse trace)
@@ -88,9 +91,11 @@ runFixed' fixed runstm sched s idSource ma = do
 -- efficient to prepend to a list than append. As this function isn't
 -- exposed to users of the library, this is just an internal gotcha to
 -- watch out for.
+--
+-- TODO: Actually use the memory type
 runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
-           -> Scheduler g -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace')
-runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads where
+           -> Scheduler g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace')
+runThreads fixed runstm sched _ origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads where
   go idSource sofar prior g threads
     | isTerminated  = return (g, idSource, sofar)
     | isDeadlocked  = writeRef fixed ref (Just $ Left Deadlock) >> return (g, idSource, sofar)
@@ -127,7 +132,7 @@ runThreads fixed runstm sched origg origthreads idsrc ref = go idsrc [] Nothing 
                                            ((~=  OnMask      undefined) <$> M.lookup 0 threads) == Just True)
       isSTMLocked   = isLocked 0 threads && ((~=  OnCTVar    []) <$> M.lookup 0 threads) == Just True
 
-      runconc ma i = do { (a,_,i',_) <- runFixed' fixed runstm sched g i ma; return (a,i') }
+      runconc ma i = do { (a,_,i',_) <- runFixed' fixed runstm sched SequentialConsistency g i ma; return (a,i') }
 
       unblockWaitingOn tid = M.map unblock where
         unblock thrd = case _blocking thrd of

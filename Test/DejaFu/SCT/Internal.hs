@@ -221,7 +221,7 @@ todo bv = step where
 tidOf :: ThreadId -> Decision -> ThreadId
 tidOf _ (Start t)    = t
 tidOf _ (SwitchTo t) = t
-tidOf tid Continue   = tid
+tidOf tid _          = tid
 
 -- | Get the 'Decision' that would have resulted in this 'ThreadId',
 -- given a prior 'ThreadId' (if any) and list of runnable threads.
@@ -234,10 +234,7 @@ decisionOf prior runnable chosen
 -- | Get the tid of the currently active thread after executing a
 -- series of decisions. The list MUST begin with a 'Start'.
 activeTid :: [Decision] -> ThreadId
-activeTid = foldl' go 0 where
-  go _ (Start t)    = t
-  go _ (SwitchTo t) = t
-  go t Continue     = t
+activeTid = foldl' tidOf 0
 
 -- | Count the number of pre-emptions in a schedule
 preEmpCount :: [Decision] -> Int

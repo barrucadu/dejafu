@@ -47,6 +47,7 @@ module Test.DejaFu.Deterministic.IO
 
   -- * @CRef@s
   , CRef
+  , MemType(..)
   , newCRef
   , readCRef
   , writeCRef
@@ -338,11 +339,13 @@ _concAllKnown = C $ cont $ \c -> AAllKnown (c ())
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning an failure reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
+--
+-- This uses the 'SequentialConsistency' memory model.
 runConcIO :: Scheduler s -> s -> (forall t. ConcIO t a) -> IO (Either Failure a, s, Trace)
 runConcIO sched s ma = do
-  (r, s', t') <- runConcIO' sched s ma
+  (r, s', t') <- runConcIO' sched SequentialConsistency s ma
   return (r, s', toTrace t')
 
 -- | Variant of 'runConcIO' which produces a 'Trace''.
-runConcIO' :: Scheduler s -> s -> (forall t. ConcIO t a) -> IO (Either Failure a, s, Trace')
-runConcIO' sched s ma = runFixed fixed runTransactionIO sched s $ unC ma
+runConcIO' :: Scheduler s -> MemType -> s -> (forall t. ConcIO t a) -> IO (Either Failure a, s, Trace')
+runConcIO' sched memtype s ma = runFixed fixed runTransactionIO sched memtype s $ unC ma

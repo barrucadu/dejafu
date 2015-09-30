@@ -150,12 +150,15 @@ data Decision =
   -- ^ Continue running the last thread for another step.
   | SwitchTo ThreadId
   -- ^ Pre-empt the running thread, and switch to another.
+  | Commit
+  -- ^ Commit a 'CRef' write action so that every thread can see the
+  -- result.
   deriving (Eq, Show)
 
 instance NFData Decision where
   rnf (Start    tid) = rnf tid
   rnf (SwitchTo tid) = rnf tid
-  rnf Continue = ()
+  rnf d = d `seq` ()
 
 -- | All the actions that a thread can perform.
 data ThreadAction =
@@ -187,6 +190,9 @@ data ThreadAction =
   -- ^ Read from a 'CRef'.
   | ModRef CRefId
   -- ^ Modify a 'CRef'.
+  | CommitRef ThreadId CRefId
+  -- ^ Commit the last write to the given 'CRef' by the given thread,
+  -- so that all threads can see the updated value.
   | STM [ThreadId]
   -- ^ An STM transaction was executed, possibly waking up some
   -- threads.
@@ -233,21 +239,26 @@ data ThreadAction =
   deriving (Eq, Show)
 
 instance NFData ThreadAction where
-  rnf (TryTake c b tids) = rnf (c, b, tids)
-  rnf (TryPut  c b tids) = rnf (c, b, tids)
-  rnf (SetMasking   b m) = m `seq` b `seq` ()
-  rnf (ResetMasking b m) = m `seq` b `seq` ()
-  rnf (BlockedRead c) = rnf c
-  rnf (BlockedTake c) = rnf c
-  rnf (BlockedPut  c) = rnf c
-  rnf (ThrowTo tid) = rnf tid
-  rnf (Take c tids) = rnf (c, tids)
-  rnf (Put  c tids) = rnf (c, tids)
-  rnf (STM  tids) = rnf tids
-  rnf (Fork tid)  = rnf tid
-  rnf (New  c) = rnf c
+  rnf (Fork t) = rnf t
+  rnf (New c) = rnf c
+  rnf (Put c ts) = rnf (c, ts)
+  rnf (BlockedPut c) = rnf c
+  rnf (TryPut c b ts) = rnf (c, b, ts)
   rnf (Read c) = rnf c
-  rnf ta = ta `seq` ()
+  rnf (BlockedRead c) = rnf c
+  rnf (Take c ts) = rnf (c, ts)
+  rnf (BlockedTake c) = rnf c
+  rnf (TryTake c b ts) = rnf (c, b, ts)
+  rnf (NewRef c) = rnf c
+  rnf (ReadRef c) = rnf c
+  rnf (ModRef c) = rnf c
+  rnf (CommitRef t c) = rnf (t, c)
+  rnf (STM ts) = rnf ts
+  rnf (ThrowTo t) = rnf t
+  rnf (BlockedThrowTo t) = rnf t
+  rnf (SetMasking b m) = b `seq` m `seq` ()
+  rnf (ResetMasking b m) = b `seq` m `seq` ()
+  rnf a = a `seq` ()
 
 -- | A one-step look-ahead at what a thread will do next.
 data Lookahead =
@@ -273,6 +284,8 @@ data Lookahead =
   -- ^ Will read from a 'CRef'.
   | WillModRef CRefId
   -- ^ Will modify a 'CRef'.
+  | WillCommitRef ThreadId CRefId
+  -- ^ Will commit the last write by the given thread to the 'CRef'.
   | WillSTM
   -- ^ Will execute an STM transaction, possibly waking up some
   -- threads.
@@ -310,16 +323,18 @@ data Lookahead =
   deriving (Eq, Show)
 
 instance NFData Lookahead where
-  rnf (WillSetMasking   b ms) = b `seq` ms `seq` ()
-  rnf (WillResetMasking b ms) = b `seq` ms `seq` ()
-  rnf (WillPut     c) = rnf c
-  rnf (WillTryPut  c) = rnf c
-  rnf (WillRead    c) = rnf c
-  rnf (WillTake    c) = rnf c
+  rnf (WillPut c) = rnf c
+  rnf (WillTryPut c) = rnf c
+  rnf (WillRead c) = rnf c
+  rnf (WillTake c) = rnf c
   rnf (WillTryTake c) = rnf c
   rnf (WillReadRef c) = rnf c
-  rnf (WillModRef  c) = rnf c
-  rnf ta = ta `seq` ()
+  rnf (WillModRef c) = rnf c
+  rnf (WillCommitRef t c) = rnf (t, c)
+  rnf (WillThrowTo t) = rnf t
+  rnf (WillSetMasking b m) = b `seq` m `seq` ()
+  rnf (WillResetMasking b m) = b `seq` m `seq` ()
+  rnf l = l `seq` ()
 
 --------------------------------------------------------------------------------
 -- * Failures
@@ -343,3 +358,28 @@ data Failure =
 
 instance NFData Failure where
   rnf f = f `seq` () -- WHNF == NF
+
+--------------------------------------------------------------------------------
+-- * Memory Models
+
+-- | The memory model to use for non-synchronised 'CRef' operations.
+data MemType =
+    SequentialConsistency
+  -- ^ The most intuitive model: a program behaves as a simple
+  -- interleaving of the actions in different threads. When a 'CRef'
+  -- is written to, that write is immediately visible to all threads.
+  | TotalStoreOrder
+  -- ^ Each thread has a write buffer. A thread sees its writes
+  -- immediately, but other threads will only see writes when they are
+  -- committed, which may happen later. Writes are committed in the
+  -- same order that they are created.
+  | PartialStoreOrder
+  -- ^ Each 'CRef' has a write buffer. A thread sees its writes
+  -- immediately, but other threads will only see writes when they are
+  -- committed, which may happen later. Writes to different 'CRef's
+  -- are not necessarily committed in the same order that they are
+  -- created.
+  deriving (Eq, Show)
+
+instance NFData MemType where
+  rnf m = m `seq` () -- WHNF == NF
