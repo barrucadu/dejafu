@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP   #-}
 {-# LANGUAGE GADTs #-}
 
 -- | Operations over @CRef@s and @CVar@s
@@ -11,6 +12,10 @@ import Test.DejaFu.Deterministic.Internal.Threading
 import Test.DejaFu.Internal
 
 import qualified Data.IntMap.Strict as I
+
+#if __GLASGOW_HASKELL__ < 710
+import Data.Foldable (mapM_)
+#endif
 
 --------------------------------------------------------------------------------
 -- * Manipulating @CRef@s
@@ -47,11 +52,8 @@ bufferWrite fixed (WriteBuffer wb) i cref@(_, ref) new tid = do
 -- | Commit the write at the head of a buffer.
 commitWrite :: Monad n => Fixed n r s -> WriteBuffer r -> Int -> n (WriteBuffer r)
 commitWrite fixed w@(WriteBuffer wb) i = case maybe EmptyL viewl $ I.lookup i wb of
-  BufferedWrite (_, ref) a :< rest -> do
-    -- Write the value tot he @CRef@ and clear the update map.
-    writeRef fixed ref (I.empty, a)
-
-    -- Return a new write buffer with the head gone.
+  BufferedWrite cref a :< rest -> do
+    writeImmediate fixed cref a
     return . WriteBuffer $ I.insert i rest wb
     
   EmptyL -> return w
@@ -62,6 +64,16 @@ readCRef :: Monad n => Fixed n r s -> R r a -> ThreadId -> n a
 readCRef fixed (_, ref) tid = do
   (map, def) <- readRef fixed ref
   return $ I.findWithDefault def tid map
+
+-- | Write and commit to a @CRef@ immediately, clearing the update
+-- map.
+writeImmediate :: Monad n => Fixed n r s -> R r a -> a -> n ()
+writeImmediate fixed (_, ref) a = writeRef fixed ref (I.empty, a)
+
+-- | Flush all writes in the buffer.
+writeBarrier :: Monad n => Fixed n r s -> WriteBuffer r -> n ()
+writeBarrier fixed (WriteBuffer wb) = mapM_ flush $ I.elems wb where
+  flush = mapM_ $ \(BufferedWrite cref a) -> writeImmediate fixed cref a
 
 --------------------------------------------------------------------------------
 -- * Manipulating @CVar@s

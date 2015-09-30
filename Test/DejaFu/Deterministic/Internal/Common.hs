@@ -49,6 +49,7 @@ data Action n r s =
   | forall a. ATryTake (V r a) (Maybe a -> Action n r s)
   | forall a. AReadRef (R r a) (a -> Action n r s)
   | forall a b. AModRef  (R r a) (a -> (a, b)) (b -> Action n r s)
+  | forall a. AWriteRef (R r a) a (Action n r s)
   | forall a. ANoTest  (M n r s a) (a -> Action n r s)
   | forall a. AAtom    (s n r a) (a -> Action n r s)
   | ANew  (CVarId -> n (Action n r s))
@@ -63,6 +64,7 @@ data Action n r s =
   | AKnowsAbout (Either CVarId CTVarId) (Action n r s)
   | AForgets (Either CVarId CTVarId) (Action n r s)
   | AAllKnown (Action n r s)
+  | ACommit ThreadId CRefId
   | AStop
 
 --------------------------------------------------------------------------------
@@ -193,6 +195,8 @@ data ThreadAction =
   -- ^ Read from a 'CRef'.
   | ModRef CRefId
   -- ^ Modify a 'CRef'.
+  | WriteRef CRefId
+  -- ^ Write to a 'CRef' without synchronising.
   | CommitRef ThreadId CRefId
   -- ^ Commit the last write to the given 'CRef' by the given thread,
   -- so that all threads can see the updated value.
@@ -255,6 +259,7 @@ instance NFData ThreadAction where
   rnf (NewRef c) = rnf c
   rnf (ReadRef c) = rnf c
   rnf (ModRef c) = rnf c
+  rnf (WriteRef c) = rnf c
   rnf (CommitRef t c) = rnf (t, c)
   rnf (STM ts) = rnf ts
   rnf (ThrowTo t) = rnf t
@@ -287,6 +292,8 @@ data Lookahead =
   -- ^ Will read from a 'CRef'.
   | WillModRef CRefId
   -- ^ Will modify a 'CRef'.
+  | WillWriteRef CRefId
+  -- ^ Will write to a 'CRef' without synchronising.
   | WillCommitRef ThreadId CRefId
   -- ^ Will commit the last write by the given thread to the 'CRef'.
   | WillSTM
@@ -333,6 +340,7 @@ instance NFData Lookahead where
   rnf (WillTryTake c) = rnf c
   rnf (WillReadRef c) = rnf c
   rnf (WillModRef c) = rnf c
+  rnf (WillWriteRef c) = rnf c
   rnf (WillCommitRef t c) = rnf (t, c)
   rnf (WillThrowTo t) = rnf t
   rnf (WillSetMasking b m) = b `seq` m `seq` ()

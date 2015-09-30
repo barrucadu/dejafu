@@ -162,6 +162,8 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
       nextActions' (ANewRef _)             = [WillNewRef]
       nextActions' (AReadRef (r, _) _)     = [WillReadRef r]
       nextActions' (AModRef (r, _) _ _)    = [WillModRef r]
+      nextActions' (AWriteRef (r, _) _ _)  = [WillWriteRef r]
+      nextActions' (ACommit t c)           = [WillCommitRef t c]
       nextActions' (AAtom _ _)             = [WillSTM]
       nextActions' (AThrow _)              = [WillThrow]
       nextActions' (AThrowTo tid _ k)      = WillThrowTo tid : nextActions' k
@@ -209,6 +211,8 @@ stepThread fixed runconc runstm memtype action idSource tid threads wb = case ac
   ATryTake ref c   -> stepTryTake     ref c
   AReadRef ref c   -> stepReadRef     ref c
   AModRef  ref f c -> stepModRef      ref f c
+  AWriteRef ref a c -> stepWriteRef ref a c
+  ACommit  t c     -> stepCommit t c
   AAtom    stm c   -> stepAtom        stm c
   ANew     na      -> stepNew         na
   ANewRef  na      -> stepNewRef      na
@@ -269,15 +273,30 @@ stepThread fixed runconc runstm memtype action idSource tid threads wb = case ac
 
     -- | Modify a @CRef@.
     stepModRef cref@(crid, _) f c = do
+      writeBarrier fixed wb
       (new, val) <- f <$> readCRef fixed cref tid
+      writeImmediate fixed cref new
+      return $ Right (goto (c val) tid threads, idSource, ModRef crid, emptyBuffer)
+
+    -- | Write to a @CRef@ without synchronising
+    stepWriteRef cref@(crid, _) a c = do
       wb' <- case memtype of
               -- Buffer and then immediately commit
-              SequentialConsistency -> bufferWrite fixed wb tid cref new tid >>= \b -> commitWrite fixed b tid
-              -- Add to buffer using thread id. TODO: Don't commit this when phantom threads + commit primitive
-              TotalStoreOrder       -> bufferWrite fixed wb tid cref new tid >>= \b -> commitWrite fixed b tid
-              -- Add to buffer using cref id. TODO: Don't commit this when phantom threads + commit primitive
-              PartialStoreOrder     -> bufferWrite fixed wb crid cref new tid >>= \b -> commitWrite fixed b crid
-      return $ Right (goto (c val) tid threads, idSource, ModRef crid, wb')
+              SequentialConsistency -> bufferWrite fixed wb tid cref a tid >>= \b -> commitWrite fixed b tid
+              -- Add to buffer using thread id.
+              TotalStoreOrder   -> bufferWrite fixed wb tid cref a tid
+              -- Add to buffer using cref id
+              PartialStoreOrder -> bufferWrite fixed wb crid cref a tid
+      return $ Right (goto c tid threads, idSource, WriteRef crid, wb')
+
+    -- | Commit a @CRef@ write
+    stepCommit c t = do
+      wb' <- case memtype of
+              SequentialConsistency -> return wb
+              TotalStoreOrder   -> commitWrite fixed wb t
+              PartialStoreOrder -> commitWrite fixed wb c
+
+      return $ Right (kill tid threads, idSource, CommitRef t c, wb')
 
     -- | Run a STM transaction atomically.
     stepAtom stm c = do
