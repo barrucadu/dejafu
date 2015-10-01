@@ -71,21 +71,19 @@ import Control.Applicative ((<$>), (<*>))
 -- * Pre-emption bounding
 
 -- | An SCT runner using a pre-emption bounding scheduler.
---
--- This uses the 'SequentialConsistency' memory model.
-sctPreBound :: Int
+sctPreBound :: MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Int
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
   -> (forall t. Conc t a)
   -- ^ The computation to run many times
   -> [(Either Failure a, Trace)]
-sctPreBound pb = sctBounded SequentialConsistency (pbBv pb) pbBacktrack pbInitialise
+sctPreBound memtype pb = sctBounded memtype (pbBv pb) pbBacktrack pbInitialise
 
 -- | Variant of 'sctPreBound' for computations which do 'IO'.
---
--- This uses the 'SequentialConsistency' memory model.
-sctPreBoundIO :: Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
-sctPreBoundIO pb = sctBoundedIO SequentialConsistency (pbBv pb) pbBacktrack pbInitialise
+sctPreBoundIO :: MemType -> Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
+sctPreBoundIO memtype pb = sctBoundedIO memtype (pbBv pb) pbBacktrack pbInitialise
 
 -- | Check if a schedule is in the bound.
 pbBv :: Int -> [Decision] -> Bool

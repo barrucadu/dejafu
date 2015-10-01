@@ -75,6 +75,19 @@ module Test.DejaFu
   , dejafusIO
   , dejafusIO'
 
+  -- * Testing under Relaxed Memory
+
+  -- | Threads running under modern multicore processors do not behave
+  -- as a simple interleaving of the individual thread
+  -- actions. Processors do all sorts of complex things to increase
+  -- speed, such as buffering writes. For concurrent programs which
+  -- make use of non-synchronised functions ('readCRef' coupled with
+  -- 'writeCRef') different memory models may yield different results.
+
+  , MemType(..)
+  , autocheck'
+  , autocheckIO'
+
   -- * Results
 
   -- | The results of a test can be pretty-printed to the console, as
@@ -140,19 +153,40 @@ autocheck :: (Eq a, Show a)
   => (forall t. Conc t a)
   -- ^ The computation to test
   -> IO Bool
-autocheck conc = dejafus conc cases where
-  cases = [ ("Never Deadlocks",   deadlocksNever)
-          , ("No Exceptions",     exceptionsNever)
-          , ("Consistent Result", alwaysSame)
-          ]
+autocheck conc = dejafus conc autocheckCases
+
+-- | Variant of 'autocheck' which tests a computation under a given
+-- memory model.
+--
+-- TODO: Mangle traces to hide phranom threads.
+autocheck' :: (Eq a, Show a)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> (forall t. Conc t a)
+  -- ^ The computation to test
+  -> IO Bool
+autocheck' memtype conc = dejafus' memtype 2 conc autocheckCases
 
 -- | Variant of 'autocheck' for computations which do 'IO'.
 autocheckIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> IO Bool
-autocheckIO concio = dejafusIO concio cases where
-  cases = [ ("Never Deadlocks",   deadlocksNever)
-          , ("No Exceptions",     exceptionsNever)
-          , ("Consistent Result", alwaysSame)
-          ]
+autocheckIO concio = dejafusIO concio autocheckCases
+
+-- | Variant of 'autocheck'' for computations which do 'IO'.
+autocheckIO' :: (Eq a, Show a)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> (forall t. ConcIO t a)
+  -- ^ The computation to test
+  -> IO Bool
+autocheckIO' memtype concio = dejafusIO' memtype 2 concio autocheckCases
+
+-- | Predicates for the various autocheck functions.
+autocheckCases :: (Eq a, Show a) => [(String, Predicate a)]
+autocheckCases =
+  [ ("Never Deadlocks",   deadlocksNever)
+  , ("No Exceptions",     exceptionsNever)
+  , ("Consistent Result", alwaysSame)
+  ]
 
 -- | Check a predicate and print the result to stdout, return 'True'
 -- if it passes.
@@ -172,9 +206,10 @@ dejafus :: (Eq a, Show a)
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> IO Bool
-dejafus = dejafus' 2
+dejafus = dejafus' SequentialConsistency 2
 
--- | Variant of 'dejafus' which takes a pre-emption bound.
+-- | Variant of 'dejafus' which takes a memory model and pre-emption
+-- bound.
 --
 -- Pre-emption bounding is used to filter the large number of possible
 -- schedules, and can be iteratively increased for further coverage
@@ -186,7 +221,9 @@ dejafus = dejafus' 2
 -- __Warning:__ Using a larger pre-emption bound will almost certainly
 -- significantly increase the time taken to test!
 dejafus' :: (Eq a, Show a)
-  => Int
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Int
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
   -> (forall t. Conc t a)
@@ -194,8 +231,8 @@ dejafus' :: (Eq a, Show a)
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> IO Bool
-dejafus' pb conc tests = do
-  let traces = sctPreBound pb conc
+dejafus' memtype pb conc tests = do
+  let traces = sctPreBound memtype pb conc
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
@@ -205,12 +242,12 @@ dejafuIO concio test = dejafusIO concio [test]
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
 dejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
-dejafusIO = dejafusIO' 2
+dejafusIO = dejafusIO' SequentialConsistency 2
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-dejafusIO' :: (Eq a, Show a) => Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
-dejafusIO' pb concio tests = do
-  traces  <- sctPreBoundIO pb concio
+dejafusIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
+dejafusIO' memtype pb concio tests = do
+  traces  <- sctPreBoundIO memtype pb concio
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
@@ -244,11 +281,14 @@ runTest ::
   -> (forall t. Conc t a)
   -- ^ The computation to test
   -> Result a
-runTest = runTest' 2
+runTest = runTest' SequentialConsistency 2
 
--- | Variant of 'runTest' which takes a pre-emption bound.
+-- | Variant of 'runTest' which takes a memory model and pre-emption
+-- bound.
 runTest' ::
-    Int
+    MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Int
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
   -> Predicate a
@@ -256,15 +296,15 @@ runTest' ::
   -> (forall t. Conc t a)
   -- ^ The computation to test
   -> Result a
-runTest' pb predicate conc = predicate $ sctPreBound pb conc
+runTest' memtype pb predicate conc = predicate $ sctPreBound memtype pb conc
 
 -- | Variant of 'runTest' for computations which do 'IO'.
 runTestIO :: Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
-runTestIO = runTestIO' 2
+runTestIO = runTestIO' SequentialConsistency 2
 
 -- | Variant of 'runTest'' for computations which do 'IO'.
-runTestIO' :: Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
-runTestIO' pb predicate conc = predicate <$> sctPreBoundIO pb conc
+runTestIO' :: MemType -> Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
+runTestIO' memtype pb predicate conc = predicate <$> sctPreBoundIO memtype pb conc
 
 -- * Predicates
 
