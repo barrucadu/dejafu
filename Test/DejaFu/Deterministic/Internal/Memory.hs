@@ -79,15 +79,15 @@ writeBarrier fixed (WriteBuffer wb) = mapM_ flush $ I.elems wb where
   flush = mapM_ $ \(BufferedWrite _ cref a) -> writeImmediate fixed cref a
 
 -- | Add phantom threads to the thread list to commit pending writes.
-haunt :: WriteBuffer r -> Threads n r s -> Threads n r s
-haunt (WriteBuffer wb) ts = ts <> M.fromList phantoms where
+addCommitThreads :: WriteBuffer r -> Threads n r s -> Threads n r s
+addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
   phantoms = [(negate k - 1, mkthread $ fromJust c) | (k, b) <- I.toList wb, let c = go $ viewl b, isJust c]
   go (BufferedWrite tid (crid, _) _ :< _) = Just $ ACommit tid crid
   go EmptyL = Nothing
 
 -- | Remove phantom threads.
-exorcise :: Threads n r s -> Threads n r s
-exorcise = M.filterWithKey $ \k _ -> k >= 0
+delCommitThreads :: Threads n r s -> Threads n r s
+delCommitThreads = M.filterWithKey $ \k _ -> k >= 0
 
 --------------------------------------------------------------------------------
 -- * Manipulating @CVar@s

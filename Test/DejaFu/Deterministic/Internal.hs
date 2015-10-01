@@ -96,34 +96,28 @@ runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVar
            -> Scheduler g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace')
 runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer where
   go idSource sofar prior g threads wb
-    | isTerminated  = return (g, idSource, sofar)
-    | isDeadlocked  = writeRef fixed ref (Just $ Left Deadlock) >> return (g, idSource, sofar)
-    | isSTMLocked   = writeRef fixed ref (Just $ Left STMDeadlock) >> return (g, idSource, sofar)
-    | isNonexistant = writeRef fixed ref (Just $ Left InternalError) >> return (g, idSource, sofar)
-    | isBlocked     = writeRef fixed ref (Just $ Left InternalError) >> return (g, idSource, sofar)
+    | isTerminated  = stop
+    | isDeadlocked  = die Deadlock
+    | isSTMLocked   = die STMDeadlock
+    | isNonexistant = die InternalError
+    | isBlocked     = die InternalError
     | otherwise = do
       stepped <- stepThread fixed runstm memtype (_continuation $ fromJust thread) idSource chosen threads wb
       case stepped of
-        Right (threads', idSource', act, wb') ->
-          let sofar' = (decision, alternatives, act) : sofar
-              threads'' = if (interruptible <$> M.lookup chosen threads') == Just True then unblockWaitingOn chosen threads' else threads'
-          in  go idSource' sofar' (Just chosen) g' (exorcise threads'') wb'
+        Right (threads', idSource', act, wb') -> loop threads' idSource' act wb'
 
         Left UncaughtException
-          | chosen == 0 -> writeRef fixed ref (Just $ Left UncaughtException) >> return (g, idSource, sofar)
-          | otherwise ->
-          let sofar' = (decision, alternatives, Killed) : sofar
-              threads' = unblockWaitingOn chosen $ kill chosen threads
-          in go idSource sofar' (Just chosen) g' (exorcise threads') wb
+          | chosen == 0 -> die UncaughtException
+          | otherwise -> loop (kill chosen threads) idSource Killed wb
 
-        Left failure -> writeRef fixed ref (Just $ Left failure) >> return (g, idSource, sofar)
+        Left failure -> die failure
 
     where
       (chosen, g')  = sched g ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ unsafeToNonEmpty runnable'
       runnable'     = [(t, nextActions t) | t <- sort $ M.keys runnable]
       runnable      = M.filter (isNothing . _blocking) threadsc
       thread        = M.lookup chosen threadsc
-      threadsc      = haunt wb threads
+      threadsc      = addCommitThreads wb threads
       isBlocked     = isJust . _blocking $ fromJust thread
       isNonexistant = isNothing thread
       isTerminated  = 0 `notElem` M.keys threads
@@ -147,32 +141,44 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
         | prior `notElem` map (Just . fst) runnable' = [(Start t, na) | (t, na) <- runnable', t /= chosen]
         | otherwise = [(if Just t == prior then Continue else SwitchTo t, na) | (t, na) <- runnable', t /= chosen]
 
-      nextActions t = unsafeToNonEmpty . nextActions' . _continuation . fromJust $ M.lookup t threadsc
-      nextActions' (AFork _ _)             = [WillFork]
-      nextActions' (AMyTId _)              = [WillMyThreadId]
-      nextActions' (ANew _)                = [WillNew]
-      nextActions' (APut (c, _) _ k)       = WillPut c : nextActions' k
-      nextActions' (ATryPut (c, _) _ _)    = [WillTryPut c]
-      nextActions' (AGet (c, _) _)         = [WillRead c]
-      nextActions' (ATake (c, _) _)        = [WillTake c]
-      nextActions' (ATryTake (c, _) _)     = [WillTryTake c]
-      nextActions' (ANewRef _)             = [WillNewRef]
-      nextActions' (AReadRef (r, _) _)     = [WillReadRef r]
-      nextActions' (AModRef (r, _) _ _)    = [WillModRef r]
-      nextActions' (AWriteRef (r, _) _ _)  = [WillWriteRef r]
-      nextActions' (ACommit t c)           = [WillCommitRef t c]
-      nextActions' (AAtom _ _)             = [WillSTM]
-      nextActions' (AThrow _)              = [WillThrow]
-      nextActions' (AThrowTo tid _ k)      = WillThrowTo tid : nextActions' k
-      nextActions' (ACatching _ _ _)       = [WillCatching]
-      nextActions' (APopCatching k)        = WillPopCatching : nextActions' k
-      nextActions' (AMasking ms _ _)       = [WillSetMasking False ms]
-      nextActions' (AResetMask b1 b2 ms k) = (if b1 then WillSetMasking else WillResetMasking) b2 ms : nextActions' k
-      nextActions' (ALift _)               = [WillLift]
-      nextActions' (AKnowsAbout _ k)       = WillKnowsAbout : nextActions' k
-      nextActions' (AForgets _ k)          = WillForgets : nextActions' k
-      nextActions' (AAllKnown k)           = WillAllKnown : nextActions' k
-      nextActions' (AStop)                 = [WillStop]
+      nextActions t = lookahead . _continuation . fromJust $ M.lookup t threadsc
+
+      stop = return (g, idSource, sofar)
+      die reason = writeRef fixed ref (Just $ Left reason) >> stop
+
+      loop threads' idSource' act wb' =
+        let sofar' = ((decision, alternatives, act) : sofar)
+            threads'' = if (interruptible <$> M.lookup chosen threads') /= Just False then unblockWaitingOn chosen threads' else threads'
+        in go idSource' sofar' (Just chosen) g' (delCommitThreads threads'') wb'
+
+-- | Look as far ahead in the given continuation as possible.
+lookahead :: Action n r s -> NonEmpty Lookahead
+lookahead = unsafeToNonEmpty . lookahead' where
+  lookahead' (AFork _ _)             = [WillFork]
+  lookahead' (AMyTId _)              = [WillMyThreadId]
+  lookahead' (ANew _)                = [WillNew]
+  lookahead' (APut (c, _) _ k)       = WillPut c : lookahead' k
+  lookahead' (ATryPut (c, _) _ _)    = [WillTryPut c]
+  lookahead' (AGet (c, _) _)         = [WillRead c]
+  lookahead' (ATake (c, _) _)        = [WillTake c]
+  lookahead' (ATryTake (c, _) _)     = [WillTryTake c]
+  lookahead' (ANewRef _)             = [WillNewRef]
+  lookahead' (AReadRef (r, _) _)     = [WillReadRef r]
+  lookahead' (AModRef (r, _) _ _)    = [WillModRef r]
+  lookahead' (AWriteRef (r, _) _ k)  = WillWriteRef r : lookahead' k
+  lookahead' (ACommit t c)           = [WillCommitRef t c]
+  lookahead' (AAtom _ _)             = [WillSTM]
+  lookahead' (AThrow _)              = [WillThrow]
+  lookahead' (AThrowTo tid _ k)      = WillThrowTo tid : lookahead' k
+  lookahead' (ACatching _ _ _)       = [WillCatching]
+  lookahead' (APopCatching k)        = WillPopCatching : lookahead' k
+  lookahead' (AMasking ms _ _)       = [WillSetMasking False ms]
+  lookahead' (AResetMask b1 b2 ms k) = (if b1 then WillSetMasking else WillResetMasking) b2 ms : lookahead' k
+  lookahead' (ALift _)               = [WillLift]
+  lookahead' (AKnowsAbout _ k)       = WillKnowsAbout : lookahead' k
+  lookahead' (AForgets _ k)          = WillForgets : lookahead' k
+  lookahead' (AAllKnown k)           = WillAllKnown : lookahead' k
+  lookahead' AStop                   = [WillStop]
 
 --------------------------------------------------------------------------------
 -- * Single-step execution
@@ -229,40 +235,40 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       (idSource', newtid) = nextTId idSource
 
     -- | Get the 'ThreadId' of the current thread
-    stepMyTId c = return $ Right (goto (c tid) tid threads, idSource, MyThreadId, wb)
+    stepMyTId c = simple (goto (c tid) tid threads) MyThreadId
 
     -- | Put a value into a @CVar@, blocking the thread until it's
     -- empty.
     stepPut cvar@(cvid, _) a c = do
       (success, threads', woken) <- putIntoCVar True cvar a (const c) fixed tid threads
-      return $ Right (threads', idSource, if success then Put cvid woken else BlockedPut cvid, wb)
+      simple threads' $ if success then Put cvid woken else BlockedPut cvid
 
     -- | Try to put a value into a @CVar@, without blocking.
     stepTryPut cvar@(cvid, _) a c = do
       (success, threads', woken) <- putIntoCVar False cvar a c fixed tid threads
-      return $ Right (threads', idSource, TryPut cvid success woken, wb)
+      simple threads' $ TryPut cvid success woken
 
     -- | Get the value from a @CVar@, without emptying, blocking the
     -- thread until it's full.
     stepGet cvar@(cvid, _) c = do
       (success, threads', _) <- readFromCVar False True cvar (c . fromJust) fixed tid threads
-      return $ Right (threads', idSource, if success then Read cvid else BlockedRead cvid, wb)
+      simple threads' $ if success then Read cvid else BlockedRead cvid
 
     -- | Take the value from a @CVar@, blocking the thread until it's
     -- full.
     stepTake cvar@(cvid, _) c = do
       (success, threads', woken) <- readFromCVar True True cvar (c . fromJust) fixed tid threads
-      return $ Right (threads', idSource, if success then Take cvid woken else BlockedTake cvid, wb)
+      simple threads' $ if success then Take cvid woken else BlockedTake cvid
 
     -- | Try to take the value from a @CVar@, without blocking.
     stepTryTake cvar@(cvid, _) c = do
       (success, threads', woken) <- readFromCVar True False cvar c fixed tid threads
-      return $ Right (threads', idSource, TryTake cvid success woken, wb)
+      simple threads' $ TryTake cvid success woken
 
     -- | Read from a @CRef@.
     stepReadRef cref@(crid, _) c = do
       val <- readCRef fixed cref tid
-      return $ Right (goto (c val) tid threads, idSource, ReadRef crid, wb)
+      simple (goto (c val) tid threads) $ ReadRef crid
 
     -- | Modify a @CRef@.
     stepModRef cref@(crid, _) f c = do
@@ -308,40 +314,40 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
         Exception e -> stepThrow e
 
     -- | Run a subcomputation in an exception-catching context.
-    stepCatching h ma c = return $ Right (threads', idSource, Catching, wb) where
+    stepCatching h ma c = simple threads' Catching where
       a     = runCont ma      (APopCatching . c)
       e exc = runCont (h exc) (APopCatching . c)
 
       threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = a, _handlers = Handler e : _handlers thread }) tid threads
 
     -- | Pop the top exception handler from the thread's stack.
-    stepPopCatching a = return $ Right (threads', idSource, PopCatching, wb) where
+    stepPopCatching a = simple threads' PopCatching where
       threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = a, _handlers = tail $_handlers thread }) tid threads
 
     -- | Throw an exception, and propagate it to the appropriate
     -- handler.
-    stepThrow e = return $
+    stepThrow e =
       case propagate e . _handlers . fromJust $ M.lookup tid threads of
         Just (act, hs) ->
           let threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = act, _handlers = hs }) tid threads
-          in  Right (threads', idSource, Throw, wb)
-        Nothing -> Left UncaughtException
+          in  simple threads' Throw
+        Nothing -> return $ Left UncaughtException
 
     -- | Throw an exception to the target thread, and propagate it to
     -- the appropriate handler.
-    stepThrowTo t e c = return $
+    stepThrowTo t e c =
       let threads' = goto c tid threads
           blocked = M.alter (\(Just thread) -> Just $ thread { _blocking = Just (OnMask t) }) tid threads
           interrupted act hs = M.alter (\(Just thread) -> Just $ thread { _continuation = act, _blocking = Nothing, _handlers = hs }) t
       in case M.lookup t threads of
            Just thread
              | interruptible thread -> case propagate e $ _handlers thread of
-               Just (act, hs) -> Right (interrupted act hs threads', idSource, ThrowTo t, wb)
+               Just (act, hs) -> simple (interrupted act hs threads') $ ThrowTo t
                Nothing
-                 | t == 0     -> Left UncaughtException
-                 | otherwise -> Right (kill t threads', idSource, ThrowTo t, wb)
-             | otherwise -> Right (blocked, idSource, BlockedThrowTo t, wb)
-           Nothing -> Right (threads', idSource, ThrowTo t, wb)
+                 | t == 0     -> return $ Left UncaughtException
+                 | otherwise -> simple (kill t threads') $ ThrowTo t
+             | otherwise -> simple blocked $ BlockedThrowTo t
+           Nothing -> simple threads' $ ThrowTo t
 
     -- | Execute a subcomputation with a new masking state, and give
     -- it a function to run a computation with the current masking
@@ -353,7 +359,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
                 -> ((forall b. M n r s b -> M n r s b) -> M n r s a)
                 -> (a -> Action n r s)
                 -> n (Either Failure (Threads n r s, IdSource, ThreadAction, WriteBuffer r))
-    stepMasking m ma c = return $ Right (threads', idSource, SetMasking False m, wb) where
+    stepMasking m ma c = simple threads' $ SetMasking False m where
       a = runCont (ma umask) (AResetMask False False m' . c)
 
       m' = _masking . fromJust $ M.lookup tid threads
@@ -363,7 +369,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = a, _masking = m }) tid threads
 
     -- | Reset the masking thread of the state.
-    stepResetMask b1 b2 m c = return $ Right (threads', idSource, (if b1 then SetMasking else ResetMasking) b2 m, wb) where
+    stepResetMask b1 b2 m c = simple threads' $ (if b1 then SetMasking else ResetMasking) b2 m where
       threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = c, _masking = m }) tid threads
 
     -- | Create a new @CVar@, using the next 'CVarId'.
@@ -382,16 +388,20 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
     -- computation.
     stepLift na = do
       a <- na
-      return $ Right (goto a tid threads, idSource, Lift, wb)
+      simple (goto a tid threads) Lift
 
     -- | Record that a variable is known about.
-    stepKnowsAbout v c = return $ Right (knows [v] tid $ goto c tid threads, idSource, KnowsAbout, wb)
+    stepKnowsAbout v c = simple (knows [v] tid $ goto c tid threads) KnowsAbout
 
     -- | Record that a variable will never be touched again.
-    stepForgets v c = return $ Right (forgets [v] tid $ goto c tid threads, idSource, Forgets, wb)
+    stepForgets v c = simple (forgets [v] tid $ goto c tid threads) Forgets
 
     -- | Record that all shared variables are known.
-    stepAllKnown c = return $ Right (fullknown tid $ goto c tid threads, idSource, AllKnown, wb)
+    stepAllKnown c = simple (fullknown tid $ goto c tid threads) AllKnown
 
     -- | Kill the current thread.
-    stepStop = return $ Right (kill tid threads, idSource, Stop, wb)
+    stepStop = simple (kill tid threads) Stop
+
+    -- | Helper for actions which don't touch the 'IdSource' or
+    -- 'WriteBuffer'
+    simple threads' act = return $ Right (threads', idSource, act, wb)
