@@ -51,7 +51,6 @@ module Test.DejaFu.Deterministic
   , modifyCRef
 
   -- * Testing
-  , _concNoTest
   , _concKnowsAbout
   , _concForgets
   , _concAllKnown
@@ -136,7 +135,6 @@ instance C.MonadConc (Conc t) where
   atomicWriteCRef = atomicWriteCRef
   modifyCRef     = modifyCRef
   atomically     = atomically
-  _concNoTest    = _concNoTest
   _concKnowsAbout = _concKnowsAbout
   _concForgets   = _concForgets
   _concAllKnown  = _concAllKnown
@@ -310,11 +308,6 @@ forkOn _ = fork
 -- so it seems a sane choice.
 getNumCapabilities :: Conc t Int
 getNumCapabilities = return 2
-
--- | Run the argument in one step. If the argument fails, the whole
--- computation will fail.
-_concNoTest :: Conc t a -> Conc t a
-_concNoTest ma = C $ cont $ \c -> ANoTest (unC ma) c
 
 -- | Record that the referenced variable is known by the current thread.
 _concKnowsAbout :: Either (CVar t a) (CTVar t (STRef t) a) -> Conc t ()

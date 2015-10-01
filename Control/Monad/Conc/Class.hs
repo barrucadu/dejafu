@@ -204,27 +204,6 @@ class ( Applicative m, Monad m
   uninterruptibleMask :: ((forall a. m a -> m a) -> m b) -> m b
   uninterruptibleMask = Ca.uninterruptibleMask
 
-  -- | Runs its argument, just as if the @_concNoTest@ weren't there.
-  --
-  -- This function is purely for testing purposes, and indicates that
-  -- it's not worth considering more than one schedule here. This is
-  -- useful if you have some larger computation built up out of
-  -- subcomputations which you have already got tests for: you only
-  -- want to consider what's unique to the large component.
-  --
-  -- The test runner will report a failure if the argument fails.
-  --
-  -- Note that inappropriate use of @_concNoTest@ can actually
-  -- /suppress/ bugs! For this reason it is recommended to use it only
-  -- for things which don't make use of any state from a larger
-  -- scope. As a rule-of-thumb: if you can't define it as a top-level
-  -- function taking no @CVRef@, @CVar@, or @CTVar@ arguments, you
-  -- probably shouldn't @_concNoTest@ it.
-  --
-  -- > _concNoTest x = x
-  _concNoTest :: m a -> m a
-  _concNoTest = id
-
   -- | Does nothing.
   --
   -- This function is purely for testing purposes, and indicates that
@@ -334,7 +313,6 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   fork              = reader fork
   forkOn i          = reader (forkOn i)
   forkWithUnmask ma = ReaderT $ \r -> forkWithUnmask (\f -> runReaderT (ma $ reader f) r)
-  _concNoTest       = reader _concNoTest
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
@@ -367,7 +345,6 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   fork              = writerlazy fork
   forkOn i          = writerlazy (forkOn i)
   forkWithUnmask ma = lift $ forkWithUnmask (\f -> fst `liftM` WL.runWriterT (ma $ writerlazy f))
-  _concNoTest       = writerlazy _concNoTest
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
@@ -400,7 +377,6 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   fork              = writerstrict fork
   forkOn i          = writerstrict (forkOn i)
   forkWithUnmask ma = lift $ forkWithUnmask (\f -> fst `liftM` WS.runWriterT (ma $ writerstrict f))
-  _concNoTest       = writerstrict _concNoTest
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
@@ -433,7 +409,6 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   fork              = statelazy fork
   forkOn i          = statelazy (forkOn i)
   forkWithUnmask ma = SL.StateT $ \s -> (\a -> (a,s)) `liftM` forkWithUnmask (\f -> SL.evalStateT (ma $ statelazy f) s)
-  _concNoTest       = statelazy _concNoTest
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
@@ -466,7 +441,6 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   fork              = statestrict fork
   forkOn i          = statestrict (forkOn i)
   forkWithUnmask ma = SS.StateT $ \s -> (\a -> (a,s)) `liftM` forkWithUnmask (\f -> SS.evalStateT (ma $ statestrict f) s)
-  _concNoTest       = statestrict _concNoTest
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
@@ -499,7 +473,6 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   fork              = rwslazy fork
   forkOn i          = rwslazy (forkOn i)
   forkWithUnmask ma = RL.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkWithUnmask (\f -> fst `liftM` RL.evalRWST (ma $ rwslazy f) r s)
-  _concNoTest       = rwslazy _concNoTest
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
@@ -532,7 +505,6 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   fork              = rwsstrict fork
   forkOn i          = rwsstrict (forkOn i)
   forkWithUnmask ma = RS.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkWithUnmask (\f -> fst `liftM` RS.evalRWST (ma $ rwsstrict f) r s)
-  _concNoTest       = rwsstrict _concNoTest
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId

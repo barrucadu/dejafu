@@ -50,7 +50,6 @@ data Action n r s =
   | forall a. AReadRef (R r a) (a -> Action n r s)
   | forall a b. AModRef  (R r a) (a -> (a, b)) (b -> Action n r s)
   | forall a. AWriteRef (R r a) a (Action n r s)
-  | forall a. ANoTest  (M n r s a) (a -> Action n r s)
   | forall a. AAtom    (s n r a) (a -> Action n r s)
   | ANew  (CVarId -> n (Action n r s))
   | ANewRef (CRefId -> n (Action n r s))
@@ -232,9 +231,6 @@ data ThreadAction =
   -- ^ Lift an action from the underlying monad. Note that the
   -- penultimate action in a trace will always be a @Lift@, this is an
   -- artefact of how the runner works.
-  | NoTest
-  -- ^ A computation annotated with '_concNoTest' was executed in a
-  -- single step.
   | KnowsAbout
   -- ^ A '_concKnowsAbout' annotation was processed.
   | Forgets
@@ -319,9 +315,6 @@ data Lookahead =
   -- ^ Will lift an action from the underlying monad. Note that the
   -- penultimate action in a trace will always be a @Lift@, this is an
   -- artefact of how the runner works.
-  | WillNoTest
-  -- ^ Will execute a computation annotated with '_concNoTest' in a
-  -- single step.
   | WillKnowsAbout
   -- ^ Will process a '_concKnowsAbout' annotation.
   | WillForgets
@@ -362,9 +355,6 @@ data Failure =
   -- ^ The computation became blocked indefinitely on @CTVar@s.
   | UncaughtException
   -- ^ An uncaught exception bubbled to the top of the computation.
-  | FailureInNoTest
-  -- ^ A computation annotated with '_concNoTest' produced a failure,
-  -- rather than a result.
   deriving (Eq, Show)
 
 instance NFData Failure where

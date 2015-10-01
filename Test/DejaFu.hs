@@ -423,5 +423,4 @@ showfail :: Failure -> String
 showfail Deadlock          = "[deadlock]"
 showfail STMDeadlock       = "[stm-deadlock]"
 showfail InternalError     = "[internal-error]"
-showfail FailureInNoTest   = "[_concNoTest]"
 showfail UncaughtException = "[exception]"

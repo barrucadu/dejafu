@@ -102,7 +102,7 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
     | isNonexistant = writeRef fixed ref (Just $ Left InternalError) >> return (g, idSource, sofar)
     | isBlocked     = writeRef fixed ref (Just $ Left InternalError) >> return (g, idSource, sofar)
     | otherwise = do
-      stepped <- stepThread fixed runconc runstm memtype (_continuation $ fromJust thread) idSource chosen threads wb
+      stepped <- stepThread fixed runstm memtype (_continuation $ fromJust thread) idSource chosen threads wb
       case stepped of
         Right (threads', idSource', act, wb') ->
           let sofar' = (decision, alternatives, act) : sofar
@@ -131,8 +131,6 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
                                            ((~=  OnCVarEmpty undefined) <$> M.lookup 0 threads) == Just True ||
                                            ((~=  OnMask      undefined) <$> M.lookup 0 threads) == Just True)
       isSTMLocked   = isLocked 0 threads && ((~=  OnCTVar    []) <$> M.lookup 0 threads) == Just True
-
-      runconc ma i = do { (a,_,i',_) <- runFixed' fixed runstm sched SequentialConsistency g i ma; return (a,i') }
 
       unblockWaitingOn tid = M.map unblock where
         unblock thrd = case _blocking thrd of
@@ -171,7 +169,6 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
       nextActions' (AMasking ms _ _)       = [WillSetMasking False ms]
       nextActions' (AResetMask b1 b2 ms k) = (if b1 then WillSetMasking else WillResetMasking) b2 ms : nextActions' k
       nextActions' (ALift _)               = [WillLift]
-      nextActions' (ANoTest _ _)           = [WillNoTest]
       nextActions' (AKnowsAbout _ k)       = WillKnowsAbout : nextActions' k
       nextActions' (AForgets _ k)          = WillForgets : nextActions' k
       nextActions' (AAllKnown k)           = WillAllKnown : nextActions' k
@@ -183,8 +180,6 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
 stepThread :: forall n r s. (Functor n, Monad n) => Fixed n r s
-  -> (forall x. M n r s x -> IdSource -> n (Either Failure x, IdSource))
-  -- ^ Run a 'MonadConc' computation atomically.
   -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
   -- ^ Run a 'MonadSTM' transaction atomically.
   -> MemType
@@ -200,7 +195,7 @@ stepThread :: forall n r s. (Functor n, Monad n) => Fixed n r s
   -> WriteBuffer r
   -- ^ @CRef@ write buffer
   -> n (Either Failure (Threads n r s, IdSource, ThreadAction, WriteBuffer r))
-stepThread fixed runconc runstm memtype action idSource tid threads wb = case action of
+stepThread fixed runstm memtype action idSource tid threads wb = case action of
   AFork    a b     -> stepFork        a b
   AMyTId   c       -> stepMyTId       c
   APut     ref a c -> stepPut         ref a c
@@ -222,7 +217,6 @@ stepThread fixed runconc runstm memtype action idSource tid threads wb = case ac
   APopCatching a   -> stepPopCatching a
   AMasking m ma c  -> stepMasking     m ma c
   AResetMask b1 b2 m c -> stepResetMask b1 b2 m c
-  ANoTest  ma a    -> stepNoTest      ma a
   AKnowsAbout v c  -> stepKnowsAbout  v c
   AForgets    v c  -> stepForgets v c
   AAllKnown   c    -> stepAllKnown c
@@ -389,14 +383,6 @@ stepThread fixed runconc runstm memtype action idSource tid threads wb = case ac
     stepLift na = do
       a <- na
       return $ Right (goto a tid threads, idSource, Lift, wb)
-
-    -- | Run a computation atomically. If this fails, the entire thing fails.
-    stepNoTest ma c = do
-      (a, idSource') <- runconc ma idSource
-      return $
-        case a of
-          Right a' -> Right (goto (c a') tid threads, idSource', NoTest, wb)
-          _ -> Left FailureInNoTest
 
     -- | Record that a variable is known about.
     stepKnowsAbout v c = return $ Right (knows [v] tid $ goto c tid threads, idSource, KnowsAbout, wb)
