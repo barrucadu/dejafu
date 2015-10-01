@@ -131,7 +131,12 @@ type Trace' = [(Decision, [(Decision, NonEmpty Lookahead)], ThreadAction)]
 -- | Throw away information from a 'Trace'' to get just a 'Trace'.
 toTrace :: Trace' -> Trace
 toTrace = map go where
-  go (dec, alters, act) = (dec, map (\(d, a:|_) -> (d, a)) alters, act)
+  go (_, alters, CommitRef t c) = (Commit, goA alters, CommitRef t c)
+  go (dec, alters, act) = (dec, goA alters, act)
+
+  goA = map $ \x -> case x of
+    (_, WillCommitRef t c:|_) -> (Commit, WillCommitRef t c)
+    (d, a:|_) -> (d, a)
 
 -- | Pretty-print a trace.
 showTrace :: Trace -> String
@@ -139,6 +144,7 @@ showTrace = trace "" 0 where
   trace prefix num ((Start tid,_,_):ds)    = thread prefix num ++ trace ("S" ++ show tid) 1 ds
   trace prefix num ((SwitchTo tid,_,_):ds) = thread prefix num ++ trace ("P" ++ show tid) 1 ds
   trace prefix num ((Continue,_,_):ds)     = trace prefix (num + 1) ds
+  trace prefix num ((Commit,_,_):ds)       = thread prefix num ++ trace "C" 1 ds
   trace prefix num []                      = thread prefix num
 
   thread prefix num = prefix ++ replicate num '-'
