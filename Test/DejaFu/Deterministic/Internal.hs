@@ -92,8 +92,6 @@ runFixed' fixed runstm sched memtype s idSource ma = do
 -- efficient to prepend to a list than append. As this function isn't
 -- exposed to users of the library, this is just an internal gotcha to
 -- watch out for.
---
--- TODO: Phantom threads
 runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s n r x -> CTVarId -> n (Result x, CTVarId))
            -> Scheduler g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace')
 runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer where
