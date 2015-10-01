@@ -32,6 +32,31 @@ Control.Monad.Conc.SCT.
 Whilst this assumption may not hold in general when `IO` is involved,
 you should strive to produce test cases where it does.
 
+Memory Model
+------------
+
+The testing functionality supports a few different memory models, for
+computations which use non-synchronised `CRef` operations. The
+supported models are:
+
+- **Sequential Consistency:** A program behaves as a simple
+    interleaving of the actions in different threads. When a CRef is
+    written to, that write is immediately visible to all threads.
+
+- **Total Store Order (TSO):** Each thread has a write buffer. A
+    thread sees its writes immediately, but other threads will only
+    see writes when they are committed, which may happen later. Writes
+    are committed in the same order that they are created.
+
+- **Partial Store Order (PSO):** Each CRef has a write buffer. A
+    thread sees its writes immediately, but other threads will only
+    see writes when they are committed, which may happen later. Writes
+    to different CRefs are not necessarily committed in the same order
+    that they are created.
+
+If a testing function does not take the memory model as a parameter,
+it uses sequential consistency.
+
 Contributing
 ------------
 
