@@ -69,11 +69,9 @@ module Test.DejaFu
     autocheck
   , dejafu
   , dejafus
-  , dejafus'
   , autocheckIO
   , dejafuIO
   , dejafusIO
-  , dejafusIO'
 
   -- * Testing under Relaxed Memory
 
@@ -141,6 +139,8 @@ module Test.DejaFu
   , MemType(..)
   , autocheck'
   , autocheckIO'
+  , dejafus'
+  , dejafusIO'
 
   -- * Results
 
