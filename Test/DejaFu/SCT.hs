@@ -98,12 +98,16 @@ pbBacktrack bs i tid = maybe id (\j' b -> backtrack True b j' tid) j $ backtrack
   -- Index of the conservative point
   j = goJ . reverse . pairs $ zip [0..i-1] bs where
     goJ (((_,b1), (j',b2)):rest)
-      | _threadid b1 /= _threadid b2 = Just j'
+      | _threadid b1 /= _threadid b2 && not (commit b1) && not (commit b2) = Just j'
       | otherwise = goJ rest
     goJ [] = Nothing
 
   {-# INLINE pairs #-}
   pairs = zip <*> tail
+
+  commit b = case _decision b of
+    (_, CommitRef _ _) -> True
+    _ -> False
 
   -- Add a backtracking point. If the thread isn't runnable, add all
   -- runnable threads.
@@ -157,8 +161,8 @@ sctBounded :: MemType
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -- ^ Produce possible scheduling decisions, all will be tried.
   -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
-sctBounded memtype bv backtrack initialise c = runIdentity $ sctBoundedM bv backtrack initialise run where
-  run sched s = Identity $ runConc' sched memtype s c
+sctBounded memtype bv backtrack initialise c = runIdentity $ sctBoundedM memtype bv backtrack initialise run where
+  run memty sched s = Identity $ runConc' sched memty s c
 
 -- | Variant of 'sctBounded' for computations which do 'IO'.
 sctBoundedIO :: MemType
@@ -166,24 +170,25 @@ sctBoundedIO :: MemType
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
-sctBoundedIO memtype bv backtrack initialise c = sctBoundedM bv backtrack initialise run where
-  run sched s = runConcIO' sched memtype s c
+sctBoundedIO memtype bv backtrack initialise c = sctBoundedM memtype bv backtrack initialise run where
+  run memty sched s = runConcIO' sched memty s c
 
 -- | Generic SCT runner.
 sctBoundedM :: (Functor m, Monad m)
-  => ([Decision] -> Bool)
+  => MemType
+  -> ([Decision] -> Bool)
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
-  -> (Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
+  -> (MemType -> Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
   -- ^ Monadic runner, with computation fixed.
   -> m [(Either Failure a, Trace)]
-sctBoundedM bv backtrack initialise run = go initialState where
+sctBoundedM memtype bv backtrack initialise run = go initialState where
   go bpor = case next bpor of
     Just (sched, conservative, bpor') -> do
-      (res, s, trace) <- run (bporSched initialise) (initialSchedState sched)
+      (res, s, trace) <- run memtype (bporSched initialise) (initialSchedState sched)
 
-      let bpoints = findBacktrack backtrack (_sbpoints s) trace
-      let bpor''  = grow conservative trace bpor'
+      let bpoints = findBacktrack memtype backtrack (_sbpoints s) trace
+      let bpor''  = grow memtype conservative trace bpor'
       let bpor''' = todo bv bpoints bpor''
 
       ((res, toTrace trace):) <$> go bpor'''

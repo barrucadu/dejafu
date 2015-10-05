@@ -111,11 +111,12 @@ next = go 0 where
 
 -- | Produce a list of new backtracking points from an execution
 -- trace.
-findBacktrack :: ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
-              -> Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
-              -> Trace'
-              -> [BacktrackStep]
-findBacktrack backtrack = go S.empty 0 [] . Sq.viewl where
+findBacktrack :: MemType
+  -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
+  -> Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
+  -> Trace'
+  -> [BacktrackStep]
+findBacktrack memtype backtrack = go S.empty 0 [] . Sq.viewl where
   go allThreads tid bs ((e,i):<is) ((d,_,a):ts) =
     let tid' = tidOf tid d
         this        = BacktrackStep { _threadid  = tid'
@@ -137,14 +138,14 @@ findBacktrack backtrack = go S.empty 0 [] . Sq.viewl where
                  , let is = [ i
                             | (i, b) <- tagged
                             , _threadid b == v
-                            , dependent' (snd $ _decision b) (u, n)
+                            , dependent' memtype (snd $ _decision b) (u, n)
                             ]
                  , not $ null is] :: [(Int, ThreadId)]
     in foldl' (\b (i, u) -> backtrack b i u) bs idxs
 
 -- | Add a new trace to the tree, creating a new subtree.
-grow :: Bool -> Trace' -> BPOR -> BPOR
-grow conservative = grow' initialCVState 0 where
+grow :: MemType -> Bool -> Trace' -> BPOR -> BPOR
+grow memtype conservative = grow' initialCVState 0 where
   grow' cvstate tid trc@((d, _, a):rest) bpor =
     let tid'     = tidOf tid d
         cvstate' = updateCVState cvstate a
@@ -156,7 +157,7 @@ grow conservative = grow' initialCVState 0 where
 
   subtree cvstate tid sleep ((d, ts, a):rest) =
     let cvstate' = updateCVState cvstate a
-        sleep'   = I.filterWithKey (\t a' -> not $ dependent a (t,a')) sleep
+        sleep'   = I.filterWithKey (\t a' -> not $ dependent memtype a (t,a')) sleep
     in BPOR
         { _brunnable = S.fromList $ tids tid d a ts
         , _btodo     = I.empty
@@ -244,17 +245,34 @@ preEmpCount (SwitchTo t:ds)
 preEmpCount (_:ds) = preEmpCount ds
 preEmpCount [] = 0
 
--- | Check if an action is dependent on another, assumes the actions
--- are from different threads (two actions in the same thread are
--- always dependent).
-dependent :: ThreadAction -> (ThreadId, ThreadAction) -> Bool
-dependent Lift (_, Lift) = True
-dependent (ThrowTo t) (t2, _) = t == t2
-dependent d1 (_, d2) = cref || cvar || ctvar where
-  cref = Just True == ((\(r1, w1) (r2, w2) -> r1 == r2 && (w1 || w2)) <$> cref' d1 <*> cref' d2)
-  cref'  (ReadRef  r) = Just (r, False)
-  cref'  (ModRef   r) = Just (r, True)
-  cref'  _ = Nothing
+-- | Check if an action is dependent on another.
+dependent :: MemType -> ThreadAction -> (ThreadId, ThreadAction) -> Bool
+dependent _ Lift (_, Lift) = True
+dependent _ (ThrowTo t) (t2, _) = t == t2
+dependent memtype d1 (_, d2) = cref || cvar || ctvar where
+  cref = case (d1, d2) of
+    (ReadRef r1, ModRef      r2) -> r1 == r2
+    (ReadRef r1, WriteRef    r2) -> r1 == r2 && memtype == SequentialConsistency
+    (ReadRef r1, CommitRef _ r2) -> r1 == r2
+
+    (ModRef r1, ReadRef     r2) -> r1 == r2
+    (ModRef r1, ModRef      r2) -> r1 == r2
+    (ModRef r1, WriteRef    r2) -> r1 == r2
+    (ModRef r1, CommitRef _ r2) -> r1 == r2
+
+    -- Writes would also conflict with commits under sequential
+    -- consistency, but commits only get introduced for TSO and PSO.
+    (WriteRef r1, ReadRef  r2) -> r1 == r2 && memtype == SequentialConsistency
+    (WriteRef r1, ModRef   r2) -> r1 == r2
+    (WriteRef r1, WriteRef r2) -> r1 == r2 && memtype == SequentialConsistency
+
+    -- Similarly, commits would conflict with writes under SQ, but
+    -- they don't get introduced.
+    (CommitRef _ r1, ReadRef     r2) -> r1 == r2
+    (CommitRef _ r1, ModRef      r2) -> r1 == r2
+    (CommitRef _ r1, CommitRef _ r2) -> r1 == r2
+
+    _ -> False
 
   cvar = Just True == ((==) <$> cvar' d1 <*> cvar' d2)
   cvar'  (TryPut  c _ _) = Just c
@@ -269,21 +287,33 @@ dependent d1 (_, d2) = cref || cvar || ctvar where
   ctvar' _ = False
 
 -- | Variant of 'dependent' to handle 'ThreadAction''s
-dependent' :: ThreadAction -> (ThreadId, Lookahead) -> Bool
-dependent' Lift (_, WillLift) = True
-dependent' (ThrowTo t) (t2, _) = t == t2
-dependent' d1 (_, d2) = cref || cvar || ctvar where
-  cref = Just True == ((\(r1, w1) (r2, w2) -> r1 == r2 && (w1 || w2)) <$> cref' d1 <*> cref'' d2)
-  cref'  (ReadRef  r) = Just (r, False)
-  cref'  (ModRef   r) = Just (r, True)
-  cref'  (WriteRef r) = Just (r, True)
-  cref'  (CommitRef _ r) = Just (r, True)
-  cref'  _ = Nothing
-  cref'' (WillReadRef  r) = Just (r, False)
-  cref'' (WillModRef   r) = Just (r, True)
-  cref'' (WillWriteRef r) = Just (r, True)
-  cref'' (WillCommitRef _ r) = Just (r, True)
-  cref'' _ = Nothing
+dependent' :: MemType -> ThreadAction -> (ThreadId, Lookahead) -> Bool
+dependent' _ Lift (_, WillLift) = True
+dependent' _ (ThrowTo t) (t2, _) = t == t2
+dependent' memtype d1 (_, d2) = cref || cvar || ctvar where
+  cref = case (d1, d2) of
+    (ReadRef r1, WillModRef      r2) -> r1 == r2
+    (ReadRef r1, WillWriteRef    r2) -> r1 == r2 && memtype == SequentialConsistency
+    (ReadRef r1, WillCommitRef _ r2) -> r1 == r2
+
+    (ModRef r1, WillReadRef     r2) -> r1 == r2
+    (ModRef r1, WillModRef      r2) -> r1 == r2
+    (ModRef r1, WillWriteRef    r2) -> r1 == r2
+    (ModRef r1, WillCommitRef _ r2) -> r1 == r2
+
+    -- Writes would also conflict with commits under sequential
+    -- consistency, but commits only get introduced for TSO and PSO.
+    (WriteRef r1, WillReadRef  r2) -> r1 == r2 && memtype == SequentialConsistency
+    (WriteRef r1, WillModRef   r2) -> r1 == r2
+    (WriteRef r1, WillWriteRef r2) -> r1 == r2 && memtype == SequentialConsistency
+
+    -- Similarly, commits would conflict with writes under SQ, but
+    -- they don't get introduced.
+    (CommitRef _ r1, WillReadRef     r2) -> r1 == r2
+    (CommitRef _ r1, WillModRef      r2) -> r1 == r2
+    (CommitRef _ r1, WillCommitRef _ r2) -> r1 == r2
+
+    _ -> False
 
   cvar = Just True == ((==) <$> cvar' d1 <*> cvar'' d2)
   cvar'  (TryPut  c _ _) = Just c
