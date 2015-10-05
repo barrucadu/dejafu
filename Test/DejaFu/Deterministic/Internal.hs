@@ -278,24 +278,37 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       return $ Right (goto (c val) tid threads, idSource, ModRef crid, emptyBuffer)
 
     -- | Write to a @CRef@ without synchronising
-    stepWriteRef cref@(crid, _) a c = do
-      wb' <- case memtype of
-              -- Buffer and then immediately commit
-              SequentialConsistency -> bufferWrite fixed wb tid cref a tid >>= \b -> commitWrite fixed b tid
-              -- Add to buffer using thread id.
-              TotalStoreOrder   -> bufferWrite fixed wb tid cref a tid
-              -- Add to buffer using cref id
-              PartialStoreOrder -> bufferWrite fixed wb crid cref a tid
-      return $ Right (goto c tid threads, idSource, WriteRef crid, wb')
+    stepWriteRef cref@(crid, _) a c = case memtype of
+      -- Write immediately.
+      SequentialConsistency -> do
+        writeImmediate fixed cref a
+        simple (goto c tid threads) $ WriteRef crid
+
+      -- Add to buffer using thread id.
+      TotalStoreOrder -> do
+        wb' <- bufferWrite fixed wb tid cref a tid
+        return $ Right (goto c tid threads, idSource, WriteRef crid, wb')
+
+      -- Add to buffer using cref id
+      PartialStoreOrder -> do
+        wb' <- bufferWrite fixed wb crid cref a tid
+        return $ Right (goto c tid threads, idSource, WriteRef crid, wb')
 
     -- | Commit a @CRef@ write
-    stepCommit c t = do
-      wb' <- case memtype of
-              SequentialConsistency -> return wb
-              TotalStoreOrder   -> commitWrite fixed wb t
-              PartialStoreOrder -> commitWrite fixed wb c
+    stepCommit c t = case memtype of
+      -- Shouldn't ever get here
+      SequentialConsistency ->
+        error "Attempting to commit under SequentialConsistency"
 
-      return $ Right (kill tid threads, idSource, CommitRef t c, wb')
+      -- Commit using the thread id.
+      TotalStoreOrder -> do
+        wb' <- commitWrite fixed wb t
+        return $ Right (threads, idSource, CommitRef t c, wb')
+
+      -- Commit using the cref id.
+      PartialStoreOrder -> do
+        wb' <- commitWrite fixed wb c
+        return $ Right (threads, idSource, CommitRef t c, wb')
 
     -- | Run a STM transaction atomically.
     stepAtom stm c = do
