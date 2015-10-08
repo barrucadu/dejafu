@@ -30,9 +30,9 @@ tests = TestList
     ]
 
   , TestLabel "CRef Relaxed Memory" $ test
-    [ testDejafus' SequentialConsistency 2 C.crefRelaxed [("SQ", gives [(True, True), (True, False), (False, True)])]
-    , testDejafus' TotalStoreOrder   2 C.crefRelaxed [("TSO", gives [(True, True), (True, False), (False, True), (False, False)])]
-    , testDejafus' PartialStoreOrder 2 C.crefRelaxed [("PSO", gives [(True, True), (True, False), (False, True), (False, False)])]
+    [ testDejafu' SequentialConsistency 2 C.crefRelaxed "SQ" $ gives [(True, True), (True, False), (False, True)]
+    , testDejafu' TotalStoreOrder   2 C.crefRelaxed "TSO" $ gives [(True, True), (True, False), (False, True), (False, False)]
+    , testDejafu' PartialStoreOrder 2 C.crefRelaxed "PSO" $ gives [(True, True), (True, False), (False, True), (False, False)]
     ]
   ]
 

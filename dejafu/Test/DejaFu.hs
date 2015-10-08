@@ -139,7 +139,9 @@ module Test.DejaFu
   , MemType(..)
   , autocheck'
   , autocheckIO'
+  , dejafu'
   , dejafus'
+  , dejafuIO'
   , dejafusIO'
 
   -- * Results
@@ -243,7 +245,32 @@ dejafu :: (Eq a, Show a)
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
   -> IO Bool
-dejafu conc test = dejafus conc [test]
+dejafu = dejafu' SequentialConsistency 2
+
+-- | Variant of 'dejafu'' which takes a memory model and pre-emption
+-- bound.
+--
+-- Pre-emption bounding is used to filter the large number of possible
+-- schedules, and can be iteratively increased for further coverage
+-- guarantees. Empirical studies (/Concurrency Testing Using Schedule Bounding: an Empirical Study/,
+-- P. Thompson, A. Donaldson, and A. Betts) have found that many
+-- concurrency bugs can be exhibited with as few as two threads and
+-- two pre-emptions, which is what 'dejafus' uses.
+--
+-- __Warning:__ Using a larger pre-emption bound will almost certainly
+-- significantly increase the time taken to test!
+dejafu' :: (Eq a, Show a)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Int
+  -- ^ The maximum number of pre-emptions to allow in a single
+  -- execution
+  -> (forall t. Conc t a)
+  -- ^ The computation to test
+  -> (String, Predicate a)
+  -- ^ The predicate (with a name) to check
+  -> IO Bool
+dejafu' memtype pb conc test = dejafus' memtype pb conc [test]
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
@@ -257,16 +284,6 @@ dejafus = dejafus' SequentialConsistency 2
 
 -- | Variant of 'dejafus' which takes a memory model and pre-emption
 -- bound.
---
--- Pre-emption bounding is used to filter the large number of possible
--- schedules, and can be iteratively increased for further coverage
--- guarantees. Empirical studies (/Concurrency Testing Using Schedule Bounding: an Empirical Study/,
--- P. Thompson, A. Donaldson, and A. Betts) have found that many
--- concurrency bugs can be exhibited with as few as two threads and
--- two pre-emptions, which is what 'dejafus' uses.
---
--- __Warning:__ Using a larger pre-emption bound will almost certainly
--- significantly increase the time taken to test!
 dejafus' :: (Eq a, Show a)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -285,7 +302,11 @@ dejafus' memtype pb conc tests = do
 
 -- | Variant of 'dejafu' for computations which do 'IO'.
 dejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
-dejafuIO concio test = dejafusIO concio [test]
+dejafuIO = dejafuIO' SequentialConsistency 2
+
+-- | Variant of 'dejafu'' for computations which do 'IO'.
+dejafuIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
+dejafuIO' memtype pb concio test = dejafusIO' memtype pb concio [test]
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
 dejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
