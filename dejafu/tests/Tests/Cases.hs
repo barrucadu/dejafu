@@ -1,6 +1,5 @@
 {-# LANGUAGE ImpredicativeTypes #-}
 
--- | Tests sourced from <https://github.com/sctbenchmarks>.
 module Tests.Cases where
 
 import Control.Concurrent.CVar
@@ -8,6 +7,17 @@ import Control.Exception (ArithException(..), ArrayException)
 import Control.Monad (liftM, replicateM, void)
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
+
+-- | Relaxed memory test, from Data.IORef
+crefRelaxed :: MonadConc m => m (Bool, Bool)
+crefRelaxed = do
+  r1 <- newCRef False
+  r2 <- newCRef False
+  x  <- spawn $ writeCRef r1 True >> readCRef r2
+  y  <- spawn $ writeCRef r2 True >> readCRef r1
+  (,) <$> readCVar x <*> readCVar y
+
+-- Following tests sourced from <https://github.com/sctbenchmarks>.
 
 -- | Should deadlock on a minority of schedules.
 simple2Deadlock :: MonadConc m => m Int

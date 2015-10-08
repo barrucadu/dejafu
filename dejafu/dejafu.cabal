@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                dejafu
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            Overloadable primitives for testable, potentially non-deterministic, concurrency.
 
 description:
@@ -121,5 +121,5 @@ test-suite tests
   hs-source-dirs:      tests
   type:                exitcode-stdio-1.0
   main-is:             Tests.hs
-  build-depends:       dejafu, base
+  build-depends:       base, dejafu, HUnit, hunit-dejafu
   default-language:    Haskell2010

@@ -366,6 +366,13 @@ data Failure =
 instance NFData Failure where
   rnf f = f `seq` () -- WHNF == NF
 
+-- | Pretty-print a failure
+showFail :: Failure -> String
+showFail Deadlock          = "[deadlock]"
+showFail STMDeadlock       = "[stm-deadlock]"
+showFail InternalError     = "[internal-error]"
+showFail UncaughtException = "[exception]"
+
 --------------------------------------------------------------------------------
 -- * Memory Models
 
@@ -386,7 +393,7 @@ data MemType =
   -- committed, which may happen later. Writes to different 'CRef's
   -- are not necessarily committed in the same order that they are
   -- created.
-  deriving (Eq, Show)
+  deriving (Eq, Show, Read)
 
 instance NFData MemType where
   rnf m = m `seq` () -- WHNF == NF

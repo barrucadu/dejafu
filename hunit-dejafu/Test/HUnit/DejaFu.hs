@@ -1,0 +1,159 @@
+{-# LANGUAGE GADTs      #-}
+{-# LANGUAGE RankNTypes #-}
+
+-- | This module allows using Deja Fu predicates with HUnit to test
+-- the behaviour of concurrent systems.
+module Test.HUnit.DejaFu
+  ( -- * Testing
+    testAuto
+  , testDejafu
+  , testDejafus
+  , testAutoIO
+  , testDejafuIO
+  , testDejafusIO
+
+  -- * Testing under Relaxed Memory
+  , MemType(..)
+  , testAuto'
+  , testAutoIO'
+  , testDejafus'
+  , testDejafusIO'
+  ) where
+
+import Test.DejaFu
+import Test.DejaFu.Deterministic (Conc, showFail, showTrace)
+import Test.DejaFu.Deterministic.IO (ConcIO)
+import Test.DejaFu.SCT (sctPreBound, sctPreBoundIO)
+import Test.HUnit
+
+--------------------------------------------------------------------------------
+-- Automated testing
+
+-- | Automatically test a computation. In particular, look for
+-- deadlocks, uncaught exceptions, and multiple return values.
+-- 
+-- This uses the 'Conc' monad for testing, which is an instance of
+-- 'MonadConc'. If you need to test something which also uses
+-- 'MonadIO', use 'testAutoIO'.
+testAuto :: (Eq a, Show a)
+  => (forall t. Conc t a)
+  -- ^ The computation to test
+  -> ConcTest a
+testAuto = testAuto' SequentialConsistency
+
+-- | Variant of 'testAuto' which tests a computation under a given
+-- memory model.
+testAuto' :: (Eq a, Show a)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> (forall t. Conc t a)
+  -- ^ The computation to test
+  -> ConcTest a
+testAuto' memtype conc = testDejafus' memtype 2 conc autocheckCases
+
+-- | Variant of 'testAuto' for computations which do 'IO'.
+testAutoIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> ConcIOTest a
+testAutoIO = testAutoIO' SequentialConsistency
+
+-- | Variant of 'testAuto'' for computations which do 'IO'.
+testAutoIO' :: (Eq a, Show a) => MemType -> (forall t. ConcIO t a) -> ConcIOTest a
+testAutoIO' memtype concio = testDejafusIO' memtype 2 concio autocheckCases
+
+-- | Predicates for the various autocheck functions.
+autocheckCases :: Eq a => [Predicate a]
+autocheckCases = [deadlocksNever, exceptionsNever, alwaysSame]
+
+--------------------------------------------------------------------------------
+-- Manual testing
+
+-- | Check that a predicate holds.
+testDejafu :: (Eq a, Show a)
+  => (forall t. Conc t a)
+  -- ^ The computation to test
+  -> Predicate a
+  -- ^ The predicate to check
+  -> ConcTest a
+testDejafu conc test = testDejafus conc [test]
+
+-- | Variant of 'testDejafu' which takes a collection of predicates to
+-- test. This will share work between the predicates, rather than
+-- running the concurrent computation many times for each predicate.
+testDejafus :: (Eq a, Show a)
+  => (forall t. Conc t a)
+  -- ^ The computation to test
+  -> [Predicate a]
+  -- ^ The list of predicates to check
+  -> ConcTest a
+testDejafus = testDejafus' SequentialConsistency 2
+
+-- | Variant of 'testDejafus' which takes a memory model and pre-emption
+-- bound.
+testDejafus' :: (Eq a, Show a)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Int
+  -- ^ The maximum number of pre-emptions to allow in a single
+  -- execution
+  -> (forall t. Conc t a)
+  -- ^ The computation to test
+  -> [Predicate a]
+  -- ^ The list of predicates to check
+  -> ConcTest a
+testDejafus' = ConcTest
+
+-- | Variant of 'testDejafu' for computations which do 'IO'.
+testDejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> Predicate a -> ConcIOTest a
+testDejafuIO concio test = testDejafusIO concio [test]
+
+-- | Variant of 'testDejafus' for computations which do 'IO'.
+testDejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [Predicate a] -> ConcIOTest a
+testDejafusIO = testDejafusIO' SequentialConsistency 2
+
+-- | Variant of 'dejafus'' for computations which do 'IO'.
+testDejafusIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> [Predicate a] -> ConcIOTest a
+testDejafusIO' = ConcIOTest
+
+--------------------------------------------------------------------------------
+-- HUnit integration
+
+data ConcTest a where
+  ConcTest :: MemType -> Int -> (forall t. Conc t a) -> [Predicate a] -> ConcTest a
+
+data ConcIOTest a where
+  ConcIOTest :: MemType -> Int -> (forall t. ConcIO t a) -> [Predicate a] -> ConcIOTest a
+
+instance Show a => Testable (ConcTest a) where
+  test (ConcTest memtype pb conc tests) = TestCase $ do
+    let traces  = sctPreBound memtype pb conc
+
+    let errors = map (\test -> showErr $ test traces) tests
+    let output = unlines $ filter (not . null) errors
+
+    assertString output
+
+instance Show a => Testable (ConcIOTest a) where
+  test (ConcIOTest memtype pb concio tests) = TestCase $ do
+    traces <- sctPreBoundIO memtype pb concio
+
+    let errors = map (\test -> showErr $ test traces) tests
+    let output = unlines $ filter (not . null) errors
+
+    assertString output
+
+-- | Convert a test result into an error message on failure (empty
+-- string on success).
+showErr :: Show a => Result a -> String
+showErr res
+  | _pass res = ""
+  | otherwise = "Failed after " ++ show (_casesChecked res) ++ " cases:\n" ++ unlines failures ++ rest where
+
+  failures = map (\(r, t) -> "\t" ++ either showFail show r ++ " " ++ showTrace t) . take 5 $ _failures res
+
+  rest = if moreThan (_failures res) 5 then "\n\t..." else ""
+
+-- | Check if a list has more than some number of elements.
+moreThan :: [a] -> Int -> Bool
+moreThan [] n = n < 0
+moreThan _ 0  = True
+moreThan (_:xs) n = moreThan xs (n-1)
+

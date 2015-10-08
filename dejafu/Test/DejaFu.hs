@@ -455,7 +455,7 @@ doTest name result = do
     putStrLn ("\27[31m[fail]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")")
 
     let failures = _failures result
-    mapM_ (\(r, t) -> putStrLn $ "\t" ++ either showfail show r ++ " " ++ showTrace t) $ take 5 failures
+    mapM_ (\(r, t) -> putStrLn $ "\t" ++ either showFail show r ++ " " ++ showTrace t) $ take 5 failures
     when (moreThan failures 5) $
       putStrLn "\t..."
 
@@ -464,10 +464,3 @@ doTest name result = do
 -- | Increment the cases
 incCC :: Result a -> Result a
 incCC r = r { _casesChecked = _casesChecked r + 1 }
-
--- | Pretty-print a failure
-showfail :: Failure -> String
-showfail Deadlock          = "[deadlock]"
-showfail STMDeadlock       = "[stm-deadlock]"
-showfail InternalError     = "[internal-error]"
-showfail UncaughtException = "[exception]"

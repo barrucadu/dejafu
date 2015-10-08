@@ -67,8 +67,9 @@ module Test.DejaFu.Deterministic.IO
   , Lookahead(..)
   , CVarId
   , MaskingState(..)
-  , showTrace
   , toTrace
+  , showTrace
+  , showFail
 
   -- * Scheduling
   , module Test.DejaFu.Deterministic.Schedule

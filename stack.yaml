@@ -1,5 +1,9 @@
 flags: {}
+
 packages:
+- hunit-dejafu
 - dejafu
+
 extra-deps: []
+
 resolver: lts-3.0
