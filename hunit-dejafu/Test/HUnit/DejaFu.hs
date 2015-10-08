@@ -18,6 +18,10 @@ module Test.HUnit.DejaFu
   , testAutoIO'
   , testDejafus'
   , testDejafusIO'
+
+  -- * HUnit integration
+  , ConcTest
+  , ConcIOTest
   ) where
 
 import Test.DejaFu
@@ -38,7 +42,7 @@ import Test.HUnit
 testAuto :: (Eq a, Show a)
   => (forall t. Conc t a)
   -- ^ The computation to test
-  -> ConcTest a
+  -> ConcTest
 testAuto = testAuto' SequentialConsistency
 
 -- | Variant of 'testAuto' which tests a computation under a given
@@ -48,15 +52,15 @@ testAuto' :: (Eq a, Show a)
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> (forall t. Conc t a)
   -- ^ The computation to test
-  -> ConcTest a
+  -> ConcTest
 testAuto' memtype conc = testDejafus' memtype 2 conc autocheckCases
 
 -- | Variant of 'testAuto' for computations which do 'IO'.
-testAutoIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> ConcIOTest a
+testAutoIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> ConcIOTest
 testAutoIO = testAutoIO' SequentialConsistency
 
 -- | Variant of 'testAuto'' for computations which do 'IO'.
-testAutoIO' :: (Eq a, Show a) => MemType -> (forall t. ConcIO t a) -> ConcIOTest a
+testAutoIO' :: (Eq a, Show a) => MemType -> (forall t. ConcIO t a) -> ConcIOTest
 testAutoIO' memtype concio = testDejafusIO' memtype 2 concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
@@ -78,7 +82,7 @@ testDejafu :: (Eq a, Show a)
   -- ^ The name of the test.
   -> Predicate a
   -- ^ The predicate to check
-  -> ConcTest a
+  -> ConcTest
 testDejafu conc name p = testDejafus conc [(name, p)]
 
 -- | Variant of 'testDejafu' which takes a collection of predicates to
@@ -89,7 +93,7 @@ testDejafus :: (Eq a, Show a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
-  -> ConcTest a
+  -> ConcTest
 testDejafus = testDejafus' SequentialConsistency 2
 
 -- | Variant of 'testDejafus' which takes a memory model and pre-emption
@@ -104,31 +108,31 @@ testDejafus' :: (Eq a, Show a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
-  -> ConcTest a
+  -> ConcTest
 testDejafus' = ConcTest
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
-testDejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> String -> Predicate a -> ConcIOTest a
+testDejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> String -> Predicate a -> ConcIOTest
 testDejafuIO concio name p = testDejafusIO concio [(name, p)]
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
-testDejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> ConcIOTest a
+testDejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> ConcIOTest
 testDejafusIO = testDejafusIO' SequentialConsistency 2
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-testDejafusIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> ConcIOTest a
+testDejafusIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> ConcIOTest
 testDejafusIO' = ConcIOTest
 
 --------------------------------------------------------------------------------
 -- HUnit integration
 
-data ConcTest a where
-  ConcTest :: MemType -> Int -> (forall t. Conc t a) -> [(String, Predicate a)] -> ConcTest a
+data ConcTest where
+  ConcTest :: Show a => MemType -> Int -> (forall t. Conc t a) -> [(String, Predicate a)] -> ConcTest
 
-data ConcIOTest a where
-  ConcIOTest :: MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> ConcIOTest a
+data ConcIOTest where
+  ConcIOTest :: Show a => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> ConcIOTest
 
-instance Show a => Testable (ConcTest a) where
+instance Testable ConcTest where
   test (ConcTest memtype pb conc tests) = case map toTest tests of
     [t] -> t
     ts  -> TestList ts
@@ -139,7 +143,7 @@ instance Show a => Testable (ConcTest a) where
         let traces = sctPreBound memtype pb conc
         assertString . showErr $ p traces
 
-instance Show a => Testable (ConcIOTest a) where
+instance Testable ConcIOTest where
   test (ConcIOTest memtype pb concio tests) = case map toTest tests of
     [t] -> t
     ts  -> TestList ts

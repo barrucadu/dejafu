@@ -10,23 +10,23 @@ import qualified Tests.Logger as L
 
 tests :: Test
 tests = TestList
-  [ TestLabel "Simple" $ TestList
-    [ test $ testDejafu  C.simple2Deadlock "Simple 2-Deadlock"    deadlocksSometimes
-    , test $ testDejafu (C.philosophers 2) "2 Philosophers"       deadlocksSometimes
-    , test $ testDejafu (C.philosophers 3) "3 Philosophers"       deadlocksSometimes
-    , test $ testDejafu (C.philosophers 4) "4 Philosophers"       deadlocksSometimes
-    , test $ testDejafu  C.thresholdValue  "Threshold Value"      notAlwaysSame
-    , test $ testDejafu  C.forgottenUnlock "Forgotten Unlock"     deadlocksAlways
-    , test $ testDejafu  C.simple2Race     "Simple 2-Race"        notAlwaysSame
-    , test $ testDejafu  C.raceyStack      "Racey Stack"          notAlwaysSame
-    , test $ testDejafu  C.threadKill      "Kill Thread"          deadlocksSometimes
-    , test $ testDejafu  C.threadKillMask  "Kill Thread w/ Mask"  deadlocksNever
-    , test $ testDejafu  C.threadKillUmask "Kill Thread w/ Umask" deadlocksSometimes
-    , test $ testDejafu  C.stmAtomic       "STM Atomicity"      $ gives [0,2]
-    , test $ testDejafu  C.stmRetry        "STM Retry"            alwaysSame
-    , test $ testDejafu  C.stmOrElse       "STM orElse"           alwaysSame
-    , test $ testDejafu  C.stmExc          "STM Exceptions"       alwaysSame
-    , test $ testDejafu  C.excNest         "Nested Exceptions"    alwaysSame
+  [ TestLabel "Simple" $ test
+    [ testDejafu  C.simple2Deadlock "Simple 2-Deadlock"    deadlocksSometimes
+    , testDejafu (C.philosophers 2) "2 Philosophers"       deadlocksSometimes
+    , testDejafu (C.philosophers 3) "3 Philosophers"       deadlocksSometimes
+    , testDejafu (C.philosophers 4) "4 Philosophers"       deadlocksSometimes
+    , testDejafu  C.thresholdValue  "Threshold Value"      notAlwaysSame
+    , testDejafu  C.forgottenUnlock "Forgotten Unlock"     deadlocksAlways
+    , testDejafu  C.simple2Race     "Simple 2-Race"        notAlwaysSame
+    , testDejafu  C.raceyStack      "Racey Stack"          notAlwaysSame
+    , testDejafu  C.threadKill      "Kill Thread"          deadlocksSometimes
+    , testDejafu  C.threadKillMask  "Kill Thread w/ Mask"  deadlocksNever
+    , testDejafu  C.threadKillUmask "Kill Thread w/ Umask" deadlocksSometimes
+    , testDejafu  C.stmAtomic       "STM Atomicity"      $ gives [0,2]
+    , testDejafu  C.stmRetry        "STM Retry"            alwaysSame
+    , testDejafu  C.stmOrElse       "STM orElse"           alwaysSame
+    , testDejafu  C.stmExc          "STM Exceptions"       alwaysSame
+    , testDejafu  C.excNest         "Nested Exceptions"    alwaysSame
     ]
 
   , TestLabel "CRef Relaxed Memory" $ test
