@@ -26,7 +26,7 @@ import Test.DejaFu
 import Test.DejaFu.Deterministic (Conc, showFail, showTrace)
 import Test.DejaFu.Deterministic.IO (ConcIO)
 import Test.DejaFu.SCT (sctPreBound, sctPreBoundIO)
-import Test.HUnit
+import Test.HUnit (Test(..), assertString)
 
 --------------------------------------------------------------------------------
 -- Automated testing
@@ -124,7 +124,7 @@ testDejafus' :: (Eq a, Show a)
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> Test
-testDejafus' memtype pb conc tests = test $ ConcTest memtype pb conc tests
+testDejafus' = test
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
 testDejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> String -> Predicate a -> Test
@@ -140,41 +140,37 @@ testDejafusIO = testDejafusIO' SequentialConsistency 2
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
 testDejafusIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> Test
-testDejafusIO' memtype pb concio tests = test $ ConcIOTest memtype pb concio tests
+testDejafusIO' = testio
 
 --------------------------------------------------------------------------------
 -- HUnit integration
 
-data ConcTest where
-  ConcTest :: Show a => MemType -> Int -> (forall t. Conc t a) -> [(String, Predicate a)] -> ConcTest
+-- | Produce a HUnit 'Test' from a Deja Fu test.
+test :: Show a => MemType -> Int -> (forall t. Conc t a) -> [(String, Predicate a)] -> Test
+test memtype pb conc tests = case map toTest tests of
+  [t] -> t
+  ts  -> TestList ts
 
-data ConcIOTest where
-  ConcIOTest :: Show a => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> ConcIOTest
+  where
+    toTest (name, p) = TestLabel name . TestCase $
+      assertString . showErr $ p traces
 
-instance Testable ConcTest where
-  test (ConcTest memtype pb conc tests) = case map toTest tests of
-    [t] -> t
-    ts  -> TestList ts
+    traces = sctPreBound memtype pb conc
 
-    where
-      toTest (name, p) = TestLabel name . TestCase $
-        assertString . showErr $ p traces
+-- | Produce a HUnit 'Test' from an IO-using Deja Fu test.
+testio :: Show a => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> Test
+testio memtype pb concio tests = case map toTest tests of
+  [t] -> t
+  ts  -> TestList ts
 
-      traces = sctPreBound memtype pb conc
-
-instance Testable ConcIOTest where
-  test (ConcIOTest memtype pb concio tests) = case map toTest tests of
-    [t] -> t
-    ts  -> TestList ts
-
-    where
-      toTest (name, p) = TestLabel name . TestCase $ do
-        -- Sharing of traces probably not possible (without something
-        -- really unsafe) here, as 'test' doesn't allow side-effects
-        -- (eg, constructing an 'MVar' to share the traces after one
-        -- test computed them).
-        traces <- sctPreBoundIO memtype pb concio
-        assertString . showErr $ p traces
+  where
+    toTest (name, p) = TestLabel name . TestCase $ do
+      -- Sharing of traces probably not possible (without something
+      -- really unsafe) here, as 'test' doesn't allow side-effects
+      -- (eg, constructing an 'MVar' to share the traces after one
+      -- test computed them).
+      traces <- sctPreBoundIO memtype pb concio
+      assertString . showErr $ p traces
 
 -- | Convert a test result into an error message on failure (empty
 -- string on success).
