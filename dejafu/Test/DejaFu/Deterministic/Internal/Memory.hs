@@ -18,6 +18,7 @@ import qualified Data.Map as M
 
 #if __GLASGOW_HASKELL__ < 710
 import Data.Foldable (mapM_)
+import Prelude hiding (mapM_)
 #endif
 
 --------------------------------------------------------------------------------
