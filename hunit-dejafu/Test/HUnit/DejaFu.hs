@@ -60,8 +60,12 @@ testAutoIO' :: (Eq a, Show a) => MemType -> (forall t. ConcIO t a) -> ConcIOTest
 testAutoIO' memtype concio = testDejafusIO' memtype 2 concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
-autocheckCases :: Eq a => [Predicate a]
-autocheckCases = [deadlocksNever, exceptionsNever, alwaysSame]
+autocheckCases :: Eq a => [(String, Predicate a)]
+autocheckCases =
+  [("Never Deadlocks", deadlocksNever)
+  , ("No Exceptions", exceptionsNever)
+  , ("Consistent Result", alwaysSame)
+  ]
 
 --------------------------------------------------------------------------------
 -- Manual testing
@@ -70,10 +74,12 @@ autocheckCases = [deadlocksNever, exceptionsNever, alwaysSame]
 testDejafu :: (Eq a, Show a)
   => (forall t. Conc t a)
   -- ^ The computation to test
+  -> String
+  -- ^ The name of the test.
   -> Predicate a
   -- ^ The predicate to check
   -> ConcTest a
-testDejafu conc test = testDejafus conc [test]
+testDejafu conc name p = testDejafus conc [(name, p)]
 
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test. This will share work between the predicates, rather than
@@ -81,8 +87,8 @@ testDejafu conc test = testDejafus conc [test]
 testDejafus :: (Eq a, Show a)
   => (forall t. Conc t a)
   -- ^ The computation to test
-  -> [Predicate a]
-  -- ^ The list of predicates to check
+  -> [(String, Predicate a)]
+  -- ^ The list of predicates (with names) to check
   -> ConcTest a
 testDejafus = testDejafus' SequentialConsistency 2
 
@@ -96,49 +102,53 @@ testDejafus' :: (Eq a, Show a)
   -- execution
   -> (forall t. Conc t a)
   -- ^ The computation to test
-  -> [Predicate a]
-  -- ^ The list of predicates to check
+  -> [(String, Predicate a)]
+  -- ^ The list of predicates (with names) to check
   -> ConcTest a
 testDejafus' = ConcTest
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
-testDejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> Predicate a -> ConcIOTest a
-testDejafuIO concio test = testDejafusIO concio [test]
+testDejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> String -> Predicate a -> ConcIOTest a
+testDejafuIO concio name p = testDejafusIO concio [(name, p)]
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
-testDejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [Predicate a] -> ConcIOTest a
+testDejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> ConcIOTest a
 testDejafusIO = testDejafusIO' SequentialConsistency 2
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-testDejafusIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> [Predicate a] -> ConcIOTest a
+testDejafusIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> ConcIOTest a
 testDejafusIO' = ConcIOTest
 
 --------------------------------------------------------------------------------
 -- HUnit integration
 
 data ConcTest a where
-  ConcTest :: MemType -> Int -> (forall t. Conc t a) -> [Predicate a] -> ConcTest a
+  ConcTest :: MemType -> Int -> (forall t. Conc t a) -> [(String, Predicate a)] -> ConcTest a
 
 data ConcIOTest a where
-  ConcIOTest :: MemType -> Int -> (forall t. ConcIO t a) -> [Predicate a] -> ConcIOTest a
+  ConcIOTest :: MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> ConcIOTest a
 
 instance Show a => Testable (ConcTest a) where
-  test (ConcTest memtype pb conc tests) = TestCase $ do
-    let traces  = sctPreBound memtype pb conc
+  test (ConcTest memtype pb conc tests) = case map toTest tests of
+    [t] -> t
+    ts  -> TestList ts
 
-    let errors = map (\test -> showErr $ test traces) tests
-    let output = unlines $ filter (not . null) errors
-
-    assertString output
+    where
+      -- TODO: Sharing of traces
+      toTest (name, p) = TestLabel name . TestCase $ do
+        let traces = sctPreBound memtype pb conc
+        assertString . showErr $ p traces
 
 instance Show a => Testable (ConcIOTest a) where
-  test (ConcIOTest memtype pb concio tests) = TestCase $ do
-    traces <- sctPreBoundIO memtype pb concio
+  test (ConcIOTest memtype pb concio tests) = case map toTest tests of
+    [t] -> t
+    ts  -> TestList ts
 
-    let errors = map (\test -> showErr $ test traces) tests
-    let output = unlines $ filter (not . null) errors
-
-    assertString output
+    where
+      -- TODO: Sharing of traces
+      toTest (name, p) = TestLabel name . TestCase $ do
+        traces <- sctPreBoundIO memtype pb concio
+        assertString . showErr $ p traces
 
 -- | Convert a test result into an error message on failure (empty
 -- string on success).
