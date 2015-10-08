@@ -2,6 +2,7 @@ flags: {}
 
 packages:
 - hunit-dejafu
+- tasty-dejafu
 - dejafu
 
 extra-deps: []
