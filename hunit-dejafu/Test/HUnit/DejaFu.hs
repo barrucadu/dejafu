@@ -20,10 +20,6 @@ module Test.HUnit.DejaFu
   , testDejafus'
   , testDejafuIO'
   , testDejafusIO'
-
-  -- * HUnit integration
-  , ConcTest
-  , ConcIOTest
   ) where
 
 import Test.DejaFu
@@ -44,7 +40,7 @@ import Test.HUnit
 testAuto :: (Eq a, Show a)
   => (forall t. Conc t a)
   -- ^ The computation to test
-  -> ConcTest
+  -> Test
 testAuto = testAuto' SequentialConsistency
 
 -- | Variant of 'testAuto' which tests a computation under a given
@@ -54,15 +50,15 @@ testAuto' :: (Eq a, Show a)
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> (forall t. Conc t a)
   -- ^ The computation to test
-  -> ConcTest
+  -> Test
 testAuto' memtype conc = testDejafus' memtype 2 conc autocheckCases
 
 -- | Variant of 'testAuto' for computations which do 'IO'.
-testAutoIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> ConcIOTest
+testAutoIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> Test
 testAutoIO = testAutoIO' SequentialConsistency
 
 -- | Variant of 'testAuto'' for computations which do 'IO'.
-testAutoIO' :: (Eq a, Show a) => MemType -> (forall t. ConcIO t a) -> ConcIOTest
+testAutoIO' :: (Eq a, Show a) => MemType -> (forall t. ConcIO t a) -> Test
 testAutoIO' memtype concio = testDejafusIO' memtype 2 concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
@@ -84,7 +80,7 @@ testDejafu :: (Eq a, Show a)
   -- ^ The name of the test.
   -> Predicate a
   -- ^ The predicate to check
-  -> ConcTest
+  -> Test
 testDejafu = testDejafu' SequentialConsistency 2
 
 -- | Variant of 'testDejafu' which takes a memory model and
@@ -101,7 +97,7 @@ testDejafu' :: (Eq a, Show a)
   -- ^ The name of the test.
   -> Predicate a
   -- ^ The predicate to check
-  -> ConcTest
+  -> Test
 testDejafu' memtype pb conc name p = testDejafus' memtype pb conc [(name, p)]
 
 -- | Variant of 'testDejafu' which takes a collection of predicates to
@@ -112,7 +108,7 @@ testDejafus :: (Eq a, Show a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
-  -> ConcTest
+  -> Test
 testDejafus = testDejafus' SequentialConsistency 2
 
 -- | Variant of 'testDejafus' which takes a memory model and pre-emption
@@ -127,24 +123,24 @@ testDejafus' :: (Eq a, Show a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
-  -> ConcTest
-testDejafus' = ConcTest
+  -> Test
+testDejafus' memtype pb conc tests = test $ ConcTest memtype pb conc tests
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
-testDejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> String -> Predicate a -> ConcIOTest
+testDejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> String -> Predicate a -> Test
 testDejafuIO = testDejafuIO' SequentialConsistency 2
 
 -- | Variant of 'testDejafu'' for computations which do 'IO'.
-testDejafuIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> String -> Predicate a -> ConcIOTest
+testDejafuIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> String -> Predicate a -> Test
 testDejafuIO' memtype pb concio name p = testDejafusIO' memtype pb concio [(name, p)]
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
-testDejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> ConcIOTest
+testDejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> Test
 testDejafusIO = testDejafusIO' SequentialConsistency 2
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-testDejafusIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> ConcIOTest
-testDejafusIO' = ConcIOTest
+testDejafusIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> Test
+testDejafusIO' memtype pb concio tests = test $ ConcIOTest memtype pb concio tests
 
 --------------------------------------------------------------------------------
 -- HUnit integration
