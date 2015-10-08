@@ -138,10 +138,10 @@ instance Testable ConcTest where
     ts  -> TestList ts
 
     where
-      -- TODO: Sharing of traces
-      toTest (name, p) = TestLabel name . TestCase $ do
-        let traces = sctPreBound memtype pb conc
+      toTest (name, p) = TestLabel name . TestCase $
         assertString . showErr $ p traces
+
+      traces = sctPreBound memtype pb conc
 
 instance Testable ConcIOTest where
   test (ConcIOTest memtype pb concio tests) = case map toTest tests of
@@ -149,8 +149,11 @@ instance Testable ConcIOTest where
     ts  -> TestList ts
 
     where
-      -- TODO: Sharing of traces
       toTest (name, p) = TestLabel name . TestCase $ do
+        -- Sharing of traces probably not possible (without something
+        -- really unsafe) here, as 'test' doesn't allow side-effects
+        -- (eg, constructing an 'MVar' to share the traces after one
+        -- test computed them).
         traces <- sctPreBoundIO memtype pb concio
         assertString . showErr $ p traces
 
