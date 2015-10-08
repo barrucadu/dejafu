@@ -1,4 +1,3 @@
-{-# LANGUAGE GADTs      #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | This module allows using Deja Fu predicates with HUnit to test
