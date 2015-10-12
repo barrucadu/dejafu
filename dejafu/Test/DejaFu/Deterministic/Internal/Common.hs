@@ -377,14 +377,18 @@ instance NFData ActionType where
   rnf (SynchronisedWrite   c) = rnf c
   rnf a = a `seq` ()
 
--- | Check if an action is synchronised
+-- | Check if an action imposes a write barrier.
+isBarrier :: ActionType -> Bool
+isBarrier (SynchronisedModify _) = True
+isBarrier (SynchronisedRead   _) = True
+isBarrier (SynchronisedWrite  _) = True
+isBarrier SynchronisedOther = True
+isBarrier _ = False
+
+-- | Check if an action is synchronised.
 isSynchronised :: ActionType -> Bool
-isSynchronised (SynchronisedModify _) = True
 isSynchronised (SynchronisedCommit _) = True
-isSynchronised (SynchronisedRead   _) = True
-isSynchronised (SynchronisedWrite  _) = True
-isSynchronised SynchronisedOther = True
-isSynchronised _ = False
+isSynchronised a = isBarrier a
 
 -- | Get the 'CRef' affected.
 crefOf :: ActionType -> Maybe CRefId

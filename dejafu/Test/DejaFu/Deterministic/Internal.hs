@@ -39,6 +39,7 @@ module Test.DejaFu.Deterministic.Internal
 
  -- * Synchronised and Unsynchronised Actions
  , ActionType(..)
+ , isBarrier
  , isSynchronised
  , crefOf
  , cvarOf

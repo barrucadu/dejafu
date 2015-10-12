@@ -297,11 +297,10 @@ dependentActions memtype a1 a2 = case (a1, a2) of
   (UnsynchronisedRead  r1, UnsynchronisedWrite r2) -> r1 == r2 && memtype == SequentialConsistency
   (UnsynchronisedWrite r1, UnsynchronisedWrite r2) -> r1 == r2 && memtype == SequentialConsistency
 
-  -- Unsynchronised operations where a memory barrier would take
-  -- effect.
-  (a1, SynchronisedOther) -> not (isSynchronised a1) && memtype /= SequentialConsistency
-
   (a1, a2)
+    -- Unsynchronised operations where a memory barrier would take
+    -- effect
+    | not (isSynchronised a1) && isBarrier a2 -> memtype /= SequentialConsistency
     -- Two actions on the same CRef where at least one is synchronised
     | same crefOf a1 a2 && (isSynchronised a1 || isSynchronised a2) -> True
     -- Two actions on the same CVar
