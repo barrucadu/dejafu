@@ -6,7 +6,7 @@ module Test.DejaFu.SCT.Internal where
 import Control.DeepSeq (NFData(..))
 import Data.IntMap.Strict (IntMap)
 import Data.List (foldl', partition, maximumBy)
-import Data.Maybe (mapMaybe, fromJust)
+import Data.Maybe (mapMaybe, isJust, fromJust)
 import Data.Ord (comparing)
 import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
@@ -249,91 +249,40 @@ preEmpCount [] = 0
 dependent :: MemType -> ThreadAction -> (ThreadId, ThreadAction) -> Bool
 dependent _ Lift (_, Lift) = True
 dependent _ (ThrowTo t) (t2, _) = t == t2
-dependent memtype d1 (_, d2) = cref || cvar || ctvar where
-  cref = case (d1, d2) of
-    (ReadRef r1, ModRef      r2) -> r1 == r2
-    (ReadRef r1, WriteRef    r2) -> r1 == r2 && memtype == SequentialConsistency
-    (ReadRef r1, CommitRef _ r2) -> r1 == r2
-
-    (ModRef r1, ReadRef     r2) -> r1 == r2
-    (ModRef r1, ModRef      r2) -> r1 == r2
-    (ModRef r1, WriteRef    r2) -> r1 == r2
-    (ModRef r1, CommitRef _ r2) -> r1 == r2
-
-    -- Writes would also conflict with commits under sequential
-    -- consistency, but commits only get introduced for TSO and PSO.
-    (WriteRef r1, ReadRef  r2) -> r1 == r2 && memtype == SequentialConsistency
-    (WriteRef r1, ModRef   r2) -> r1 == r2
-    (WriteRef r1, WriteRef r2) -> r1 == r2 && memtype == SequentialConsistency
-
-    -- Similarly, commits would conflict with writes under SQ, but
-    -- they don't get introduced.
-    (CommitRef _ r1, ReadRef     r2) -> r1 == r2
-    (CommitRef _ r1, ModRef      r2) -> r1 == r2
-    (CommitRef _ r1, CommitRef _ r2) -> r1 == r2
-
-    _ -> False
-
-  cvar = Just True == ((==) <$> cvar' d1 <*> cvar' d2)
-  cvar'  (TryPut  c _ _) = Just c
-  cvar'  (TryTake c _ _) = Just c
-  cvar'  (Put  c _) = Just c
-  cvar'  (Read c)   = Just c
-  cvar'  (Take c _) = Just c
-  cvar'  _ = Nothing
-
-  ctvar = ctvar' d1 && ctvar' d2
-  ctvar' (STM _) = True
-  ctvar' _ = False
+dependent _ (STM _) (_, STM _) = True
+dependent memtype d1 (_, d2) = dependentActions memtype (simplify d1) (simplify d2)
 
 -- | Variant of 'dependent' to handle 'ThreadAction''s
 dependent' :: MemType -> ThreadAction -> (ThreadId, Lookahead) -> Bool
 dependent' _ Lift (_, WillLift) = True
 dependent' _ (ThrowTo t) (t2, _) = t == t2
-dependent' memtype d1 (_, d2) = cref || cvar || ctvar where
-  cref = case (d1, d2) of
-    (ReadRef r1, WillModRef      r2) -> r1 == r2
-    (ReadRef r1, WillWriteRef    r2) -> r1 == r2 && memtype == SequentialConsistency
-    (ReadRef r1, WillCommitRef _ r2) -> r1 == r2
+dependent' _ (STM _) (_, WillSTM) = True
+dependent' memtype d1 (_, d2) = dependentActions memtype (simplify d1) (simplify' d2)
 
-    (ModRef r1, WillReadRef     r2) -> r1 == r2
-    (ModRef r1, WillModRef      r2) -> r1 == r2
-    (ModRef r1, WillWriteRef    r2) -> r1 == r2
-    (ModRef r1, WillCommitRef _ r2) -> r1 == r2
+-- | Check if two 'ActionType's are dependent. Note that this is not
+-- sufficient to know if two 'ThreadAction's are dependent, without
+-- being so great an over-approximation as to be useless!
+dependentActions :: MemType -> ActionType -> ActionType -> Bool
+dependentActions memtype a1 a2 = case (a1, a2) of
+  -- Unsynchronised reads and writes under a sequentially consistent
+  -- memory model
+  (UnsynchronisedRead  r1, UnsynchronisedWrite r2) -> r1 == r2 && memtype == SequentialConsistency
+  (UnsynchronisedWrite r1, UnsynchronisedWrite r2) -> r1 == r2 && memtype == SequentialConsistency
 
-    -- Writes would also conflict with commits under sequential
-    -- consistency, but commits only get introduced for TSO and PSO.
-    (WriteRef r1, WillReadRef  r2) -> r1 == r2 && memtype == SequentialConsistency
-    (WriteRef r1, WillModRef   r2) -> r1 == r2
-    (WriteRef r1, WillWriteRef r2) -> r1 == r2 && memtype == SequentialConsistency
+  -- Unsynchronised operations where a memory barrier would take
+  -- effect.
+  (a1, SynchronisedOther) -> not (isSynchronised a1) && memtype /= SequentialConsistency
 
-    -- Similarly, commits would conflict with writes under SQ, but
-    -- they don't get introduced.
-    (CommitRef _ r1, WillReadRef     r2) -> r1 == r2
-    (CommitRef _ r1, WillModRef      r2) -> r1 == r2
-    (CommitRef _ r1, WillCommitRef _ r2) -> r1 == r2
+  (a1, a2)
+    -- Two actions on the same CRef where at least one is synchronised
+    | same crefOf a1 a2 && (isSynchronised a1 || isSynchronised a2) -> True
+    -- Two actions on the same CVar
+    | same cvarOf a1 a2 -> True
 
-    _ -> False
+  _ -> False
 
-  cvar = Just True == ((==) <$> cvar' d1 <*> cvar'' d2)
-  cvar'  (TryPut  c _ _) = Just c
-  cvar'  (TryTake c _ _) = Just c
-  cvar'  (Put  c _) = Just c
-  cvar'  (Read c)   = Just c
-  cvar'  (Take c _) = Just c
-  cvar'  _ = Nothing
-  cvar'' (WillTryPut  c) = Just c
-  cvar'' (WillTryTake c) = Just c
-  cvar'' (WillPut  c) = Just c
-  cvar'' (WillRead c) = Just c
-  cvar'' (WillTake c) = Just c
-  cvar'' _ = Nothing
-
-  ctvar = ctvar' d1 && ctvar'' d2
-  ctvar' (STM _) = True
-  ctvar' _ = False
-  ctvar'' WillSTM = True
-  ctvar'' _ = False
+  where
+    same f a1 a2 = isJust (f a1) && f a1 == f a2
 
 -- * Keeping track of 'CVar' full/empty states
 
