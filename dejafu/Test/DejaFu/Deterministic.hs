@@ -64,9 +64,15 @@ module Test.DejaFu.Deterministic
   , CVarId
   , CRefId
   , MaskingState(..)
+  , ActionType(..)
   , toTrace
   , showTrace
   , showFail
+  , isSynchronised
+  , crefOf
+  , cvarOf
+  , simplify
+  , simplify'
 
   -- * Scheduling
   , module Test.DejaFu.Deterministic.Schedule

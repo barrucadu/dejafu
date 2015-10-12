@@ -346,6 +346,98 @@ instance NFData Lookahead where
   rnf (WillResetMasking b m) = b `seq` m `seq` ()
   rnf l = l `seq` ()
 
+-- | A simplified view of the possible actions a thread can perform.
+data ActionType =
+    UnsynchronisedRead  CRefId
+  -- ^ A 'readCRef'.
+  | UnsynchronisedWrite CRefId
+  -- ^ A 'writeCRef'.
+  | UnsynchronisedOther
+  -- ^ Some other action which doesn't require cross-thread
+  -- communication.
+  | SynchronisedModify  CRefId
+  -- ^ An 'atomicModifyCRef'.
+  | SynchronisedCommit  CRefId
+  -- ^ A commit.
+  | SynchronisedRead    CVarId
+  -- ^ A 'readCVar' or 'takeCVar' (or @try@/@blocked@ variants).
+  | SynchronisedWrite   CVarId
+  -- ^ A 'putCVar' (or @try@/@blocked@ variant).
+  | SynchronisedOther
+  -- ^ Some other action which does require cross-thread
+  -- communication.
+  deriving (Eq, Show)
+
+instance NFData ActionType where
+  rnf (UnsynchronisedRead  r) = rnf r
+  rnf (UnsynchronisedWrite r) = rnf r
+  rnf (SynchronisedModify  r) = rnf r
+  rnf (SynchronisedCommit  r) = rnf r
+  rnf (SynchronisedRead    c) = rnf c
+  rnf (SynchronisedWrite   c) = rnf c
+  rnf a = a `seq` ()
+
+-- | Check if an action is synchronised
+isSynchronised :: ActionType -> Bool
+isSynchronised (SynchronisedModify _) = True
+isSynchronised (SynchronisedCommit _) = True
+isSynchronised (SynchronisedRead   _) = True
+isSynchronised (SynchronisedWrite  _) = True
+isSynchronised _ = False
+
+-- | Get the 'CRef' affected.
+crefOf :: ActionType -> Maybe CRefId
+crefOf (UnsynchronisedRead  r) = Just r
+crefOf (UnsynchronisedWrite r) = Just r
+crefOf (SynchronisedModify  r) = Just r
+crefOf (SynchronisedCommit  r) = Just r
+crefOf _ = Nothing
+
+-- | Get the 'CVar' affected.
+cvarOf :: ActionType -> Maybe CVarId
+cvarOf (SynchronisedRead  c) = Just c
+cvarOf (SynchronisedWrite c) = Just c
+cvarOf _ = Nothing
+
+-- | Throw away information from a 'ThreadAction' and give a
+-- simplified view of what is happening.
+--
+-- This is used in the SCT code to help determine interesting
+-- alternative scheduling decisions.
+simplify :: ThreadAction -> ActionType
+simplify (Put c _)       = SynchronisedWrite c
+simplify (BlockedPut c)  = SynchronisedOther
+simplify (TryPut c _ _)  = SynchronisedWrite c
+simplify (Read c)        = SynchronisedRead c
+simplify (BlockedRead c) = SynchronisedOther
+simplify (Take c _)      = SynchronisedRead c
+simplify (BlockedTake c) = SynchronisedOther
+simplify (TryTake c _ _) = SynchronisedRead c
+simplify (ReadRef r)     = UnsynchronisedRead r
+simplify (ModRef r)      = SynchronisedModify r
+simplify (WriteRef r)    = UnsynchronisedWrite r
+simplify (CommitRef _ r) = SynchronisedCommit r
+simplify (STM _)            = SynchronisedOther
+simplify BlockedSTM         = SynchronisedOther
+simplify (ThrowTo _)        = SynchronisedOther
+simplify (BlockedThrowTo _) = SynchronisedOther
+simplify _ = UnsynchronisedOther
+
+-- | Variant of 'simplify' that takes a 'Lookahead'.
+simplify' :: Lookahead -> ActionType
+simplify' (WillPut c)         = SynchronisedWrite c
+simplify' (WillTryPut c)      = SynchronisedWrite c
+simplify' (WillRead c)        = SynchronisedRead c
+simplify' (WillTake c)        = SynchronisedRead c
+simplify' (WillTryTake c)     = SynchronisedRead c
+simplify' (WillReadRef r)     = UnsynchronisedRead r
+simplify' (WillModRef r)      = SynchronisedModify r
+simplify' (WillWriteRef r)    = UnsynchronisedWrite r
+simplify' (WillCommitRef _ r) = SynchronisedCommit r
+simplify' WillSTM         = SynchronisedOther
+simplify' (WillThrowTo _) = SynchronisedOther
+simplify' _ = UnsynchronisedOther
+
 --------------------------------------------------------------------------------
 -- * Failures
 

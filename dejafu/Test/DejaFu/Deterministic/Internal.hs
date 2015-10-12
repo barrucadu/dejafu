@@ -32,10 +32,16 @@ module Test.DejaFu.Deterministic.Internal
  , Decision(..)
  , ThreadAction(..)
  , Lookahead(..)
+ , ActionType(..)
  , Trace'
  , toTrace
  , showTrace
  , showFail
+ , isSynchronised
+ , crefOf
+ , cvarOf
+ , simplify
+ , simplify'
 
  -- * Failures
  , Failure(..)
