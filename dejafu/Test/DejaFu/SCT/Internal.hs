@@ -4,10 +4,11 @@
 module Test.DejaFu.SCT.Internal where
 
 import Control.DeepSeq (NFData(..))
+import Data.Either (lefts)
 import Data.IntMap.Strict (IntMap)
-import Data.List (foldl', partition, maximumBy)
+import Data.List (foldl', partition, sortBy)
 import Data.Maybe (mapMaybe, isJust, fromJust)
-import Data.Ord (comparing)
+import Data.Ord (Down(..), comparing)
 import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
 import Test.DejaFu.Deterministic.Internal
@@ -64,6 +65,9 @@ data BPOR = BPOR
   -- conservatively-added ones, in the (reverse) order that they were
   -- taken, as the 'Map' doesn't preserve insertion order. This is
   -- used in implementing sleep sets.
+  , _baction    :: Maybe ThreadAction
+  -- ^ What happened at this step. This will be 'Nothing' at the root,
+  -- 'Just' everywhere else.
   }
 
 -- | Initial BPOR state.
@@ -75,6 +79,7 @@ initialState = BPOR
   , _bdone     = I.empty
   , _bsleep    = I.empty
   , _btaken    = I.empty
+  , _baction   = Nothing
   }
 
 -- | Produce a new schedule from a BPOR tree. If there are no new
@@ -91,17 +96,20 @@ next = go 0 where
         -- updated BPOR subtrees if taken from the done list.
     let prefixes = mapMaybe go' (I.toList $ _bdone bpor) ++ [Left t | t <- I.toList $ _btodo bpor]
         -- Sort by number of preemptions, in descending order.
-        cmp   = comparing $ preEmps tid bpor . either (\(a,_) -> [a]) (\(a,_,_) -> a)
+        cmp = preEmps tid bpor . either (\(a,_) -> [a]) (\(a,_,_) -> a)
 
     in if null prefixes
        then Nothing
-       else case maximumBy cmp prefixes of
+       else case sortBy (comparing $ Down . cmp) prefixes of
               -- If the prefix with the most preemptions is from the done list, update that.
-              Right (ts@(t:_), c, b) -> Just (ts, c, bpor { _bdone = I.insert t b $ _bdone bpor })
-              Right ([], _, _) -> error "Invariant failure in 'next': empty done prefix!"
+              (Right (ts@(t:_), c, b):_) -> Just (ts, c, bpor { _bdone = I.insert t b $ _bdone bpor })
+              (Right ([], _, _):_) -> error "Invariant failure in 'next': empty done prefix!"
 
               -- If from the todo list, remove it.
-              Left (t,c) -> Just ([t], c, bpor { _btodo = I.delete t $ _btodo bpor })
+              rest -> case partition (\(t,c) -> t < 0) $ lefts rest of
+                (_, (t,c):_) -> Just ([t], c, bpor { _btodo = I.delete t $ _btodo bpor })
+                ((t,c):_, _) -> Just ([t], c, bpor { _btodo = I.delete t $ _btodo bpor })
+                ([], []) -> error "Invariant failure in 'next': empty prefix list!"
 
   go' (tid, bpor) = (\(ts,c,b) -> Right (tid:ts, c, b)) <$> go tid bpor
 
@@ -172,6 +180,7 @@ grow memtype conservative = grow' initialCVState 0 where
         , _btaken = case rest of
           ((d', _, a'):_) -> I.singleton (tidOf tid d') a'
           [] -> I.empty
+        , _baction = Just a
         }
   subtree _ _ _ [] = error "Invariant failure in 'subtree': suffix empty!"
 
@@ -215,6 +224,24 @@ todo bv = step where
                 ]
         (blocked, nxt) = partition (\(t,_) -> t `S.member` _bignore bpor) todo'
     in  (bpor { _btodo = _btodo bpor `I.union` I.fromList nxt }, I.fromList blocked)
+
+-- | Remove commits from the todo sets where every other action will
+-- result in a write barrier (and so a commit) occurring.
+--
+-- To get the benefit from this, do not execute commit actions from
+-- the todo set until there are no other choises.
+pruneCommits :: BPOR -> BPOR
+pruneCommits bpor
+  | not onlycommits || not alldonesync = go bpor
+  | otherwise = go bpor { _btodo = I.empty, _bdone = fmap pruneCommits $ _bdone bpor }
+
+  where
+    go b = b { _bdone = fmap pruneCommits $ _bdone bpor }
+
+    onlycommits = all (<0) . I.keys $ _btodo bpor
+    alldonesync = all synchronised . I.elems $ _bdone bpor
+
+    synchronised = isSynchronised . simplify . fromJust . _baction
 
 -- * Utilities
 

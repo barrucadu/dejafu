@@ -383,6 +383,7 @@ isSynchronised (SynchronisedModify _) = True
 isSynchronised (SynchronisedCommit _) = True
 isSynchronised (SynchronisedRead   _) = True
 isSynchronised (SynchronisedWrite  _) = True
+isSynchronised SynchronisedOther = True
 isSynchronised _ = False
 
 -- | Get the 'CRef' affected.

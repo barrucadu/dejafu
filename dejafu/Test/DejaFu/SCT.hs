@@ -188,10 +188,9 @@ sctBoundedM memtype bv backtrack initialise run = go initialState where
       (res, s, trace) <- run memtype (bporSched initialise) (initialSchedState sched)
 
       let bpoints = findBacktrack memtype backtrack (_sbpoints s) trace
-      let bpor''  = grow memtype conservative trace bpor'
-      let bpor''' = todo bv bpoints bpor''
+      let newBPOR = pruneCommits . todo bv bpoints $ grow memtype conservative trace bpor'
 
-      ((res, toTrace trace):) <$> go bpor'''
+      ((res, toTrace trace):) <$> go newBPOR
 
     Nothing -> return []
 
