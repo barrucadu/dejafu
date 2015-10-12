@@ -240,29 +240,29 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
 
     -- | Put a value into a @CVar@, blocking the thread until it's
     -- empty.
-    stepPut cvar@(cvid, _) a c = do
+    stepPut cvar@(cvid, _) a c = synchronised $ do
       (success, threads', woken) <- putIntoCVar True cvar a (const c) fixed tid threads
       simple threads' $ if success then Put cvid woken else BlockedPut cvid
 
     -- | Try to put a value into a @CVar@, without blocking.
-    stepTryPut cvar@(cvid, _) a c = do
+    stepTryPut cvar@(cvid, _) a c = synchronised $ do
       (success, threads', woken) <- putIntoCVar False cvar a c fixed tid threads
       simple threads' $ TryPut cvid success woken
 
     -- | Get the value from a @CVar@, without emptying, blocking the
     -- thread until it's full.
-    stepGet cvar@(cvid, _) c = do
+    stepGet cvar@(cvid, _) c = synchronised $ do
       (success, threads', _) <- readFromCVar False True cvar (c . fromJust) fixed tid threads
       simple threads' $ if success then Read cvid else BlockedRead cvid
 
     -- | Take the value from a @CVar@, blocking the thread until it's
     -- full.
-    stepTake cvar@(cvid, _) c = do
+    stepTake cvar@(cvid, _) c = synchronised $ do
       (success, threads', woken) <- readFromCVar True True cvar (c . fromJust) fixed tid threads
       simple threads' $ if success then Take cvid woken else BlockedTake cvid
 
     -- | Try to take the value from a @CVar@, without blocking.
-    stepTryTake cvar@(cvid, _) c = do
+    stepTryTake cvar@(cvid, _) c = synchronised $ do
       (success, threads', woken) <- readFromCVar True False cvar c fixed tid threads
       simple threads' $ TryTake cvid success woken
 
@@ -272,11 +272,10 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       simple (goto (c val) tid threads) $ ReadRef crid
 
     -- | Modify a @CRef@.
-    stepModRef cref@(crid, _) f c = do
-      writeBarrier fixed wb
+    stepModRef cref@(crid, _) f c = synchronised $ do
       (new, val) <- f <$> readCRef fixed cref tid
       writeImmediate fixed cref new
-      return $ Right (goto (c val) tid threads, idSource, ModRef crid, emptyBuffer)
+      simple (goto (c val) tid threads) $ ModRef crid
 
     -- | Write to a @CRef@ without synchronising
     stepWriteRef cref@(crid, _) a c = case memtype of
@@ -312,7 +311,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
         return $ Right (threads, idSource, CommitRef t c, wb')
 
     -- | Run a STM transaction atomically.
-    stepAtom stm c = do
+    stepAtom stm c = synchronised $ do
       let oldctvid = _nextCTVId idSource
       (res, newctvid) <- runstm stm oldctvid
       case res of
@@ -349,7 +348,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
 
     -- | Throw an exception to the target thread, and propagate it to
     -- the appropriate handler.
-    stepThrowTo t e c =
+    stepThrowTo t e c = synchronised $
       let threads' = goto c tid threads
           blocked = M.alter (\(Just thread) -> Just $ thread { _blocking = Just (OnMask t) }) tid threads
           interrupted act hs = M.alter (\(Just thread) -> Just $ thread { _continuation = act, _blocking = Nothing, _handlers = hs }) t
@@ -419,3 +418,12 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
     -- | Helper for actions which don't touch the 'IdSource' or
     -- 'WriteBuffer'
     simple threads' act = return $ Right (threads', idSource, act, wb)
+
+    -- | Helper for actions impose a write barrier.
+    synchronised ma = do
+      writeBarrier fixed wb
+      res <- ma
+
+      return $ case res of
+        Right (threads', idSource', act', _) -> Right (threads', idSource', act', emptyBuffer)
+        _ -> res
