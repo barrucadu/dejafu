@@ -10,7 +10,8 @@ import Data.Maybe (mapMaybe, isJust, fromJust)
 import Data.Ord (comparing)
 import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
-import Test.DejaFu.Deterministic
+import Test.DejaFu.Deterministic.Internal
+import Test.DejaFu.Deterministic.Schedule
 
 import qualified Data.IntMap.Strict as I
 import qualified Data.Sequence as Sq

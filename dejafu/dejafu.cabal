@@ -93,16 +93,16 @@ library
                      , Test.DejaFu.SCT
                      , Test.DejaFu.STM
 
-  other-modules:       Test.DejaFu.Deterministic.Internal
+                     , Test.DejaFu.Deterministic.Internal
                      , Test.DejaFu.Deterministic.Internal.Common
                      , Test.DejaFu.Deterministic.Internal.Memory
                      , Test.DejaFu.Deterministic.Internal.Threading
                      , Test.DejaFu.Internal
                      , Test.DejaFu.SCT.Internal
                      , Test.DejaFu.STM.Internal
-
                      , Data.List.Extra
 
+  -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.5 && <5
                      , containers

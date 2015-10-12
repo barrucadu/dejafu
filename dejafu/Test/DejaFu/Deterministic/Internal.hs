@@ -23,7 +23,7 @@ module Test.DejaFu.Deterministic.Internal
  , CVarId
  , CRefId
 
- -- * Memory models
+ -- * Memory Models
  , MemType(..)
 
  -- * Scheduling & Traces
@@ -32,11 +32,13 @@ module Test.DejaFu.Deterministic.Internal
  , Decision(..)
  , ThreadAction(..)
  , Lookahead(..)
- , ActionType(..)
  , Trace'
  , toTrace
  , showTrace
  , showFail
+
+ -- * Synchronised and Unsynchronised Actions
+ , ActionType(..)
  , isSynchronised
  , crefOf
  , cvarOf
