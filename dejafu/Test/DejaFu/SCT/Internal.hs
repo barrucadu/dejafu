@@ -106,7 +106,7 @@ next = go 0 where
               (Right ([], _, _):_) -> error "Invariant failure in 'next': empty done prefix!"
 
               -- If from the todo list, remove it.
-              rest -> case partition (\(t,c) -> t < 0) $ lefts rest of
+              rest -> case partition (\(t,_) -> t < 0) $ lefts rest of
                 (_, (t,c):_) -> Just ([t], c, bpor { _btodo = I.delete t $ _btodo bpor })
                 ((t,c):_, _) -> Just ([t], c, bpor { _btodo = I.delete t $ _btodo bpor })
                 ([], []) -> error "Invariant failure in 'next': empty prefix list!"
@@ -303,18 +303,18 @@ dependentActions memtype buf a1 a2 = case (a1, a2) of
 
   -- Unsynchronised reads where a memory barrier would flush a
   -- buffered write
-  (UnsynchronisedRead r1, a2) | isBarrier a2 -> isBuffered buf r1 && memtype /= SequentialConsistency
+  (UnsynchronisedRead r1, _) | isBarrier a2 -> isBuffered buf r1 && memtype /= SequentialConsistency
 
-  (a1, a2)
+  (_, _)
     -- Two actions on the same CRef where at least one is synchronised
-    | same crefOf a1 a2 && (isSynchronised a1 || isSynchronised a2) -> True
+    | same crefOf && (isSynchronised a1 || isSynchronised a2) -> True
     -- Two actions on the same CVar
-    | same cvarOf a1 a2 -> True
+    | same cvarOf -> True
 
   _ -> False
 
   where
-    same f a1 a2 = isJust (f a1) && f a1 == f a2
+    same f = isJust (f a1) && f a1 == f a2
 
 -- * Keeping track of 'CVar' full/empty states
 
