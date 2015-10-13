@@ -125,20 +125,22 @@ findBacktrack :: MemType
   -> Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
   -> Trace'
   -> [BacktrackStep]
-findBacktrack memtype backtrack = go S.empty 0 [] . Sq.viewl where
-  go allThreads tid bs ((e,i):<is) ((d,_,a):ts) =
+findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl where
+  go crstate allThreads tid bs ((e,i):<is) ((d,_,a):ts) =
     let tid' = tidOf tid d
-        this        = BacktrackStep { _threadid  = tid'
-                                    , _decision  = (d, a)
-                                    , _runnable  = S.fromList . map fst . toList $ e
-                                    , _backtrack = I.fromList $ map (\i' -> (i', False)) i
-                                    }
-        bs'         = doBacktrack allThreads (toList e) bs
+        crstate' = updateCRState crstate a
+        this = BacktrackStep
+          { _threadid  = tid'
+          , _decision  = (d, a)
+          , _runnable  = S.fromList . map fst . toList $ e
+          , _backtrack = I.fromList $ map (\i' -> (i', False)) i
+          }
+        bs' = doBacktrack crstate' allThreads (toList e) bs
         allThreads' = allThreads `S.union` _runnable this
-    in go allThreads' tid' (bs' ++ [this]) (Sq.viewl is) ts
-  go _ _ bs _ _ = bs
+    in go crstate' allThreads' tid' (bs' ++ [this]) (Sq.viewl is) ts
+  go _ _ _ bs _ _ = bs
 
-  doBacktrack allThreads enabledThreads bs =
+  doBacktrack crstate allThreads enabledThreads bs =
     let tagged = reverse $ zip [0..] bs
         idxs   = [ (head is, u)
                  | (u, n) <- enabledThreads
@@ -147,26 +149,28 @@ findBacktrack memtype backtrack = go S.empty 0 [] . Sq.viewl where
                  , let is = [ i
                             | (i, b) <- tagged
                             , _threadid b == v
-                            , dependent' memtype (snd $ _decision b) (u, n)
+                            , dependent' memtype crstate (snd $ _decision b) (u, n)
                             ]
                  , not $ null is] :: [(Int, ThreadId)]
     in foldl' (\b (i, u) -> backtrack b i u) bs idxs
 
 -- | Add a new trace to the tree, creating a new subtree.
 grow :: MemType -> Bool -> Trace' -> BPOR -> BPOR
-grow memtype conservative = grow' initialCVState 0 where
-  grow' cvstate tid trc@((d, _, a):rest) bpor =
+grow memtype conservative = grow' initialCVState initialCRState 0 where
+  grow' cvstate crstate tid trc@((d, _, a):rest) bpor =
     let tid'     = tidOf tid d
         cvstate' = updateCVState cvstate a
+        crstate' = updateCRState crstate a
     in  case I.lookup tid' $ _bdone bpor of
-          Just bpor' -> bpor { _bdone  = I.insert tid' (grow' cvstate' tid' rest bpor') $ _bdone bpor }
+          Just bpor' -> bpor { _bdone  = I.insert tid' (grow' cvstate' crstate' tid' rest bpor') $ _bdone bpor }
           Nothing    -> bpor { _btaken = if conservative then _btaken bpor else I.insert tid' a $ _btaken bpor
-                            , _bdone  = I.insert tid' (subtree cvstate' tid' (_bsleep bpor `I.union` _btaken bpor) trc) $ _bdone bpor }
-  grow' _ _ [] bpor = bpor
+                            , _bdone  = I.insert tid' (subtree cvstate' crstate' tid' (_bsleep bpor `I.union` _btaken bpor) trc) $ _bdone bpor }
+  grow' _ _ _ [] bpor = bpor
 
-  subtree cvstate tid sleep ((d, ts, a):rest) =
+  subtree cvstate crstate tid sleep ((d, ts, a):rest) =
     let cvstate' = updateCVState cvstate a
-        sleep'   = I.filterWithKey (\t a' -> not $ dependent memtype a (t,a')) sleep
+        crstate' = updateCRState crstate a
+        sleep'   = I.filterWithKey (\t a' -> not $ dependent memtype crstate' a (t,a')) sleep
     in BPOR
         { _brunnable = S.fromList $ tids tid d a ts
         , _btodo     = I.empty
@@ -174,7 +178,7 @@ grow memtype conservative = grow' initialCVState 0 where
         , _bdone     = I.fromList $ case rest of
           ((d', _, _):_) ->
             let tid' = tidOf tid d'
-            in  [(tid', subtree cvstate' tid' sleep' rest)]
+            in  [(tid', subtree cvstate' crstate' tid' sleep' rest)]
           [] -> []
         , _bsleep = sleep'
         , _btaken = case rest of
@@ -182,7 +186,7 @@ grow memtype conservative = grow' initialCVState 0 where
           [] -> I.empty
         , _baction = Just a
         }
-  subtree _ _ _ [] = error "Invariant failure in 'subtree': suffix empty!"
+  subtree _ _ _ _ [] = error "Invariant failure in 'subtree': suffix empty!"
 
   tids tid d (Fork t)           ts = tidOf tid d : t : map (tidOf tid . fst) ts
   tids tid _ (BlockedPut _)     ts = map (tidOf tid . fst) ts
@@ -239,9 +243,9 @@ pruneCommits bpor
     go b = b { _bdone = fmap pruneCommits $ _bdone bpor }
 
     onlycommits = all (<0) . I.keys $ _btodo bpor
-    alldonesync = all synchronised . I.elems $ _bdone bpor
+    alldonesync = all barrier . I.elems $ _bdone bpor
 
-    synchronised = isSynchronised . simplify . fromJust . _baction
+    barrier = isBarrier . simplify . fromJust . _baction
 
 -- * Utilities
 
@@ -274,33 +278,34 @@ preEmpCount (_:ds) = preEmpCount ds
 preEmpCount [] = 0
 
 -- | Check if an action is dependent on another.
-dependent :: MemType -> ThreadAction -> (ThreadId, ThreadAction) -> Bool
-dependent _ Lift (_, Lift) = True
-dependent _ (ThrowTo t) (t2, _) = t == t2
-dependent _ (STM _) (_, STM _) = True
-dependent memtype d1 (_, d2) = dependentActions memtype (simplify d1) (simplify d2)
+dependent :: MemType -> CRState -> ThreadAction -> (ThreadId, ThreadAction) -> Bool
+dependent _ _ Lift (_, Lift) = True
+dependent _ _ (ThrowTo t) (t2, _) = t == t2
+dependent _ _ (STM _) (_, STM _) = True
+dependent memtype buf d1 (_, d2) = dependentActions memtype buf (simplify d1) (simplify d2)
 
 -- | Variant of 'dependent' to handle 'ThreadAction''s
-dependent' :: MemType -> ThreadAction -> (ThreadId, Lookahead) -> Bool
-dependent' _ Lift (_, WillLift) = True
-dependent' _ (ThrowTo t) (t2, _) = t == t2
-dependent' _ (STM _) (_, WillSTM) = True
-dependent' memtype d1 (_, d2) = dependentActions memtype (simplify d1) (simplify' d2)
+dependent' :: MemType -> CRState -> ThreadAction -> (ThreadId, Lookahead) -> Bool
+dependent' _ _ Lift (_, WillLift) = True
+dependent' _ _ (ThrowTo t) (t2, _) = t == t2
+dependent' _ _ (STM _) (_, WillSTM) = True
+dependent' memtype buf d1 (_, d2) = dependentActions memtype buf (simplify d1) (simplify' d2)
 
 -- | Check if two 'ActionType's are dependent. Note that this is not
 -- sufficient to know if two 'ThreadAction's are dependent, without
 -- being so great an over-approximation as to be useless!
-dependentActions :: MemType -> ActionType -> ActionType -> Bool
-dependentActions memtype a1 a2 = case (a1, a2) of
+dependentActions :: MemType -> CRState -> ActionType -> ActionType -> Bool
+dependentActions memtype buf a1 a2 = case (a1, a2) of
   -- Unsynchronised reads and writes under a sequentially consistent
   -- memory model
   (UnsynchronisedRead  r1, UnsynchronisedWrite r2) -> r1 == r2 && memtype == SequentialConsistency
   (UnsynchronisedWrite r1, UnsynchronisedWrite r2) -> r1 == r2 && memtype == SequentialConsistency
 
+  -- Unsynchronised reads where a memory barrier would flush a
+  -- buffered write
+  (UnsynchronisedRead r1, a2) | isBarrier a2 -> isBuffered buf r1 && memtype /= SequentialConsistency
+
   (a1, a2)
-    -- Unsynchronised operations where a memory barrier would take
-    -- effect
-    | not (isSynchronised a1) && isBarrier a2 -> memtype /= SequentialConsistency
     -- Two actions on the same CRef where at least one is synchronised
     | same crefOf a1 a2 && (isSynchronised a1 || isSynchronised a2) -> True
     -- Two actions on the same CVar
@@ -313,12 +318,14 @@ dependentActions memtype a1 a2 = case (a1, a2) of
 
 -- * Keeping track of 'CVar' full/empty states
 
+type CVState = IntMap Bool
+
 -- | Initial global 'CVar' state
-initialCVState :: IntMap Bool
+initialCVState :: CVState
 initialCVState = I.empty
 
 -- | Update the 'CVar' state with the action that has just happened.
-updateCVState :: IntMap Bool -> ThreadAction -> IntMap Bool
+updateCVState :: CVState -> ThreadAction -> CVState
 updateCVState cvstate (Put  c _) = I.insert c True  cvstate
 updateCVState cvstate (Take c _) = I.insert c False cvstate
 updateCVState cvstate (TryPut  c True _) = I.insert c True  cvstate
@@ -326,7 +333,7 @@ updateCVState cvstate (TryTake c True _) = I.insert c False cvstate
 updateCVState cvstate _ = cvstate
 
 -- | Check if an action will block.
-willBlock :: IntMap Bool -> Lookahead -> Bool
+willBlock :: CVState -> Lookahead -> Bool
 willBlock cvstate (WillPut  c) = I.lookup c cvstate == Just True
 willBlock cvstate (WillTake c) = I.lookup c cvstate == Just False
 willBlock _ _ = False
@@ -334,10 +341,31 @@ willBlock _ _ = False
 -- | Check if a list of actions will block safely (without modifying
 -- any global state). This allows further lookahead at, say, the
 -- 'spawn' of a thread (which always starts with 'KnowsAbout').
-willBlockSafely :: IntMap Bool -> [Lookahead] -> Bool
+willBlockSafely :: CVState -> [Lookahead] -> Bool
 willBlockSafely cvstate (WillKnowsAbout:as) = willBlockSafely cvstate as
 willBlockSafely cvstate (WillForgets:as)    = willBlockSafely cvstate as
 willBlockSafely cvstate (WillAllKnown:as)   = willBlockSafely cvstate as
 willBlockSafely cvstate (WillPut  c:_) = willBlock cvstate (WillPut  c)
 willBlockSafely cvstate (WillTake c:_) = willBlock cvstate (WillTake c)
 willBlockSafely _ _ = False
+
+-- * Keeping track of 'CRef' buffer state
+
+type CRState = IntMap Bool
+
+-- | Initial global 'CRef buffer state.
+initialCRState :: CRState
+initialCRState = I.empty
+
+-- | Update the 'CRef' buffer state with the action that has just
+-- happened.
+updateCRState :: CRState -> ThreadAction -> CRState
+updateCRState crstate (CommitRef _ r) = I.delete r crstate
+updateCRState crstate (WriteRef r) = I.insert r True crstate
+updateCRState crstate ta
+  | isBarrier $ simplify ta = initialCRState
+  | otherwise = crstate
+
+-- | Check if a 'CRef' has a buffered write pending.
+isBuffered :: CRState -> CRefId -> Bool
+isBuffered crefid r = I.findWithDefault False r crefid
