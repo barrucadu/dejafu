@@ -79,15 +79,11 @@ sctPreBound :: MemType
   -> (forall t. Conc t a)
   -- ^ The computation to run many times
   -> [(Either Failure a, Trace)]
-sctPreBound memtype pb = sctBounded memtype (pbBv pb) pbBacktrack pbInitialise
+sctPreBound memtype pb = sctBounded memtype preEmpCount pb pbBacktrack pbInitialise
 
 -- | Variant of 'sctPreBound' for computations which do 'IO'.
 sctPreBoundIO :: MemType -> Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
-sctPreBoundIO memtype pb = sctBoundedIO memtype (pbBv pb) pbBacktrack pbInitialise
-
--- | Check if a schedule is in the bound.
-pbBv :: Int -> [Decision] -> Bool
-pbBv pb ds = preEmpCount ds <= pb
+sctPreBoundIO memtype pb = sctBoundedIO memtype preEmpCount pb pbBacktrack pbInitialise
 
 -- | Add a backtrack point, and also conservatively add one prior to
 -- the most recent transition before that point. This may result in
@@ -149,10 +145,13 @@ pbInitialise prior threads@((nextTid, _):|rest) = case prior of
 -- Note that unlike with non-bounded partial-order reduction, this may
 -- do some redundant work as the introduction of a bound can make
 -- previously non-interfering events interfere with each other.
-sctBounded :: MemType
+sctBounded :: Ord d
+  => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> ([Decision] -> Bool)
-  -- ^ Check if a prefix trace is within the bound.
+  -> ([Decision] -> d)
+  -- ^ Convert a prefix trace to a bound-specific value
+  -> d
+  -- ^ The maximum bound
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -- ^ Add a new backtrack point, this takes the history of the
   -- execution so far, the index to insert the backtracking point, and
@@ -161,34 +160,35 @@ sctBounded :: MemType
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -- ^ Produce possible scheduling decisions, all will be tried.
   -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
-sctBounded memtype bv backtrack initialise c = runIdentity $ sctBoundedM memtype bv backtrack initialise run where
+sctBounded memtype bf blim backtrack initialise c = runIdentity $ sctBoundedM memtype bf blim backtrack initialise run where
   run memty sched s = Identity $ runConc' sched memty s c
 
 -- | Variant of 'sctBounded' for computations which do 'IO'.
-sctBoundedIO :: MemType
-  ->([Decision] -> Bool)
+sctBoundedIO :: Ord d
+  => MemType
+  -> ([Decision] -> d) -> d
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
-sctBoundedIO memtype bv backtrack initialise c = sctBoundedM memtype bv backtrack initialise run where
+sctBoundedIO memtype bf blim backtrack initialise c = sctBoundedM memtype bf blim backtrack initialise run where
   run memty sched s = runConcIO' sched memty s c
 
 -- | Generic SCT runner.
-sctBoundedM :: (Functor m, Monad m)
+sctBoundedM :: (Functor m, Monad m, Ord d)
   => MemType
-  -> ([Decision] -> Bool)
+  -> ([Decision] -> d) -> d
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -> (MemType -> Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
   -- ^ Monadic runner, with computation fixed.
   -> m [(Either Failure a, Trace)]
-sctBoundedM memtype bv backtrack initialise run = go initialState where
+sctBoundedM memtype bf blim backtrack initialise run = go initialState where
   go bpor = case next bpor of
     Just (sched, conservative, bpor') -> do
       (res, s, trace) <- run memtype (bporSched initialise) (initialSchedState sched)
 
       let bpoints = findBacktrack memtype backtrack (_sbpoints s) trace
-      let newBPOR = pruneCommits . todo bv bpoints $ grow memtype conservative trace bpor'
+      let newBPOR = pruneCommits . todo (\t -> bf t <= blim) bpoints $ grow memtype conservative trace bpor'
 
       ((res, toTrace trace):) <$> go newBPOR
 
