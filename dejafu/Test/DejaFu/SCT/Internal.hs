@@ -237,10 +237,10 @@ todo bv = step where
 pruneCommits :: BPOR -> BPOR
 pruneCommits bpor
   | not onlycommits || not alldonesync = go bpor
-  | otherwise = go bpor { _btodo = I.empty, _bdone = fmap pruneCommits $ _bdone bpor }
+  | otherwise = go bpor { _btodo = I.empty, _bdone = pruneCommits <$> _bdone bpor }
 
   where
-    go b = b { _bdone = fmap pruneCommits $ _bdone bpor }
+    go b = b { _bdone = pruneCommits <$> _bdone bpor }
 
     onlycommits = all (<0) . I.keys $ _btodo bpor
     alldonesync = all barrier . I.elems $ _bdone bpor
