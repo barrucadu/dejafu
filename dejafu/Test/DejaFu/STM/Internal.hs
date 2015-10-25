@@ -10,6 +10,8 @@ module Test.DejaFu.STM.Internal where
 import Control.Exception (Exception, SomeException(..), fromException)
 import Control.Monad.Cont (Cont, runCont)
 import Data.List (nub)
+import Data.Maybe (fromMaybe)
+import Data.Typeable (cast)
 import Test.DejaFu.Internal
 
 #if __GLASGOW_HASKELL__ < 710
@@ -39,7 +41,7 @@ data STMAction t n r
   | forall a. AOrElse (M t n r a) (M t n r a) (a -> STMAction t n r)
   | ANew (Fixed t n r -> CTVarId -> n (STMAction t n r))
   | ALift (n (STMAction t n r))
-  | AThrow SomeException
+  | forall e. Exception e => AThrow e
   | ARetry
   | AStop
 
@@ -106,11 +108,17 @@ doTransaction fixed ma newctvid = do
       (act', undo', nctvid', readen', written') <- stepTrans fixed act nctvid
       let ret = (nctvid', undo >> undo', readen' ++ readen, written' ++ written)
       case act' of
-        AStop      -> return ret
-        ARetry     -> writeRef fixed ref Nothing >> return ret
-        AThrow exc -> writeRef fixed ref (Just $ Left exc) >> return ret
+        AStop  -> return ret
+        ARetry -> writeRef fixed ref Nothing >> return ret
+        AThrow exc -> writeRef fixed ref (Just . Left $ wrap exc) >> return ret
 
         _ -> go ref act' (undo >> undo') nctvid' (readen' ++ readen) (written' ++ written)
+
+    -- | This wraps up an uncaught exception inside a @SomeException@,
+    -- unless it already is a @SomeException@. This is because
+    -- multiple levels of @SomeException@ do not play nicely with
+    -- @fromException@.
+    wrap e = fromMaybe (SomeException e) $ cast e
 
 -- | Run a transaction for one step.
 stepTrans :: forall t n r. Monad n => Fixed t n r -> STMAction t n r -> CTVarId -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])

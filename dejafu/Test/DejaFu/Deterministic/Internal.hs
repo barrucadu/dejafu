@@ -50,11 +50,12 @@ module Test.DejaFu.Deterministic.Internal
  , Failure(..)
  ) where
 
-import Control.Exception (MaskingState(..))
+import Control.Exception (MaskingState(..), SomeException(..))
 import Control.Monad.Cont (cont, runCont)
 import Data.List (sort)
 import Data.List.Extra
-import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
+import Data.Maybe (fromJust, isJust, fromMaybe, isNothing, listToMaybe)
+import Data.Typeable (cast)
 import Test.DejaFu.STM (CTVarId, Result(..))
 import Test.DejaFu.Internal
 import Test.DejaFu.Deterministic.Internal.Common
@@ -349,7 +350,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
     -- | Throw an exception, and propagate it to the appropriate
     -- handler.
     stepThrow e =
-      case propagate e . _handlers . fromJust $ M.lookup tid threads of
+      case propagate (wrap e) . _handlers . fromJust $ M.lookup tid threads of
         Just (act, hs) ->
           let threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = act, _handlers = hs }) tid threads
           in  simple threads' Throw
@@ -363,7 +364,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
           interrupted act hs = M.alter (\(Just thread) -> Just $ thread { _continuation = act, _blocking = Nothing, _handlers = hs }) t
       in case M.lookup t threads of
            Just thread
-             | interruptible thread -> case propagate e $ _handlers thread of
+             | interruptible thread -> case propagate (wrap e) $ _handlers thread of
                Just (act, hs) -> simple (interrupted act hs threads') $ ThrowTo t
                Nothing
                  | t == 0     -> return $ Left UncaughtException
@@ -436,3 +437,6 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       return $ case res of
         Right (threads', idSource', act', _) -> Right (threads', idSource', act', emptyBuffer)
         _ -> res
+
+    -- | Helper function for wrapping up exceptions.
+    wrap e = fromMaybe (SomeException e) $ cast e

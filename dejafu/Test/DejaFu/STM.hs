@@ -30,7 +30,7 @@ module Test.DejaFu.STM
   , writeCTVar
   ) where
 
-import Control.Exception (Exception, SomeException(..))
+import Control.Exception (Exception)
 import Control.Monad (liftM)
 import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
 import Control.Monad.Cont (cont)
@@ -93,7 +93,7 @@ check = C.check
 -- | Throw an exception. This aborts the transaction and propagates
 -- the exception.
 throwSTM :: Exception e => e -> STMLike t n r a
-throwSTM e = S $ cont $ const $ AThrow (SomeException e)
+throwSTM e = S $ cont $ const $ AThrow e
 
 -- | Handling exceptions from 'throwSTM'.
 catchSTM :: Exception e => STMLike t n r a -> (e -> STMLike t n r a) -> STMLike t n r a

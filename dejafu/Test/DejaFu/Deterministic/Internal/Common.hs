@@ -6,7 +6,7 @@
 module Test.DejaFu.Deterministic.Internal.Common where
 
 import Control.DeepSeq (NFData(..))
-import Control.Exception (Exception, MaskingState(..), SomeException(..))
+import Control.Exception (Exception, MaskingState(..))
 import Control.Monad.Cont (Cont)
 import Data.IntMap.Strict (IntMap)
 import Data.List.Extra
@@ -54,8 +54,8 @@ data Action n r s =
   | ANew  (CVarId -> n (Action n r s))
   | ANewRef (CRefId -> n (Action n r s))
   | ALift (n (Action n r s))
-  | AThrow SomeException
-  | AThrowTo ThreadId SomeException (Action n r s)
+  | forall e. Exception e => AThrow e
+  | forall e. Exception e => AThrowTo ThreadId e (Action n r s)
   | forall a e. Exception e => ACatching (e -> M n r s a) (M n r s a) (a -> Action n r s)
   | APopCatching (Action n r s)
   | forall a. AMasking MaskingState ((forall b. M n r s b -> M n r s b) -> M n r s a) (a -> Action n r s)

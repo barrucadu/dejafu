@@ -5,7 +5,7 @@
 -- | Operations and types for threads.
 module Test.DejaFu.Deterministic.Internal.Threading where
 
-import Control.Exception (Exception, MaskingState(..), SomeException(..), fromException)
+import Control.Exception (Exception, MaskingState(..), SomeException, fromException)
 import Control.Monad.Cont (cont)
 import Data.List (intersect, nub)
 import Data.Map (Map)

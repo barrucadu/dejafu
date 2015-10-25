@@ -72,7 +72,7 @@ module Test.DejaFu.Deterministic
   , module Test.DejaFu.Deterministic.Schedule
   ) where
 
-import Control.Exception (Exception, MaskingState(..), SomeException(..))
+import Control.Exception (Exception, MaskingState(..), SomeException)
 import Control.Monad.Cont (cont, runCont)
 import Control.Monad.ST (ST, runST)
 import Data.STRef (STRef, newSTRef)
@@ -231,13 +231,13 @@ atomicWriteCRef ref a = modifyCRef ref $ const (a, ())
 --
 -- > throw e >> x == throw e
 throw :: Exception e => e -> Conc t a
-throw e = C $ cont $ \_ -> AThrow (SomeException e)
+throw e = C $ cont $ \_ -> AThrow e
 
 -- | Throw an exception to the target thread. This blocks until the
 -- exception is delivered, and it is just as if the target thread had
 -- raised it with 'throw'. This can interrupt a blocked action.
 throwTo :: Exception e => ThreadId -> e -> Conc t ()
-throwTo tid e = C $ cont $ \c -> AThrowTo tid (SomeException e) $ c ()
+throwTo tid e = C $ cont $ \c -> AThrowTo tid e $ c ()
 
 -- | Raise the 'ThreadKilled' exception in the target thread. Note
 -- that if the thread is prepared to catch this exception, it won't
