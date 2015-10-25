@@ -1,6 +1,7 @@
 flags: {}
 
 packages:
+- async-dejafu
 - hunit-dejafu
 - tasty-dejafu
 - dejafu
