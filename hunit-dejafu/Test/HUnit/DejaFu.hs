@@ -72,7 +72,7 @@ autocheckCases =
 -- Manual testing
 
 -- | Check that a predicate holds.
-testDejafu :: (Eq a, Show a)
+testDejafu :: Show a
   => (forall t. Conc t a)
   -- ^ The computation to test
   -> String
@@ -84,7 +84,7 @@ testDejafu = testDejafu' SequentialConsistency 2
 
 -- | Variant of 'testDejafu' which takes a memory model and
 -- pre-emption bound.
-testDejafu' :: (Eq a, Show a)
+testDejafu' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Int
@@ -102,7 +102,7 @@ testDejafu' memtype pb conc name p = testDejafus' memtype pb conc [(name, p)]
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test. This will share work between the predicates, rather than
 -- running the concurrent computation many times for each predicate.
-testDejafus :: (Eq a, Show a)
+testDejafus :: Show a
   => (forall t. Conc t a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
@@ -112,7 +112,7 @@ testDejafus = testDejafus' SequentialConsistency 2
 
 -- | Variant of 'testDejafus' which takes a memory model and pre-emption
 -- bound.
-testDejafus' :: (Eq a, Show a)
+testDejafus' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Int
@@ -126,19 +126,19 @@ testDejafus' :: (Eq a, Show a)
 testDejafus' = test
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
-testDejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> String -> Predicate a -> Test
+testDejafuIO :: Show a => (forall t. ConcIO t a) -> String -> Predicate a -> Test
 testDejafuIO = testDejafuIO' SequentialConsistency 2
 
 -- | Variant of 'testDejafu'' for computations which do 'IO'.
-testDejafuIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> String -> Predicate a -> Test
+testDejafuIO' :: Show a => MemType -> Int -> (forall t. ConcIO t a) -> String -> Predicate a -> Test
 testDejafuIO' memtype pb concio name p = testDejafusIO' memtype pb concio [(name, p)]
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
-testDejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> Test
+testDejafusIO :: Show a => (forall t. ConcIO t a) -> [(String, Predicate a)] -> Test
 testDejafusIO = testDejafusIO' SequentialConsistency 2
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-testDejafusIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> Test
+testDejafusIO' :: Show a => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> Test
 testDejafusIO' = testio
 
 --------------------------------------------------------------------------------

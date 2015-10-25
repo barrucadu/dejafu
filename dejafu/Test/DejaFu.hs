@@ -239,7 +239,7 @@ autocheckCases =
 
 -- | Check a predicate and print the result to stdout, return 'True'
 -- if it passes.
-dejafu :: (Eq a, Show a)
+dejafu :: Show a
   => (forall t. Conc t a)
   -- ^ The computation to test
   -> (String, Predicate a)
@@ -259,7 +259,7 @@ dejafu = dejafu' SequentialConsistency 2
 --
 -- __Warning:__ Using a larger pre-emption bound will almost certainly
 -- significantly increase the time taken to test!
-dejafu' :: (Eq a, Show a)
+dejafu' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Int
@@ -274,7 +274,7 @@ dejafu' memtype pb conc test = dejafus' memtype pb conc [test]
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
-dejafus :: (Eq a, Show a)
+dejafus :: Show a
   => (forall t. Conc t a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
@@ -284,7 +284,7 @@ dejafus = dejafus' SequentialConsistency 2
 
 -- | Variant of 'dejafus' which takes a memory model and pre-emption
 -- bound.
-dejafus' :: (Eq a, Show a)
+dejafus' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Int
@@ -301,19 +301,19 @@ dejafus' memtype pb conc tests = do
   return $ and results
 
 -- | Variant of 'dejafu' for computations which do 'IO'.
-dejafuIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
+dejafuIO :: Show a => (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
 dejafuIO = dejafuIO' SequentialConsistency 2
 
 -- | Variant of 'dejafu'' for computations which do 'IO'.
-dejafuIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
+dejafuIO' :: Show a => MemType -> Int -> (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
 dejafuIO' memtype pb concio test = dejafusIO' memtype pb concio [test]
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
-dejafusIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
+dejafusIO :: Show a => (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
 dejafusIO = dejafusIO' SequentialConsistency 2
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-dejafusIO' :: (Eq a, Show a) => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
+dejafusIO' :: Show a => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
 dejafusIO' memtype pb concio tests = do
   traces  <- sctPreBoundIO memtype pb concio
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
@@ -465,7 +465,7 @@ somewhereTrue p xs = go xs Result { _pass = False, _casesChecked = 0, _failures 
 -- * Internal
 
 -- | Run a test and print to stdout
-doTest :: (Eq a, Show a) => String -> Result a -> IO Bool
+doTest :: Show a => String -> Result a -> IO Bool
 doTest name result = do
   if _pass result
   then
