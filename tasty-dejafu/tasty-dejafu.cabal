@@ -16,6 +16,10 @@ build-type:          Simple
 -- extra-source-files:  
 cabal-version:       >=1.10
 
+source-repository head
+  type:     git
+  location: https://github.com/barrucadu/dejafu.git
+
 library
   exposed-modules:     Test.Tasty.DejaFu
   -- other-modules:       
