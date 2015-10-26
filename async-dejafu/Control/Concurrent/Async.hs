@@ -110,9 +110,7 @@ instance MonadConc m => Applicative (Concurrently m) where
     Concurrently $ (\(f, a) -> f a) <$> concurrently fs as
 
 instance MonadConc m => Alternative (Concurrently m) where
-  -- 'yield' or something here would be better, but dejafu currently
-  -- has no yield.
-  empty = Concurrently $ forever (return ())
+  empty = Concurrently $ forever yield
 
   Concurrently as <|> Concurrently bs =
     Concurrently $ either id id <$> race as bs
