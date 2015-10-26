@@ -16,49 +16,9 @@ module Test.DejaFu.Deterministic.IO
   ( -- * The @ConcIO@ Monad
     ConcIO
   , Failure(..)
+  , MemType(..)
   , runConcIO
   , runConcIO'
-  , liftIO
-
-  -- * Concurrency
-  , fork
-  , forkFinally
-  , forkWithUnmask
-  , forkOn
-  , getNumCapabilities
-  , myThreadId
-  , yield
-  , spawn
-  , atomically
-  , throw
-  , throwTo
-  , killThread
-  , Test.DejaFu.Deterministic.IO.catch
-  , mask
-  , uninterruptibleMask
-
-  -- * @CVar@s
-  , CVar
-  , newEmptyCVar
-  , putCVar
-  , tryPutCVar
-  , readCVar
-  , takeCVar
-  , tryTakeCVar
-
-  -- * @CRef@s
-  , CRef
-  , MemType(..)
-  , newCRef
-  , readCRef
-  , writeCRef
-  , atomicWriteCRef
-  , modifyCRef
-
-  -- * Testing
-  , _concKnowsAbout
-  , _concForgets
-  , _concAllKnown
 
   -- * Execution traces
   , Trace
@@ -77,7 +37,7 @@ module Test.DejaFu.Deterministic.IO
   , module Test.DejaFu.Deterministic.Schedule
   ) where
 
-import Control.Exception (Exception, MaskingState(..), SomeException)
+import Control.Exception (Exception, MaskingState(..))
 import Control.Monad.Cont (cont, runCont)
 import Data.IORef (IORef, newIORef)
 import Test.DejaFu.Deterministic.Internal
@@ -163,10 +123,6 @@ liftIO :: IO a -> ConcIO t a
 liftIO ma = C $ cont lifted where
   lifted c = ALift $ c <$> ma
 
--- | Run the provided computation concurrently, returning the result.
-spawn :: ConcIO t a -> ConcIO t (CVar t a)
-spawn = C.spawn
-
 -- | Block on a 'CVar' until it is full, then read from it (without
 -- emptying).
 readCVar :: CVar t a -> ConcIO t a
@@ -251,27 +207,11 @@ throw e = C $ cont $ \_ -> AThrow e
 throwTo :: Exception e => ThreadId -> e -> ConcIO t ()
 throwTo tid e = C $ cont $ \c -> AThrowTo tid e $ c ()
 
--- | Raise the 'ThreadKilled' exception in the target thread. Note
--- that if the thread is prepared to catch this exception, it won't
--- actually kill it.
-killThread :: ThreadId -> ConcIO t ()
-killThread = C.killThread
-
 -- | Catch an exception raised by 'throw'. This __cannot__ catch
 -- errors, such as evaluating 'undefined', or division by zero. If you
 -- need that, use Control.Exception.catch and 'liftIO'.
 catch :: Exception e => ConcIO t a -> (e -> ConcIO t a) -> ConcIO t a
 catch ma h = C $ cont $ ACatching (unC . h) (unC ma)
-
--- | Fork a thread and call the supplied function when the thread is
--- about to terminate, with an exception or a returned value. The
--- function is called with asynchronous exceptions masked.
---
--- This function is useful for informing the parent when a child
--- terminates, for example.
-forkFinally :: ConcIO t a -> (Either SomeException a -> ConcIO t ()) -> ConcIO t ThreadId
-forkFinally action and_then = mask $ \restore ->
-  fork $ Ca.try (restore action) >>= and_then
 
 -- | Like 'fork', but the child thread is passed a function that can
 -- be used to unmask asynchronous exceptions. This function should not

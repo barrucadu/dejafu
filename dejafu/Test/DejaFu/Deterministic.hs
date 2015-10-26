@@ -13,48 +13,9 @@ module Test.DejaFu.Deterministic
   ( -- * The @Conc@ Monad
     Conc
   , Failure(..)
+  , MemType(..)
   , runConc
   , runConc'
-
-  -- * Concurrency
-  , fork
-  , forkFinally
-  , forkWithUnmask
-  , forkOn
-  , getNumCapabilities
-  , myThreadId
-  , yield
-  , spawn
-  , atomically
-  , throw
-  , throwTo
-  , killThread
-  , Test.DejaFu.Deterministic.catch
-  , mask
-  , uninterruptibleMask
-
-  -- * @CVar@s
-  , CVar
-  , newEmptyCVar
-  , putCVar
-  , tryPutCVar
-  , readCVar
-  , takeCVar
-  , tryTakeCVar
-
-  -- * @CRef@s
-  , CRef
-  , MemType(..)
-  , newCRef
-  , readCRef
-  , writeCRef
-  , atomicWriteCRef
-  , modifyCRef
-
-  -- * Testing
-  , _concKnowsAbout
-  , _concForgets
-  , _concAllKnown
 
   -- * Execution traces
   , Trace
@@ -73,7 +34,7 @@ module Test.DejaFu.Deterministic
   , module Test.DejaFu.Deterministic.Schedule
   ) where
 
-import Control.Exception (Exception, MaskingState(..), SomeException)
+import Control.Exception (Exception, MaskingState(..))
 import Control.Monad.Cont (cont, runCont)
 import Control.Monad.ST (ST, runST)
 import Data.STRef (STRef, newSTRef)
@@ -157,10 +118,6 @@ newtype CVar t a = Var { unV :: V (STRef t) a } deriving Eq
 -- but don't have the potential re-ordering problem mentioned in
 -- Data.IORef.
 newtype CRef t a = Ref { unR :: R (STRef t) a } deriving Eq
-
--- | Run the provided computation concurrently, returning the result.
-spawn :: Conc t a -> Conc t (CVar t a)
-spawn = C.spawn
 
 -- | Block on a 'CVar' until it is full, then read from it (without
 -- emptying).
@@ -246,27 +203,11 @@ throw e = C $ cont $ \_ -> AThrow e
 throwTo :: Exception e => ThreadId -> e -> Conc t ()
 throwTo tid e = C $ cont $ \c -> AThrowTo tid e $ c ()
 
--- | Raise the 'ThreadKilled' exception in the target thread. Note
--- that if the thread is prepared to catch this exception, it won't
--- actually kill it.
-killThread :: ThreadId -> Conc t ()
-killThread = C.killThread
-
 -- | Catch an exception raised by 'throw'. This __cannot__ catch
 -- errors, such as evaluating 'undefined', or division by zero. If you
 -- need that, use Control.Exception.catch and 'ConcIO'.
 catch :: Exception e => Conc t a -> (e -> Conc t a) -> Conc t a
 catch ma h = C $ cont $ ACatching (unC . h) (unC ma)
-
--- | Fork a thread and call the supplied function when the thread is
--- about to terminate, with an exception or a returned value. The
--- function is called with asynchronous exceptions masked.
---
--- This function is useful for informing the parent when a child
--- terminates, for example.
-forkFinally :: Conc t a -> (Either SomeException a -> Conc t ()) -> Conc t ThreadId
-forkFinally action and_then = mask $ \restore ->
-  fork $ Ca.try (restore action) >>= and_then
 
 -- | Like 'fork', but the child thread is passed a function that can
 -- be used to unmask asynchronous exceptions. This function should not
