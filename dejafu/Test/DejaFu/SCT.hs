@@ -61,7 +61,6 @@ import Test.DejaFu.Deterministic.IO (ConcIO, runConcIO')
 import Test.DejaFu.SCT.Internal
 
 import qualified Data.IntMap.Strict as I
-import qualified Data.Set as S
 import qualified Data.Sequence as Sq
 
 #if __GLASGOW_HASKELL__ < 710
@@ -84,6 +83,17 @@ sctPreBound memtype pb = sctBounded memtype preEmpCount pb pbBacktrack pbInitial
 -- | Variant of 'sctPreBound' for computations which do 'IO'.
 sctPreBoundIO :: MemType -> Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
 sctPreBoundIO memtype pb = sctBoundedIO memtype preEmpCount pb pbBacktrack pbInitialise
+
+-- | Count the number of pre-emptions in a schedule prefix.
+preEmpCount :: [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Int
+preEmpCount ts (d, l) = go ts where
+  go ((d, a):rest) = preEmpC (d, Left a) + go rest
+  go [] = preEmpC (d, Right l)
+
+  preEmpC (SwitchTo _, Left Yield) = 0
+  preEmpC (SwitchTo _, Right WillYield) = 0
+  preEmpC (SwitchTo t, _) = if t >= 0 then 1 else 0
+  preEmpC _ = 0
 
 -- | Add a backtrack point, and also conservatively add one prior to
 -- the most recent transition before that point. This may result in
@@ -111,14 +121,14 @@ pbBacktrack bs i tid = maybe id (\j' b -> backtrack True b j' tid) j $ backtrack
     -- If the backtracking point is already present, don't re-add it,
     -- UNLESS this would force it to backtrack (it's conservative)
     -- where before it might not.
-    | t `S.member` _runnable b =
+    | t `I.member` _runnable b =
       let val = I.lookup t $ _backtrack b
       in  if isNothing val || (val == Just False && c)
           then b { _backtrack = I.insert t c $ _backtrack b } : rest
           else bx
 
     -- Otherwise just backtrack to everything runnable.
-    | otherwise = b { _backtrack = I.fromList [ (t',c) | t' <- S.toList $ _runnable b ] } : rest
+    | otherwise = b { _backtrack = I.fromList [ (t',c) | t' <- I.keys $ _runnable b ] } : rest
 
   backtrack c (b:rest) n t = b : backtrack c rest (n-1) t
   backtrack _ [] _ _ = error "Ran out of schedule whilst backtracking!"
@@ -148,7 +158,7 @@ pbInitialise prior threads@((nextTid, _):|rest) = case prior of
 sctBounded :: Ord d
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> ([Decision] -> d)
+  -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> d)
   -- ^ Convert a prefix trace to a bound-specific value
   -> d
   -- ^ The maximum bound
@@ -166,7 +176,7 @@ sctBounded memtype bf blim backtrack initialise c = runIdentity $ sctBoundedM me
 -- | Variant of 'sctBounded' for computations which do 'IO'.
 sctBoundedIO :: Ord d
   => MemType
-  -> ([Decision] -> d) -> d
+  -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> d) -> d
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
@@ -176,7 +186,7 @@ sctBoundedIO memtype bf blim backtrack initialise c = sctBoundedM memtype bf bli
 -- | Generic SCT runner.
 sctBoundedM :: (Functor m, Monad m, Ord d)
   => MemType
-  -> ([Decision] -> d) -> d
+  -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> d) -> d
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -> (MemType -> Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
@@ -188,7 +198,7 @@ sctBoundedM memtype bf blim backtrack initialise run = go initialState where
       (res, s, trace) <- run memtype (bporSched initialise) (initialSchedState sched)
 
       let bpoints = findBacktrack memtype backtrack (_sbpoints s) trace
-      let newBPOR = pruneCommits . todo (\t -> bf t <= blim) bpoints $ grow memtype conservative trace bpor'
+      let newBPOR = pruneCommits . todo (\t d -> bf t d <= blim) bpoints $ grow memtype conservative trace bpor'
 
       ((res, toTrace trace):) <$> go newBPOR
 

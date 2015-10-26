@@ -23,6 +23,7 @@ module Test.DejaFu.Deterministic
   , forkOn
   , getNumCapabilities
   , myThreadId
+  , yield
   , spawn
   , atomically
   , throw
@@ -123,6 +124,7 @@ instance C.MonadConc (Conc t) where
   forkOn         = forkOn
   getNumCapabilities = getNumCapabilities
   myThreadId     = myThreadId
+  yield          = yield
   throwTo        = throwTo
   newEmptyCVar   = newEmptyCVar
   putCVar        = putCVar
@@ -172,6 +174,11 @@ fork (C ma) = C $ cont $ AFork ((\a _ -> a) $ runCont ma $ const AStop)
 -- | Get the 'ThreadId' of the current thread.
 myThreadId :: Conc t ThreadId
 myThreadId = C $ cont AMyTId
+
+-- | Allows a context-switch to any other currently runnable thread
+-- (if any).
+yield :: Conc t ()
+yield = C $ cont $ \c -> AYield $ c ()
 
 -- | Run the provided 'MonadSTM' transaction atomically. If 'retry' is
 -- called, it will be blocked until any of the touched 'CTVar's have

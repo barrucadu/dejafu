@@ -63,6 +63,7 @@ data Action n r s =
   | AKnowsAbout (Either CVarId CTVarId) (Action n r s)
   | AForgets (Either CVarId CTVarId) (Action n r s)
   | AAllKnown (Action n r s)
+  | AYield (Action n r s)
   | ACommit ThreadId CRefId
   | AStop
 
@@ -176,6 +177,8 @@ data ThreadAction =
   -- ^ Start a new thread.
   | MyThreadId
   -- ^ Get the 'ThreadId' of the current thread.
+  | Yield
+  -- ^ Yield the current thread.
   | New CVarId
   -- ^ Create a new 'CVar'.
   | Put CVarId [ThreadId]
@@ -276,6 +279,8 @@ data Lookahead =
   -- ^ Will start a new thread.
   | WillMyThreadId
   -- ^ Will get the 'ThreadId'.
+  | WillYield
+  -- ^ Will yield the current thread.
   | WillNew
   -- ^ Will create a new 'CVar'.
   | WillPut CVarId

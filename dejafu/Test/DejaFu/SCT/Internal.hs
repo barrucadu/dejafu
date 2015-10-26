@@ -32,7 +32,7 @@ data BacktrackStep = BacktrackStep
   -- ^ The thread running at this step
   , _decision  :: (Decision, ThreadAction)
   -- ^ What happened at this step.
-  , _runnable  :: Set ThreadId
+  , _runnable  :: IntMap Lookahead
   -- ^ The threads runnable at this step
   , _backtrack :: IntMap Bool
   -- ^ The list of alternative threads to run, and whether those
@@ -132,11 +132,11 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
         this = BacktrackStep
           { _threadid  = tid'
           , _decision  = (d, a)
-          , _runnable  = S.fromList . map fst . toList $ e
+          , _runnable  = I.fromList . toList $ e
           , _backtrack = I.fromList $ map (\i' -> (i', False)) i
           }
         bs' = doBacktrack crstate' allThreads (toList e) bs
-        allThreads' = allThreads `S.union` _runnable this
+        allThreads' = allThreads `S.union` S.fromList (I.keys $ _runnable this)
     in go crstate' allThreads' tid' (bs' ++ [this]) (Sq.viewl is) ts
   go _ _ _ bs _ _ = bs
 
@@ -199,7 +199,7 @@ grow memtype conservative = grow' initialCVState initialCRState 0 where
 
 -- | Add new backtracking points, if they have not already been
 -- visited, fit into the bound, and aren't in the sleep set.
-todo :: ([Decision] -> Bool) -> [BacktrackStep] -> BPOR -> BPOR
+todo :: ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool) -> [BacktrackStep] -> BPOR -> BPOR
 todo bv = step where
   step bs bpor =
     let (bpor', bs') = go 0 [] Nothing bs bpor
@@ -210,7 +210,8 @@ todo bv = step where
   go tid pref lastb (b:bs) bpor =
     let (bpor', blocked) = backtrack pref b bpor
         tid'   = tidOf tid . fst $ _decision b
-        (child, blocked')  = go tid' (pref++[fst $ _decision b]) (Just b) bs . fromJust $ I.lookup tid' (_bdone bpor)
+        pref'  = pref ++ [_decision b]
+        (child, blocked')  = go tid' pref' (Just b) bs . fromJust $ I.lookup tid' (_bdone bpor)
         bpor'' = bpor' { _bdone = I.insert tid' child $ _bdone bpor' }
     in  case lastb of
          Just b' -> (bpor'', b' { _backtrack = blocked } : blocked')
@@ -222,7 +223,9 @@ todo bv = step where
   backtrack pref b bpor =
     let todo' = [ x
                 | x@(t,c) <- I.toList $ _backtrack b
-                , bv $ pref ++ [decisionOf (Just $ activeTid pref) (_brunnable bpor) t]
+                , let decision  = decisionOf (Just . activeTid $ map fst pref) (_brunnable bpor) t
+                , let lookahead = fromJust . I.lookup t $ _runnable b
+                , bv pref (decision, lookahead)
                 , t `notElem` I.keys (_bdone bpor)
                 , c || I.notMember t (_bsleep bpor)
                 ]
@@ -268,14 +271,6 @@ decisionOf prior runnable chosen
 -- series of decisions. The list MUST begin with a 'Start'.
 activeTid :: [Decision] -> ThreadId
 activeTid = foldl' tidOf 0
-
--- | Count the number of pre-emptions in a schedule
-preEmpCount :: [Decision] -> Int
-preEmpCount (SwitchTo t:ds)
-  | t >= 0 = 1 + preEmpCount ds
-  | otherwise = preEmpCount ds
-preEmpCount (_:ds) = preEmpCount ds
-preEmpCount [] = 0
 
 -- | Check if an action is dependent on another.
 dependent :: MemType -> CRState -> ThreadAction -> (ThreadId, ThreadAction) -> Bool

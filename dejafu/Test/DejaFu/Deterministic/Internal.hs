@@ -189,6 +189,7 @@ lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (AKnowsAbout _ k)       = WillKnowsAbout : lookahead' k
   lookahead' (AForgets _ k)          = WillForgets : lookahead' k
   lookahead' (AAllKnown k)           = WillAllKnown : lookahead' k
+  lookahead' (AYield k)              = WillYield : lookahead' k
   lookahead' AStop                   = [WillStop]
 
 --------------------------------------------------------------------------------
@@ -215,6 +216,7 @@ stepThread :: forall n r s. (Functor n, Monad n) => Fixed n r s
 stepThread fixed runstm memtype action idSource tid threads wb = case action of
   AFork    a b     -> stepFork        a b
   AMyTId   c       -> stepMyTId       c
+  AYield   c       -> stepYield       c
   APut     ref a c -> stepPut         ref a c
   ATryPut  ref a c -> stepTryPut      ref a c
   AGet     ref c   -> stepGet         ref c
@@ -247,6 +249,9 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
 
     -- | Get the 'ThreadId' of the current thread
     stepMyTId c = simple (goto (c tid) tid threads) MyThreadId
+
+    -- | Yield the current thread
+    stepYield c = simple (goto c tid threads) Yield
 
     -- | Put a value into a @CVar@, blocking the thread until it's
     -- empty.
