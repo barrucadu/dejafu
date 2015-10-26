@@ -27,7 +27,7 @@ module Test.DejaFu.SCT
   , sctBounded
   , sctBoundedIO
 
-  -- * Pre-emption Bounding
+  -- * Pre-emption and Fair Bounding
 
   -- | BPOR using pre-emption bounding. This adds conservative
   -- backtracking points at the prior context switch whenever a
@@ -39,12 +39,29 @@ module Test.DejaFu.SCT
   , sctPreBound
   , sctPreBoundIO
 
+  -- | BPOR using fair bounding. This bounds the maximum difference
+  -- between the number of yield operations different threads have
+  -- performed.
+  --
+  -- See the BPOR paper for more details.
+
+  , sctFairBound
+  , sctFairBoundIO
+
+  -- | Combination pre-emption and fair bounding, this is what is used
+  -- by the testing functionality in @Test.DejaFu@.
+
+  , sctPFBound
+  , sctPFBoundIO
+
   -- * Utilities
 
   , tidOf
   , decisionOf
   , activeTid
   , preEmpCount
+  , yieldCount
+  , maxYieldCountDiff
   , initialCVState
   , updateCVState
   , willBlock
@@ -53,6 +70,7 @@ module Test.DejaFu.SCT
 
 import Control.DeepSeq (force)
 import Data.Functor.Identity (Identity(..), runIdentity)
+import Data.List (nub)
 import Data.IntMap.Strict (IntMap)
 import Data.Sequence (Seq, (|>))
 import Data.Maybe (maybeToList, isNothing)
@@ -78,11 +96,15 @@ sctPreBound :: MemType
   -> (forall t. Conc t a)
   -- ^ The computation to run many times
   -> [(Either Failure a, Trace)]
-sctPreBound memtype pb = sctBounded memtype preEmpCount pb pbBacktrack pbInitialise
+sctPreBound memtype pb = sctBounded memtype (pbBound pb) pbBacktrack pbInitialise
 
 -- | Variant of 'sctPreBound' for computations which do 'IO'.
 sctPreBoundIO :: MemType -> Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
-sctPreBoundIO memtype pb = sctBoundedIO memtype preEmpCount pb pbBacktrack pbInitialise
+sctPreBoundIO memtype pb = sctBoundedIO memtype (pbBound pb) pbBacktrack pbInitialise
+
+-- | Pre-emption bound function
+pbBound :: Int -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
+pbBound pb ts dl = preEmpCount ts dl <= pb
 
 -- | Count the number of pre-emptions in a schedule prefix.
 preEmpCount :: [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Int
@@ -141,6 +163,117 @@ pbInitialise prior threads@((nextTid, _):|rest) = case prior of
     | any (\(t, _) -> t == tid) $ toList threads -> tid:|[]
   _ -> nextTid:|map fst rest
 
+-- * Fair bounding
+
+-- | An SCT runner using a fair bounding scheduler.
+sctFairBound :: MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Int
+  -- ^ The maximum difference between the number of yield operations
+  -- performed by different threads.
+  -> (forall t. Conc t a)
+  -- ^ The computation to run many times
+  -> [(Either Failure a, Trace)]
+sctFairBound memtype fb = sctBounded memtype (fBound fb) fBacktrack fInitialise
+
+-- | Variant of 'sctFairBound' for computations which do 'IO'.
+sctFairBoundIO :: MemType -> Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
+sctFairBoundIO memtype fb = sctBoundedIO memtype (fBound fb) fBacktrack fInitialise
+
+-- | Fair bound function
+fBound :: Int -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
+fBound fb ts dl = maxYieldCountDiff ts dl <= fb
+
+-- | Count the number of yields by a thread in a schedule prefix.
+yieldCount :: ThreadId -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Int
+yieldCount tid ts (_, l) = go 0 ts where
+  go t ((Start    t', Yield):rest) = (if t == tid then 1 else 0) + go t' rest
+  go t ((SwitchTo t', Yield):rest) = (if t == tid then 1 else 0) + go t' rest
+  go t ((Continue,    Yield):rest) = (if t == tid then 1 else 0) + go t  rest
+  go _ ((Start    t', _):rest) = go t' rest
+  go _ ((SwitchTo t', _):rest) = go t' rest
+  go t ((Continue,    _):rest) = go t  rest
+  go t (_:rest) = go t rest
+  go t [] = if l == WillYield && t == tid then 1 else 0
+
+-- | Get the maximum difference between the yield counts of all
+-- threads in this schedule prefix.
+maxYieldCountDiff :: [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Int
+maxYieldCountDiff ts dl = maximum yieldCountDiffs where
+  yieldCounts = [yieldCount tid ts dl | tid <- nub $ allTids ts]
+  yieldCountDiffs = [y1 - y2 | y1 <- yieldCounts, y2 <- yieldCounts]
+
+  allTids ((_, Fork tid):rest) = tid : allTids rest
+  allTids (_:rest) = allTids rest
+  allTids [] = [0]
+
+-- | Add a backtrack point. If the thread isn't runnable, or performs
+-- a release operation, add all runnable threads.
+fBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
+fBacktrack bx@(b:rest) 0 t
+  -- If the backtracking point is already present, don't re-add it,
+  -- UNLESS this would force it to backtrack (it's conservative) where
+  -- before it might not.
+  | Just True == (isNotRelease <$> I.lookup t (_runnable b)) =
+    let val = I.lookup t $ _backtrack b
+    in  if isNothing val
+        then b { _backtrack = I.insert t False $ _backtrack b } : rest
+        else bx
+
+  -- Otherwise just backtrack to everything runnable.
+  | otherwise = b { _backtrack = I.fromList [ (t',False) | t' <- I.keys $ _runnable b ] } : rest
+
+  where
+    isNotRelease WillMyThreadId = True
+    isNotRelease WillNew = True
+    isNotRelease (WillRead _) = True
+    isNotRelease WillNewRef = True
+    isNotRelease (WillReadRef _) = True
+    isNotRelease (WillModRef _) = True
+    isNotRelease (WillWriteRef _) = True
+    isNotRelease (WillCommitRef _ _) = True
+    isNotRelease WillCatching = True
+    isNotRelease WillPopCatching = True
+    isNotRelease WillLift = True
+    isNotRelease WillKnowsAbout = True
+    isNotRelease WillForgets = True
+    isNotRelease WillAllKnown = True
+    isNotRelease _ = False
+
+fBacktrack (b:rest) n t = b : fBacktrack rest (n-1) t
+fBacktrack [] _ _ = error "Ran out of schedule whilst backtracking!"
+
+-- | Pick a new thread to run. Choose the current thread if available,
+-- otherwise add all runnable threads.
+fInitialise :: Maybe (ThreadId, a) -> NonEmpty (ThreadId, b) -> NonEmpty ThreadId
+fInitialise = pbInitialise
+
+-- * Combined PB and Fair bounding
+
+-- | An SCT runner using a fair bounding scheduler.
+sctPFBound :: MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Int
+  -- ^ The pre-emption bound
+  -> Int
+  -- ^ The fair bound
+  -> (forall t. Conc t a)
+  -- ^ The computation to run many times
+  -> [(Either Failure a, Trace)]
+sctPFBound memtype pb fb = sctBounded memtype (pfBound pb fb) pfBacktrack pbInitialise
+
+-- | Variant of 'sctPFBound' for computations which do 'IO'.
+sctPFBoundIO :: MemType -> Int -> Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
+sctPFBoundIO memtype pb fb = sctBoundedIO memtype (pfBound pb fb) pfBacktrack pbInitialise
+
+-- | PB/Fair bound function
+pfBound :: Int -> Int -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
+pfBound pb fb ts dl = preEmpCount ts dl <= pb && maxYieldCountDiff ts dl <= fb
+
+-- | PB/Fair backtracking function. Add all backtracking points.
+pfBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
+pfBacktrack bs i t = fBacktrack (pbBacktrack bs i t) i t
+
 -- * BPOR
 
 -- | SCT via BPOR.
@@ -155,13 +288,10 @@ pbInitialise prior threads@((nextTid, _):|rest) = case prior of
 -- Note that unlike with non-bounded partial-order reduction, this may
 -- do some redundant work as the introduction of a bound can make
 -- previously non-interfering events interfere with each other.
-sctBounded :: Ord d
-  => MemType
+sctBounded :: MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> d)
-  -- ^ Convert a prefix trace to a bound-specific value
-  -> d
-  -- ^ The maximum bound
+  -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
+  -- ^ Check if a prefix trace is within the bound
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -- ^ Add a new backtrack point, this takes the history of the
   -- execution so far, the index to insert the backtracking point, and
@@ -170,35 +300,34 @@ sctBounded :: Ord d
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -- ^ Produce possible scheduling decisions, all will be tried.
   -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
-sctBounded memtype bf blim backtrack initialise c = runIdentity $ sctBoundedM memtype bf blim backtrack initialise run where
+sctBounded memtype bf backtrack initialise c = runIdentity $ sctBoundedM memtype bf backtrack initialise run where
   run memty sched s = Identity $ runConc' sched memty s c
 
 -- | Variant of 'sctBounded' for computations which do 'IO'.
-sctBoundedIO :: Ord d
-  => MemType
-  -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> d) -> d
+sctBoundedIO :: MemType
+  -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
-sctBoundedIO memtype bf blim backtrack initialise c = sctBoundedM memtype bf blim backtrack initialise run where
+sctBoundedIO memtype bf backtrack initialise c = sctBoundedM memtype bf backtrack initialise run where
   run memty sched s = runConcIO' sched memty s c
 
 -- | Generic SCT runner.
-sctBoundedM :: (Functor m, Monad m, Ord d)
+sctBoundedM :: (Functor m, Monad m)
   => MemType
-  -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> d) -> d
+  -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -> (MemType -> Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
   -- ^ Monadic runner, with computation fixed.
   -> m [(Either Failure a, Trace)]
-sctBoundedM memtype bf blim backtrack initialise run = go initialState where
+sctBoundedM memtype bf backtrack initialise run = go initialState where
   go bpor = case next bpor of
     Just (sched, conservative, bpor') -> do
       (res, s, trace) <- run memtype (bporSched initialise) (initialSchedState sched)
 
       let bpoints = findBacktrack memtype backtrack (_sbpoints s) trace
-      let newBPOR = pruneCommits . todo (\t d -> bf t d <= blim) bpoints $ grow memtype conservative trace bpor'
+      let newBPOR = pruneCommits . todo bf bpoints $ grow memtype conservative trace bpor'
 
       ((res, toTrace trace):) <$> go newBPOR
 

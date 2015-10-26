@@ -219,7 +219,7 @@ autocheck' :: (Eq a, Show a)
   -> (forall t. Conc t a)
   -- ^ The computation to test
   -> IO Bool
-autocheck' memtype conc = dejafus' memtype 2 conc autocheckCases
+autocheck' memtype conc = dejafus' memtype 2 5 conc autocheckCases
 
 -- | Variant of 'autocheck' for computations which do 'IO'.
 autocheckIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> IO Bool
@@ -227,7 +227,7 @@ autocheckIO = autocheckIO' SequentialConsistency
 
 -- | Variant of 'autocheck'' for computations which do 'IO'.
 autocheckIO' :: (Eq a, Show a) => MemType -> (forall t. ConcIO t a) -> IO Bool
-autocheckIO' memtype concio = dejafusIO' memtype 2 concio autocheckCases
+autocheckIO' memtype concio = dejafusIO' memtype 2 5 concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
 autocheckCases :: (Eq a, Show a) => [(String, Predicate a)]
@@ -245,7 +245,7 @@ dejafu :: Show a
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
   -> IO Bool
-dejafu = dejafu' SequentialConsistency 2
+dejafu = dejafu' SequentialConsistency 2 5
 
 -- | Variant of 'dejafu'' which takes a memory model and pre-emption
 -- bound.
@@ -265,12 +265,15 @@ dejafu' :: Show a
   -> Int
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
+  -> Int
+  -- ^ The maximum difference between the number of yield operations
+  -- across all threads.
   -> (forall t. Conc t a)
   -- ^ The computation to test
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
   -> IO Bool
-dejafu' memtype pb conc test = dejafus' memtype pb conc [test]
+dejafu' memtype pb fb conc test = dejafus' memtype pb fb conc [test]
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
@@ -280,7 +283,7 @@ dejafus :: Show a
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> IO Bool
-dejafus = dejafus' SequentialConsistency 2
+dejafus = dejafus' SequentialConsistency 2 5
 
 -- | Variant of 'dejafus' which takes a memory model and pre-emption
 -- bound.
@@ -290,32 +293,35 @@ dejafus' :: Show a
   -> Int
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
+  -> Int
+  -- ^ The maximum difference between the number of yield operations
+  -- across all threads.
   -> (forall t. Conc t a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> IO Bool
-dejafus' memtype pb conc tests = do
-  let traces = sctPreBound memtype pb conc
+dejafus' memtype pb fb conc tests = do
+  let traces = sctPFBound memtype pb fb conc
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
 -- | Variant of 'dejafu' for computations which do 'IO'.
 dejafuIO :: Show a => (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
-dejafuIO = dejafuIO' SequentialConsistency 2
+dejafuIO = dejafuIO' SequentialConsistency 2 5
 
 -- | Variant of 'dejafu'' for computations which do 'IO'.
-dejafuIO' :: Show a => MemType -> Int -> (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
-dejafuIO' memtype pb concio test = dejafusIO' memtype pb concio [test]
+dejafuIO' :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
+dejafuIO' memtype pb fb concio test = dejafusIO' memtype pb fb concio [test]
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
 dejafusIO :: Show a => (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
-dejafusIO = dejafusIO' SequentialConsistency 2
+dejafusIO = dejafusIO' SequentialConsistency 2 5
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-dejafusIO' :: Show a => MemType -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
-dejafusIO' memtype pb concio tests = do
-  traces  <- sctPreBoundIO memtype pb concio
+dejafusIO' :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
+dejafusIO' memtype pb fb concio tests = do
+  traces  <- sctPFBoundIO memtype pb fb concio
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
@@ -349,7 +355,7 @@ runTest ::
   -> (forall t. Conc t a)
   -- ^ The computation to test
   -> Result a
-runTest = runTest' SequentialConsistency 2
+runTest = runTest' SequentialConsistency 2 5
 
 -- | Variant of 'runTest' which takes a memory model and pre-emption
 -- bound.
@@ -359,20 +365,23 @@ runTest' ::
   -> Int
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
+  -> Int
+  -- ^ The maximum difference between the number of yield operations
+  -- across all threads.
   -> Predicate a
   -- ^ The predicate to check
   -> (forall t. Conc t a)
   -- ^ The computation to test
   -> Result a
-runTest' memtype pb predicate conc = predicate $ sctPreBound memtype pb conc
+runTest' memtype pb fb predicate conc = predicate $ sctPFBound memtype pb fb conc
 
 -- | Variant of 'runTest' for computations which do 'IO'.
 runTestIO :: Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
-runTestIO = runTestIO' SequentialConsistency 2
+runTestIO = runTestIO' SequentialConsistency 2 5
 
 -- | Variant of 'runTest'' for computations which do 'IO'.
-runTestIO' :: MemType -> Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
-runTestIO' memtype pb predicate conc = predicate <$> sctPreBoundIO memtype pb conc
+runTestIO' :: MemType -> Int -> Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
+runTestIO' memtype pb fb predicate conc = predicate <$> sctPFBoundIO memtype pb fb conc
 
 -- * Predicates
 

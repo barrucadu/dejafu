@@ -27,7 +27,7 @@ import Data.Typeable (Typeable)
 import Test.DejaFu
 import Test.DejaFu.Deterministic (Conc, Trace, showFail, showTrace)
 import Test.DejaFu.Deterministic.IO (ConcIO)
-import Test.DejaFu.SCT (sctPreBound, sctPreBoundIO)
+import Test.DejaFu.SCT (sctPFBound, sctPFBoundIO)
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.Providers (IsTest(..), singleTest, testPassed, testFailed)
 
@@ -54,7 +54,7 @@ testAuto' :: (Eq a, Show a)
   -> (forall t. Conc t a)
   -- ^ The computation to test
   -> TestTree
-testAuto' memtype conc = testDejafus' memtype 2 conc autocheckCases
+testAuto' memtype conc = testDejafus' memtype 2 5 conc autocheckCases
 
 -- | Variant of 'testAuto' for computations which do 'IO'.
 testAutoIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> TestTree
@@ -62,7 +62,7 @@ testAutoIO = testAutoIO' SequentialConsistency
 
 -- | Variant of 'testAuto'' for computations which do 'IO'.
 testAutoIO' :: (Eq a, Show a) => MemType -> (forall t. ConcIO t a) -> TestTree
-testAutoIO' memtype concio = testDejafusIO' memtype 2 concio autocheckCases
+testAutoIO' memtype concio = testDejafusIO' memtype 2 5 concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
 autocheckCases :: Eq a => [(TestName, Predicate a)]
@@ -84,7 +84,7 @@ testDejafu :: Show a
   -> Predicate a
   -- ^ The predicate to check
   -> TestTree
-testDejafu = testDejafu' SequentialConsistency 2
+testDejafu = testDejafu' SequentialConsistency 2 5
 
 -- | Variant of 'testDejafu' which takes a memory model and
 -- pre-emption bound.
@@ -94,6 +94,9 @@ testDejafu' :: Show a
   -> Int
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
+  -> Int
+  -- ^ The maximum difference between the number of yield operations
+  -- across all threads.
   -> (forall t. Conc t a)
   -- ^ The computation to test
   -> TestName
@@ -101,7 +104,7 @@ testDejafu' :: Show a
   -> Predicate a
   -- ^ The predicate to check
   -> TestTree
-testDejafu' memtype pb conc name p = testDejafus' memtype pb conc [(name, p)]
+testDejafu' memtype pb fb conc name p = testDejafus' memtype pb fb conc [(name, p)]
 
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test. This will share work between the predicates, rather than
@@ -112,7 +115,7 @@ testDejafus :: Show a
   -> [(TestName, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> TestTree
-testDejafus = testDejafus' SequentialConsistency 2
+testDejafus = testDejafus' SequentialConsistency 2 5
 
 -- | Variant of 'testDejafus' which takes a memory model and pre-emption
 -- bound.
@@ -122,6 +125,9 @@ testDejafus' :: Show a
   -> Int
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
+  -> Int
+  -- ^ The maximum difference between the number of yield operations
+  -- across all threads.
   -> (forall t. Conc t a)
   -- ^ The computation to test
   -> [(TestName, Predicate a)]
@@ -131,18 +137,18 @@ testDejafus' = test
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
 testDejafuIO :: Show a => (forall t. ConcIO t a) -> TestName -> Predicate a -> TestTree
-testDejafuIO = testDejafuIO' SequentialConsistency 2
+testDejafuIO = testDejafuIO' SequentialConsistency 2 5
 
 -- | Variant of 'testDejafu'' for computations which do 'IO'.
-testDejafuIO' :: Show a => MemType -> Int -> (forall t. ConcIO t a) -> TestName -> Predicate a -> TestTree
-testDejafuIO' memtype pb concio name p = testDejafusIO' memtype pb concio [(name, p)]
+testDejafuIO' :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> TestName -> Predicate a -> TestTree
+testDejafuIO' memtype pb fb concio name p = testDejafusIO' memtype pb fb concio [(name, p)]
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
 testDejafusIO :: Show a => (forall t. ConcIO t a) -> [(TestName, Predicate a)] -> TestTree
-testDejafusIO = testDejafusIO' SequentialConsistency 2
+testDejafusIO = testDejafusIO' SequentialConsistency 2 5
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-testDejafusIO' :: Show a => MemType -> Int -> (forall t. ConcIO t a) -> [(TestName, Predicate a)] -> TestTree
+testDejafusIO' :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> [(TestName, Predicate a)] -> TestTree
 testDejafusIO' = testio
 
 --------------------------------------------------------------------------------
@@ -172,19 +178,19 @@ instance IsTest ConcIOTest where
     return $ if null err then testPassed "" else testFailed err
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu test.
-test :: Show a => MemType -> Int -> (forall t. Conc t a) -> [(TestName, Predicate a)] -> TestTree
-test memtype pb conc tests = case map toTest tests of
+test :: Show a => MemType -> Int -> Int -> (forall t. Conc t a) -> [(TestName, Predicate a)] -> TestTree
+test memtype pb fb conc tests = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts
 
   where
     toTest (name, p) = singleTest name $ ConcTest traces p
 
-    traces = sctPreBound memtype pb conc
+    traces = sctPFBound memtype pb fb conc
 
 -- | Produce a Tasty 'Test' from an IO-using Deja Fu test.
-testio :: Show a => MemType -> Int -> (forall t. ConcIO t a) -> [(TestName, Predicate a)] -> TestTree
-testio memtype pb concio tests = case map toTest tests of
+testio :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> [(TestName, Predicate a)] -> TestTree
+testio memtype pb fb concio tests = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts
 
@@ -193,7 +199,7 @@ testio memtype pb concio tests = case map toTest tests of
 
     -- As with HUnit, constructing a test is side-effect free, so
     -- sharing of traces can't happen here.
-    traces = sctPreBoundIO memtype pb concio
+    traces = sctPFBoundIO memtype pb fb concio
 
 -- | Convert a test result into an error message on failure (empty
 -- string on success).

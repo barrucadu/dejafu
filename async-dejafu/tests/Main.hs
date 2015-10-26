@@ -25,17 +25,15 @@ main = void . runTestTT $ TestList
     -- a bug which may require migrating away from Cont to fix.
     -- , testDejafu async_cancel      "async_cancel"      $ gives [Left (Just TestException), Right value]
 
-    -- this hangs dejafu doesn't cope well with forever (return ())
-    -- , testDejafu async_poll        "async_poll"        $ alwaysTrue (\case Right Nothing -> True; _ -> False)
-
+    , testDejafu async_poll        "async_poll"        $ alwaysTrue (\case Right Nothing -> True; _ -> False)
     , testDejafu async_poll2       "async_poll2"       $ alwaysTrue (\case Right (Just (Right v)) -> v == value; _ -> False)
     ]
 
   , TestLabel "withAsync" $ test
     [ testDejafu withasync_waitCatch "withasync_waitCatch" $ alwaysTrue (\case Right (Right v) -> v == value; _ -> False)
 
-    -- this hangs because dejafu doesn't cope well with @forever (return ())@
-    -- , testDejafu withasync_wait2     "withasync_wait2"     $ alwaysTrue (\case Right (Left _) -> True; _ -> False)
+    -- this hangs because I implemented the test incorrectly.
+    --, testDejafu withasync_wait2     "withasync_wait2"     $ alwaysTrue (\case Right (Left _) -> True; _ -> False)
 
     -- this fails because dejafu doesn't throw 'BlockedIndefinitelyOnMVar' in testing yet
     -- , testDejafu withasync_waitCatch_blocked "withasync_waitCatch_blocked" $ alwaysTrue (\case Right (Just BlockedIndefinitelyOnMVar) -> True; _ -> False)
@@ -98,7 +96,7 @@ async_cancel = do
 
 async_poll :: MonadConc m => m (Maybe (Either SomeException Int))
 async_poll = do
-  a <- async . forever $ return ()
+  a <- async $ forever yield
   poll a
 
 async_poll2 :: MonadConc m => m (Maybe (Either SomeException Int))
@@ -112,7 +110,7 @@ withasync_waitCatch = withAsync (return value) waitCatch
 
 withasync_wait2 :: MonadConc m => m (Either SomeException ())
 withasync_wait2 = do
-  a <- withAsync (forever $ return ()) return
+  a <- withAsync (forever yield) return
   waitCatch a
 
 withasync_waitCatch_blocked :: MonadConc m => m (Maybe BlockedIndefinitelyOnMVar)
