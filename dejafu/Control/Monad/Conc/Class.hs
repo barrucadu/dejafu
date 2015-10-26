@@ -101,6 +101,10 @@ class ( Applicative m, Monad m
   -- | Get the @ThreadId@ of the current thread.
   myThreadId :: m (ThreadId m)
 
+  -- | Allows a context-switch to any other currently runnable thread
+  -- (if any).
+  yield :: m ()
+
   -- | Create a new empty @CVar@.
   newEmptyCVar :: m (CVar m a)
 
@@ -263,6 +267,7 @@ instance MonadConc IO where
   forkOn         = C.forkOn
   getNumCapabilities = C.getNumCapabilities
   myThreadId     = C.myThreadId
+  yield          = C.yield
   throwTo        = C.throwTo
   newEmptyCVar   = newEmptyMVar
   putCVar        = putMVar
@@ -316,6 +321,7 @@ instance MonadConc m => MonadConc (ReaderT r m) where
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
+  yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   readCVar           = lift . readCVar
@@ -348,6 +354,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
+  yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   readCVar           = lift . readCVar
@@ -380,6 +387,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
+  yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   readCVar           = lift . readCVar
@@ -412,6 +420,7 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
+  yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   readCVar           = lift . readCVar
@@ -444,6 +453,7 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
+  yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   readCVar           = lift . readCVar
@@ -476,6 +486,7 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
+  yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   readCVar           = lift . readCVar
@@ -508,6 +519,7 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
 
   getNumCapabilities = lift getNumCapabilities
   myThreadId         = lift myThreadId
+  yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   readCVar           = lift . readCVar
