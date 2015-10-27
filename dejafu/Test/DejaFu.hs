@@ -184,6 +184,8 @@ module Test.DejaFu
   , alwaysTrue
   , alwaysTrue2
   , somewhereTrue
+  , gives
+  , gives'
   ) where
 
 import Control.Arrow (first)
@@ -471,9 +473,36 @@ somewhereTrue p xs = go xs Result { _pass = False, _casesChecked = 0, _failures 
     | otherwise = go ys . incCC $ res { _failures = y : _failures res }
   go [] res = res
 
+-- | Predicate for when there is a known set of results where every
+-- result must be exhibited at least once.
+gives :: Eq a => [Either Failure a] -> Predicate a
+gives expected results = go expected [] results Result { _pass = False, _casesChecked = 0, _failures = failures } where
+  go waitingFor alreadySeen ((x, _):xs) res
+    -- If it's a result we're waiting for, move it to the
+    -- @alreadySeen@ list and continue.
+    | x `elem` waitingFor  = go (filter (/=x) waitingFor) (x:alreadySeen) xs res { _casesChecked = _casesChecked res + 1 }
+
+    -- If it's a result we've already seen, continue.
+    | x `elem` alreadySeen = go waitingFor alreadySeen xs res { _casesChecked = _casesChecked res + 1 }
+
+    -- If it's not a result we expected, fail.
+    | otherwise = res { _casesChecked = _casesChecked res + 1 }
+
+  go [] _ [] res = res { _pass = True }
+  go _  _ [] res = res
+
+  failures = filter (\(r, _) -> r `notElem` expected) results
+
+-- | Variant of 'gives' that doesn't allow for expected failures.
+gives' :: Eq a => [a] -> Predicate a
+gives' = gives . map Right
+
 -- * Internal
 
 -- | Run a test and print to stdout
+--
+-- TODO: Allow for failure text, for cases like @gives@ and @gives'@
+-- where they can fail with no failing traces.
 doTest :: Show a => String -> Result a -> IO Bool
 doTest name result = do
   if _pass result

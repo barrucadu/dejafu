@@ -23,7 +23,7 @@ main = void . runTestTT $ TestList
 
     -- this doesn't quite work as dejafu can't deliver the exception in time! @return@ can't be pre-empted, this is
     -- a bug which may require migrating away from Cont to fix.
-    -- , testDejafu async_cancel      "async_cancel"      $ gives [Left (Just TestException), Right value]
+    -- , testDejafu async_cancel      "async_cancel"      $ gives' [Left (Just TestException), Right value]
 
     , testDejafu async_poll        "async_poll"        $ alwaysTrue (\case Right Nothing -> True; _ -> False)
     , testDejafu async_poll2       "async_poll2"       $ alwaysTrue (\case Right (Just (Right v)) -> v == value; _ -> False)
@@ -39,22 +39,6 @@ main = void . runTestTT $ TestList
     -- , testDejafu withasync_waitCatch_blocked "withasync_waitCatch_blocked" $ alwaysTrue (\case Right (Just BlockedIndefinitelyOnMVar) -> True; _ -> False)
     ]
   ]
-
-  where
-    -- Taken from the dejafu test suite. Because this has been used in
-    -- two separate places, it's probably worth bringing into dejafu
-    -- proper.
-    gives :: Eq a => [a] -> Predicate a
-    gives expected results = go expected [] results Result { _pass = False, _casesChecked = 0, _failures = failures } where
-      go waitingFor alreadySeen ((Right x, _):xs) res
-        | x `elem` waitingFor  = go (filter (/=x) waitingFor) (x:alreadySeen) xs res { _casesChecked = _casesChecked res + 1 }
-        | x `elem` alreadySeen = go waitingFor alreadySeen xs res { _casesChecked = _casesChecked res + 1 }
-        | otherwise = res { _casesChecked = _casesChecked res + 1 }
-      go waitingFor alreadySeen (_:xs) res = go waitingFor alreadySeen xs res
-      go [] _ [] res = res { _pass = True }
-      go _ _ _ res = res
-
-      failures = filter (\(r, _) -> either (const True) (`notElem` expected) r) results
 
 value :: Int
 value = 42

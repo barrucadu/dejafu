@@ -30,26 +30,11 @@ tests = TestList
     ]
 
   , TestLabel "CRef Relaxed Memory" $ test
-    [ testDejafu' SequentialConsistency 2 5 C.crefRelaxed "SQ" $ gives [(True, True), (True, False), (False, True)]
-    , testDejafu' TotalStoreOrder   2 5 C.crefRelaxed "TSO" $ gives [(True, True), (True, False), (False, True), (False, False)]
-    , testDejafu' PartialStoreOrder 2 5 C.crefRelaxed "PSO" $ gives [(True, True), (True, False), (False, True), (False, False)]
+    [ testDejafu' SequentialConsistency 2 5 C.crefRelaxed "SQ" $ gives' [(True, True), (True, False), (False, True)]
+    , testDejafu' TotalStoreOrder   2 5 C.crefRelaxed "TSO" $ gives' [(True, True), (True, False), (False, True), (False, False)]
+    , testDejafu' PartialStoreOrder 2 5 C.crefRelaxed "PSO" $ gives' [(True, True), (True, False), (False, True), (False, False)]
     ]
   ]
-
-  where
-    -- Predicate for when there is a known set of results where every
-    -- result must be exhibited at least once.
-    gives :: Eq a => [a] -> Predicate a
-    gives expected results = go expected [] results Result { _pass = False, _casesChecked = 0, _failures = failures } where
-      go waitingFor alreadySeen ((Right x, _):xs) res
-        | x `elem` waitingFor  = go (filter (/=x) waitingFor) (x:alreadySeen) xs res { _casesChecked = _casesChecked res + 1 }
-        | x `elem` alreadySeen = go waitingFor alreadySeen xs res { _casesChecked = _casesChecked res + 1 }
-        | otherwise = res { _casesChecked = _casesChecked res + 1 }
-      go waitingFor alreadySeen (_:xs) res = go waitingFor alreadySeen xs res
-      go [] _ [] res = res { _pass = True }
-      go _ _ _ res = res
-
-      failures = filter (\(r, _) -> either (const True) (`notElem` expected) r) results
 
 main :: IO ()
 main = void $ runTestTT tests
