@@ -206,7 +206,9 @@ testio memtype pb fb concio tests = case map toTest tests of
 showErr :: Show a => Result a -> String
 showErr res
   | _pass res = ""
-  | otherwise = "Failed after " ++ show (_casesChecked res) ++ " cases:\n" ++ unlines failures ++ rest where
+  | otherwise = "Failed after " ++ show (_casesChecked res) ++ " cases:\n" ++ msg ++ unlines failures ++ rest where
+
+  msg = if null (_failureMsg res) then "" else _failureMsg res ++ "\n"
 
   failures = map (\(r, t) -> "\t" ++ either showFail show r ++ " " ++ showTrace t) . take 5 $ _failures res
 

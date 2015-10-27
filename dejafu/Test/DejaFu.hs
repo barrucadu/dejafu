@@ -190,7 +190,7 @@ module Test.DejaFu
 
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
-import Control.Monad (when)
+import Control.Monad (when, unless)
 import Data.List.Extra
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.IO (ConcIO)
@@ -338,10 +338,20 @@ data Result a = Result
   -- ^ The number of cases checked.
   , _failures     :: [(Either Failure a, Trace)]
   -- ^ The failing cases, if any.
+  , _failureMsg   :: String
+  -- ^ A message to display on failure, if nonempty
   } deriving (Show, Eq)
 
+-- | A failed result, taking the given list of failures.
+defaultFail :: [(Either Failure a, Trace)] -> Result a
+defaultFail failures = Result False 0 failures ""
+
+-- | A passed result.
+defaultPass :: Result a
+defaultPass = Result True 0 [] ""
+
 instance NFData a => NFData (Result a) where
-  rnf r = rnf (_pass r, _casesChecked r, _failures r)
+  rnf r = rnf (_pass r, _casesChecked r, _failures r, _failureMsg r)
 
 instance Functor Result where
   fmap f r = r { _failures = map (first $ fmap f) $ _failures r }
@@ -423,8 +433,8 @@ alwaysSame = alwaysTrue2 (==)
 
 -- | Check that the result of a computation is not always the same.
 notAlwaysSame :: Eq a => Predicate a
-notAlwaysSame [x] = Result { _pass = False, _casesChecked = 1, _failures = [x] }
-notAlwaysSame xs = go xs Result { _pass = False, _casesChecked = 0, _failures = [] } where
+notAlwaysSame [x] = (defaultFail [x]) { _casesChecked = 1 }
+notAlwaysSame xs = go xs $ defaultFail [] where
   go [y1,y2] res
     | fst y1 /= fst y2 = incCC res { _pass = True }
     | otherwise = incCC res { _failures = y1 : y2 : _failures res }
@@ -436,11 +446,13 @@ notAlwaysSame xs = go xs Result { _pass = False, _casesChecked = 0, _failures = 
 -- | Check that the result of a unary boolean predicate is always
 -- true.
 alwaysTrue :: (Either Failure a -> Bool) -> Predicate a
-alwaysTrue p xs = go xs Result { _pass = True, _casesChecked = 0, _failures = filter (not . p . fst) xs } where
+alwaysTrue p xs = go xs $ (defaultFail failures) { _pass = True } where
   go (y:ys) res
     | p (fst y) = go ys . incCC $ res
     | otherwise = incCC $ res { _pass = False }
   go [] res = res
+
+  failures = filter (not . p . fst) xs
 
 -- | Check that the result of a binary boolean predicate is true
 -- between all pairs of results. Only properties which are transitive
@@ -449,8 +461,8 @@ alwaysTrue p xs = go xs Result { _pass = True, _casesChecked = 0, _failures = fi
 -- If the predicate fails, /both/ (result,trace) tuples will be added
 -- to the failures list.
 alwaysTrue2 :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
-alwaysTrue2 _ [_] = Result { _pass = True, _casesChecked = 1, _failures = [] }
-alwaysTrue2 p xs = go xs Result { _pass = True, _casesChecked = 0, _failures = failures xs } where
+alwaysTrue2 _ [_] = defaultPass { _casesChecked = 1 }
+alwaysTrue2 p xs = go xs $ defaultPass { _failures = failures } where
   go [y1,y2] res
     | p (fst y1) (fst y2) = incCC res
     | otherwise = incCC res { _pass = False }
@@ -459,24 +471,27 @@ alwaysTrue2 p xs = go xs Result { _pass = True, _casesChecked = 0, _failures = f
     | otherwise = go (y2:ys) . incCC $ res { _pass = False }
   go _ res = res
 
-  failures (y1:y2:ys)
-    | p (fst y1) (fst y2) = failures (y2:ys)
-    | otherwise = y1 : if null ys then [y2] else failures (y2:ys)
-  failures _ = []
+  failures = fgo xs where
+    fgo (y1:y2:ys)
+      | p (fst y1) (fst y2) = fgo (y2:ys)
+      | otherwise = y1 : if null ys then [y2] else fgo (y2:ys)
+    fgo _ = []
 
 -- | Check that the result of a unary boolean predicate is true at
 -- least once.
 somewhereTrue :: (Either Failure a -> Bool) -> Predicate a
-somewhereTrue p xs = go xs Result { _pass = False, _casesChecked = 0, _failures = filter (not . p . fst) xs } where
+somewhereTrue p xs = go xs $ defaultFail failures where
   go (y:ys) res
     | p (fst y) = incCC $ res { _pass = True }
     | otherwise = go ys . incCC $ res { _failures = y : _failures res }
   go [] res = res
 
+  failures = filter (not . p . fst) xs
+
 -- | Predicate for when there is a known set of results where every
 -- result must be exhibited at least once.
-gives :: Eq a => [Either Failure a] -> Predicate a
-gives expected results = go expected [] results Result { _pass = False, _casesChecked = 0, _failures = failures } where
+gives :: (Eq a, Show a) => [Either Failure a] -> Predicate a
+gives expected results = go expected [] results $ defaultFail failures where
   go waitingFor alreadySeen ((x, _):xs) res
     -- If it's a result we're waiting for, move it to the
     -- @alreadySeen@ list and continue.
@@ -489,20 +504,17 @@ gives expected results = go expected [] results Result { _pass = False, _casesCh
     | otherwise = res { _casesChecked = _casesChecked res + 1 }
 
   go [] _ [] res = res { _pass = True }
-  go _  _ [] res = res
+  go es _ [] res = res { _failureMsg = unlines $ map (\e -> "Expected: " ++ show e) es }
 
   failures = filter (\(r, _) -> r `notElem` expected) results
 
 -- | Variant of 'gives' that doesn't allow for expected failures.
-gives' :: Eq a => [a] -> Predicate a
+gives' :: (Eq a, Show a) => [a] -> Predicate a
 gives' = gives . map Right
 
 -- * Internal
 
 -- | Run a test and print to stdout
---
--- TODO: Allow for failure text, for cases like @gives@ and @gives'@
--- where they can fail with no failing traces.
 doTest :: Show a => String -> Result a -> IO Bool
 doTest name result = do
   if _pass result
@@ -512,6 +524,9 @@ doTest name result = do
   else do
     -- Display a failure message, and the first 5 (simplified) failed traces
     putStrLn ("\27[31m[fail]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")")
+
+    unless (null $ _failureMsg result) $
+      putStrLn $ _failureMsg result
 
     let failures = _failures result
     mapM_ (\(r, t) -> putStrLn $ "\t" ++ either showFail show r ++ " " ++ showTrace t) $ take 5 failures
