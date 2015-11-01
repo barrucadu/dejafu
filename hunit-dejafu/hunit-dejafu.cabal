@@ -4,7 +4,17 @@
 name:                hunit-dejafu
 version:             0.2.0.0
 synopsis:            Deja Fu support for the HUnit test framework.
--- description:         
+
+description:
+  Integration between the <https://hackage.haskell.org/package/dejafu dejafu>
+  library for concurrency testing and
+  <https://hackage.haskell.org/package/HUnit HUnit>. This lets you
+  easily incorporate concurrency testing into your existing test
+  suites.
+  .
+  See the <https://github.com/barrucadu/dejafu README> for more
+  details.
+
 homepage:            https://github.com/barrucadu/dejafu
 license:             MIT
 license-file:        LICENSE
