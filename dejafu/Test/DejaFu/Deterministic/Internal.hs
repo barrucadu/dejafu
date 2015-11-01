@@ -14,6 +14,8 @@ module Test.DejaFu.Deterministic.Internal
  , V
  , R
  , Fixed
+ , cont
+ , runCont
 
  -- * Primitive Actions
  , Action(..)
@@ -51,7 +53,6 @@ module Test.DejaFu.Deterministic.Internal
  ) where
 
 import Control.Exception (MaskingState(..), SomeException(..))
-import Control.Monad.Cont (cont, runCont)
 import Data.List (sort)
 import Data.List.Extra
 import Data.Maybe (fromJust, isJust, fromMaybe, isNothing, listToMaybe)

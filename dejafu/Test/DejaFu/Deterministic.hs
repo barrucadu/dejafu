@@ -35,7 +35,6 @@ module Test.DejaFu.Deterministic
   ) where
 
 import Control.Exception (Exception, MaskingState(..))
-import Control.Monad.Cont (cont, runCont)
 import Control.Monad.ST (ST, runST)
 import Data.STRef (STRef, newSTRef)
 import Test.DejaFu.Deterministic.Internal

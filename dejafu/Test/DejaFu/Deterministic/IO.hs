@@ -38,7 +38,6 @@ module Test.DejaFu.Deterministic.IO
   ) where
 
 import Control.Exception (Exception, MaskingState(..))
-import Control.Monad.Cont (cont, runCont)
 import Data.IORef (IORef, newIORef)
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule

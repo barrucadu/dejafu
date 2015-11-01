@@ -7,7 +7,6 @@ module Test.DejaFu.Deterministic.Internal.Common where
 
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception, MaskingState(..))
-import Control.Monad.Cont (Cont)
 import Data.IntMap.Strict (IntMap)
 import Data.List.Extra
 import Test.DejaFu.Internal
@@ -17,7 +16,18 @@ import Test.DejaFu.STM (CTVarId)
 -- * The @Conc@ Monad
 
 -- | The underlying monad is based on continuations over Actions.
-type M n r s a = Cont (Action n r s) a
+newtype M n r s a = M { runM :: (a -> Action n r s) -> Action n r s }
+
+instance Functor (M n r s) where
+    fmap f m = M $ \ c -> runM m (c . f)
+
+instance Applicative (M n r s) where
+    pure x  = M ($ x)
+    f <*> v = M $ \c -> runM f (\g -> runM v (c . g))
+
+instance Monad (M n r s) where
+    return  = pure
+    m >>= k = M $ \c -> runM m (\x -> runM (k x) c)
 
 -- | CVars are represented as a unique numeric identifier, and a
 -- reference containing a Maybe value.
@@ -30,7 +40,15 @@ type V r a = (CVarId, r (Maybe a))
 type R r a = (CRefId, r (IntMap a, a))
 
 -- | Dict of methods for implementations to override.
-type Fixed n r s = Ref n r (Cont (Action n r s))
+type Fixed n r s = Ref n r (M n r s)
+
+-- | Construct a continuation-passing operation from a function.
+cont :: ((a -> Action n r s) -> Action n r s) -> M n r s a
+cont = M
+
+-- | Run a CPS computation with the given final computation.
+runCont :: M n r s a -> (a -> Action n r s) -> Action n r s
+runCont = runM
 
 --------------------------------------------------------------------------------
 -- * Primitive Actions
