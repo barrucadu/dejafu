@@ -474,8 +474,13 @@ alwaysTrue2 p xs = go xs $ defaultPass { _failures = failures } where
   failures = fgo xs where
     fgo (y1:y2:ys)
       | p (fst y1) (fst y2) = fgo (y2:ys)
-      | otherwise = y1 : if null ys then [y2] else fgo (y2:ys)
+      | otherwise = y1 : y2 : fgo2 y2 ys
     fgo _ = []
+
+    fgo2 y1 (y2:ys)
+      | p (fst y1) (fst y2) = fgo (y2:ys)
+      | otherwise = y2 : fgo2 y2 ys
+    fgo2 _ _ = []
 
 -- | Check that the result of a unary boolean predicate is true at
 -- least once.
