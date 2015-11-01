@@ -20,11 +20,7 @@ main = void . runTestTT $ TestList
     , testDejafu async_waitCatch   "async_waitCatch"   $ alwaysTrue (\case Right (Right v) -> v == value; _ -> False)
     , testDejafu async_exwait      "async_exwait"      $ alwaysTrue (==Right (Just TestException))
     , testDejafu async_exwaitCatch "async_exwaitCatch" $ alwaysTrue (==Right (Just TestException))
-
-    -- this doesn't quite work as dejafu can't deliver the exception in time! @return@ can't be pre-empted, this is
-    -- a bug which may require migrating away from Cont to fix.
-    -- , testDejafu async_cancel      "async_cancel"      $ gives' [Left (Just TestException), Right value]
-
+    , testDejafu async_cancel      "async_cancel"      $ gives' [Left (Just TestException), Right value]
     , testDejafu async_poll        "async_poll"        $ alwaysTrue (\case Right Nothing -> True; _ -> False)
     , testDejafu async_poll2       "async_poll2"       $ alwaysTrue (\case Right (Just (Right v)) -> v == value; _ -> False)
     ]
