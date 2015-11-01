@@ -191,6 +191,7 @@ lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (AForgets _ k)          = WillForgets : lookahead' k
   lookahead' (AAllKnown k)           = WillAllKnown : lookahead' k
   lookahead' (AYield k)              = WillYield : lookahead' k
+  lookahead' (AReturn k)             = WillReturn : lookahead' k
   lookahead' AStop                   = [WillStop]
 
 --------------------------------------------------------------------------------
@@ -237,6 +238,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
   APopCatching a   -> stepPopCatching a
   AMasking m ma c  -> stepMasking     m ma c
   AResetMask b1 b2 m c -> stepResetMask b1 b2 m c
+  AReturn     c    -> stepReturn c
   AKnowsAbout v c  -> stepKnowsAbout  v c
   AForgets    v c  -> stepForgets v c
   AAllKnown   c    -> stepAllKnown c
@@ -418,6 +420,9 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
     stepLift na = do
       a <- na
       simple (goto a tid threads) Lift
+
+    -- | Execute a 'return' or 'pure'.
+    stepReturn c = simple (goto c tid threads) Return
 
     -- | Record that a variable is known about.
     stepKnowsAbout v c = simple (knows [v] tid $ goto c tid threads) KnowsAbout

@@ -22,7 +22,7 @@ instance Functor (M n r s) where
     fmap f m = M $ \ c -> runM m (c . f)
 
 instance Applicative (M n r s) where
-    pure x  = M ($ x)
+    pure x  = M $ \c -> AReturn $ c x
     f <*> v = M $ \c -> runM f (\g -> runM v (c . g))
 
 instance Monad (M n r s) where
@@ -82,6 +82,7 @@ data Action n r s =
   | AForgets (Either CVarId CTVarId) (Action n r s)
   | AAllKnown (Action n r s)
   | AYield (Action n r s)
+  | AReturn (Action n r s)
   | ACommit ThreadId CRefId
   | AStop
 
@@ -258,6 +259,8 @@ data ThreadAction =
   -- ^ Lift an action from the underlying monad. Note that the
   -- penultimate action in a trace will always be a @Lift@, this is an
   -- artefact of how the runner works.
+  | Return
+  -- ^ A 'return' or 'pure' action was executed.
   | KnowsAbout
   -- ^ A '_concKnowsAbout' annotation was processed.
   | Forgets
@@ -344,6 +347,8 @@ data Lookahead =
   -- ^ Will lift an action from the underlying monad. Note that the
   -- penultimate action in a trace will always be a @Lift@, this is an
   -- artefact of how the runner works.
+  | WillReturn
+  -- ^ Will execute a 'return' or 'pure' action.
   | WillKnowsAbout
   -- ^ Will process a '_concKnowsAbout' annotation.
   | WillForgets

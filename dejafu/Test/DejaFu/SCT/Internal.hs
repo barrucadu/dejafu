@@ -149,7 +149,7 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
                  , let is = [ i
                             | (i, b) <- tagged
                             , _threadid b == v
-                            , dependent' memtype crstate (snd $ _decision b) (u, n)
+                            , dependent' memtype crstate (_threadid b, snd $ _decision b) (u, n)
                             ]
                  , not $ null is] :: [(Int, ThreadId)]
     in foldl' (\b (i, u) -> backtrack b i u) bs idxs
@@ -170,7 +170,7 @@ grow memtype conservative = grow' initialCVState initialCRState 0 where
   subtree cvstate crstate tid sleep ((d, ts, a):rest) =
     let cvstate' = updateCVState cvstate a
         crstate' = updateCRState crstate a
-        sleep'   = I.filterWithKey (\t a' -> not $ dependent memtype crstate' a (t,a')) sleep
+        sleep'   = I.filterWithKey (\t a' -> not $ dependent memtype crstate' (tid, a) (t,a')) sleep
     in BPOR
         { _brunnable = S.fromList $ tids tid d a ts
         , _btodo     = I.empty
@@ -273,18 +273,20 @@ activeTid :: [Decision] -> ThreadId
 activeTid = foldl' tidOf 0
 
 -- | Check if an action is dependent on another.
-dependent :: MemType -> CRState -> ThreadAction -> (ThreadId, ThreadAction) -> Bool
-dependent _ _ Lift (_, Lift) = True
-dependent _ _ (ThrowTo t) (t2, _) = t == t2
-dependent _ _ (STM _) (_, STM _) = True
-dependent memtype buf d1 (_, d2) = dependentActions memtype buf (simplify d1) (simplify d2)
+dependent :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, ThreadAction) -> Bool
+dependent _ _ (_, Lift) (_, Lift) = True
+dependent _ _ (_, ThrowTo t) (t2, _) = t == t2
+dependent _ _ (t2, _) (_, ThrowTo t) = t == t2
+dependent _ _ (_, STM _) (_, STM _) = True
+dependent memtype buf (_, d1) (_, d2) = dependentActions memtype buf (simplify d1) (simplify d2)
 
 -- | Variant of 'dependent' to handle 'ThreadAction''s
-dependent' :: MemType -> CRState -> ThreadAction -> (ThreadId, Lookahead) -> Bool
-dependent' _ _ Lift (_, WillLift) = True
-dependent' _ _ (ThrowTo t) (t2, _) = t == t2
-dependent' _ _ (STM _) (_, WillSTM) = True
-dependent' memtype buf d1 (_, d2) = dependentActions memtype buf (simplify d1) (simplify' d2)
+dependent' :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool
+dependent' _ _ (_, Lift) (_, WillLift) = True
+dependent' _ _ (_, ThrowTo t) (t2, _)     = t == t2
+dependent' _ _ (t2, _) (_, WillThrowTo t) = t == t2
+dependent' _ _ (_, STM _) (_, WillSTM) = True
+dependent' memtype buf (_, d1) (_, d2) = dependentActions memtype buf (simplify d1) (simplify' d2)
 
 -- | Check if two 'ActionType's are dependent. Note that this is not
 -- sufficient to know if two 'ThreadAction's are dependent, without
