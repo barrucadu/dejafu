@@ -82,6 +82,7 @@ instance C.MonadConc (Conc t) where
   fork           = fork
   forkWithUnmask = forkWithUnmask
   forkOn         = forkOn
+  forkOnWithUnmask = forkOnWithUnmask
   getNumCapabilities = getNumCapabilities
   myThreadId     = myThreadId
   yield          = yield
@@ -248,6 +249,11 @@ uninterruptibleMask mb = C $ cont $
 -- implementation only has a single processor.
 forkOn :: Int -> Conc t () -> Conc t ThreadId
 forkOn _ = fork
+
+-- | Fork a computation to happen on a specific processor. This
+-- implementation only has a single processor.
+forkOnWithUnmask :: Int -> ((forall a. Conc t a -> Conc t a) -> Conc t ()) -> Conc t ThreadId
+forkOnWithUnmask _ = forkWithUnmask
 
 -- | Get the number of Haskell threads that can run
 -- simultaneously. This implementation lies and always returns
