@@ -4,11 +4,11 @@
 module Main where
 
 import Control.Concurrent.Async
-import Control.Exception (BlockedIndefinitelyOnMVar(..), Exception, SomeException, fromException)
+import Control.Exception (AsyncException(..), BlockedIndefinitelyOnMVar(..), Exception, SomeException(..), fromException)
 import Control.Monad (forever)
 import Control.Monad.Conc.Class
 import Data.Functor (void)
-import Data.Typeable (Typeable)
+import Data.Typeable (Typeable, cast)
 import Test.DejaFu hiding (MemType(..))
 import Test.HUnit (Test(..), runTestTT, test)
 import Test.HUnit.DejaFu
@@ -27,9 +27,7 @@ main = void . runTestTT $ TestList
 
   , TestLabel "withAsync" $ test
     [ testDejafu withasync_waitCatch "withasync_waitCatch" $ alwaysTrue (\case Right (Right v) -> v == value; _ -> False)
-
-    -- this hangs because I implemented the test incorrectly.
-    --, testDejafu withasync_wait2     "withasync_wait2"     $ alwaysTrue (\case Right (Left _) -> True; _ -> False)
+    , testDejafu withasync_wait2     "withasync_wait2"     $ alwaysTrue (\case Right (Left (Just ThreadKilled)) -> True; _ -> False)
 
     -- this fails because dejafu doesn't throw 'BlockedIndefinitelyOnMVar' in testing yet
     -- , testDejafu withasync_waitCatch_blocked "withasync_waitCatch_blocked" $ alwaysTrue (\case Right (Just BlockedIndefinitelyOnMVar) -> True; _ -> False)
@@ -88,10 +86,13 @@ async_poll2 = do
 withasync_waitCatch :: MonadConc m => m (Either SomeException Int)
 withasync_waitCatch = withAsync (return value) waitCatch
 
-withasync_wait2 :: MonadConc m => m (Either SomeException ())
+withasync_wait2 :: MonadConc m => m (Either (Maybe AsyncException) ())
 withasync_wait2 = do
   a <- withAsync (forever yield) return
-  waitCatch a
+  r <- waitCatch a
+  return $ case r of
+    Left (SomeException e) -> Left $ cast e
+    Right x -> Right x
 
 withasync_waitCatch_blocked :: MonadConc m => m (Maybe BlockedIndefinitelyOnMVar)
 withasync_waitCatch_blocked = do
