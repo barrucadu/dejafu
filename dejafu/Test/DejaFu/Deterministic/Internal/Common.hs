@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 
@@ -11,6 +12,10 @@ import Data.IntMap.Strict (IntMap)
 import Data.List.Extra
 import Test.DejaFu.Internal
 import Test.DejaFu.STM (CTVarId)
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative (Applicative(..))
+#endif
 
 --------------------------------------------------------------------------------
 -- * The @Conc@ Monad
