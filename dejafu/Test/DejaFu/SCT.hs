@@ -70,7 +70,8 @@ module Test.DejaFu.SCT
 
 import Control.DeepSeq (force)
 import Data.Functor.Identity (Identity(..), runIdentity)
-import Data.List (nub)
+import Data.List (nub, partition)
+import Data.List.Extra (unsafeToNonEmpty)
 import Data.IntMap.Strict (IntMap)
 import Data.Sequence (Seq, (|>))
 import Data.Maybe (maybeToList, isNothing)
@@ -155,13 +156,20 @@ pbBacktrack bs i tid = maybe id (\j' b -> backtrack True b j' tid) j $ backtrack
   backtrack c (b:rest) n t = b : backtrack c rest (n-1) t
   backtrack _ [] _ _ = error "Ran out of schedule whilst backtracking!"
 
--- | Pick a new thread to run. Choose the current thread if available,
--- otherwise add all runnable threads.
-pbInitialise :: Maybe (ThreadId, a) -> NonEmpty (ThreadId, b) -> NonEmpty ThreadId
-pbInitialise prior threads@((nextTid, _):|rest) = case prior of
+-- | Pick a new thread to run. Choose the current thread if available
+-- and it hasn't just yielded, otherwise add all runnable threads.
+pbInitialise :: Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId
+pbInitialise prior threads@((nextTid, _):|rest) = unsafeToNonEmpty . yieldsToEnd $ case prior of
+  Just (_, Yield) -> nextTid : map fst rest
   Just (tid, _)
-    | any (\(t, _) -> t == tid) $ toList threads -> tid:|[]
-  _ -> nextTid:|map fst rest
+    | any (\(t, _) -> t == tid) threads' -> [tid]
+  _ -> nextTid : map fst rest
+
+  where
+    yieldsToEnd ts = case partition ((== Just WillYield) . action) ts of
+      (willYield, noYield) -> noYield ++ willYield
+    action t = lookup t threads'
+    threads' = toList threads
 
 -- * Fair bounding
 
@@ -174,11 +182,11 @@ sctFairBound :: MemType
   -> (forall t. Conc t a)
   -- ^ The computation to run many times
   -> [(Either Failure a, Trace)]
-sctFairBound memtype fb = sctBounded memtype (fBound fb) fBacktrack fInitialise
+sctFairBound memtype fb = sctBounded memtype (fBound fb) fBacktrack pbInitialise
 
 -- | Variant of 'sctFairBound' for computations which do 'IO'.
 sctFairBoundIO :: MemType -> Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
-sctFairBoundIO memtype fb = sctBoundedIO memtype (fBound fb) fBacktrack fInitialise
+sctFairBoundIO memtype fb = sctBoundedIO memtype (fBound fb) fBacktrack pbInitialise
 
 -- | Fair bound function
 fBound :: Int -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
@@ -242,11 +250,6 @@ fBacktrack bx@(b:rest) 0 t
 
 fBacktrack (b:rest) n t = b : fBacktrack rest (n-1) t
 fBacktrack [] _ _ = error "Ran out of schedule whilst backtracking!"
-
--- | Pick a new thread to run. Choose the current thread if available,
--- otherwise add all runnable threads.
-fInitialise :: Maybe (ThreadId, a) -> NonEmpty (ThreadId, b) -> NonEmpty ThreadId
-fInitialise = pbInitialise
 
 -- * Combined PB and Fair bounding
 
