@@ -333,12 +333,17 @@ updateCVState cvstate _ = cvstate
 willBlock :: CVState -> Lookahead -> Bool
 willBlock cvstate (WillPut  c) = I.lookup c cvstate == Just True
 willBlock cvstate (WillTake c) = I.lookup c cvstate == Just False
+willBlock cvstate (WillRead c) = I.lookup c cvstate == Just False
 willBlock _ _ = False
 
 -- | Check if a list of actions will block safely (without modifying
 -- any global state). This allows further lookahead at, say, the
 -- 'spawn' of a thread (which always starts with 'KnowsAbout').
 willBlockSafely :: CVState -> [Lookahead] -> Bool
+willBlockSafely cvstate (WillMyThreadId:as) = willBlockSafely cvstate as
+willBlockSafely cvstate (WillNew:as)        = willBlockSafely cvstate as
+willBlockSafely cvstate (WillNewRef:as)     = willBlockSafely cvstate as
+willBlockSafely cvstate (WillReturn:as)     = willBlockSafely cvstate as
 willBlockSafely cvstate (WillKnowsAbout:as) = willBlockSafely cvstate as
 willBlockSafely cvstate (WillForgets:as)    = willBlockSafely cvstate as
 willBlockSafely cvstate (WillAllKnown:as)   = willBlockSafely cvstate as
