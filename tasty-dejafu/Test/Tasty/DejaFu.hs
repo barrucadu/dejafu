@@ -13,7 +13,7 @@ module Test.Tasty.DejaFu
   , testDejafuIO
   , testDejafusIO
 
-  -- * Testing under Relaxed Memory
+  -- * Testing under Alternative Memory Models
   , MemType(..)
   , testAuto'
   , testAutoIO'
@@ -44,7 +44,7 @@ testAuto :: (Eq a, Show a)
   => (forall t. Conc t a)
   -- ^ The computation to test
   -> TestTree
-testAuto = testAuto' SequentialConsistency
+testAuto = testAuto' TotalStoreOrder
 
 -- | Variant of 'testAuto' which tests a computation under a given
 -- memory model.
@@ -58,7 +58,7 @@ testAuto' memtype conc = testDejafus' memtype 2 5 conc autocheckCases
 
 -- | Variant of 'testAuto' for computations which do 'IO'.
 testAutoIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> TestTree
-testAutoIO = testAutoIO' SequentialConsistency
+testAutoIO = testAutoIO' TotalStoreOrder
 
 -- | Variant of 'testAuto'' for computations which do 'IO'.
 testAutoIO' :: (Eq a, Show a) => MemType -> (forall t. ConcIO t a) -> TestTree
@@ -84,7 +84,7 @@ testDejafu :: Show a
   -> Predicate a
   -- ^ The predicate to check
   -> TestTree
-testDejafu = testDejafu' SequentialConsistency 2 5
+testDejafu = testDejafu' TotalStoreOrder 2 5
 
 -- | Variant of 'testDejafu' which takes a memory model and
 -- pre-emption bound.
@@ -115,7 +115,7 @@ testDejafus :: Show a
   -> [(TestName, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> TestTree
-testDejafus = testDejafus' SequentialConsistency 2 5
+testDejafus = testDejafus' TotalStoreOrder 2 5
 
 -- | Variant of 'testDejafus' which takes a memory model and pre-emption
 -- bound.
@@ -137,7 +137,7 @@ testDejafus' = test
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
 testDejafuIO :: Show a => (forall t. ConcIO t a) -> TestName -> Predicate a -> TestTree
-testDejafuIO = testDejafuIO' SequentialConsistency 2 5
+testDejafuIO = testDejafuIO' TotalStoreOrder 2 5
 
 -- | Variant of 'testDejafu'' for computations which do 'IO'.
 testDejafuIO' :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> TestName -> Predicate a -> TestTree
@@ -145,7 +145,7 @@ testDejafuIO' memtype pb fb concio name p = testDejafusIO' memtype pb fb concio 
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
 testDejafusIO :: Show a => (forall t. ConcIO t a) -> [(TestName, Predicate a)] -> TestTree
-testDejafusIO = testDejafusIO' SequentialConsistency 2 5
+testDejafusIO = testDejafusIO' TotalStoreOrder 2 5
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
 testDejafusIO' :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> [(TestName, Predicate a)] -> TestTree

@@ -65,6 +65,10 @@ module Test.DejaFu
   --
   -- If you simply wish to check that something is deterministic, see
   -- the 'autocheck' and 'autocheckIO' functions.
+  --
+  -- These functions use a Total Store Order (TSO) memory model for
+  -- unsynchronised actions, see \"Testing under Alternative Memory
+  -- Models\" for some explanation of this.
 
     autocheck
   , dejafu
@@ -73,14 +77,15 @@ module Test.DejaFu
   , dejafuIO
   , dejafusIO
 
-  -- * Testing under Relaxed Memory
+  -- * Testing under Alternative Memory Models
 
   -- | Threads running under modern multicore processors do not behave
   -- as a simple interleaving of the individual thread
   -- actions. Processors do all sorts of complex things to increase
   -- speed, such as buffering writes. For concurrent programs which
-  -- make use of non-synchronised functions ('readCRef' coupled with
-  -- 'writeCRef') different memory models may yield different results.
+  -- make use of non-synchronised functions (such as 'readCRef'
+  -- coupled with 'writeCRef') different memory models may yield
+  -- different results.
   --
   -- As an example, consider this program (modified from the
   -- Data.IORef documentation). Two @CRef@s are created, and two
@@ -211,7 +216,7 @@ autocheck :: (Eq a, Show a)
   => (forall t. Conc t a)
   -- ^ The computation to test
   -> IO Bool
-autocheck = autocheck' SequentialConsistency
+autocheck = autocheck' TotalStoreOrder
 
 -- | Variant of 'autocheck' which tests a computation under a given
 -- memory model.
@@ -225,7 +230,7 @@ autocheck' memtype conc = dejafus' memtype 2 5 conc autocheckCases
 
 -- | Variant of 'autocheck' for computations which do 'IO'.
 autocheckIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> IO Bool
-autocheckIO = autocheckIO' SequentialConsistency
+autocheckIO = autocheckIO' TotalStoreOrder
 
 -- | Variant of 'autocheck'' for computations which do 'IO'.
 autocheckIO' :: (Eq a, Show a) => MemType -> (forall t. ConcIO t a) -> IO Bool
@@ -247,7 +252,7 @@ dejafu :: Show a
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
   -> IO Bool
-dejafu = dejafu' SequentialConsistency 2 5
+dejafu = dejafu' TotalStoreOrder 2 5
 
 -- | Variant of 'dejafu'' which takes a memory model and pre-emption
 -- bound.
@@ -285,7 +290,7 @@ dejafus :: Show a
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> IO Bool
-dejafus = dejafus' SequentialConsistency 2 5
+dejafus = dejafus' TotalStoreOrder 2 5
 
 -- | Variant of 'dejafus' which takes a memory model and pre-emption
 -- bound.
@@ -310,7 +315,7 @@ dejafus' memtype pb fb conc tests = do
 
 -- | Variant of 'dejafu' for computations which do 'IO'.
 dejafuIO :: Show a => (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
-dejafuIO = dejafuIO' SequentialConsistency 2 5
+dejafuIO = dejafuIO' TotalStoreOrder 2 5
 
 -- | Variant of 'dejafu'' for computations which do 'IO'.
 dejafuIO' :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
@@ -318,7 +323,7 @@ dejafuIO' memtype pb fb concio test = dejafusIO' memtype pb fb concio [test]
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
 dejafusIO :: Show a => (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
-dejafusIO = dejafusIO' SequentialConsistency 2 5
+dejafusIO = dejafusIO' TotalStoreOrder 2 5
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
 dejafusIO' :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
@@ -367,7 +372,7 @@ runTest ::
   -> (forall t. Conc t a)
   -- ^ The computation to test
   -> Result a
-runTest = runTest' SequentialConsistency 2 5
+runTest = runTest' TotalStoreOrder 2 5
 
 -- | Variant of 'runTest' which takes a memory model and pre-emption
 -- bound.
@@ -389,7 +394,7 @@ runTest' memtype pb fb predicate conc = predicate $ sctPFBound memtype pb fb con
 
 -- | Variant of 'runTest' for computations which do 'IO'.
 runTestIO :: Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
-runTestIO = runTestIO' SequentialConsistency 2 5
+runTestIO = runTestIO' TotalStoreOrder 2 5
 
 -- | Variant of 'runTest'' for computations which do 'IO'.
 runTestIO' :: MemType -> Int -> Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
