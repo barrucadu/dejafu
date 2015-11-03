@@ -1,6 +1,33 @@
 {-# LANGUAGE CPP        #-}
 {-# LANGUAGE RankNTypes #-}
 
+-- | This module is a version of the
+-- <https://hackage.haskell.org/package/async async> package using the
+-- <https://hackage.haskell.org/package/dejafu dejafu> concurrency
+-- abstraction. It provides a set of operations for running
+-- @MonadConc@ operations asynchronously and waiting for their
+-- results.
+--
+-- For example, assuming a suitable @getURL@ function, we can fetch
+-- the contents of two web pages at the same time:
+--
+-- > withAsync (getURL url1) $ \a1 -> do
+-- > withAsync (getURL url2) $ \a2 -> do
+-- > page1 <- wait a1
+-- > page2 <- wait a2
+-- > ...
+--
+-- The 'withAsync' function starts an operation in a separate thread,
+-- and kills it if the inner action finishes before it completes.
+--
+-- There are a few deviations from the regular async package:
+--
+--   * 'asyncBound' and 'withAsyncBound' are missing as dejafu does
+--   not support bound threads.
+--
+--   * The @Alternative@ instance for 'Concurrently' uses @forever
+--   yield@ in the definition of @empty@, rather than @forever
+--   (threadDelay maxBound)@.
 module Control.Concurrent.Async
   ( -- * Asynchronous actions
     Async
@@ -9,11 +36,13 @@ module Control.Concurrent.Async
   , async
   , asyncOn
   , asyncWithUnmask
+  , asyncOnWithUnmask
 
   -- * Spawning with automatic 'cancel'ation
   , withAsync
   , withAsyncOn
   , withAsyncWithUnmask
+  , withAsyncOnWithUnmask
 
   -- * Querying 'Async's
   , wait, waitSTM
@@ -51,7 +80,7 @@ module Control.Concurrent.Async
 import Control.Applicative
 import Control.Exception (AsyncException(ThreadKilled), BlockedIndefinitelyOnSTM(..), Exception, SomeException)
 import Control.Monad
-import Control.Monad.Catch (bracket, finally, try, onException)
+import Control.Monad.Catch (finally, try, onException)
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
 import Control.Concurrent.STM.CTMVar (newEmptyCTMVar, putCTMVar, readCTMVar)
@@ -129,17 +158,26 @@ asyncOn = asyncUsing . forkOn
 
 -- | Like 'async' but using 'forkWithUnmask' internally.
 asyncWithUnmask :: MonadConc m => ((forall b. m b -> m b) -> m a) -> m (Async m a)
-asyncWithUnmask action = do
-  var <- atomically newEmptyCTMVar
-  tid <- forkWithUnmask $ \restore -> try (action restore) >>= atomically . putCTMVar var
+asyncWithUnmask = asyncUnmaskUsing forkWithUnmask
 
-  return $ Async tid (readCTMVar var)
+-- | Like 'asyncOn' but using 'forkOnWithUnmask' internally.
+asyncOnWithUnmask :: MonadConc m => Int -> ((forall b. m b -> m b) -> m a) -> m (Async m a)
+asyncOnWithUnmask i = asyncUnmaskUsing (forkOnWithUnmask i)
 
 -- | Fork a thread with the given forking function
 asyncUsing :: MonadConc m => (m () -> m (ThreadId m)) -> m a -> m (Async m a)
 asyncUsing doFork action = do
   var <- atomically newEmptyCTMVar
   tid <- mask $ \restore -> doFork $ try (restore action) >>= atomically . putCTMVar var
+
+  return $ Async tid (readCTMVar var)
+
+-- | Fork a thread with the given forking function and give it an
+-- action to unmask exceptions
+asyncUnmaskUsing :: MonadConc m => (((forall b. m b -> m b) -> m ()) -> m (ThreadId m)) -> ((forall b. m b -> m b) -> m a) -> m (Async m a)
+asyncUnmaskUsing doFork action = do
+  var <- atomically newEmptyCTMVar
+  tid <- doFork $ \restore -> try (action restore) >>= atomically . putCTMVar var
 
   return $ Async tid (readCTMVar var)
 
@@ -155,20 +193,53 @@ asyncUsing doFork action = do
 -- Since 'cancel' may block, 'withAsync' may also block; see 'cancel'
 -- for details.
 withAsync :: MonadConc m => m a -> (Async m a -> m b) -> m b
-withAsync = withAsyncUsing async
+withAsync = withAsyncUsing fork
 
 -- | Like 'withAsync' but uses 'forkOn' internally.
 withAsyncOn :: MonadConc m => Int -> m a -> (Async m a -> m b) -> m b
-withAsyncOn = withAsyncUsing . asyncOn
+withAsyncOn = withAsyncUsing . forkOn
 
 -- | Like 'withAsync' bit uses 'forkWithUnmask' internally.
-withAsyncWithUnmask :: MonadConc m => ((forall c. m c -> m c) -> m a) -> (Async m a -> m b) -> m b
-withAsyncWithUnmask action = bracket (asyncWithUnmask action) cancel
+withAsyncWithUnmask :: MonadConc m => ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
+withAsyncWithUnmask = withAsyncUnmaskUsing forkWithUnmask
 
--- | Fork a thread with the given forking function, with cancellation.
-withAsyncUsing :: MonadConc m => (m a -> m (Async m a)) -> m a -> (Async m a -> m b) -> m b
-withAsyncUsing doAsync action = bracket (doAsync action) cancel
+-- | Like 'withAsyncOn' bit uses 'forkOnWithUnmask' internally.
+withAsyncOnWithUnmask :: MonadConc m => Int -> ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
+withAsyncOnWithUnmask i = withAsyncUnmaskUsing (forkOnWithUnmask i)
 
+-- | Fork a thread with the given forking function and kill it when
+-- the inner action completes.
+--
+-- The 'bracket' version appears to hang, even with just IO stuff and
+-- using the normal async package. Curious.
+withAsyncUsing :: MonadConc m => (m () -> m (ThreadId m)) -> m a -> (Async m a -> m b) -> m b
+withAsyncUsing doFork action inner = do
+  var <- atomically newEmptyCTMVar
+  tid <- mask $ \restore -> doFork $ try (restore action) >>= atomically . putCTMVar var
+
+  let a = Async tid (readCTMVar var)
+
+  res <- inner a `catchAll` (\e -> cancel a >> throw e)
+  cancel a
+
+  return res
+
+-- | Fork a thread with the given forking function, give it an action
+-- to unmask exceptions, and kill it when the inner action completed.
+withAsyncUnmaskUsing :: MonadConc m => (((forall x. m x -> m x) -> m ()) -> m (ThreadId m)) -> ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
+withAsyncUnmaskUsing doFork action inner = do
+  var <- atomically newEmptyCTMVar
+  tid <- doFork $ \restore -> try (action restore) >>= atomically . putCTMVar var
+
+  let a = Async tid (readCTMVar var)
+
+  res <- inner a `catchAll` (\e -> cancel a >> throw e)
+  cancel a
+
+  return res
+
+catchAll :: MonadConc m => m a -> (SomeException -> m a) -> m a
+catchAll = catch
 
 -------------------------------------------------------------------------------
 -- Querying

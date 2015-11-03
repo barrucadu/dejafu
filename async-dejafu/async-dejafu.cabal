@@ -4,7 +4,21 @@
 name:                async-dejafu
 version:             0.1.0.0
 synopsis:            Run MonadConc operations asynchronously and wait for their results.
--- description:         
+
+description:
+  The <https://hackage.haskell.org/package/async async> library
+  provides a higher-level interface over threads, allowing users to
+  conveniently run IO operations asynchronously and wait for their
+  results. This package is a reimplementation of async using the
+  @MonadConc@ abstraction from
+  <https://hackage.haskell.org/package/dejafu dejafu>, providing
+  easy-to-use asynchronous operaitons within an easily-testable
+  framework.
+  .
+  When these functions are used in an IO context, the behaviour should
+  appear identical to the original async package.
+
+
 homepage:            https://github.com/barrucadu/dejafu
 license:             BSD3
 license-file:        LICENSE
