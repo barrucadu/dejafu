@@ -7,10 +7,19 @@
 -- monads.
 module Control.Monad.Conc.Class
   ( MonadConc(..)
+
   -- * Utilities
   , spawn
   , forkFinally
   , killThread
+
+  -- * Bound Threads
+
+  -- | @MonadConc@ does not support bound threads, if you need that
+  -- sort of thing you will have to use regular @IO@.
+
+  , rtsSupportsBoundThreads
+  , isCurrentThreadBound
   ) where
 
 import Control.Concurrent (forkIO)
@@ -310,6 +319,14 @@ forkFinally action and_then =
 -- actually kill it.
 killThread :: MonadConc m => ThreadId m -> m ()
 killThread tid = throwTo tid ThreadKilled
+
+-- | Provided for compatibility, always returns 'False'.
+rtsSupportsBoundThreads :: Bool
+rtsSupportsBoundThreads = False
+
+-- | Provided for compatibility, always returns 'False'.
+isCurrentThreadBound :: MonadConc m => m Bool
+isCurrentThreadBound = return False
 
 -------------------------------------------------------------------------------
 -- Transformer instances
