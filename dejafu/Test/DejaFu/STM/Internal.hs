@@ -35,15 +35,15 @@ type Fixed t n r = Ref n r (Cont (STMAction t n r))
 -- | STM transactions are represented as a sequence of primitive
 -- actions.
 data STMAction t n r
-  = forall a e. Exception e => ACatch (M t n r a) (e -> M t n r a) (a -> STMAction t n r)
-  | forall a. ARead  (CTVar t r a) (a -> STMAction t n r)
-  | forall a. AWrite (CTVar t r a) a (STMAction t n r)
-  | forall a. AOrElse (M t n r a) (M t n r a) (a -> STMAction t n r)
-  | ANew (Fixed t n r -> CTVarId -> n (STMAction t n r))
-  | ALift (n (STMAction t n r))
-  | forall e. Exception e => AThrow e
-  | ARetry
-  | AStop
+  = forall a e. Exception e => SCatch (e -> M t n r a) (M t n r a) (a -> STMAction t n r)
+  | forall a. SRead  (CTVar t r a) (a -> STMAction t n r)
+  | forall a. SWrite (CTVar t r a) a (STMAction t n r)
+  | forall a. SOrElse (M t n r a) (M t n r a) (a -> STMAction t n r)
+  | forall a. SNew a (CTVar t r a -> STMAction t n r)
+  | SLift (n (STMAction t n r))
+  | forall e. Exception e => SThrow e
+  | SRetry
+  | SStop
 
 --------------------------------------------------------------------------------
 -- * @CTVar@s
@@ -91,7 +91,7 @@ doTransaction :: Monad n => Fixed t n r -> M t n r a -> CTVarId -> n (Result a, 
 doTransaction fixed ma newctvid = do
   ref <- newRef fixed Nothing
 
-  let c = runCont (ma >>= liftN fixed . writeRef fixed ref . Just . Right) $ const AStop
+  let c = runCont (ma >>= liftN fixed . writeRef fixed ref . Just . Right) $ const SStop
 
   (newctvid', undo, readen, written) <- go ref c (return ()) newctvid [] []
 
@@ -108,9 +108,9 @@ doTransaction fixed ma newctvid = do
       (act', undo', nctvid', readen', written') <- stepTrans fixed act nctvid
       let ret = (nctvid', undo >> undo', readen' ++ readen, written' ++ written)
       case act' of
-        AStop  -> return ret
-        ARetry -> writeRef fixed ref Nothing >> return ret
-        AThrow exc -> writeRef fixed ref (Just . Left $ wrap exc) >> return ret
+        SStop  -> return ret
+        SRetry -> writeRef fixed ref Nothing >> return ret
+        SThrow exc -> writeRef fixed ref (Just . Left $ wrap exc) >> return ret
 
         _ -> go ref act' (undo >> undo') nctvid' (readen' ++ readen) (written' ++ written)
 
@@ -123,66 +123,54 @@ doTransaction fixed ma newctvid = do
 -- | Run a transaction for one step.
 stepTrans :: forall t n r. Monad n => Fixed t n r -> STMAction t n r -> CTVarId -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
 stepTrans fixed act newctvid = case act of
-  ACatch  stm h c -> stepCatch stm h c
-  ARead   ref c   -> stepRead ref c
-  AWrite  ref a c -> stepWrite ref a c
-  ANew    na      -> stepNew na
-  AOrElse a b c   -> stepOrElse a b c
-  ALift   na      -> stepLift na
+  SCatch  h stm c -> stepCatch h stm c
+  SRead   ref c   -> stepRead ref c
+  SWrite  ref a c -> stepWrite ref a c
+  SNew    a c     -> stepNew a c
+  SOrElse a b c   -> stepOrElse a b c
+  SLift   na      -> stepLift na
 
-  AThrow exc -> return (AThrow exc, nothing, newctvid, [], [])
-  ARetry     -> return (ARetry,     nothing, newctvid, [], [])
-  AStop      -> return (AStop,      nothing, newctvid, [], [])
+  halt -> return (halt, nothing, newctvid, [], [])
 
   where
     nothing = return ()
 
-    stepCatch :: Exception e => M t n r a -> (e -> M t n r a) -> (a -> STMAction t n r) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
-    stepCatch stm h c = do
-      (res, undo, newctvid') <- doTransaction fixed stm newctvid
-      case res of
-        Success readen written val -> return (c val, undo, newctvid', readen, written)
-        Retry readen -> return (ARetry, nothing, newctvid, readen, [])
-        Exception exc -> case fromException exc of
-          Just exc' -> do
-            (rese, undoe, newctvide') <- doTransaction fixed (h exc') newctvid
-            case rese of
-              Success readen written val -> return (c val, undoe, newctvide', readen, written)
-              Exception exce -> return (AThrow exce, nothing, newctvid, [], [])
-              Retry readen -> return (ARetry, nothing, newctvid, readen, [])
-          Nothing -> return (AThrow exc, nothing, newctvid, [], [])
+    stepCatch h stm c = onFailure stm c
+      (\readen -> return (SRetry, nothing, newctvid, readen, []))
+      (\exc    -> case fromException exc of
+        Just exc' -> transaction (h exc') c
+        Nothing   -> return (SThrow exc, nothing, newctvid, [], []))
 
-    stepRead :: CTVar t r a -> (a -> STMAction t n r) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepRead (V (ctvid, ref)) c = do
       val <- readRef fixed ref
       return (c val, nothing, newctvid, [ctvid], [])
 
-    stepWrite :: CTVar t r a -> a -> STMAction t n r -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepWrite (V (ctvid, ref)) a c = do
       old <- readRef fixed ref
       writeRef fixed ref a
       return (c, writeRef fixed ref old, newctvid, [], [ctvid])
 
-    stepNew :: (Fixed t n r -> CTVarId -> n (STMAction t n r)) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
-    stepNew na = do
+    stepNew a c = do
       let newctvid' = newctvid + 1
-      a <- na fixed newctvid
-      return (a, nothing, newctvid', [], [newctvid])
+      ref <- newRef fixed a
+      let ctvar = V (newctvid, ref)
+      return (c ctvar, nothing, newctvid', [], [newctvid])
 
-    stepOrElse :: M t n r a -> M t n r a -> (a -> STMAction t n r) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
-    stepOrElse a b c = do
-      (resa, undoa, newctvida') <- doTransaction fixed a newctvid
-      case resa of
-        Success readen written val -> return (c val, undoa, newctvida', readen, written)
-        Exception exc -> return (AThrow exc, nothing, newctvid, [], [])
-        Retry _ -> do
-          (resb, undob, newctvidb') <- doTransaction fixed b newctvid
-          case resb of
-            Success readen written val -> return (c val, undob, newctvidb', readen, written)
-            Exception exc -> return (AThrow exc, nothing, newctvid, [], [])
-            Retry readen -> return (ARetry, nothing, newctvid, readen, [])
+    stepOrElse a b c = onFailure a c
+      (\_   -> transaction b c)
+      (\exc -> return (SThrow exc, nothing, newctvid, [], []))
 
-    stepLift :: n (STMAction t n r) -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
     stepLift na = do
       a <- na
       return (a, nothing, newctvid, [], [])
+
+    onFailure stm onSuccess onRetry onException = do
+      (res, undo, newctvid') <- doTransaction fixed stm newctvid
+      case res of
+        Success readen written val -> return (onSuccess val, undo, newctvid', readen, written)
+        Retry readen  -> onRetry readen
+        Exception exc -> onException exc
+
+    transaction stm onSuccess = onFailure stm onSuccess
+      (\readen -> return (SRetry, nothing, newctvid, readen, []))
+      (\exc    -> return (SThrow exc, nothing, newctvid, [], []))
