@@ -34,7 +34,7 @@ module Test.DejaFu.Deterministic
   , module Test.DejaFu.Deterministic.Schedule
   ) where
 
-import Control.Exception (Exception, MaskingState(..))
+import Control.Exception (MaskingState(..))
 import Control.Monad.ST (ST, runST)
 import Data.STRef (STRef)
 import Test.DejaFu.Deterministic.Internal
@@ -59,46 +59,11 @@ import Control.Applicative (Applicative(..), (<$>))
 -- monad.
 newtype Conc t a = C { unC :: M (ST t) (STRef t) (STMLike t) a } deriving (Functor, Applicative, Monad)
 
+toConc :: ((a -> Action (ST t) (STRef t) (STMLike t)) -> Action (ST t) (STRef t) (STMLike t)) -> Conc t a
+toConc = C . cont
+
 wrap :: (M (ST t) (STRef t) (STMLike t) a -> M (ST t) (STRef t) (STMLike t) a) -> Conc t a -> Conc t a
 wrap f = C . f . unC
-
-instance Ca.MonadCatch (Conc t) where
-  catch = Test.DejaFu.Deterministic.catch
-
-instance Ca.MonadThrow (Conc t) where
-  throwM = throw
-
-instance Ca.MonadMask (Conc t) where
-  mask = mask
-  uninterruptibleMask = uninterruptibleMask
-
-instance C.MonadConc (Conc t) where
-  type CVar     (Conc t) = CVar t
-  type CRef     (Conc t) = CRef t
-  type STMLike  (Conc t) = STMLike t (ST t) (STRef t)
-  type ThreadId (Conc t) = Int
-
-  forkWithUnmask = forkWithUnmask
-  forkOnWithUnmask = forkOnWithUnmask
-  getNumCapabilities = getNumCapabilities
-  myThreadId     = myThreadId
-  yield          = yield
-  throwTo        = throwTo
-  newEmptyCVar   = newEmptyCVar
-  putCVar        = putCVar
-  tryPutCVar     = tryPutCVar
-  readCVar       = readCVar
-  takeCVar       = takeCVar
-  tryTakeCVar    = tryTakeCVar
-  newCRef        = newCRef
-  readCRef       = readCRef
-  writeCRef      = writeCRef
-  atomicWriteCRef = atomicWriteCRef
-  modifyCRef     = modifyCRef
-  atomically     = atomically
-  _concKnowsAbout = _concKnowsAbout
-  _concForgets   = _concForgets
-  _concAllKnown  = _concAllKnown
 
 fixed :: Fixed (ST t) (STRef t) (STMLike t)
 fixed = refST $ \ma -> cont (\c -> ALift $ c <$> ma)
@@ -109,159 +74,80 @@ fixed = refST $ \ma -> cont (\c -> ALift $ c <$> ma)
 -- wakes up all threads blocked on reading it, and it is up to the
 -- scheduler which one runs next. Taking from a @CVar@ behaves
 -- analogously.
-newtype CVar t a = Var { unV :: V (STRef t) a } deriving Eq
+newtype CVar t a = Var (V (STRef t) a) deriving Eq
 
 -- | The mutable non-blocking reference type. These are like 'IORef's,
 -- but don't have the potential re-ordering problem mentioned in
 -- Data.IORef.
-newtype CRef t a = Ref { unR :: R (STRef t) a } deriving Eq
+newtype CRef t a = Ref (R (STRef t) a) deriving Eq
 
--- | Block on a 'CVar' until it is full, then read from it (without
--- emptying).
-readCVar :: CVar t a -> Conc t a
-readCVar cvar = C $ cont $ AReadVar $ unV cvar
+instance Ca.MonadCatch (Conc t) where
+  catch ma h = toConc (ACatching (unC . h) (unC ma))
 
--- | Get the 'ThreadId' of the current thread.
-myThreadId :: Conc t ThreadId
-myThreadId = C $ cont AMyTId
+instance Ca.MonadThrow (Conc t) where
+  throwM e = toConc (\_ -> AThrow e)
 
--- | Allows a context-switch to any other currently runnable thread
--- (if any).
-yield :: Conc t ()
-yield = C $ cont $ \c -> AYield $ c ()
+instance Ca.MonadMask (Conc t) where
+  mask                mb = toConc (AMasking MaskedInterruptible   (\f -> unC $ mb $ wrap f))
+  uninterruptibleMask mb = toConc (AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f))
 
--- | Run the provided 'MonadSTM' transaction atomically. If 'retry' is
--- called, it will be blocked until any of the touched 'CTVar's have
--- been written to.
-atomically :: STMLike t (ST t) (STRef t) a -> Conc t a
-atomically stm = C $ cont $ AAtom stm
+instance C.MonadConc (Conc t) where
+  type CVar     (Conc t) = CVar t
+  type CRef     (Conc t) = CRef t
+  type STMLike  (Conc t) = STMLike t (ST t) (STRef t)
+  type ThreadId (Conc t) = Int
 
--- | Create a new empty 'CVar'.
-newEmptyCVar :: Conc t (CVar t a)
-newEmptyCVar = C $ cont $ \c -> ANewVar (c . Var)
+  -- ----------
 
--- | Block on a 'CVar' until it is empty, then write to it.
-putCVar :: CVar t a -> a -> Conc t ()
-putCVar cvar a = C $ cont $ \c -> APutVar (unV cvar) a $ c ()
+  forkWithUnmask  ma = toConc (AFork (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop)))
+  forkOnWithUnmask _ = C.forkWithUnmask
 
--- | Put a value into a 'CVar' if there isn't one, without blocking.
-tryPutCVar :: CVar t a -> a -> Conc t Bool
-tryPutCVar cvar a = C $ cont $ ATryPutVar (unV cvar) a
+  -- This implementation lies and always returns 2. There is no way to
+  -- verify in the computation that this is a lie, and will
+  -- potentially avoid special-case behaviour for 1 capability, so it
+  -- seems a sane choice.
+  getNumCapabilities = return 2
 
--- | Block on a 'CVar' until it is full, then read from it (with
--- emptying).
-takeCVar :: CVar t a -> Conc t a
-takeCVar cvar = C $ cont $ ATakeVar $ unV cvar
+  myThreadId = toConc AMyTId
 
--- | Read a value from a 'CVar' if there is one, without blocking.
-tryTakeCVar :: CVar t a -> Conc t (Maybe a)
-tryTakeCVar cvar = C $ cont $ ATryTakeVar $ unV cvar
+  yield = toConc (\c -> AYield (c ()))
 
--- | Create a new 'CRef'.
-newCRef :: a -> Conc t (CRef t a)
-newCRef a = C $ cont $ \c -> ANewRef a (c . Ref)
+  -- ----------
 
--- | Read the value from a 'CRef'.
-readCRef :: CRef t a -> Conc t a
-readCRef ref = C $ cont $ AReadRef $ unR ref
+  newCRef a = toConc (\c -> ANewRef a (c . Ref))
 
--- | Atomically modify the value inside a 'CRef'.
-modifyCRef :: CRef t a -> (a -> (a, b)) -> Conc t b
-modifyCRef ref f = C $ cont $ AModRef (unR ref) f
+  readCRef   (Ref ref)   = toConc (AReadRef ref)
+  writeCRef  (Ref ref) a = toConc (\c -> AWriteRef ref a (c ()))
+  modifyCRef (Ref ref) f = toConc (AModRef ref f)
 
--- | Replace the value stored inside a 'CRef'.
-writeCRef :: CRef t a -> a -> Conc t ()
-writeCRef ref a = C $ cont $ \c -> AWriteRef (unR ref) a $ c ()
+  -- ----------
 
--- | Replace the value stored inside a 'CRef' with a barrier to
--- re-ordering.
-atomicWriteCRef :: CRef t a -> a -> Conc t ()
-atomicWriteCRef ref a = modifyCRef ref $ const (a, ())
+  newEmptyCVar = toConc (\c -> ANewVar (c . Var))
 
--- | Raise an exception in the 'Conc' monad. The exception is raised
--- when the action is run, not when it is applied. It short-citcuits
--- the rest of the computation:
---
--- > throw e >> x == throw e
-throw :: Exception e => e -> Conc t a
-throw e = C $ cont $ \_ -> AThrow e
+  putCVar  (Var var) a = toConc (\c -> APutVar var a (c ()))
+  readCVar (Var var)   = toConc (AReadVar var)
+  takeCVar (Var var)   = toConc (ATakeVar var)
 
--- | Throw an exception to the target thread. This blocks until the
--- exception is delivered, and it is just as if the target thread had
--- raised it with 'throw'. This can interrupt a blocked action.
-throwTo :: Exception e => ThreadId -> e -> Conc t ()
-throwTo tid e = C $ cont $ \c -> AThrowTo tid e $ c ()
+  tryPutCVar  (Var var) a = toConc (ATryPutVar  var a)
+  tryTakeCVar (Var var)   = toConc (ATryTakeVar var)
 
--- | Catch an exception raised by 'throw'. This __cannot__ catch
--- errors, such as evaluating 'undefined', or division by zero. If you
--- need that, use Control.Exception.catch and 'ConcIO'.
-catch :: Exception e => Conc t a -> (e -> Conc t a) -> Conc t a
-catch ma h = C $ cont $ ACatching (unC . h) (unC ma)
+  -- ----------
 
--- | Like 'fork', but the child thread is passed a function that can
--- be used to unmask asynchronous exceptions. This function should not
--- be used within a 'mask' or 'uninterruptibleMask'.
-forkWithUnmask :: ((forall a. Conc t a -> Conc t a) -> Conc t ()) -> Conc t ThreadId
-forkWithUnmask ma = C $ cont $
-  AFork (\umask -> runCont (unC $ ma $ wrap umask) $ const AStop)
+  throwTo tid e = toConc (\c -> AThrowTo tid e (c ()))
 
--- | Executes a computation with asynchronous exceptions
--- /masked/. That is, any thread which attempts to raise an exception
--- in the current thread with 'throwTo' will be blocked until
--- asynchronous exceptions are unmasked again.
---
--- The argument passed to mask is a function that takes as its
--- argument another function, which can be used to restore the
--- prevailing masking state within the context of the masked
--- computation. This function should not be used within an
--- 'uninterruptibleMask'.
-mask :: ((forall a. Conc t a -> Conc t a) -> Conc t b) -> Conc t b
--- Can't avoid the lambda here (and in uninterruptibleMask and in
--- ConcIO) because higher-ranked type inference is scary.
-mask mb = C $ cont $ AMasking MaskedInterruptible (\f -> unC $ mb $ wrap f)
+  -- ----------
 
--- | Like 'mask', but the masked computation is not
--- interruptible. THIS SHOULD BE USED WITH GREAT CARE, because if a
--- thread executing in 'uninterruptibleMask' blocks for any reason,
--- then the thread (and possibly the program, if this is the main
--- thread) will be unresponsive and unkillable. This function should
--- only be necessary if you need to mask exceptions around an
--- interruptible operation, and you can guarantee that the
--- interruptible operation will only block for a short period of
--- time. The supplied unmasking function should not be used within a
--- 'mask'.
-uninterruptibleMask :: ((forall a. Conc t a -> Conc t a) -> Conc t b) -> Conc t b
-uninterruptibleMask mb = C $ cont $
-  AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f)
+  atomically = toConc . AAtom
 
--- | Fork a computation to happen on a specific processor. This
--- implementation only has a single processor.
-forkOnWithUnmask :: Int -> ((forall a. Conc t a -> Conc t a) -> Conc t ()) -> Conc t ThreadId
-forkOnWithUnmask _ = forkWithUnmask
+  -- ----------
 
--- | Get the number of Haskell threads that can run
--- simultaneously. This implementation lies and always returns
--- 2. There is no way to verify in the computation that this is a lie,
--- and will potentially avoid special-case behaviour for 1 capability,
--- so it seems a sane choice.
-getNumCapabilities :: Conc t Int
-getNumCapabilities = return 2
+  _concKnowsAbout (Left  (Var (cvarid,  _))) = toConc (\c -> AKnowsAbout (Left  cvarid)  (c ()))
+  _concKnowsAbout (Right (V   (ctvarid, _))) = toConc (\c -> AKnowsAbout (Right ctvarid) (c ()))
 
--- | Record that the referenced variable is known by the current thread.
-_concKnowsAbout :: Either (CVar t a) (CTVar t (STRef t) a) -> Conc t ()
-_concKnowsAbout (Left  (Var (cvarid,  _))) = C $ cont $ \c -> AKnowsAbout (Left  cvarid)  (c ())
-_concKnowsAbout (Right (V   (ctvarid, _))) = C $ cont $ \c -> AKnowsAbout (Right ctvarid) (c ())
+  _concForgets (Left  (Var (cvarid,  _))) = toConc (\c -> AForgets (Left  cvarid)  (c ()))
+  _concForgets (Right (V   (ctvarid, _))) = toConc (\c -> AForgets (Right ctvarid) (c ()))
 
--- | Record that the referenced variable will never be touched by the
--- current thread.
-_concForgets :: Either (CVar t a) (CTVar t (STRef t) a) -> Conc t ()
-_concForgets (Left  (Var (cvarid,  _))) = C $ cont $ \c -> AForgets (Left  cvarid)  (c ())
-_concForgets (Right (V   (ctvarid, _))) = C $ cont $ \c -> AForgets (Right ctvarid) (c ())
-
--- | Record that all 'CVar's and 'CTVar's known by the current thread
--- have been passed to '_concKnowsAbout'.
-_concAllKnown :: Conc t ()
-_concAllKnown = C $ cont $ \c -> AAllKnown (c ())
+  _concAllKnown = toConc (\c -> AAllKnown (c ()))
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the
