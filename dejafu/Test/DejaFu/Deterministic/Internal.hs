@@ -63,6 +63,7 @@ import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.Deterministic.Internal.Memory
 import Test.DejaFu.Deterministic.Internal.Threading
 
+import qualified Data.IntMap.Strict as I
 import qualified Data.Map as M
 
 #if __GLASGOW_HASKELL__ < 710
@@ -174,7 +175,7 @@ lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (AGet (c, _) _)         = [WillRead c]
   lookahead' (ATake (c, _) _)        = [WillTake c]
   lookahead' (ATryTake (c, _) _)     = [WillTryTake c]
-  lookahead' (ANewRef _)             = [WillNewRef]
+  lookahead' (ANewRef _ _)           = [WillNewRef]
   lookahead' (AReadRef (r, _) _)     = [WillReadRef r]
   lookahead' (AModRef (r, _) _ _)    = [WillModRef r]
   lookahead' (AWriteRef (r, _) _ k)  = WillWriteRef r : lookahead' k
@@ -229,8 +230,8 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
   AWriteRef ref a c -> stepWriteRef ref a c
   ACommit  t c     -> stepCommit t c
   AAtom    stm c   -> stepAtom        stm c
-  ANew     na      -> stepNew         na
-  ANewRef  na      -> stepNewRef      na
+  ANew     c       -> stepNew         c
+  ANewRef  a c     -> stepNewRef      a c
   ALift    na      -> stepLift        na
   AThrow   e       -> stepThrow       e
   AThrowTo t e c   -> stepThrowTo     t e c
@@ -404,16 +405,18 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = c, _masking = m }) tid threads
 
     -- | Create a new @CVar@, using the next 'CVarId'.
-    stepNew na = do
+    stepNew c = do
       let (idSource', newcvid) = nextCVId idSource
-      a <- na newcvid
-      return $ Right (knows [Left newcvid] tid $ goto a tid threads, idSource', New newcvid, wb)
+      ref <- newRef fixed Nothing
+      let cvar = (newcvid, ref)
+      return $ Right (knows [Left newcvid] tid $ goto (c cvar) tid threads, idSource', New newcvid, wb)
 
     -- | Create a new @CRef@, using the next 'CRefId'.
-    stepNewRef na = do
+    stepNewRef a c = do
       let (idSource', newcrid) = nextCRId idSource
-      a <- na newcrid
-      return $ Right (goto a tid threads, idSource', NewRef newcrid, wb)
+      ref <- newRef fixed (I.empty, a)
+      let cref = (newcrid, ref)
+      return $ Right (goto (c cref) tid threads, idSource', NewRef newcrid, wb)
 
     -- | Lift an action from the underlying monad into the @Conc@
     -- computation.

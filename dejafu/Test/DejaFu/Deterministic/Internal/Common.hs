@@ -74,8 +74,8 @@ data Action n r s =
   | forall a b. AModRef  (R r a) (a -> (a, b)) (b -> Action n r s)
   | forall a. AWriteRef (R r a) a (Action n r s)
   | forall a. AAtom    (s n r a) (a -> Action n r s)
-  | ANew  (CVarId -> n (Action n r s))
-  | ANewRef (CRefId -> n (Action n r s))
+  | forall a. ANew  (V r a -> Action n r s)
+  | forall a. ANewRef a (R r a -> Action n r s)
   | ALift (n (Action n r s))
   | forall e. Exception e => AThrow e
   | forall e. Exception e => AThrowTo ThreadId e (Action n r s)

@@ -38,7 +38,7 @@ module Test.DejaFu.Deterministic.IO
   ) where
 
 import Control.Exception (Exception, MaskingState(..))
-import Data.IORef (IORef, newIORef)
+import Data.IORef (IORef)
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
 import Test.DejaFu.Internal (refIO)
@@ -48,7 +48,6 @@ import Test.DejaFu.STM.Internal (CTVar(..))
 import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
 import qualified Control.Monad.IO.Class as IO
-import qualified Data.IntMap.Strict as I
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative(..), (<$>))
@@ -143,9 +142,7 @@ atomically stm = C $ cont $ AAtom stm
 
 -- | Create a new empty 'CVar'.
 newEmptyCVar :: ConcIO t (CVar t a)
-newEmptyCVar = C $ cont lifted where
-  lifted c = ANew $ \cvid -> c <$> newEmptyCVar' cvid
-  newEmptyCVar' cvid = (\ref -> Var (cvid, ref)) <$> newIORef Nothing
+newEmptyCVar = C $ cont $ \c -> ANew (c . Var)
 
 -- | Block on a 'CVar' until it is empty, then write to it.
 putCVar :: CVar t a -> a -> ConcIO t ()
@@ -166,9 +163,7 @@ tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
 
 -- | Create a new 'CRef'.
 newCRef :: a -> ConcIO t (CRef t a)
-newCRef a = C $ cont lifted where
-  lifted c = ANewRef $ \crid -> c <$> newCRef' crid
-  newCRef' crid = (\ref -> Ref (crid, ref)) <$> newIORef (I.empty, a)
+newCRef a = C $ cont $ \c -> ANewRef a (c . Ref)
 
 -- | Read the value from a 'CRef'.
 readCRef :: CRef t a -> ConcIO t a
