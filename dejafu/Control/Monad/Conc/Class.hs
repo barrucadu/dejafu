@@ -90,7 +90,10 @@ class ( Applicative m, Monad m
 
   -- | Fork a computation to happen concurrently. Communication may
   -- happen over @CVar@s.
+  --
+  -- > fork ma = forkWithUnmask (\_ -> ma)
   fork :: m () -> m (ThreadId m)
+  fork ma = forkWithUnmask (\_ -> ma)
 
   -- | Like 'fork', but the child thread is passed a function that can
   -- be used to unmask asynchronous exceptions. This function should
@@ -102,7 +105,10 @@ class ( Applicative m, Monad m
   -- correspond to physical processors or cores but this is
   -- implementation dependent. The int is interpreted modulo to the
   -- total number of capabilities as returned by 'getNumCapabilities'.
+  --
+  -- > forkOn c ma = forkOnWithUnmask c (\_ -> ma)
   forkOn :: Int -> m () -> m (ThreadId m)
+  forkOn c ma = forkOnWithUnmask c (\_ -> ma)
 
   -- | Like 'forkWithUnmask' but the child thread is pinned to the
   -- given CPU, as with 'forkOn'.

@@ -79,9 +79,7 @@ instance C.MonadConc (Conc t) where
   type STMLike  (Conc t) = STMLike t (ST t) (STRef t)
   type ThreadId (Conc t) = Int
 
-  fork           = fork
   forkWithUnmask = forkWithUnmask
-  forkOn         = forkOn
   forkOnWithUnmask = forkOnWithUnmask
   getNumCapabilities = getNumCapabilities
   myThreadId     = myThreadId
@@ -123,10 +121,6 @@ newtype CRef t a = Ref { unR :: R (STRef t) a } deriving Eq
 -- emptying).
 readCVar :: CVar t a -> Conc t a
 readCVar cvar = C $ cont $ AGet $ unV cvar
-
--- | Run the provided computation concurrently.
-fork :: Conc t () -> Conc t ThreadId
-fork (C ma) = C $ cont $ AFork ((\a _ -> a) $ runCont ma $ const AStop)
 
 -- | Get the 'ThreadId' of the current thread.
 myThreadId :: Conc t ThreadId
@@ -244,11 +238,6 @@ mask mb = C $ cont $ AMasking MaskedInterruptible (\f -> unC $ mb $ wrap f)
 uninterruptibleMask :: ((forall a. Conc t a -> Conc t a) -> Conc t b) -> Conc t b
 uninterruptibleMask mb = C $ cont $
   AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f)
-
--- | Fork a computation to happen on a specific processor. This
--- implementation only has a single processor.
-forkOn :: Int -> Conc t () -> Conc t ThreadId
-forkOn _ = fork
 
 -- | Fork a computation to happen on a specific processor. This
 -- implementation only has a single processor.
