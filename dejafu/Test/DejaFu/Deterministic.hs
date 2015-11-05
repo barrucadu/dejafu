@@ -119,7 +119,7 @@ newtype CRef t a = Ref { unR :: R (STRef t) a } deriving Eq
 -- | Block on a 'CVar' until it is full, then read from it (without
 -- emptying).
 readCVar :: CVar t a -> Conc t a
-readCVar cvar = C $ cont $ AGet $ unV cvar
+readCVar cvar = C $ cont $ AReadVar $ unV cvar
 
 -- | Get the 'ThreadId' of the current thread.
 myThreadId :: Conc t ThreadId
@@ -138,24 +138,24 @@ atomically stm = C $ cont $ AAtom stm
 
 -- | Create a new empty 'CVar'.
 newEmptyCVar :: Conc t (CVar t a)
-newEmptyCVar = C $ cont $ \c -> ANew (c . Var)
+newEmptyCVar = C $ cont $ \c -> ANewVar (c . Var)
 
 -- | Block on a 'CVar' until it is empty, then write to it.
 putCVar :: CVar t a -> a -> Conc t ()
-putCVar cvar a = C $ cont $ \c -> APut (unV cvar) a $ c ()
+putCVar cvar a = C $ cont $ \c -> APutVar (unV cvar) a $ c ()
 
 -- | Put a value into a 'CVar' if there isn't one, without blocking.
 tryPutCVar :: CVar t a -> a -> Conc t Bool
-tryPutCVar cvar a = C $ cont $ ATryPut (unV cvar) a
+tryPutCVar cvar a = C $ cont $ ATryPutVar (unV cvar) a
 
 -- | Block on a 'CVar' until it is full, then read from it (with
 -- emptying).
 takeCVar :: CVar t a -> Conc t a
-takeCVar cvar = C $ cont $ ATake $ unV cvar
+takeCVar cvar = C $ cont $ ATakeVar $ unV cvar
 
 -- | Read a value from a 'CVar' if there is one, without blocking.
 tryTakeCVar :: CVar t a -> Conc t (Maybe a)
-tryTakeCVar cvar = C $ cont $ ATryTake $ unV cvar
+tryTakeCVar cvar = C $ cont $ ATryTakeVar $ unV cvar
 
 -- | Create a new 'CRef'.
 newCRef :: a -> Conc t (CRef t a)

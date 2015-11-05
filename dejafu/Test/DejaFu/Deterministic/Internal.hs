@@ -169,12 +169,12 @@ lookahead :: Action n r s -> NonEmpty Lookahead
 lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (AFork _ _)             = [WillFork]
   lookahead' (AMyTId _)              = [WillMyThreadId]
-  lookahead' (ANew _)                = [WillNew]
-  lookahead' (APut (c, _) _ k)       = WillPut c : lookahead' k
-  lookahead' (ATryPut (c, _) _ _)    = [WillTryPut c]
-  lookahead' (AGet (c, _) _)         = [WillRead c]
-  lookahead' (ATake (c, _) _)        = [WillTake c]
-  lookahead' (ATryTake (c, _) _)     = [WillTryTake c]
+  lookahead' (ANewVar _)             = [WillNew]
+  lookahead' (APutVar (c, _) _ k)    = WillPut c : lookahead' k
+  lookahead' (ATryPutVar (c, _) _ _) = [WillTryPut c]
+  lookahead' (AReadVar (c, _) _)     = [WillRead c]
+  lookahead' (ATakeVar (c, _) _)     = [WillTake c]
+  lookahead' (ATryTakeVar (c, _) _)  = [WillTryTake c]
   lookahead' (ANewRef _ _)           = [WillNewRef]
   lookahead' (AReadRef (r, _) _)     = [WillReadRef r]
   lookahead' (AModRef (r, _) _ _)    = [WillModRef r]
@@ -220,18 +220,18 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
   AFork    a b     -> stepFork        a b
   AMyTId   c       -> stepMyTId       c
   AYield   c       -> stepYield       c
-  APut     ref a c -> stepPut         ref a c
-  ATryPut  ref a c -> stepTryPut      ref a c
-  AGet     ref c   -> stepGet         ref c
-  ATake    ref c   -> stepTake        ref c
-  ATryTake ref c   -> stepTryTake     ref c
+  ANewVar  c       -> stepNew         c
+  APutVar  ref a c -> stepPut         ref a c
+  ATryPutVar ref a c -> stepTryPut    ref a c
+  AReadVar ref c   -> stepGet         ref c
+  ATakeVar ref c   -> stepTake        ref c
+  ATryTakeVar ref c   -> stepTryTake  ref c
+  ANewRef  a c     -> stepNewRef      a c
   AReadRef ref c   -> stepReadRef     ref c
   AModRef  ref f c -> stepModRef      ref f c
-  AWriteRef ref a c -> stepWriteRef ref a c
-  ACommit  t c     -> stepCommit t c
+  AWriteRef ref a c -> stepWriteRef   ref a c
+  ACommit  t c     -> stepCommit      t c
   AAtom    stm c   -> stepAtom        stm c
-  ANew     c       -> stepNew         c
-  ANewRef  a c     -> stepNewRef      a c
   ALift    na      -> stepLift        na
   AThrow   e       -> stepThrow       e
   AThrowTo t e c   -> stepThrowTo     t e c
