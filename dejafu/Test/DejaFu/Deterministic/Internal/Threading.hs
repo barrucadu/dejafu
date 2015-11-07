@@ -105,14 +105,34 @@ data Handler n r s = forall e. Exception e => Handler (e -> Action n r s)
 
 -- | Propagate an exception upwards, finding the closest handler
 -- which can deal with it.
-propagate :: SomeException -> [Handler n r s] -> Maybe (Action n r s, [Handler n r s])
-propagate _ [] = Nothing
-propagate e (Handler h:hs) = maybe (propagate e hs) (\act -> Just (act, hs)) $ h <$> e' where
-  e' = fromException e
+propagate :: SomeException -> ThreadId -> Threads n r s -> Maybe (Threads n r s)
+propagate e tid threads = case M.lookup tid threads >>= go . _handlers of
+  Just (act, hs) -> Just $ except act hs tid threads
+  Nothing -> Nothing
+
+  where
+    go [] = Nothing
+    go (Handler h:hs) = maybe (go hs) (\act -> Just (act, hs)) $ h <$> fromException e
 
 -- | Check if a thread can be interrupted by an exception.
 interruptible :: Thread n r s -> Bool
 interruptible thread = _masking thread == Unmasked || (_masking thread == MaskedInterruptible && isJust (_blocking thread))
+
+-- | Register a new exception handler.
+catching :: Exception e => (e -> Action n r s) -> ThreadId -> Threads n r s -> Threads n r s
+catching h = M.alter $ \(Just thread) -> Just $ thread { _handlers = Handler h : _handlers thread }
+
+-- | Remove the most recent exception handler.
+uncatching :: ThreadId -> Threads n r s -> Threads n r s
+uncatching = M.alter $ \(Just thread) -> Just $ thread { _handlers = tail $ _handlers thread }
+
+-- | Raise an exception in a thread.
+except :: Action n r s -> [Handler n r s] -> ThreadId -> Threads n r s -> Threads n r s
+except act hs = M.alter $ \(Just thread) -> Just $ thread { _continuation = act, _handlers = hs, _blocking = Nothing }
+
+-- | Set the masking state of a thread.
+mask :: MaskingState -> ThreadId -> Threads n r s -> Threads n r s
+mask ms = M.alter $ \(Just thread) -> Just $ thread { _masking = ms }
 
 --------------------------------------------------------------------------------
 -- * Manipulating threads

@@ -349,31 +349,28 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       a     = runCont ma      (APopCatching . c)
       e exc = runCont (h exc) (APopCatching . c)
 
-      threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = a, _handlers = Handler e : _handlers thread }) tid threads
+      threads' = goto a tid (catching e tid threads)
 
     -- | Pop the top exception handler from the thread's stack.
     stepPopCatching a = simple threads' PopCatching where
-      threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = a, _handlers = tail $_handlers thread }) tid threads
+      threads' = goto a tid (uncatching tid threads)
 
     -- | Throw an exception, and propagate it to the appropriate
     -- handler.
     stepThrow e =
-      case propagate (wrap e) . _handlers . fromJust $ M.lookup tid threads of
-        Just (act, hs) ->
-          let threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = act, _handlers = hs }) tid threads
-          in  simple threads' Throw
+      case propagate (wrap e) tid threads of
+        Just threads' -> simple threads' Throw
         Nothing -> return $ Left UncaughtException
 
     -- | Throw an exception to the target thread, and propagate it to
     -- the appropriate handler.
     stepThrowTo t e c = synchronised $
       let threads' = goto c tid threads
-          blocked = M.alter (\(Just thread) -> Just $ thread { _blocking = Just (OnMask t) }) tid threads
-          interrupted act hs = M.alter (\(Just thread) -> Just $ thread { _continuation = act, _blocking = Nothing, _handlers = hs }) t
+          blocked  = block (OnMask t) tid threads
       in case M.lookup t threads of
            Just thread
-             | interruptible thread -> case propagate (wrap e) $ _handlers thread of
-               Just (act, hs) -> simple (interrupted act hs threads') $ ThrowTo t
+             | interruptible thread -> case propagate (wrap e) t threads' of
+               Just threads'' -> simple threads'' $ ThrowTo t
                Nothing
                  | t == 0     -> return $ Left UncaughtException
                  | otherwise -> simple (kill t threads') $ ThrowTo t
@@ -395,13 +392,14 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
 
       m' = _masking . fromJust $ M.lookup tid threads
       umask mb = resetMask True m' >> mb >>= \b -> resetMask False m >> return b
-      resetMask typ mask = cont $ \k -> AResetMask typ True mask $ k ()
+      resetMask typ ms = cont $ \k -> AResetMask typ True ms $ k ()
 
-      threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = a, _masking = m }) tid threads
+      threads' = goto a tid (mask m tid threads)
 
     -- | Reset the masking thread of the state.
-    stepResetMask b1 b2 m c = simple threads' $ (if b1 then SetMasking else ResetMasking) b2 m where
-      threads' = M.alter (\(Just thread) -> Just $ thread { _continuation = c, _masking = m }) tid threads
+    stepResetMask b1 b2 m c = simple threads' action where
+      action   = (if b1 then SetMasking else ResetMasking) b2 m
+      threads' = goto c tid (mask m tid threads)
 
     -- | Create a new @CVar@, using the next 'CVarId'.
     stepNewVar c = do
