@@ -47,7 +47,7 @@ toSTM = S . cont
 -- purely as references. This makes the types simpler, but means you
 -- can't really get an aggregate of them (if you ever wanted to for
 -- some reason).
-type STMST t a = STMLike t (ST t) (STRef t) a
+type STMST t = STMLike t (ST t) (STRef t)
 
 -- | A 'MonadSTM' implementation using @ST@, it encapsulates a single
 -- atomic transaction. The environment, that is, the collection of
@@ -55,7 +55,7 @@ type STMST t a = STMLike t (ST t) (STRef t) a
 -- purely as references. This makes the types simpler, but means you
 -- can't really get an aggregate of them (if you ever wanted to for
 -- some reason).
-type STMIO t a = STMLike t IO IORef a
+type STMIO t = STMLike t IO IORef
 
 instance MonadThrow (STMLike t n r) where
   throwM e = toSTM (\_ -> SThrow e)

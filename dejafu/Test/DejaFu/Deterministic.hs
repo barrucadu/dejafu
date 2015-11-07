@@ -40,7 +40,7 @@ import Data.STRef (STRef)
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
 import Test.DejaFu.Internal (refST)
-import Test.DejaFu.STM (STMLike, runTransactionST)
+import Test.DejaFu.STM (STMST, runTransactionST)
 import Test.DejaFu.STM.Internal (CTVar(..))
 
 import qualified Control.Monad.Catch as Ca
@@ -57,15 +57,15 @@ import Control.Applicative (Applicative(..), (<$>))
 -- universally-quantified indexing state trick as used by 'ST' and
 -- 'STRef's to prevent mutable references from leaking out of the
 -- monad.
-newtype Conc t a = C { unC :: M (ST t) (STRef t) (STMLike t) a } deriving (Functor, Applicative, Monad)
+newtype Conc t a = C { unC :: M (ST t) (STRef t) (STMST t) a } deriving (Functor, Applicative, Monad)
 
-toConc :: ((a -> Action (ST t) (STRef t) (STMLike t)) -> Action (ST t) (STRef t) (STMLike t)) -> Conc t a
+toConc :: ((a -> Action (ST t) (STRef t) (STMST t)) -> Action (ST t) (STRef t) (STMST t)) -> Conc t a
 toConc = C . cont
 
-wrap :: (M (ST t) (STRef t) (STMLike t) a -> M (ST t) (STRef t) (STMLike t) a) -> Conc t a -> Conc t a
+wrap :: (M (ST t) (STRef t) (STMST t) a -> M (ST t) (STRef t) (STMST t) a) -> Conc t a -> Conc t a
 wrap f = C . f . unC
 
-fixed :: Fixed (ST t) (STRef t) (STMLike t)
+fixed :: Fixed (ST t) (STRef t) (STMST t)
 fixed = refST $ \ma -> cont (\c -> ALift $ c <$> ma)
 
 -- | The concurrent variable type used with the 'Conc' monad. One
@@ -94,7 +94,7 @@ instance Ca.MonadMask (Conc t) where
 instance C.MonadConc (Conc t) where
   type CVar     (Conc t) = CVar t
   type CRef     (Conc t) = CRef t
-  type STMLike  (Conc t) = STMLike t (ST t) (STRef t)
+  type STMLike  (Conc t) = STMST t
   type ThreadId (Conc t) = Int
 
   -- ----------

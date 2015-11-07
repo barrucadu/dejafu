@@ -42,7 +42,7 @@ import Data.IORef (IORef)
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
 import Test.DejaFu.Internal (refIO)
-import Test.DejaFu.STM (STMLike, runTransactionIO)
+import Test.DejaFu.STM (STMIO, runTransactionIO)
 import Test.DejaFu.STM.Internal (CTVar(..))
 
 import qualified Control.Monad.Catch as Ca
@@ -58,15 +58,15 @@ import Control.Applicative (Applicative(..), (<$>))
 
 -- | The 'IO' variant of Test.DejaFu.Deterministic's
 -- 'Test.DejaFu.Deterministic.Conc' monad.
-newtype ConcIO t a = C { unC :: M IO IORef (STMLike t) a } deriving (Functor, Applicative, Monad)
+newtype ConcIO t a = C { unC :: M IO IORef (STMIO t) a } deriving (Functor, Applicative, Monad)
 
-toConcIO :: ((a -> Action IO IORef (STMLike t)) -> Action IO IORef (STMLike t)) -> ConcIO t a
+toConcIO :: ((a -> Action IO IORef (STMIO t)) -> Action IO IORef (STMIO t)) -> ConcIO t a
 toConcIO = C . cont
 
-wrap :: (M IO IORef (STMLike t) a -> M IO IORef (STMLike t) a) -> ConcIO t a -> ConcIO t a
+wrap :: (M IO IORef (STMIO t) a -> M IO IORef (STMIO t) a) -> ConcIO t a -> ConcIO t a
 wrap f = C . f . unC
 
-fixed :: Fixed IO IORef (STMLike t)
+fixed :: Fixed IO IORef (STMIO t)
 fixed = refIO $ \ma -> cont (\c -> ALift $ c <$> ma)
 
 -- | The concurrent variable type used with the 'ConcIO' monad. These
@@ -93,7 +93,7 @@ instance Ca.MonadMask (ConcIO t) where
 instance C.MonadConc (ConcIO t) where
   type CVar     (ConcIO t) = CVar t
   type CRef     (ConcIO t) = CRef t
-  type STMLike  (ConcIO t) = STMLike t IO IORef
+  type STMLike  (ConcIO t) = STMIO t
   type ThreadId (ConcIO t) = Int
 
   -- ----------

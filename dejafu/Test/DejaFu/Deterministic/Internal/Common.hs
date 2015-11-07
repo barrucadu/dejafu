@@ -73,7 +73,7 @@ data Action n r s =
   | forall a. AReadRef (R r a) (a -> Action n r s)
   | forall a b. AModRef  (R r a) (a -> (a, b)) (b -> Action n r s)
   | forall a. AWriteRef (R r a) a (Action n r s)
-  | forall a. AAtom    (s n r a) (a -> Action n r s)
+  | forall a. AAtom    (s a) (a -> Action n r s)
   | forall a. ANewVar (V r a -> Action n r s)
   | forall a. ANewRef a (R r a -> Action n r s)
   | ALift (n (Action n r s))
