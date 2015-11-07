@@ -260,29 +260,29 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
     -- | Put a value into a @CVar@, blocking the thread until it's
     -- empty.
     stepPutVar cvar@(CVar (cvid, _)) a c = synchronised $ do
-      (success, threads', woken) <- putIntoCVar True cvar a (const c) fixed tid threads
+      (success, threads', woken) <- putIntoCVar cvar a c fixed tid threads
       simple threads' $ if success then Put cvid woken else BlockedPut cvid
 
     -- | Try to put a value into a @CVar@, without blocking.
     stepTryPutVar cvar@(CVar (cvid, _)) a c = synchronised $ do
-      (success, threads', woken) <- putIntoCVar False cvar a c fixed tid threads
+      (success, threads', woken) <- tryPutIntoCVar cvar a c fixed tid threads
       simple threads' $ TryPut cvid success woken
 
     -- | Get the value from a @CVar@, without emptying, blocking the
     -- thread until it's full.
     stepReadVar cvar@(CVar (cvid, _)) c = synchronised $ do
-      (success, threads', _) <- readFromCVar False True cvar (c . fromJust) fixed tid threads
+      (success, threads', _) <- readFromCVar cvar c fixed tid threads
       simple threads' $ if success then Read cvid else BlockedRead cvid
 
     -- | Take the value from a @CVar@, blocking the thread until it's
     -- full.
     stepTakeVar cvar@(CVar (cvid, _)) c = synchronised $ do
-      (success, threads', woken) <- readFromCVar True True cvar (c . fromJust) fixed tid threads
+      (success, threads', woken) <- takeFromCVar cvar c fixed tid threads
       simple threads' $ if success then Take cvid woken else BlockedTake cvid
 
     -- | Try to take the value from a @CVar@, without blocking.
     stepTryTakeVar cvar@(CVar (cvid, _)) c = synchronised $ do
-      (success, threads', woken) <- readFromCVar True False cvar c fixed tid threads
+      (success, threads', woken) <- tryTakeFromCVar cvar c fixed tid threads
       simple threads' $ TryTake cvid success woken
 
     -- | Read from a @CRef@.

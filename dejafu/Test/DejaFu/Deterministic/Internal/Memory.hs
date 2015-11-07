@@ -93,12 +93,36 @@ delCommitThreads = M.filterWithKey $ \k _ -> k >= 0
 --------------------------------------------------------------------------------
 -- * Manipulating @CVar@s
 
--- | Put a value into a @CVar@, in either a blocking or nonblocking
--- way.
-putIntoCVar :: Monad n
-            => Bool -> CVar r a -> a -> (Bool -> Action n r s)
-            -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-putIntoCVar blocking (CVar (cvid, ref)) a c fixed threadid threads = do
+-- | Put into a @CVar@, blocking if full.
+putIntoCVar :: Monad n => CVar r a -> a -> Action n r s
+             -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+putIntoCVar cvar a c = mutCVar True cvar a (const c)
+
+-- | Try to put into a @CVar@, not blocking if full.
+tryPutIntoCVar :: Monad n => CVar r a -> a -> (Bool -> Action n r s)
+                 -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+tryPutIntoCVar = mutCVar False
+
+-- | Read from a @CVar@, blocking if empty.
+readFromCVar :: Monad n => CVar r a -> (a -> Action n r s)
+              -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+readFromCVar cvar c = seeCVar False True cvar (c . fromJust)
+
+-- | Take from a @CVar@, blocking if empty.
+takeFromCVar :: Monad n => CVar r a -> (a -> Action n r s)
+              -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+takeFromCVar cvar c = seeCVar True True cvar (c . fromJust)
+
+-- | Try to take from a @CVar@, not blocking if empty.
+tryTakeFromCVar :: Monad n => CVar r a -> (Maybe a -> Action n r s)
+                  -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+tryTakeFromCVar = seeCVar True False
+
+-- | Mutate a @CVar@, in either a blocking or nonblocking way.
+mutCVar :: Monad n
+         => Bool -> CVar r a -> a -> (Bool -> Action n r s)
+         -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+mutCVar blocking (CVar (cvid, ref)) a c fixed threadid threads = do
   val <- readRef fixed ref
 
   case val of
@@ -115,12 +139,12 @@ putIntoCVar blocking (CVar (cvid, ref)) a c fixed threadid threads = do
       let (threads', woken) = wake (OnCVarFull cvid) threads
       return (True, goto (c True) threadid threads', woken)
 
--- | Take a value from a @CVar@, in either a blocking or nonblocking
+-- | Read a @CVar@, in either a blocking or nonblocking
 -- way.
-readFromCVar :: Monad n
-             => Bool -> Bool -> CVar r a -> (Maybe a -> Action n r s)
-             -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-readFromCVar emptying blocking (CVar (cvid, ref)) c fixed threadid threads = do
+seeCVar :: Monad n
+         => Bool -> Bool -> CVar r a -> (Maybe a -> Action n r s)
+         -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+seeCVar emptying blocking (CVar (cvid, ref)) c fixed threadid threads = do
   val <- readRef fixed ref
 
   case val of
