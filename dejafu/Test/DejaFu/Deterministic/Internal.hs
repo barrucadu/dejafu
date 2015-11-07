@@ -314,20 +314,19 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
         return $ Right (goto c tid threads, idSource, WriteRef crid, wb')
 
     -- | Commit a @CRef@ write
-    stepCommit c t = case memtype of
-      -- Shouldn't ever get here
-      SequentialConsistency ->
-        error "Attempting to commit under SequentialConsistency"
+    stepCommit c t = do
+      wb' <- case memtype of
+        -- Shouldn't ever get here
+        SequentialConsistency ->
+          error "Attempting to commit under SequentialConsistency"
 
-      -- Commit using the thread id.
-      TotalStoreOrder -> do
-        wb' <- commitWrite fixed wb t
-        return $ Right (threads, idSource, CommitRef t c, wb')
+        -- Commit using the thread id.
+        TotalStoreOrder -> commitWrite fixed wb t
 
-      -- Commit using the cref id.
-      PartialStoreOrder -> do
-        wb' <- commitWrite fixed wb c
-        return $ Right (threads, idSource, CommitRef t c, wb')
+        -- Commit using the cref id.
+        PartialStoreOrder -> commitWrite fixed wb c
+
+      return $ Right (threads, idSource, CommitRef t c, wb')
 
     -- | Run a STM transaction atomically.
     stepAtom stm c = synchronised $ do
