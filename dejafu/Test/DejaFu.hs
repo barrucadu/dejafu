@@ -229,11 +229,11 @@ autocheck' :: (Eq a, Show a)
 autocheck' memtype conc = dejafus' memtype 2 5 conc autocheckCases
 
 -- | Variant of 'autocheck' for computations which do 'IO'.
-autocheckIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> IO Bool
+autocheckIO :: (Eq a, Show a) => ConcIO a -> IO Bool
 autocheckIO = autocheckIO' TotalStoreOrder
 
 -- | Variant of 'autocheck'' for computations which do 'IO'.
-autocheckIO' :: (Eq a, Show a) => MemType -> (forall t. ConcIO t a) -> IO Bool
+autocheckIO' :: (Eq a, Show a) => MemType -> ConcIO a -> IO Bool
 autocheckIO' memtype concio = dejafusIO' memtype 2 5 concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
@@ -314,19 +314,19 @@ dejafus' memtype pb fb conc tests = do
   return $ and results
 
 -- | Variant of 'dejafu' for computations which do 'IO'.
-dejafuIO :: Show a => (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
+dejafuIO :: Show a => ConcIO a -> (String, Predicate a) -> IO Bool
 dejafuIO = dejafuIO' TotalStoreOrder 2 5
 
 -- | Variant of 'dejafu'' for computations which do 'IO'.
-dejafuIO' :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> (String, Predicate a) -> IO Bool
+dejafuIO' :: Show a => MemType -> Int -> Int -> ConcIO a -> (String, Predicate a) -> IO Bool
 dejafuIO' memtype pb fb concio test = dejafusIO' memtype pb fb concio [test]
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
-dejafusIO :: Show a => (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
+dejafusIO :: Show a => ConcIO a -> [(String, Predicate a)] -> IO Bool
 dejafusIO = dejafusIO' TotalStoreOrder 2 5
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-dejafusIO' :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> [(String, Predicate a)] -> IO Bool
+dejafusIO' :: Show a => MemType -> Int -> Int -> ConcIO a -> [(String, Predicate a)] -> IO Bool
 dejafusIO' memtype pb fb concio tests = do
   traces  <- sctPFBoundIO memtype pb fb concio
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
@@ -393,11 +393,11 @@ runTest' ::
 runTest' memtype pb fb predicate conc = predicate $ sctPFBound memtype pb fb conc
 
 -- | Variant of 'runTest' for computations which do 'IO'.
-runTestIO :: Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
+runTestIO :: Predicate a -> ConcIO a -> IO (Result a)
 runTestIO = runTestIO' TotalStoreOrder 2 5
 
 -- | Variant of 'runTest'' for computations which do 'IO'.
-runTestIO' :: MemType -> Int -> Int -> Predicate a -> (forall t. ConcIO t a) -> IO (Result a)
+runTestIO' :: MemType -> Int -> Int -> Predicate a -> ConcIO a -> IO (Result a)
 runTestIO' memtype pb fb predicate conc = predicate <$> sctPFBoundIO memtype pb fb conc
 
 -- * Predicates

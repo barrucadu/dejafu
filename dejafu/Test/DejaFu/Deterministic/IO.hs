@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
 
 -- | Deterministic traced execution of concurrent computations which
@@ -58,43 +57,43 @@ import Control.Applicative (Applicative(..), (<$>))
 
 -- | The 'IO' variant of Test.DejaFu.Deterministic's
 -- 'Test.DejaFu.Deterministic.Conc' monad.
-newtype ConcIO t a = C { unC :: M IO IORef (STMIO t) a } deriving (Functor, Applicative, Monad)
+newtype ConcIO a = C { unC :: M IO IORef STMIO a } deriving (Functor, Applicative, Monad)
 
-toConcIO :: ((a -> Action IO IORef (STMIO t)) -> Action IO IORef (STMIO t)) -> ConcIO t a
+toConcIO :: ((a -> Action IO IORef STMIO) -> Action IO IORef STMIO) -> ConcIO a
 toConcIO = C . cont
 
-wrap :: (M IO IORef (STMIO t) a -> M IO IORef (STMIO t) a) -> ConcIO t a -> ConcIO t a
+wrap :: (M IO IORef STMIO a -> M IO IORef STMIO a) -> ConcIO a -> ConcIO a
 wrap f = C . f . unC
 
-fixed :: Fixed IO IORef (STMIO t)
+fixed :: Fixed IO IORef STMIO
 fixed = refIO $ \ma -> cont (\c -> ALift $ c <$> ma)
 
 -- | The concurrent variable type used with the 'ConcIO' monad. These
 -- behave the same as @Conc@'s @CVar@s
-newtype CVar t a = Var (V IORef a) deriving Eq
+newtype CVar a = Var (V IORef a) deriving Eq
 
 -- | The mutable non-blocking reference type. These behave the same as
 -- @Conc@'s @CRef@s
-newtype CRef t a = Ref (R IORef a) deriving Eq
+newtype CRef a = Ref (R IORef a) deriving Eq
 
-instance IO.MonadIO (ConcIO t) where
+instance IO.MonadIO ConcIO where
   liftIO ma = toConcIO (\c -> ALift (fmap c ma))
 
-instance Ca.MonadCatch (ConcIO t) where
+instance Ca.MonadCatch ConcIO where
   catch ma h = toConcIO (ACatching (unC . h) (unC ma))
 
-instance Ca.MonadThrow (ConcIO t) where
+instance Ca.MonadThrow ConcIO where
   throwM e = toConcIO (\_ -> AThrow e)
 
-instance Ca.MonadMask (ConcIO t) where
+instance Ca.MonadMask ConcIO where
   mask                mb = toConcIO (AMasking MaskedInterruptible   (\f -> unC $ mb $ wrap f))
   uninterruptibleMask mb = toConcIO (AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f))
 
-instance C.MonadConc (ConcIO t) where
-  type CVar     (ConcIO t) = CVar t
-  type CRef     (ConcIO t) = CRef t
-  type STMLike  (ConcIO t) = STMIO t
-  type ThreadId (ConcIO t) = Int
+instance C.MonadConc ConcIO where
+  type CVar     ConcIO = CVar
+  type CRef     ConcIO = CRef
+  type STMLike  ConcIO = STMIO
+  type ThreadId ConcIO = Int
 
   -- ----------
 
@@ -153,11 +152,11 @@ instance C.MonadConc (ConcIO t) where
 -- final state of the scheduler, and an execution trace.
 --
 -- This uses the 'SequentialConsistency' memory model.
-runConcIO :: Scheduler s -> s -> (forall t. ConcIO t a) -> IO (Either Failure a, s, Trace)
+runConcIO :: Scheduler s -> s -> ConcIO a -> IO (Either Failure a, s, Trace)
 runConcIO sched s ma = do
   (r, s', t') <- runConcIO' sched SequentialConsistency s ma
   return (r, s', toTrace t')
 
 -- | Variant of 'runConcIO' which produces a 'Trace''.
-runConcIO' :: Scheduler s -> MemType -> s -> (forall t. ConcIO t a) -> IO (Either Failure a, s, Trace')
+runConcIO' :: Scheduler s -> MemType -> s -> ConcIO a -> IO (Either Failure a, s, Trace')
 runConcIO' sched memtype s ma = runFixed fixed runTransactionIO sched memtype s $ unC ma

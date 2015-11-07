@@ -57,11 +57,11 @@ testAuto' :: (Eq a, Show a)
 testAuto' memtype conc = testDejafus' memtype 2 5 conc autocheckCases
 
 -- | Variant of 'testAuto' for computations which do 'IO'.
-testAutoIO :: (Eq a, Show a) => (forall t. ConcIO t a) -> TestTree
+testAutoIO :: (Eq a, Show a) => ConcIO a -> TestTree
 testAutoIO = testAutoIO' TotalStoreOrder
 
 -- | Variant of 'testAuto'' for computations which do 'IO'.
-testAutoIO' :: (Eq a, Show a) => MemType -> (forall t. ConcIO t a) -> TestTree
+testAutoIO' :: (Eq a, Show a) => MemType -> ConcIO a -> TestTree
 testAutoIO' memtype concio = testDejafusIO' memtype 2 5 concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
@@ -136,19 +136,19 @@ testDejafus' :: Show a
 testDejafus' = test
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
-testDejafuIO :: Show a => (forall t. ConcIO t a) -> TestName -> Predicate a -> TestTree
+testDejafuIO :: Show a => ConcIO a -> TestName -> Predicate a -> TestTree
 testDejafuIO = testDejafuIO' TotalStoreOrder 2 5
 
 -- | Variant of 'testDejafu'' for computations which do 'IO'.
-testDejafuIO' :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> TestName -> Predicate a -> TestTree
+testDejafuIO' :: Show a => MemType -> Int -> Int -> ConcIO a -> TestName -> Predicate a -> TestTree
 testDejafuIO' memtype pb fb concio name p = testDejafusIO' memtype pb fb concio [(name, p)]
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
-testDejafusIO :: Show a => (forall t. ConcIO t a) -> [(TestName, Predicate a)] -> TestTree
+testDejafusIO :: Show a => ConcIO a -> [(TestName, Predicate a)] -> TestTree
 testDejafusIO = testDejafusIO' TotalStoreOrder 2 5
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-testDejafusIO' :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> [(TestName, Predicate a)] -> TestTree
+testDejafusIO' :: Show a => MemType -> Int -> Int -> ConcIO a -> [(TestName, Predicate a)] -> TestTree
 testDejafusIO' = testio
 
 --------------------------------------------------------------------------------
@@ -189,7 +189,7 @@ test memtype pb fb conc tests = case map toTest tests of
     traces = sctPFBound memtype pb fb conc
 
 -- | Produce a Tasty 'Test' from an IO-using Deja Fu test.
-testio :: Show a => MemType -> Int -> Int -> (forall t. ConcIO t a) -> [(TestName, Predicate a)] -> TestTree
+testio :: Show a => MemType -> Int -> Int -> ConcIO a -> [(TestName, Predicate a)] -> TestTree
 testio memtype pb fb concio tests = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts

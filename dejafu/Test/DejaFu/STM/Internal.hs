@@ -24,23 +24,23 @@ import Data.Monoid (mempty)
 
 -- | The underlying monad is based on continuations over primitive
 -- actions.
-type M t n r a = Cont (STMAction t n r) a
+type M n r a = Cont (STMAction n r) a
 
 -- | Dict of methods for implementations to override.
-type Fixed t n r = Ref n r (Cont (STMAction t n r))
+type Fixed n r = Ref n r (Cont (STMAction n r))
 
 --------------------------------------------------------------------------------
 -- * Primitive actions
 
 -- | STM transactions are represented as a sequence of primitive
 -- actions.
-data STMAction t n r
-  = forall a e. Exception e => SCatch (e -> M t n r a) (M t n r a) (a -> STMAction t n r)
-  | forall a. SRead  (CTVar t r a) (a -> STMAction t n r)
-  | forall a. SWrite (CTVar t r a) a (STMAction t n r)
-  | forall a. SOrElse (M t n r a) (M t n r a) (a -> STMAction t n r)
-  | forall a. SNew a (CTVar t r a -> STMAction t n r)
-  | SLift (n (STMAction t n r))
+data STMAction n r
+  = forall a e. Exception e => SCatch (e -> M n r a) (M n r a) (a -> STMAction n r)
+  | forall a. SRead  (CTVar r a) (a -> STMAction n r)
+  | forall a. SWrite (CTVar r a) a (STMAction n r)
+  | forall a. SOrElse (M n r a) (M n r a) (a -> STMAction n r)
+  | forall a. SNew a (CTVar r a -> STMAction n r)
+  | SLift (n (STMAction n r))
   | forall e. Exception e => SThrow e
   | SRetry
   | SStop
@@ -51,7 +51,7 @@ data STMAction t n r
 -- | A 'CTVar' is a tuple of a unique ID and the value contained. The
 -- ID is so that blocked transactions can be re-run when a 'CTVar'
 -- they depend on has changed.
-newtype CTVar t r a = V (CTVarId, r a)
+newtype CTVar r a = V (CTVarId, r a)
 
 -- | The unique ID of a 'CTVar'. Only meaningful within a single
 -- concurrent computation.
@@ -87,7 +87,7 @@ instance Foldable Result where
 -- * Execution
 
 -- | Run a STM transaction, returning an action to undo its effects.
-doTransaction :: Monad n => Fixed t n r -> M t n r a -> CTVarId -> n (Result a, n (), CTVarId)
+doTransaction :: Monad n => Fixed n r -> M n r a -> CTVarId -> n (Result a, n (), CTVarId)
 doTransaction fixed ma newctvid = do
   ref <- newRef fixed Nothing
 
@@ -121,7 +121,7 @@ doTransaction fixed ma newctvid = do
     wrap e = fromMaybe (SomeException e) $ cast e
 
 -- | Run a transaction for one step.
-stepTrans :: forall t n r. Monad n => Fixed t n r -> STMAction t n r -> CTVarId -> n (STMAction t n r, n (), CTVarId, [CTVarId], [CTVarId])
+stepTrans :: Monad n => Fixed n r -> STMAction n r -> CTVarId -> n (STMAction n r, n (), CTVarId, [CTVarId], [CTVarId])
 stepTrans fixed act newctvid = case act of
   SCatch  h stm c -> stepCatch h stm c
   SRead   ref c   -> stepRead ref c

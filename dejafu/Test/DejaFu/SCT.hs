@@ -100,7 +100,7 @@ sctPreBound :: MemType
 sctPreBound memtype pb = sctBounded memtype (pbBound pb) pbBacktrack pbInitialise
 
 -- | Variant of 'sctPreBound' for computations which do 'IO'.
-sctPreBoundIO :: MemType -> Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
+sctPreBoundIO :: MemType -> Int -> ConcIO a -> IO [(Either Failure a, Trace)]
 sctPreBoundIO memtype pb = sctBoundedIO memtype (pbBound pb) pbBacktrack pbInitialise
 
 -- | Pre-emption bound function
@@ -185,7 +185,7 @@ sctFairBound :: MemType
 sctFairBound memtype fb = sctBounded memtype (fBound fb) fBacktrack pbInitialise
 
 -- | Variant of 'sctFairBound' for computations which do 'IO'.
-sctFairBoundIO :: MemType -> Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
+sctFairBoundIO :: MemType -> Int -> ConcIO a -> IO [(Either Failure a, Trace)]
 sctFairBoundIO memtype fb = sctBoundedIO memtype (fBound fb) fBacktrack pbInitialise
 
 -- | Fair bound function
@@ -266,7 +266,7 @@ sctPFBound :: MemType
 sctPFBound memtype pb fb = sctBounded memtype (pfBound pb fb) pfBacktrack pbInitialise
 
 -- | Variant of 'sctPFBound' for computations which do 'IO'.
-sctPFBoundIO :: MemType -> Int -> Int -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
+sctPFBoundIO :: MemType -> Int -> Int -> ConcIO a -> IO [(Either Failure a, Trace)]
 sctPFBoundIO memtype pb fb = sctBoundedIO memtype (pfBound pb fb) pfBacktrack pbInitialise
 
 -- | PB/Fair bound function
@@ -311,7 +311,7 @@ sctBoundedIO :: MemType
   -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
-  -> (forall t. ConcIO t a) -> IO [(Either Failure a, Trace)]
+  -> ConcIO a -> IO [(Either Failure a, Trace)]
 sctBoundedIO memtype bf backtrack initialise c = sctBoundedM memtype bf backtrack initialise run where
   run memty sched s = runConcIO' sched memty s c
 
