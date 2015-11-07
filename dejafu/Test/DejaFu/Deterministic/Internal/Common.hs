@@ -34,15 +34,24 @@ instance Monad (M n r s) where
     return  = pure
     m >>= k = M $ \c -> runM m (\x -> runM (k x) c)
 
--- | CVars are represented as a unique numeric identifier, and a
+-- | The concurrent variable type used with the 'Conc' monad. One
+-- notable difference between these and 'MVar's is that 'MVar's are
+-- single-wakeup, and wake up in a FIFO order. Writing to a @CVar@
+-- wakes up all threads blocked on reading it, and it is up to the
+-- scheduler which one runs next. Taking from a @CVar@ behaves
+-- analogously.
+--
+-- @CVar@s are represented as a unique numeric identifier, and a
 -- reference containing a Maybe value.
-type V r a = (CVarId, r (Maybe a))
+newtype CVar r a = CVar (CVarId, r (Maybe a))
 
--- | CRefs are represented as a unique numeric identifier, and a
+-- | The mutable non-blocking reference type. These are like 'IORef's.
+--
+-- @CRef@s are represented as a unique numeric identifier, and a
 -- reference containing (a) any thread-local non-synchronised writes
 -- (so each thread sees its latest write) and the current value
 -- visible to all threads.
-type R r a = (CRefId, r (IntMap a, a))
+newtype CRef r a = CRef (CRefId, r (IntMap a, a))
 
 -- | Dict of methods for implementations to override.
 type Fixed n r s = Ref n r (M n r s)
@@ -63,30 +72,35 @@ runCont = runM
 -- primitives of the concurrency. 'spawn' is absent as it is
 -- implemented in terms of 'newEmptyCVar', 'fork', and 'putCVar'.
 data Action n r s =
-    AFork ((forall b. M n r s b -> M n r s b) -> Action n r s) (ThreadId -> Action n r s)
+    AFork  ((forall b. M n r s b -> M n r s b) -> Action n r s) (ThreadId -> Action n r s)
   | AMyTId (ThreadId -> Action n r s)
-  | forall a. APutVar     (V r a) a (Action n r s)
-  | forall a. ATryPutVar  (V r a) a (Bool -> Action n r s)
-  | forall a. AReadVar     (V r a) (a -> Action n r s)
-  | forall a. ATakeVar    (V r a) (a -> Action n r s)
-  | forall a. ATryTakeVar (V r a) (Maybe a -> Action n r s)
-  | forall a. AReadRef (R r a) (a -> Action n r s)
-  | forall a b. AModRef  (R r a) (a -> (a, b)) (b -> Action n r s)
-  | forall a. AWriteRef (R r a) a (Action n r s)
-  | forall a. AAtom    (s a) (a -> Action n r s)
-  | forall a. ANewVar (V r a -> Action n r s)
-  | forall a. ANewRef a (R r a -> Action n r s)
-  | ALift (n (Action n r s))
-  | forall e. Exception e => AThrow e
-  | forall e. Exception e => AThrowTo ThreadId e (Action n r s)
+
+  | forall a. ANewVar     (CVar r a -> Action n r s)
+  | forall a. APutVar     (CVar r a) a (Action n r s)
+  | forall a. ATryPutVar  (CVar r a) a (Bool -> Action n r s)
+  | forall a. AReadVar    (CVar r a) (a -> Action n r s)
+  | forall a. ATakeVar    (CVar r a) (a -> Action n r s)
+  | forall a. ATryTakeVar (CVar r a) (Maybe a -> Action n r s)
+
+  | forall a.   ANewRef a (CRef r a -> Action n r s)
+  | forall a.   AReadRef  (CRef r a) (a -> Action n r s)
+  | forall a b. AModRef   (CRef r a) (a -> (a, b)) (b -> Action n r s)
+  | forall a.   AWriteRef (CRef r a) a (Action n r s)
+
+  | forall e.   Exception e => AThrow e
+  | forall e.   Exception e => AThrowTo ThreadId e (Action n r s)
   | forall a e. Exception e => ACatching (e -> M n r s a) (M n r s a) (a -> Action n r s)
   | APopCatching (Action n r s)
   | forall a. AMasking MaskingState ((forall b. M n r s b -> M n r s b) -> M n r s a) (a -> Action n r s)
   | AResetMask Bool Bool MaskingState (Action n r s)
+
   | AKnowsAbout (Either CVarId CTVarId) (Action n r s)
-  | AForgets (Either CVarId CTVarId) (Action n r s)
-  | AAllKnown (Action n r s)
-  | AYield (Action n r s)
+  | AForgets    (Either CVarId CTVarId) (Action n r s)
+  | AAllKnown   (Action n r s)
+
+  | forall a. AAtom (s a) (a -> Action n r s)
+  | ALift (n (Action n r s))
+  | AYield  (Action n r s)
   | AReturn (Action n r s)
   | ACommit ThreadId CRefId
   | AStop

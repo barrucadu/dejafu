@@ -51,7 +51,7 @@ data STMAction n r
 -- | A 'CTVar' is a tuple of a unique ID and the value contained. The
 -- ID is so that blocked transactions can be re-run when a 'CTVar'
 -- they depend on has changed.
-newtype CTVar r a = V (CTVarId, r a)
+newtype CTVar r a = CTVar (CTVarId, r a)
 
 -- | The unique ID of a 'CTVar'. Only meaningful within a single
 -- concurrent computation.
@@ -141,11 +141,11 @@ stepTrans fixed act newctvid = case act of
         Just exc' -> transaction (h exc') c
         Nothing   -> return (SThrow exc, nothing, newctvid, [], []))
 
-    stepRead (V (ctvid, ref)) c = do
+    stepRead (CTVar (ctvid, ref)) c = do
       val <- readRef fixed ref
       return (c val, nothing, newctvid, [ctvid], [])
 
-    stepWrite (V (ctvid, ref)) a c = do
+    stepWrite (CTVar (ctvid, ref)) a c = do
       old <- readRef fixed ref
       writeRef fixed ref a
       return (c, writeRef fixed ref old, newctvid, [], [ctvid])
@@ -153,7 +153,7 @@ stepTrans fixed act newctvid = case act of
     stepNew a c = do
       let newctvid' = newctvid + 1
       ref <- newRef fixed a
-      let ctvar = V (newctvid, ref)
+      let ctvar = CTVar (newctvid, ref)
       return (c ctvar, nothing, newctvid', [], [newctvid])
 
     stepOrElse a b c = onFailure a c

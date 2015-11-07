@@ -198,7 +198,6 @@ import Control.DeepSeq (NFData(..))
 import Control.Monad (when, unless)
 import Data.List.Extra
 import Test.DejaFu.Deterministic
-import Test.DejaFu.Deterministic.IO (ConcIO)
 import Test.DejaFu.SCT
 
 #if __GLASGOW_HASKELL__ < 710
@@ -213,7 +212,7 @@ import Data.Foldable (Foldable(..))
 -- 'MonadConc'. If you need to test something which also uses
 -- 'MonadIO', use 'autocheckIO'.
 autocheck :: (Eq a, Show a)
-  => (forall t. Conc t a)
+  => (forall t. ConcST t a)
   -- ^ The computation to test
   -> IO Bool
 autocheck = autocheck' TotalStoreOrder
@@ -223,7 +222,7 @@ autocheck = autocheck' TotalStoreOrder
 autocheck' :: (Eq a, Show a)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> (forall t. Conc t a)
+  -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> IO Bool
 autocheck' memtype conc = dejafus' memtype 2 5 conc autocheckCases
@@ -247,7 +246,7 @@ autocheckCases =
 -- | Check a predicate and print the result to stdout, return 'True'
 -- if it passes.
 dejafu :: Show a
-  => (forall t. Conc t a)
+  => (forall t. ConcST t a)
   -- ^ The computation to test
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
@@ -275,7 +274,7 @@ dejafu' :: Show a
   -> Int
   -- ^ The maximum difference between the number of yield operations
   -- across all threads.
-  -> (forall t. Conc t a)
+  -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
@@ -285,7 +284,7 @@ dejafu' memtype pb fb conc test = dejafus' memtype pb fb conc [test]
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
 dejafus :: Show a
-  => (forall t. Conc t a)
+  => (forall t. ConcST t a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
@@ -303,7 +302,7 @@ dejafus' :: Show a
   -> Int
   -- ^ The maximum difference between the number of yield operations
   -- across all threads.
-  -> (forall t. Conc t a)
+  -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
@@ -369,7 +368,7 @@ instance Foldable Result where
 runTest ::
     Predicate a
   -- ^ The predicate to check
-  -> (forall t. Conc t a)
+  -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Result a
 runTest = runTest' TotalStoreOrder 2 5
@@ -387,7 +386,7 @@ runTest' ::
   -- across all threads.
   -> Predicate a
   -- ^ The predicate to check
-  -> (forall t. Conc t a)
+  -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Result a
 runTest' memtype pb fb predicate conc = predicate $ sctPFBound memtype pb fb conc

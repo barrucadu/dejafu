@@ -1,10 +1,11 @@
 {-# LANGUAGE CPP                        #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
 
--- | Deterministic traced execution of concurrent computations which
--- don't do @IO@.
+-- | Deterministic traced execution of concurrent computations.
 --
 -- This works by executing the computation on a single thread, calling
 -- out to the supplied scheduler after each step to determine which
@@ -12,10 +13,16 @@
 module Test.DejaFu.Deterministic
   ( -- * The @Conc@ Monad
     Conc
+  , ConcST
+  , ConcIO
+
+  -- * Executing computations
   , Failure(..)
   , MemType(..)
-  , runConc
-  , runConc'
+  , runConcST
+  , runConcIO
+  , runConcST'
+  , runConcIO'
 
   -- * Execution traces
   , Trace
@@ -36,15 +43,17 @@ module Test.DejaFu.Deterministic
 
 import Control.Exception (MaskingState(..))
 import Control.Monad.ST (ST, runST)
+import Data.IORef (IORef)
 import Data.STRef (STRef)
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
-import Test.DejaFu.Internal (refST)
-import Test.DejaFu.STM (STMST, runTransactionST)
+import Test.DejaFu.Internal (refST, refIO)
+import Test.DejaFu.STM (STMLike, STMIO, STMST, runTransactionIO, runTransactionST)
 import Test.DejaFu.STM.Internal (CTVar(..))
 
 import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
+import qualified Control.Monad.IO.Class as IO
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative(..), (<$>))
@@ -53,49 +62,39 @@ import Control.Applicative (Applicative(..), (<$>))
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
 {-# ANN module ("HLint: ignore Use const"    :: String) #-}
 
--- | The @Conc@ monad itself. This uses the same
--- universally-quantified indexing state trick as used by 'ST' and
--- 'STRef's to prevent mutable references from leaking out of the
--- monad.
-newtype Conc t a = C { unC :: M (ST t) (STRef t) (STMST t) a } deriving (Functor, Applicative, Monad)
+newtype Conc n r s a = C { unC :: M n r s a } deriving (Functor, Applicative, Monad)
 
-toConc :: ((a -> Action (ST t) (STRef t) (STMST t)) -> Action (ST t) (STRef t) (STMST t)) -> Conc t a
+-- | A 'MonadConc' implementation using @ST@, this should be preferred
+-- if you do not need 'liftIO'.
+type ConcST t = Conc (ST t) (STRef t) (STMST t)
+
+-- | A 'MonadConc' implementation using @IO@.
+type ConcIO = Conc IO IORef STMIO
+
+toConc :: ((a -> Action n r s) -> Action n r s) -> Conc n r s a
 toConc = C . cont
 
-wrap :: (M (ST t) (STRef t) (STMST t) a -> M (ST t) (STRef t) (STMST t) a) -> Conc t a -> Conc t a
+wrap :: (M n r s a -> M n r s a) -> Conc n r s a -> Conc n r s a
 wrap f = C . f . unC
 
-fixed :: Fixed (ST t) (STRef t) (STMST t)
-fixed = refST $ \ma -> cont (\c -> ALift $ c <$> ma)
+instance IO.MonadIO ConcIO where
+  liftIO ma = toConc (\c -> ALift (fmap c ma))
 
--- | The concurrent variable type used with the 'Conc' monad. One
--- notable difference between these and 'MVar's is that 'MVar's are
--- single-wakeup, and wake up in a FIFO order. Writing to a @CVar@
--- wakes up all threads blocked on reading it, and it is up to the
--- scheduler which one runs next. Taking from a @CVar@ behaves
--- analogously.
-newtype CVar t a = Var (V (STRef t) a) deriving Eq
-
--- | The mutable non-blocking reference type. These are like 'IORef's,
--- but don't have the potential re-ordering problem mentioned in
--- Data.IORef.
-newtype CRef t a = Ref (R (STRef t) a) deriving Eq
-
-instance Ca.MonadCatch (Conc t) where
+instance Ca.MonadCatch (Conc n r s) where
   catch ma h = toConc (ACatching (unC . h) (unC ma))
 
-instance Ca.MonadThrow (Conc t) where
+instance Ca.MonadThrow (Conc n r s) where
   throwM e = toConc (\_ -> AThrow e)
 
-instance Ca.MonadMask (Conc t) where
+instance Ca.MonadMask (Conc n r s) where
   mask                mb = toConc (AMasking MaskedInterruptible   (\f -> unC $ mb $ wrap f))
   uninterruptibleMask mb = toConc (AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f))
 
-instance C.MonadConc (Conc t) where
-  type CVar     (Conc t) = CVar t
-  type CRef     (Conc t) = CRef t
-  type STMLike  (Conc t) = STMST t
-  type ThreadId (Conc t) = Int
+instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
+  type CVar     (Conc n r (STMLike n r)) = CVar r
+  type CRef     (Conc n r (STMLike n r)) = CRef r
+  type STMLike  (Conc n r (STMLike n r)) = STMLike n r
+  type ThreadId (Conc n r (STMLike n r)) = Int
 
   -- ----------
 
@@ -114,22 +113,22 @@ instance C.MonadConc (Conc t) where
 
   -- ----------
 
-  newCRef a = toConc (\c -> ANewRef a (c . Ref))
+  newCRef a = toConc (\c -> ANewRef a c)
 
-  readCRef   (Ref ref)   = toConc (AReadRef ref)
-  writeCRef  (Ref ref) a = toConc (\c -> AWriteRef ref a (c ()))
-  modifyCRef (Ref ref) f = toConc (AModRef ref f)
+  readCRef   ref   = toConc (AReadRef ref)
+  writeCRef  ref a = toConc (\c -> AWriteRef ref a (c ()))
+  modifyCRef ref f = toConc (AModRef ref f)
 
   -- ----------
 
-  newEmptyCVar = toConc (\c -> ANewVar (c . Var))
+  newEmptyCVar = toConc (\c -> ANewVar c)
 
-  putCVar  (Var var) a = toConc (\c -> APutVar var a (c ()))
-  readCVar (Var var)   = toConc (AReadVar var)
-  takeCVar (Var var)   = toConc (ATakeVar var)
+  putCVar  var a = toConc (\c -> APutVar var a (c ()))
+  readCVar var   = toConc (AReadVar var)
+  takeCVar var   = toConc (ATakeVar var)
 
-  tryPutCVar  (Var var) a = toConc (ATryPutVar  var a)
-  tryTakeCVar (Var var)   = toConc (ATryTakeVar var)
+  tryPutCVar  var a = toConc (ATryPutVar  var a)
+  tryTakeCVar var   = toConc (ATryTakeVar var)
 
   -- ----------
 
@@ -141,11 +140,11 @@ instance C.MonadConc (Conc t) where
 
   -- ----------
 
-  _concKnowsAbout (Left  (Var (cvarid,  _))) = toConc (\c -> AKnowsAbout (Left  cvarid)  (c ()))
-  _concKnowsAbout (Right (V   (ctvarid, _))) = toConc (\c -> AKnowsAbout (Right ctvarid) (c ()))
+  _concKnowsAbout (Left  (CVar  (cvarid,  _))) = toConc (\c -> AKnowsAbout (Left  cvarid)  (c ()))
+  _concKnowsAbout (Right (CTVar (ctvarid, _))) = toConc (\c -> AKnowsAbout (Right ctvarid) (c ()))
 
-  _concForgets (Left  (Var (cvarid,  _))) = toConc (\c -> AForgets (Left  cvarid)  (c ()))
-  _concForgets (Right (V   (ctvarid, _))) = toConc (\c -> AForgets (Right ctvarid) (c ()))
+  _concForgets (Left  (CVar  (cvarid,  _))) = toConc (\c -> AForgets (Left  cvarid)  (c ()))
+  _concForgets (Right (CTVar (ctvarid, _))) = toConc (\c -> AForgets (Right ctvarid) (c ()))
 
   _concAllKnown = toConc (\c -> AAllKnown (c ()))
 
@@ -156,19 +155,39 @@ instance C.MonadConc (Conc t) where
 -- Note how the @t@ in 'Conc' is universally quantified, what this
 -- means in practice is that you can't do something like this:
 --
--- > runConc roundRobinSched () newEmptyCVar
+-- > runConc roundRobinSched SequentialConsistency () newEmptyCVar
 --
 -- So mutable references cannot leak out of the 'Conc' computation. If
 -- this is making your head hurt, check out the \"How @runST@ works\"
 -- section of
 -- <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
---
--- This uses the 'SequentialConsistency' memory model.
-runConc :: Scheduler s -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace)
-runConc sched s ma =
-  let (r, s', t') = runConc' sched SequentialConsistency s ma
+runConcST :: Scheduler s -> MemType -> s -> (forall t. ConcST t a) -> (Either Failure a, s, Trace)
+runConcST sched memtype s ma =
+  let (r, s', t') = runConcST' sched memtype s ma
   in  (r, s', toTrace t')
 
--- | Variant of 'runConc' which produces a 'Trace''.
-runConc' :: Scheduler s -> MemType -> s -> (forall t. Conc t a) -> (Either Failure a, s, Trace')
-runConc' sched memtype s ma = runST $ runFixed fixed runTransactionST sched memtype s $ unC ma
+-- | Variant of 'runConcST' which produces a 'Trace''.
+runConcST' :: Scheduler s -> MemType -> s -> (forall t. ConcST t a) -> (Either Failure a, s, Trace')
+runConcST' sched memtype s ma = runST $ runFixed fixed runTransactionST sched memtype s $ unC ma where
+  fixed = refST $ \mb -> cont (\c -> ALift $ c <$> mb)
+
+-- | Run a concurrent computation in the @IO@ monad with a given
+-- 'Scheduler' and initial state, returning a failure reason on
+-- error. Also returned is the final state of the scheduler, and an
+-- execution trace.
+--
+-- __Warning:__ Blocking on the action of another thread in 'liftIO'
+-- cannot be detected! So if you perform some potentially blocking
+-- action in a 'liftIO' the entire collection of threads may deadlock!
+-- You should therefore keep @IO@ blocks small, and only perform
+-- blocking operations with the supplied primitives, insofar as
+-- possible.
+runConcIO :: Scheduler s -> MemType -> s -> ConcIO a -> IO (Either Failure a, s, Trace)
+runConcIO sched memtype s ma = do
+  (r, s', t') <- runConcIO' sched memtype s ma
+  return (r, s', toTrace t')
+
+-- | Variant of 'runConcIO' which produces a 'Trace''.
+runConcIO' :: Scheduler s -> MemType -> s -> ConcIO a -> IO (Either Failure a, s, Trace')
+runConcIO' sched memtype s ma = runFixed fixed runTransactionIO sched memtype s $ unC ma where
+  fixed = refIO $ \mb -> cont (\c -> ALift $ c <$> mb)

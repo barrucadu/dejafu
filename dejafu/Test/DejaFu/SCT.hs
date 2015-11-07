@@ -76,7 +76,6 @@ import Data.IntMap.Strict (IntMap)
 import Data.Sequence (Seq, (|>))
 import Data.Maybe (maybeToList, isNothing)
 import Test.DejaFu.Deterministic
-import Test.DejaFu.Deterministic.IO (ConcIO, runConcIO')
 import Test.DejaFu.SCT.Internal
 
 import qualified Data.IntMap.Strict as I
@@ -94,7 +93,7 @@ sctPreBound :: MemType
   -> Int
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
-  -> (forall t. Conc t a)
+  -> (forall t. ConcST t a)
   -- ^ The computation to run many times
   -> [(Either Failure a, Trace)]
 sctPreBound memtype pb = sctBounded memtype (pbBound pb) pbBacktrack pbInitialise
@@ -179,7 +178,7 @@ sctFairBound :: MemType
   -> Int
   -- ^ The maximum difference between the number of yield operations
   -- performed by different threads.
-  -> (forall t. Conc t a)
+  -> (forall t. ConcST t a)
   -- ^ The computation to run many times
   -> [(Either Failure a, Trace)]
 sctFairBound memtype fb = sctBounded memtype (fBound fb) fBacktrack pbInitialise
@@ -260,7 +259,7 @@ sctPFBound :: MemType
   -- ^ The pre-emption bound
   -> Int
   -- ^ The fair bound
-  -> (forall t. Conc t a)
+  -> (forall t. ConcST t a)
   -- ^ The computation to run many times
   -> [(Either Failure a, Trace)]
 sctPFBound memtype pb fb = sctBounded memtype (pfBound pb fb) pfBacktrack pbInitialise
@@ -302,9 +301,9 @@ sctBounded :: MemType
   -- backtracking point.
   -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -- ^ Produce possible scheduling decisions, all will be tried.
-  -> (forall t. Conc t a) -> [(Either Failure a, Trace)]
+  -> (forall t. ConcST t a) -> [(Either Failure a, Trace)]
 sctBounded memtype bf backtrack initialise c = runIdentity $ sctBoundedM memtype bf backtrack initialise run where
-  run memty sched s = Identity $ runConc' sched memty s c
+  run memty sched s = Identity $ runConcST' sched memty s c
 
 -- | Variant of 'sctBounded' for computations which do 'IO'.
 sctBoundedIO :: MemType

@@ -34,15 +34,15 @@ newtype WriteBuffer r = WriteBuffer { buffer :: IntMap (Seq (BufferedWrite r)) }
 -- write. Universally quantified over the value type so that the only
 -- thing which can be done with it is to write it to the reference.
 data BufferedWrite r where
-  BufferedWrite :: ThreadId -> R r a -> a -> BufferedWrite r
+  BufferedWrite :: ThreadId -> CRef r a -> a -> BufferedWrite r
 
 -- | An empty write buffer.
 emptyBuffer :: WriteBuffer r
 emptyBuffer = WriteBuffer I.empty
 
 -- | Add a new write to the end of a buffer.
-bufferWrite :: Monad n => Fixed n r s -> WriteBuffer r -> Int -> R r a -> a -> ThreadId -> n (WriteBuffer r)
-bufferWrite fixed (WriteBuffer wb) i cref@(_, ref) new tid = do
+bufferWrite :: Monad n => Fixed n r s -> WriteBuffer r -> Int -> CRef r a -> a -> ThreadId -> n (WriteBuffer r)
+bufferWrite fixed (WriteBuffer wb) i cref@(CRef (_, ref)) new tid = do
   -- Construct the new write buffer
   let write = singleton $ BufferedWrite tid cref new
   let buffer' = I.insertWith (><) i write wb
@@ -64,15 +64,15 @@ commitWrite fixed w@(WriteBuffer wb) i = case maybe EmptyL viewl $ I.lookup i wb
 
 -- | Read from a @CRef@, returning a newer thread-local non-committed
 -- write if there is one.
-readCRef :: Monad n => Fixed n r s -> R r a -> ThreadId -> n a
-readCRef fixed (_, ref) tid = do
+readCRef :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n a
+readCRef fixed (CRef (_, ref)) tid = do
   (map, def) <- readRef fixed ref
   return $ I.findWithDefault def tid map
 
 -- | Write and commit to a @CRef@ immediately, clearing the update
 -- map.
-writeImmediate :: Monad n => Fixed n r s -> R r a -> a -> n ()
-writeImmediate fixed (_, ref) a = writeRef fixed ref (I.empty, a)
+writeImmediate :: Monad n => Fixed n r s -> CRef r a -> a -> n ()
+writeImmediate fixed (CRef (_, ref)) a = writeRef fixed ref (I.empty, a)
 
 -- | Flush all writes in the buffer.
 writeBarrier :: Monad n => Fixed n r s -> WriteBuffer r -> n ()
@@ -83,7 +83,7 @@ writeBarrier fixed (WriteBuffer wb) = mapM_ flush $ I.elems wb where
 addCommitThreads :: WriteBuffer r -> Threads n r s -> Threads n r s
 addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
   phantoms = [(negate k - 1, mkthread $ fromJust c) | (k, b) <- I.toList wb, let c = go $ viewl b, isJust c]
-  go (BufferedWrite tid (crid, _) _ :< _) = Just $ ACommit tid crid
+  go (BufferedWrite tid (CRef (crid, _)) _ :< _) = Just $ ACommit tid crid
   go EmptyL = Nothing
 
 -- | Remove phantom threads.
@@ -96,9 +96,9 @@ delCommitThreads = M.filterWithKey $ \k _ -> k >= 0
 -- | Put a value into a @CVar@, in either a blocking or nonblocking
 -- way.
 putIntoCVar :: Monad n
-            => Bool -> V r a -> a -> (Bool -> Action n r s)
+            => Bool -> CVar r a -> a -> (Bool -> Action n r s)
             -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-putIntoCVar blocking (cvid, ref) a c fixed threadid threads = do
+putIntoCVar blocking (CVar (cvid, ref)) a c fixed threadid threads = do
   val <- readRef fixed ref
 
   case val of
@@ -118,9 +118,9 @@ putIntoCVar blocking (cvid, ref) a c fixed threadid threads = do
 -- | Take a value from a @CVar@, in either a blocking or nonblocking
 -- way.
 readFromCVar :: Monad n
-             => Bool -> Bool -> V r a -> (Maybe a -> Action n r s)
+             => Bool -> Bool -> CVar r a -> (Maybe a -> Action n r s)
              -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-readFromCVar emptying blocking (cvid, ref) c fixed threadid threads = do
+readFromCVar emptying blocking (CVar (cvid, ref)) c fixed threadid threads = do
   val <- readRef fixed ref
 
   case val of

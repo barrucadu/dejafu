@@ -22,8 +22,7 @@ module Test.HUnit.DejaFu
   ) where
 
 import Test.DejaFu
-import Test.DejaFu.Deterministic (Conc, showFail, showTrace)
-import Test.DejaFu.Deterministic.IO (ConcIO)
+import Test.DejaFu.Deterministic (ConcST, ConcIO, showFail, showTrace)
 import Test.DejaFu.SCT (sctPFBound, sctPFBoundIO)
 import Test.HUnit (Test(..), assertString)
 
@@ -37,7 +36,7 @@ import Test.HUnit (Test(..), assertString)
 -- 'MonadConc'. If you need to test something which also uses
 -- 'MonadIO', use 'testAutoIO'.
 testAuto :: (Eq a, Show a)
-  => (forall t. Conc t a)
+  => (forall t. ConcST t a)
   -- ^ The computation to test
   -> Test
 testAuto = testAuto' TotalStoreOrder
@@ -47,7 +46,7 @@ testAuto = testAuto' TotalStoreOrder
 testAuto' :: (Eq a, Show a)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> (forall t. Conc t a)
+  -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Test
 testAuto' memtype conc = testDejafus' memtype 2 5 conc autocheckCases
@@ -73,7 +72,7 @@ autocheckCases =
 
 -- | Check that a predicate holds.
 testDejafu :: Show a
-  => (forall t. Conc t a)
+  => (forall t. ConcST t a)
   -- ^ The computation to test
   -> String
   -- ^ The name of the test.
@@ -93,7 +92,7 @@ testDejafu' :: Show a
   -> Int
   -- ^ The maximum difference between the number of yield operations
   -- across all threads.
-  -> (forall t. Conc t a)
+  -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> String
   -- ^ The name of the test.
@@ -106,7 +105,7 @@ testDejafu' memtype pb fb conc name p = testDejafus' memtype pb fb conc [(name, 
 -- test. This will share work between the predicates, rather than
 -- running the concurrent computation many times for each predicate.
 testDejafus :: Show a
-  => (forall t. Conc t a)
+  => (forall t. ConcST t a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
@@ -124,7 +123,7 @@ testDejafus' :: Show a
   -> Int
   -- ^ The maximum difference between the number of yield operations
   -- across all threads.
-  -> (forall t. Conc t a)
+  -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
@@ -151,7 +150,7 @@ testDejafusIO' = testio
 -- HUnit integration
 
 -- | Produce a HUnit 'Test' from a Deja Fu test.
-test :: Show a => MemType -> Int -> Int -> (forall t. Conc t a) -> [(String, Predicate a)] -> Test
+test :: Show a => MemType -> Int -> Int -> (forall t. ConcST t a) -> [(String, Predicate a)] -> Test
 test memtype pb fb conc tests = case map toTest tests of
   [t] -> t
   ts  -> TestList ts
