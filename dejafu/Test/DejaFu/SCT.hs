@@ -325,11 +325,11 @@ sctBoundedM :: (Functor m, Monad m)
   -> m [(Either Failure a, Trace)]
 sctBoundedM memtype bf backtrack initialise run = go initialState where
   go bpor = case next bpor of
-    Just (sched, conservative, bpor') -> do
+    Just (sched, conservative) -> do
       (res, s, trace) <- run memtype (bporSched initialise) (initialSchedState sched)
 
       let bpoints = findBacktrack memtype backtrack (_sbpoints s) trace
-      let newBPOR = pruneCommits . todo bf bpoints $ grow memtype conservative trace bpor'
+      let newBPOR = pruneCommits . todo bf bpoints $ grow memtype conservative trace bpor
 
       ((res, toTrace trace):) <$> go newBPOR
 

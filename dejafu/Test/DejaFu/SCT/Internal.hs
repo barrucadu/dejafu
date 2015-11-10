@@ -4,7 +4,6 @@
 module Test.DejaFu.SCT.Internal where
 
 import Control.DeepSeq (NFData(..))
-import Data.Either (lefts)
 import Data.IntMap.Strict (IntMap)
 import Data.List (foldl', partition, sortBy)
 import Data.Maybe (mapMaybe, isJust, fromJust)
@@ -89,29 +88,23 @@ initialState = BPOR
 -- This returns the longest prefix, on the assumption that this will
 -- lead to lots of backtracking points being identified before
 -- higher-up decisions are reconsidered, so enlarging the sleep sets.
-next :: BPOR -> Maybe ([ThreadId], Bool, BPOR)
+next :: BPOR -> Maybe ([ThreadId], Bool)
 next = go 0 where
   go tid bpor =
         -- All the possible prefix traces from this point, with
         -- updated BPOR subtrees if taken from the done list.
-    let prefixes = mapMaybe go' (I.toList $ _bdone bpor) ++ [Left t | t <- I.toList $ _btodo bpor]
+    let prefixes = mapMaybe go' (I.toList $ _bdone bpor) ++ [([t], c) | (t, c) <- I.toList $ _btodo bpor]
         -- Sort by number of preemptions, in descending order.
-        cmp = preEmps tid bpor . either (\(a,_) -> [a]) (\(a,_,_) -> a)
+        cmp = preEmps tid bpor . fst
 
     in if null prefixes
        then Nothing
-       else case sortBy (comparing $ Down . cmp) prefixes of
-              -- If the prefix with the most preemptions is from the done list, update that.
-              (Right (ts@(t:_), c, b):_) -> Just (ts, c, bpor { _bdone = I.insert t b $ _bdone bpor })
-              (Right ([], _, _):_) -> error "Invariant failure in 'next': empty done prefix!"
+       else case partition (\(t:_,_) -> t < 0) $ sortBy (comparing $ Down . cmp) prefixes of
+              (_, (ts,c):_) -> Just (ts, c)
+              ((ts,c):_, _) -> Just (ts, c)
+              ([], []) -> error "Invariant failure in 'next': empty prefix list!"
 
-              -- If from the todo list, remove it.
-              rest -> case partition (\(t,_) -> t < 0) $ lefts rest of
-                (_, (t,c):_) -> Just ([t], c, bpor { _btodo = I.delete t $ _btodo bpor })
-                ((t,c):_, _) -> Just ([t], c, bpor { _btodo = I.delete t $ _btodo bpor })
-                ([], []) -> error "Invariant failure in 'next': empty prefix list!"
-
-  go' (tid, bpor) = (\(ts,c,b) -> Right (tid:ts, c, b)) <$> go tid bpor
+  go' (tid, bpor) = (\(ts,c) -> (tid:ts,c)) <$> go tid bpor
 
   preEmps tid bpor (t:ts) =
     let rest = preEmps t (fromJust . I.lookup t $ _bdone bpor) ts
@@ -164,6 +157,7 @@ grow memtype conservative = grow' initialCVState initialCRState 0 where
     in  case I.lookup tid' $ _bdone bpor of
           Just bpor' -> bpor { _bdone  = I.insert tid' (grow' cvstate' crstate' tid' rest bpor') $ _bdone bpor }
           Nothing    -> bpor { _btaken = if conservative then _btaken bpor else I.insert tid' a $ _btaken bpor
+                            , _btodo  = I.delete tid' $ _btodo bpor
                             , _bdone  = I.insert tid' (subtree cvstate' crstate' tid' (_bsleep bpor `I.union` _btaken bpor) trc) $ _bdone bpor }
   grow' _ _ _ [] bpor = bpor
 
