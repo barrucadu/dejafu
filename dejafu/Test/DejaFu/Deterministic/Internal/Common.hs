@@ -217,23 +217,23 @@ data ThreadAction =
   -- ^ Get the 'ThreadId' of the current thread.
   | Yield
   -- ^ Yield the current thread.
-  | New CVarId
+  | NewVar CVarId
   -- ^ Create a new 'CVar'.
-  | Put CVarId [ThreadId]
+  | PutVar CVarId [ThreadId]
   -- ^ Put into a 'CVar', possibly waking up some threads.
-  | BlockedPut CVarId
+  | BlockedPutVar CVarId
   -- ^ Get blocked on a put.
-  | TryPut CVarId Bool [ThreadId]
+  | TryPutVar CVarId Bool [ThreadId]
   -- ^ Try to put into a 'CVar', possibly waking up some threads.
-  | Read CVarId
+  | ReadVar CVarId
   -- ^ Read from a 'CVar'.
-  | BlockedRead CVarId
+  | BlockedReadVar CVarId
   -- ^ Get blocked on a read.
-  | Take CVarId [ThreadId]
+  | TakeVar CVarId [ThreadId]
   -- ^ Take from a 'CVar', possibly waking up some threads.
-  | BlockedTake CVarId
+  | BlockedTakeVar CVarId
   -- ^ Get blocked on a take.
-  | TryTake CVarId Bool [ThreadId]
+  | TryTakeVar CVarId Bool [ThreadId]
   -- ^ Try to take from a 'CVar', possibly waking up some threads.
   | NewRef CRefId
   -- ^ Create a new 'CRef'.
@@ -292,15 +292,15 @@ data ThreadAction =
 
 instance NFData ThreadAction where
   rnf (Fork t) = rnf t
-  rnf (New c) = rnf c
-  rnf (Put c ts) = rnf (c, ts)
-  rnf (BlockedPut c) = rnf c
-  rnf (TryPut c b ts) = rnf (c, b, ts)
-  rnf (Read c) = rnf c
-  rnf (BlockedRead c) = rnf c
-  rnf (Take c ts) = rnf (c, ts)
-  rnf (BlockedTake c) = rnf c
-  rnf (TryTake c b ts) = rnf (c, b, ts)
+  rnf (NewVar c) = rnf c
+  rnf (PutVar c ts) = rnf (c, ts)
+  rnf (BlockedPutVar c) = rnf c
+  rnf (TryPutVar c b ts) = rnf (c, b, ts)
+  rnf (ReadVar c) = rnf c
+  rnf (BlockedReadVar c) = rnf c
+  rnf (TakeVar c ts) = rnf (c, ts)
+  rnf (BlockedTakeVar c) = rnf c
+  rnf (TryTakeVar c b ts) = rnf (c, b, ts)
   rnf (NewRef c) = rnf c
   rnf (ReadRef c) = rnf c
   rnf (ModRef c) = rnf c
@@ -321,17 +321,17 @@ data Lookahead =
   -- ^ Will get the 'ThreadId'.
   | WillYield
   -- ^ Will yield the current thread.
-  | WillNew
+  | WillNewVar
   -- ^ Will create a new 'CVar'.
-  | WillPut CVarId
+  | WillPutVar CVarId
   -- ^ Will put into a 'CVar', possibly waking up some threads.
-  | WillTryPut CVarId
+  | WillTryPutVar CVarId
   -- ^ Will try to put into a 'CVar', possibly waking up some threads.
-  | WillRead CVarId
+  | WillReadVar CVarId
   -- ^ Will read from a 'CVar'.
-  | WillTake CVarId
+  | WillTakeVar CVarId
   -- ^ Will take from a 'CVar', possibly waking up some threads.
-  | WillTryTake CVarId
+  | WillTryTakeVar CVarId
   -- ^ Will try to take from a 'CVar', possibly waking up some threads.
   | WillNewRef
   -- ^ Will create a new 'CRef'.
@@ -379,11 +379,11 @@ data Lookahead =
   deriving (Eq, Show)
 
 instance NFData Lookahead where
-  rnf (WillPut c) = rnf c
-  rnf (WillTryPut c) = rnf c
-  rnf (WillRead c) = rnf c
-  rnf (WillTake c) = rnf c
-  rnf (WillTryTake c) = rnf c
+  rnf (WillPutVar c) = rnf c
+  rnf (WillTryPutVar c) = rnf c
+  rnf (WillReadVar c) = rnf c
+  rnf (WillTakeVar c) = rnf c
+  rnf (WillTryTakeVar c) = rnf c
   rnf (WillReadRef c) = rnf c
   rnf (WillModRef c) = rnf c
   rnf (WillWriteRef c) = rnf c
@@ -457,14 +457,14 @@ cvarOf _ = Nothing
 -- This is used in the SCT code to help determine interesting
 -- alternative scheduling decisions.
 simplify :: ThreadAction -> ActionType
-simplify (Put c _)       = SynchronisedWrite c
-simplify (BlockedPut _)  = SynchronisedOther
-simplify (TryPut c _ _)  = SynchronisedWrite c
-simplify (Read c)        = SynchronisedRead c
-simplify (BlockedRead _) = SynchronisedOther
-simplify (Take c _)      = SynchronisedRead c
-simplify (BlockedTake _) = SynchronisedOther
-simplify (TryTake c _ _) = SynchronisedRead c
+simplify (PutVar c _)       = SynchronisedWrite c
+simplify (BlockedPutVar _)  = SynchronisedOther
+simplify (TryPutVar c _ _)  = SynchronisedWrite c
+simplify (ReadVar c)        = SynchronisedRead c
+simplify (BlockedReadVar _) = SynchronisedOther
+simplify (TakeVar c _)      = SynchronisedRead c
+simplify (BlockedTakeVar _) = SynchronisedOther
+simplify (TryTakeVar c _ _) = SynchronisedRead c
 simplify (ReadRef r)     = UnsynchronisedRead r
 simplify (ModRef r)      = SynchronisedModify r
 simplify (WriteRef r)    = UnsynchronisedWrite r
@@ -477,11 +477,11 @@ simplify _ = UnsynchronisedOther
 
 -- | Variant of 'simplify' that takes a 'Lookahead'.
 simplify' :: Lookahead -> ActionType
-simplify' (WillPut c)         = SynchronisedWrite c
-simplify' (WillTryPut c)      = SynchronisedWrite c
-simplify' (WillRead c)        = SynchronisedRead c
-simplify' (WillTake c)        = SynchronisedRead c
-simplify' (WillTryTake c)     = SynchronisedRead c
+simplify' (WillPutVar c)     = SynchronisedWrite c
+simplify' (WillTryPutVar c)  = SynchronisedWrite c
+simplify' (WillReadVar c)    = SynchronisedRead c
+simplify' (WillTakeVar c)    = SynchronisedRead c
+simplify' (WillTryTakeVar c) = SynchronisedRead c
 simplify' (WillReadRef r)     = UnsynchronisedRead r
 simplify' (WillModRef r)      = SynchronisedModify r
 simplify' (WillWriteRef r)    = UnsynchronisedWrite r

@@ -169,12 +169,12 @@ lookahead :: Action n r s -> NonEmpty Lookahead
 lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (AFork _ _)             = [WillFork]
   lookahead' (AMyTId _)              = [WillMyThreadId]
-  lookahead' (ANewVar _)             = [WillNew]
-  lookahead' (APutVar (CVar (c, _)) _ k)    = WillPut c : lookahead' k
-  lookahead' (ATryPutVar (CVar (c, _)) _ _) = [WillTryPut c]
-  lookahead' (AReadVar (CVar (c, _)) _)     = [WillRead c]
-  lookahead' (ATakeVar (CVar (c, _)) _)     = [WillTake c]
-  lookahead' (ATryTakeVar (CVar (c, _)) _)  = [WillTryTake c]
+  lookahead' (ANewVar _)             = [WillNewVar]
+  lookahead' (APutVar (CVar (c, _)) _ k)    = WillPutVar c : lookahead' k
+  lookahead' (ATryPutVar (CVar (c, _)) _ _) = [WillTryPutVar c]
+  lookahead' (AReadVar (CVar (c, _)) _)     = [WillReadVar c]
+  lookahead' (ATakeVar (CVar (c, _)) _)     = [WillTakeVar c]
+  lookahead' (ATryTakeVar (CVar (c, _)) _)  = [WillTryTakeVar c]
   lookahead' (ANewRef _ _)           = [WillNewRef]
   lookahead' (AReadRef (CRef (r, _)) _)    = [WillReadRef r]
   lookahead' (AModRef (CRef (r, _)) _ _)   = [WillModRef r]
@@ -261,29 +261,29 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
     -- empty.
     stepPutVar cvar@(CVar (cvid, _)) a c = synchronised $ do
       (success, threads', woken) <- putIntoCVar cvar a c fixed tid threads
-      simple threads' $ if success then Put cvid woken else BlockedPut cvid
+      simple threads' $ if success then PutVar cvid woken else BlockedPutVar cvid
 
     -- | Try to put a value into a @CVar@, without blocking.
     stepTryPutVar cvar@(CVar (cvid, _)) a c = synchronised $ do
       (success, threads', woken) <- tryPutIntoCVar cvar a c fixed tid threads
-      simple threads' $ TryPut cvid success woken
+      simple threads' $ TryPutVar cvid success woken
 
     -- | Get the value from a @CVar@, without emptying, blocking the
     -- thread until it's full.
     stepReadVar cvar@(CVar (cvid, _)) c = synchronised $ do
       (success, threads', _) <- readFromCVar cvar c fixed tid threads
-      simple threads' $ if success then Read cvid else BlockedRead cvid
+      simple threads' $ if success then ReadVar cvid else BlockedReadVar cvid
 
     -- | Take the value from a @CVar@, blocking the thread until it's
     -- full.
     stepTakeVar cvar@(CVar (cvid, _)) c = synchronised $ do
       (success, threads', woken) <- takeFromCVar cvar c fixed tid threads
-      simple threads' $ if success then Take cvid woken else BlockedTake cvid
+      simple threads' $ if success then TakeVar cvid woken else BlockedTakeVar cvid
 
     -- | Try to take the value from a @CVar@, without blocking.
     stepTryTakeVar cvar@(CVar (cvid, _)) c = synchronised $ do
       (success, threads', woken) <- tryTakeFromCVar cvar c fixed tid threads
-      simple threads' $ TryTake cvid success woken
+      simple threads' $ TryTakeVar cvid success woken
 
     -- | Read from a @CRef@.
     stepReadRef cref@(CRef (crid, _)) c = do
@@ -406,7 +406,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       let (idSource', newcvid) = nextCVId idSource
       ref <- newRef fixed Nothing
       let cvar = CVar (newcvid, ref)
-      return $ Right (knows [Left newcvid] tid $ goto (c cvar) tid threads, idSource', New newcvid, wb)
+      return $ Right (knows [Left newcvid] tid $ goto (c cvar) tid threads, idSource', NewVar newcvid, wb)
 
     -- | Create a new @CRef@, using the next 'CRefId'.
     stepNewRef a c = do

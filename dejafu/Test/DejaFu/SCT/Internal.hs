@@ -183,9 +183,9 @@ grow memtype conservative = grow' initialCVState initialCRState 0 where
   subtree _ _ _ _ [] = error "Invariant failure in 'subtree': suffix empty!"
 
   tids tid d (Fork t)           ts = tidOf tid d : t : map (tidOf tid . fst) ts
-  tids tid _ (BlockedPut _)     ts = map (tidOf tid . fst) ts
-  tids tid _ (BlockedRead _)    ts = map (tidOf tid . fst) ts
-  tids tid _ (BlockedTake _)    ts = map (tidOf tid . fst) ts
+  tids tid _ (BlockedPutVar _)  ts = map (tidOf tid . fst) ts
+  tids tid _ (BlockedReadVar _) ts = map (tidOf tid . fst) ts
+  tids tid _ (BlockedTakeVar _) ts = map (tidOf tid . fst) ts
   tids tid _ BlockedSTM         ts = map (tidOf tid . fst) ts
   tids tid _ (BlockedThrowTo _) ts = map (tidOf tid . fst) ts
   tids tid _ Stop               ts = map (tidOf tid . fst) ts
@@ -317,17 +317,17 @@ initialCVState = I.empty
 
 -- | Update the 'CVar' state with the action that has just happened.
 updateCVState :: CVState -> ThreadAction -> CVState
-updateCVState cvstate (Put  c _) = I.insert c True  cvstate
-updateCVState cvstate (Take c _) = I.insert c False cvstate
-updateCVState cvstate (TryPut  c True _) = I.insert c True  cvstate
-updateCVState cvstate (TryTake c True _) = I.insert c False cvstate
+updateCVState cvstate (PutVar  c _) = I.insert c True  cvstate
+updateCVState cvstate (TakeVar c _) = I.insert c False cvstate
+updateCVState cvstate (TryPutVar  c True _) = I.insert c True  cvstate
+updateCVState cvstate (TryTakeVar c True _) = I.insert c False cvstate
 updateCVState cvstate _ = cvstate
 
 -- | Check if an action will block.
 willBlock :: CVState -> Lookahead -> Bool
-willBlock cvstate (WillPut  c) = I.lookup c cvstate == Just True
-willBlock cvstate (WillTake c) = I.lookup c cvstate == Just False
-willBlock cvstate (WillRead c) = I.lookup c cvstate == Just False
+willBlock cvstate (WillPutVar  c) = I.lookup c cvstate == Just True
+willBlock cvstate (WillTakeVar c) = I.lookup c cvstate == Just False
+willBlock cvstate (WillReadVar c) = I.lookup c cvstate == Just False
 willBlock _ _ = False
 
 -- | Check if a list of actions will block safely (without modifying
@@ -335,14 +335,14 @@ willBlock _ _ = False
 -- 'spawn' of a thread (which always starts with 'KnowsAbout').
 willBlockSafely :: CVState -> [Lookahead] -> Bool
 willBlockSafely cvstate (WillMyThreadId:as) = willBlockSafely cvstate as
-willBlockSafely cvstate (WillNew:as)        = willBlockSafely cvstate as
+willBlockSafely cvstate (WillNewVar:as)     = willBlockSafely cvstate as
 willBlockSafely cvstate (WillNewRef:as)     = willBlockSafely cvstate as
 willBlockSafely cvstate (WillReturn:as)     = willBlockSafely cvstate as
 willBlockSafely cvstate (WillKnowsAbout:as) = willBlockSafely cvstate as
 willBlockSafely cvstate (WillForgets:as)    = willBlockSafely cvstate as
 willBlockSafely cvstate (WillAllKnown:as)   = willBlockSafely cvstate as
-willBlockSafely cvstate (WillPut  c:_) = willBlock cvstate (WillPut  c)
-willBlockSafely cvstate (WillTake c:_) = willBlock cvstate (WillTake c)
+willBlockSafely cvstate (WillPutVar  c:_) = willBlock cvstate (WillPutVar  c)
+willBlockSafely cvstate (WillTakeVar c:_) = willBlock cvstate (WillTakeVar c)
 willBlockSafely _ _ = False
 
 -- * Keeping track of 'CRef' buffer state

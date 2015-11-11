@@ -232,8 +232,8 @@ fBacktrack bx@(b:rest) 0 t
 
   where
     isNotRelease WillMyThreadId = True
-    isNotRelease WillNew = True
-    isNotRelease (WillRead _) = True
+    isNotRelease WillNewVar = True
+    isNotRelease (WillReadVar _) = True
     isNotRelease WillNewRef = True
     isNotRelease (WillReadRef _) = True
     isNotRelease (WillModRef _) = True
