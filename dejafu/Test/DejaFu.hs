@@ -178,6 +178,7 @@ module Test.DejaFu
   -- results.
 
   , Predicate
+  , representative
   , deadlocksNever
   , deadlocksAlways
   , deadlocksSometimes
@@ -200,8 +201,10 @@ import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when, unless)
 import Data.Function (on)
-import Data.List (nubBy)
+import Data.List (minimumBy)
 import Data.List.Extra
+import Data.Monoid ((<>))
+import Data.Ord (comparing)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.SCT
 
@@ -410,6 +413,26 @@ runTestIO' memtype pb fb predicate conc = predicate <$> sctPFBoundIO memtype pb 
 -- into a 'Result'.
 type Predicate a = [(Either Failure a, Trace)] -> Result a
 
+-- | Reduce the list of failures in a @Predicate@ to one
+-- representative trace for each unique result.
+--
+-- This may throw away \"duplicate\" failures which have a unique
+-- cause but happen to manifest in the same way. However, it is
+-- convenient for filtering out true duplicates.
+representative :: Eq a => Predicate a -> Predicate a
+representative p xs = result { _failures = choose . collect $ _failures result } where
+  result  = p xs
+  collect = groupBy' [] ((==) `on` fst)
+  choose  = map $ minimumBy (comparing $ \(_, trc) -> (preEmpCount' trc, length trc))
+
+  groupBy' res _ [] = res
+  groupBy' res eq (x:xs) = groupBy' (insert' eq x res) eq xs
+
+  insert' eq x [] = [[x]]
+  insert' eq x (ys@(y:_):yss)
+    | x `eq` y  = (x:ys) : yss
+    | otherwise = ys : insert' eq x yss
+
 -- | Check that a computation never deadlocks.
 deadlocksNever :: Predicate a
 deadlocksNever = alwaysTrue (not . either (`elem` [Deadlock, STMDeadlock]) (const False))
@@ -506,22 +529,19 @@ somewhereTrue p xs = go xs $ defaultFail failures where
 -- with the same result. Be aware that this may throw away failures
 -- with distinct causes.
 alwaysTrueNub :: Eq a => (Either Failure a -> Bool) -> Predicate a
-alwaysTrueNub p xs = result { _failures = nubBy ((==) `on` fst) $ _failures result } where
-  result = alwaysTrue p xs
+alwaysTrueNub p = representative (alwaysTrue p)
 
 -- | Variant of 'alwaysTrue2' which only shows one trace per failure
 -- with the same result. Be aware that this may throw away failures
 -- with distinct causes.
 alwaysTrue2Nub :: Eq a => (Either Failure a -> Either Failure a -> Bool) -> Predicate a
-alwaysTrue2Nub p xs = result { _failures = nubBy ((==) `on` fst) $ _failures result } where
-  result = alwaysTrue2 p xs
+alwaysTrue2Nub p = representative (alwaysTrue2 p)
 
 -- | Variant of 'somewhereTrue' which only shows one trace per failure
 -- with the same result. Be aware that this may throw away failures
 -- with distinct causes.
 somewhereTrueNub :: Eq a => (Either Failure a -> Bool) -> Predicate a
-somewhereTrueNub p xs = result { _failures = nubBy ((==) `on` fst) $ _failures result } where
-  result = somewhereTrue p xs
+somewhereTrueNub p = representative (somewhereTrue p)
 
 -- | Predicate for when there is a known set of results where every
 -- result must be exhibited at least once.

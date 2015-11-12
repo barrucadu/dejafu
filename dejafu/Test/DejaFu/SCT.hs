@@ -60,6 +60,7 @@ module Test.DejaFu.SCT
   , decisionOf
   , activeTid
   , preEmpCount
+  , preEmpCount'
   , yieldCount
   , maxYieldCountDiff
   , initialCVState
@@ -116,6 +117,10 @@ preEmpCount ts (d, l) = go ts where
   preEmpC (SwitchTo _, Right WillYield) = 0
   preEmpC (SwitchTo t, _) = if t >= 0 then 1 else 0
   preEmpC _ = 0
+
+-- | Count the number of pre-emptions in an entire trace
+preEmpCount' :: Trace -> Int
+preEmpCount' trc = preEmpCount (map (\(d,_,a) -> (d, a)) trc) (Continue, WillStop)
 
 -- | Add a backtrack point, and also conservatively add one prior to
 -- the most recent transition before that point. This may result in
