@@ -243,9 +243,9 @@ autocheckIO' memtype concio = dejafusIO' memtype 2 5 concio autocheckCases
 -- | Predicates for the various autocheck functions.
 autocheckCases :: (Eq a, Show a) => [(String, Predicate a)]
 autocheckCases =
-  [ ("Never Deadlocks",   deadlocksNever)
-  , ("No Exceptions",     exceptionsNever)
-  , ("Consistent Result", alwaysSame)
+  [ ("Never Deadlocks",   representative deadlocksNever)
+  , ("No Exceptions",     representative exceptionsNever)
+  , ("Consistent Result", alwaysSame) -- already representative
   ]
 
 -- | Check a predicate and print the result to stdout, return 'True'

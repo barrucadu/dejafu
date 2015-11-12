@@ -66,8 +66,8 @@ testAutoIO' memtype concio = testDejafusIO' memtype 2 5 concio autocheckCases
 -- | Predicates for the various autocheck functions.
 autocheckCases :: Eq a => [(TestName, Predicate a)]
 autocheckCases =
-  [("Never Deadlocks", deadlocksNever)
-  , ("No Exceptions", exceptionsNever)
+  [("Never Deadlocks", representative deadlocksNever)
+  , ("No Exceptions", representative exceptionsNever)
   , ("Consistent Result", alwaysSame)
   ]
 
