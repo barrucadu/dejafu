@@ -189,6 +189,9 @@ module Test.DejaFu
   , alwaysTrue
   , alwaysTrue2
   , somewhereTrue
+  , alwaysTrueNub
+  , alwaysTrue2Nub
+  , somewhereTrueNub
   , gives
   , gives'
   ) where
@@ -196,6 +199,8 @@ module Test.DejaFu
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when, unless)
+import Data.Function (on)
+import Data.List (nubBy)
 import Data.List.Extra
 import Test.DejaFu.Deterministic
 import Test.DejaFu.SCT
@@ -433,7 +438,7 @@ exceptionsSometimes = somewhereTrue $ either (==UncaughtException) (const False)
 -- particular this means either: (a) it always fails in the same way,
 -- or (b) it never fails and the values returned are all equal.
 alwaysSame :: Eq a => Predicate a
-alwaysSame = alwaysTrue2 (==)
+alwaysSame = alwaysTrue2Nub (==)
 
 -- | Check that the result of a computation is not always the same.
 notAlwaysSame :: Eq a => Predicate a
@@ -496,6 +501,27 @@ somewhereTrue p xs = go xs $ defaultFail failures where
   go [] res = res
 
   failures = filter (not . p . fst) xs
+
+-- | Variant of 'alwaysTrue' which only shows one trace per failure
+-- with the same result. Be aware that this may throw away failures
+-- with distinct causes.
+alwaysTrueNub :: Eq a => (Either Failure a -> Bool) -> Predicate a
+alwaysTrueNub p xs = result { _failures = nubBy ((==) `on` fst) $ _failures result } where
+  result = alwaysTrue p xs
+
+-- | Variant of 'alwaysTrue2' which only shows one trace per failure
+-- with the same result. Be aware that this may throw away failures
+-- with distinct causes.
+alwaysTrue2Nub :: Eq a => (Either Failure a -> Either Failure a -> Bool) -> Predicate a
+alwaysTrue2Nub p xs = result { _failures = nubBy ((==) `on` fst) $ _failures result } where
+  result = alwaysTrue2 p xs
+
+-- | Variant of 'somewhereTrue' which only shows one trace per failure
+-- with the same result. Be aware that this may throw away failures
+-- with distinct causes.
+somewhereTrueNub :: Eq a => (Either Failure a -> Bool) -> Predicate a
+somewhereTrueNub p xs = result { _failures = nubBy ((==) `on` fst) $ _failures result } where
+  result = somewhereTrue p xs
 
 -- | Predicate for when there is a known set of results where every
 -- result must be exhibited at least once.
