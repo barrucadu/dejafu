@@ -190,9 +190,6 @@ module Test.DejaFu
   , alwaysTrue
   , alwaysTrue2
   , somewhereTrue
-  , alwaysTrueNub
-  , alwaysTrue2Nub
-  , somewhereTrueNub
   , gives
   , gives'
   ) where
@@ -461,7 +458,7 @@ exceptionsSometimes = somewhereTrue $ either (==UncaughtException) (const False)
 -- particular this means either: (a) it always fails in the same way,
 -- or (b) it never fails and the values returned are all equal.
 alwaysSame :: Eq a => Predicate a
-alwaysSame = alwaysTrue2Nub (==)
+alwaysSame = representative $ alwaysTrue2 (==)
 
 -- | Check that the result of a computation is not always the same.
 notAlwaysSame :: Eq a => Predicate a
@@ -524,24 +521,6 @@ somewhereTrue p xs = go xs $ defaultFail failures where
   go [] res = res
 
   failures = filter (not . p . fst) xs
-
--- | Variant of 'alwaysTrue' which only shows one trace per failure
--- with the same result. Be aware that this may throw away failures
--- with distinct causes.
-alwaysTrueNub :: Eq a => (Either Failure a -> Bool) -> Predicate a
-alwaysTrueNub p = representative (alwaysTrue p)
-
--- | Variant of 'alwaysTrue2' which only shows one trace per failure
--- with the same result. Be aware that this may throw away failures
--- with distinct causes.
-alwaysTrue2Nub :: Eq a => (Either Failure a -> Either Failure a -> Bool) -> Predicate a
-alwaysTrue2Nub p = representative (alwaysTrue2 p)
-
--- | Variant of 'somewhereTrue' which only shows one trace per failure
--- with the same result. Be aware that this may throw away failures
--- with distinct causes.
-somewhereTrueNub :: Eq a => (Either Failure a -> Bool) -> Predicate a
-somewhereTrueNub p = representative (somewhereTrue p)
 
 -- | Predicate for when there is a known set of results where every
 -- result must be exhibited at least once.
