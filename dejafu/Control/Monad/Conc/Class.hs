@@ -189,7 +189,7 @@ class ( Applicative m, Monad m
   -- This is strict in the \"new\" value argument.
   casCRef :: CRef m a -> Ticket m a -> a -> m (Bool, Ticket m a)
 
-  -- | A replacement for 'modifyCRef' that does not impose a full memory barrier.
+  -- | A replacement for 'modifyCRef' using a compare-and-swap.
   --
   -- This is strict in the \"new\" value argument.
   modifyCRefCAS :: CRef m a -> (a -> (a, b)) -> m b

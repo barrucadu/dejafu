@@ -269,7 +269,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       simple (goto (c tick) tid threads) $ ReadRefCas crid
 
     -- | Extract the value from a @Ticket@.
-    stepPeekTicket (Ticket (crid, _, _, a)) c = simple (goto (c a) tid threads) $ PeekTicket crid
+    stepPeekTicket (Ticket (crid, _, a)) c = simple (goto (c a) tid threads) $ PeekTicket crid
 
     -- | Modify a @CRef@.
     stepModRef cref@(CRef (crid, _)) f c = synchronised $ do
@@ -278,7 +278,12 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       simple (goto (c val) tid threads) $ ModRef crid
 
     -- | Modify a @CRef@ using a compare-and-swap.
-    stepModRefCas cref@(CRef (crid, _)) f c = error "Unimplemented: stepModRefCas"
+    --
+    -- Not actually implemented with a CAS here because the observable
+    -- behaviour is the same, it's just the speed that may differ.
+    stepModRefCas cref f c = do
+      Right (threads', idSource', ModRef crid, wb') <- stepModRef cref f c
+      return $ Right (threads', idSource', ModRefCas crid, wb')
 
     -- | Write to a @CRef@ without synchronising
     stepWriteRef cref@(CRef (crid, _)) a c = case memtype of
@@ -298,7 +303,9 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
         return $ Right (goto c tid threads, idSource, WriteRef crid, wb')
 
     -- | Perform a compare-and-swap on a @CRef@.
-    stepCasRef cref@(CRef (crid, _)) tick a c = error "Unimplemented: stepCasRef"
+    stepCasRef cref@(CRef (crid, _)) tick a c = synchronised $ do
+      (suc, tick') <- casCRef fixed cref tid tick a
+      simple (goto (c (suc, tick')) tid threads) $ CasRef crid suc
 
     -- | Commit a @CRef@ write
     stepCommit c t = do
@@ -398,7 +405,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
     -- | Create a new @CRef@, using the next 'CRefId'.
     stepNewRef a c = do
       let (idSource', newcrid) = nextCRId idSource
-      ref <- newRef fixed (I.empty, const 0 <$> threads, a)
+      ref <- newRef fixed (I.empty, 0, a)
       let cref = CRef (newcrid, ref)
       return $ Right (goto (c cref) tid threads, idSource', NewRef newcrid, wb)
 

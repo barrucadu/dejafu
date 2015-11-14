@@ -1,11 +1,12 @@
-{-# LANGUAGE CPP   #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP          #-}
+{-# LANGUAGE GADTs        #-}
 
 -- | Operations over @CRef@s and @CVar@s
 module Test.DejaFu.Deterministic.Internal.Memory where
 
 import Control.Monad (when)
-import Data.IntMap.Strict (IntMap, (!))
+import Data.IntMap.Strict (IntMap)
 import Data.Maybe (isJust, fromJust)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..), (><), singleton, viewl)
@@ -47,8 +48,8 @@ bufferWrite fixed (WriteBuffer wb) i cref@(CRef (_, ref)) new tid = do
   let buffer' = I.insertWith (><) i write wb
 
   -- Write the thread-local value to the @CRef@'s update map.
-  (map, counts, def) <- readRef fixed ref
-  writeRef fixed ref (I.insert tid new map, I.insertWith (+) tid 1 counts, def)
+  (map, count, def) <- readRef fixed ref
+  writeRef fixed ref (I.insert tid new map, count, def)
 
   return $ WriteBuffer buffer'
 
@@ -73,28 +74,34 @@ readCRef fixed cref tid = do
 readForTicket :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n (Ticket a)
 readForTicket fixed cref@(CRef (crid, _)) tid = do
   (val, count) <- readCRefPrim fixed cref tid
-  return $ Ticket (crid, tid, count, val)
+  return $ Ticket (crid, count, val)
 
--- | Read the local state of a @CRef@, inserting an empty entry to the
--- count map and adding the default value to the update map if
--- necessary..
+-- | Perform a compare-and-swap on a @CRef@ if the ticket is still
+-- valid. This is strict in the \"new\" value argument.
+casCRef :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> Ticket a -> a -> n (Bool, Ticket a)
+casCRef fixed cref tid (Ticket (_, cc, _)) !new = do
+  tick'@(Ticket (_, cc', _)) <- readForTicket fixed cref tid
+
+  if cc == cc'
+  then do
+    writeImmediate fixed cref new
+    tick'' <- readForTicket fixed cref tid
+    return (True, tick'')
+  else return (False, tick')
+
+-- | Read the local state of a @CRef@.
 readCRefPrim :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n (a, Integer)
 readCRefPrim fixed (CRef (_, ref)) tid = do
-  (vals, counts, def) <- readRef fixed ref
+  (vals, count, def) <- readRef fixed ref
 
-  let vals'   = I.insertWith (flip const) tid def vals
-  let counts' = I.insertWith (flip const) tid 0 counts
-
-  writeRef fixed ref (vals', counts', def)
-
-  return (vals' ! tid, counts' ! tid)
+  return (I.findWithDefault def tid vals, count)
 
 -- | Write and commit to a @CRef@ immediately, clearing the update map
--- and incrementing all the write counts.
+-- and incrementing the write count.
 writeImmediate :: Monad n => Fixed n r s -> CRef r a -> a -> n ()
 writeImmediate fixed (CRef (_, ref)) a = do
-  (_, counts, _) <- readRef fixed ref
-  writeRef fixed ref (I.empty, (+1) <$> counts, a)
+  (_, count, _) <- readRef fixed ref
+  writeRef fixed ref (I.empty, count + 1, a)
 
 -- | Flush all writes in the buffer.
 writeBarrier :: Monad n => Fixed n r s -> WriteBuffer r -> n ()
