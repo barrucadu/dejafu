@@ -80,9 +80,9 @@ class ( Applicative m, Monad m
   -- \"full\" @CVar@ will block until it is empty.
   type CVar m :: * -> *
 
-  -- | The mutable non-blocking reference type. These are like
-  -- 'IORef's, but don't have the potential re-ordering problem
-  -- mentioned in Data.IORef.
+  -- | The mutable non-blocking reference type. These may suffer from
+  -- relaxed memory effects if functions outside the set @newCRef@,
+  -- @readCRef@, @modifyCRef@, and @atomicWriteCRef@ are used.
   type CRef m :: * -> *
 
   -- | An abstract handle to a thread.
