@@ -90,10 +90,13 @@ data Action n r s =
   | forall a. ATakeVar    (CVar r a) (a -> Action n r s)
   | forall a. ATryTakeVar (CVar r a) (Maybe a -> Action n r s)
 
-  | forall a.   ANewRef a (CRef r a -> Action n r s)
-  | forall a.   AReadRef  (CRef r a) (a -> Action n r s)
-  | forall a b. AModRef   (CRef r a) (a -> (a, b)) (b -> Action n r s)
-  | forall a.   AWriteRef (CRef r a) a (Action n r s)
+  | forall a.   ANewRef a   (CRef r a -> Action n r s)
+  | forall a.   AReadRef    (CRef r a) (a -> Action n r s)
+  | forall a.   AReadRefCas (CRef r a) (Ticket a -> Action n r s)
+  | forall a b. AModRef     (CRef r a) (a -> (a, b)) (b -> Action n r s)
+  | forall a b. AModRefCas  (CRef r a) (a -> (a, b)) (b -> Action n r s)
+  | forall a.   AWriteRef   (CRef r a) a (Action n r s)
+  | forall a.   ACasRef     (CRef r a) (Ticket a) a ((Bool, Ticket a) -> Action n r s)
 
   | forall e.   Exception e => AThrow e
   | forall e.   Exception e => AThrowTo ThreadId e (Action n r s)
@@ -247,10 +250,17 @@ data ThreadAction =
   -- ^ Create a new 'CRef'.
   | ReadRef CRefId
   -- ^ Read from a 'CRef'.
+  | ReadRefCas CRefId
+  -- ^ Read from a 'CRef' for a future compare-and-swap.
   | ModRef CRefId
   -- ^ Modify a 'CRef'.
+  | ModRefCas CRefId
+  -- ^ Modify a 'CRef' using a compare-and-swap.
   | WriteRef CRefId
   -- ^ Write to a 'CRef' without synchronising.
+  | CasRef CRefId Bool
+  -- ^ Attempt to to a 'CRef' using a compare-and-swap, synchronising
+  -- it.
   | CommitRef ThreadId CRefId
   -- ^ Commit the last write to the given 'CRef' by the given thread,
   -- so that all threads can see the updated value.
@@ -311,8 +321,11 @@ instance NFData ThreadAction where
   rnf (TryTakeVar c b ts) = rnf (c, b, ts)
   rnf (NewRef c) = rnf c
   rnf (ReadRef c) = rnf c
+  rnf (ReadRefCas c) = rnf c
   rnf (ModRef c) = rnf c
+  rnf (ModRefCas c) = rnf c
   rnf (WriteRef c) = rnf c
+  rnf (CasRef c b) = rnf (c, b)
   rnf (CommitRef t c) = rnf (t, c)
   rnf (STM ts) = rnf ts
   rnf (ThrowTo t) = rnf t
@@ -345,10 +358,17 @@ data Lookahead =
   -- ^ Will create a new 'CRef'.
   | WillReadRef CRefId
   -- ^ Will read from a 'CRef'.
+  | WillReadRefCas CRefId
+  -- ^ Will read from a 'CRef' for a future compare-and-swap.
   | WillModRef CRefId
   -- ^ Will modify a 'CRef'.
+  | WillModRefCas CRefId
+  -- ^ Will nodify a 'CRef' using a compare-and-swap.
   | WillWriteRef CRefId
   -- ^ Will write to a 'CRef' without synchronising.
+  | WillCasRef CRefId
+  -- ^ Will attempt to to a 'CRef' using a compare-and-swap,
+  -- synchronising it.
   | WillCommitRef ThreadId CRefId
   -- ^ Will commit the last write by the given thread to the 'CRef'.
   | WillSTM
@@ -393,8 +413,11 @@ instance NFData Lookahead where
   rnf (WillTakeVar c) = rnf c
   rnf (WillTryTakeVar c) = rnf c
   rnf (WillReadRef c) = rnf c
+  rnf (WillReadRefCas c) = rnf c
   rnf (WillModRef c) = rnf c
+  rnf (WillModRefCas c) = rnf c
   rnf (WillWriteRef c) = rnf c
+  rnf (WillCasRef c) = rnf c
   rnf (WillCommitRef t c) = rnf (t, c)
   rnf (WillThrowTo t) = rnf t
   rnf (WillSetMasking b m) = b `seq` m `seq` ()
@@ -404,16 +427,20 @@ instance NFData Lookahead where
 -- | A simplified view of the possible actions a thread can perform.
 data ActionType =
     UnsynchronisedRead  CRefId
-  -- ^ A 'readCRef'.
+  -- ^ A 'readCRef' or a 'readForCAS'.
   | UnsynchronisedWrite CRefId
   -- ^ A 'writeCRef'.
   | UnsynchronisedOther
   -- ^ Some other action which doesn't require cross-thread
   -- communication.
+  | PartiallySynchronisedCommit CRefId
+  -- ^ A commit.
+  | PartiallySynchronisedWrite  CRefId
+  -- ^ A 'casCRef'
+  | PartiallySynchronisedModify CRefId
+  -- ^ A 'modifyCRefCAS'
   | SynchronisedModify  CRefId
   -- ^ An 'atomicModifyCRef'.
-  | SynchronisedCommit  CRefId
-  -- ^ A commit.
   | SynchronisedRead    CVarId
   -- ^ A 'readCVar' or 'takeCVar' (or @try@/@blocked@ variants).
   | SynchronisedWrite   CVarId
@@ -426,8 +453,10 @@ data ActionType =
 instance NFData ActionType where
   rnf (UnsynchronisedRead  r) = rnf r
   rnf (UnsynchronisedWrite r) = rnf r
+  rnf (PartiallySynchronisedCommit r) = rnf r
+  rnf (PartiallySynchronisedWrite  r) = rnf r
+  rnf (PartiallySynchronisedModify  r) = rnf r
   rnf (SynchronisedModify  r) = rnf r
-  rnf (SynchronisedCommit  r) = rnf r
   rnf (SynchronisedRead    c) = rnf c
   rnf (SynchronisedWrite   c) = rnf c
   rnf a = a `seq` ()
@@ -440,17 +469,21 @@ isBarrier (SynchronisedWrite  _) = True
 isBarrier SynchronisedOther = True
 isBarrier _ = False
 
--- | Check if an action is synchronised.
-isSynchronised :: ActionType -> Bool
-isSynchronised (SynchronisedCommit _) = True
-isSynchronised a = isBarrier a
+-- | Check if an action is synchronises a given 'CRef'.
+synchronises :: ActionType -> CRefId -> Bool
+synchronises (PartiallySynchronisedCommit c) r = c == r
+synchronises (PartiallySynchronisedWrite  c) r = c == r
+synchronises (PartiallySynchronisedModify c) r = c == r
+synchronises a _ = isBarrier a
 
 -- | Get the 'CRef' affected.
 crefOf :: ActionType -> Maybe CRefId
 crefOf (UnsynchronisedRead  r) = Just r
 crefOf (UnsynchronisedWrite r) = Just r
 crefOf (SynchronisedModify  r) = Just r
-crefOf (SynchronisedCommit  r) = Just r
+crefOf (PartiallySynchronisedCommit r) = Just r
+crefOf (PartiallySynchronisedWrite  r) = Just r
+crefOf (PartiallySynchronisedModify r) = Just r
 crefOf _ = Nothing
 
 -- | Get the 'CVar' affected.
@@ -474,9 +507,12 @@ simplify (TakeVar c _)      = SynchronisedRead c
 simplify (BlockedTakeVar _) = SynchronisedOther
 simplify (TryTakeVar c _ _) = SynchronisedRead c
 simplify (ReadRef r)     = UnsynchronisedRead r
+simplify (ReadRefCas r)  = UnsynchronisedRead r
 simplify (ModRef r)      = SynchronisedModify r
+simplify (ModRefCas r)   = PartiallySynchronisedModify r
 simplify (WriteRef r)    = UnsynchronisedWrite r
-simplify (CommitRef _ r) = SynchronisedCommit r
+simplify (CasRef r _)    = PartiallySynchronisedWrite r
+simplify (CommitRef _ r) = PartiallySynchronisedCommit r
 simplify (STM _)            = SynchronisedOther
 simplify BlockedSTM         = SynchronisedOther
 simplify (ThrowTo _)        = SynchronisedOther
@@ -491,9 +527,12 @@ simplify' (WillReadVar c)    = SynchronisedRead c
 simplify' (WillTakeVar c)    = SynchronisedRead c
 simplify' (WillTryTakeVar c) = SynchronisedRead c
 simplify' (WillReadRef r)     = UnsynchronisedRead r
+simplify' (WillReadRefCas r)  = UnsynchronisedRead r
 simplify' (WillModRef r)      = SynchronisedModify r
+simplify' (WillModRefCas r)   = PartiallySynchronisedModify r
 simplify' (WillWriteRef r)    = UnsynchronisedWrite r
-simplify' (WillCommitRef _ r) = SynchronisedCommit r
+simplify' (WillCasRef r)      = PartiallySynchronisedWrite r
+simplify' (WillCommitRef _ r) = PartiallySynchronisedCommit r
 simplify' WillSTM         = SynchronisedOther
 simplify' (WillThrowTo _) = SynchronisedOther
 simplify' _ = UnsynchronisedOther

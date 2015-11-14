@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -117,16 +116,16 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 
   newCRef a = toConc (\c -> ANewRef a c)
 
-  readCRef   ref = toConc (AReadRef ref)
-  readForCAS ref = toConc (error "Unimplemented: Conc.readForCAS")
+  readCRef   ref = toConc (AReadRef    ref)
+  readForCAS ref = toConc (AReadRefCas ref)
 
   peekTicket (Ticket a) = return a
 
-  writeCRef ref       a = toConc (\c -> AWriteRef ref a (c ()))
-  casCRef   ref tick !a = toConc (error "Unimplemented: Conc.casCRef")
+  writeCRef ref      a = toConc (\c -> AWriteRef ref a (c ()))
+  casCRef   ref tick a = toConc (ACasRef ref tick a)
 
-  modifyCRef    ref f = toConc (AModRef ref f)
-  modifyCRefCAS ref f = toConc (error "Unimplemented: Conc.modifyCRefCAS")
+  modifyCRef    ref f = toConc (AModRef    ref f)
+  modifyCRefCAS ref f = toConc (AModRefCas ref f)
 
   -- ----------
 

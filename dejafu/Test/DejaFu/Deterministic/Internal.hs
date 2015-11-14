@@ -43,7 +43,7 @@ module Test.DejaFu.Deterministic.Internal
  -- * Synchronised and Unsynchronised Actions
  , ActionType(..)
  , isBarrier
- , isSynchronised
+ , synchronises
  , crefOf
  , cvarOf
  , simplify
@@ -177,9 +177,12 @@ lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (ATakeVar (CVar (c, _)) _)     = [WillTakeVar c]
   lookahead' (ATryTakeVar (CVar (c, _)) _)  = [WillTryTakeVar c]
   lookahead' (ANewRef _ _)           = [WillNewRef]
-  lookahead' (AReadRef (CRef (r, _)) _)    = [WillReadRef r]
-  lookahead' (AModRef (CRef (r, _)) _ _)   = [WillModRef r]
+  lookahead' (AReadRef (CRef (r, _)) _)     = [WillReadRef r]
+  lookahead' (AReadRefCas (CRef (r, _)) _)  = [WillReadRefCas r]
+  lookahead' (AModRef (CRef (r, _)) _ _)    = [WillModRef r]
+  lookahead' (AModRefCas (CRef (r, _)) _ _) = [WillModRefCas r]
   lookahead' (AWriteRef (CRef (r, _)) _ k) = WillWriteRef r : lookahead' k
+  lookahead' (ACasRef (CRef (r, _)) _ _ _) = [WillCasRef r]
   lookahead' (ACommit t c)           = [WillCommitRef t c]
   lookahead' (AAtom _ _)             = [WillSTM]
   lookahead' (AThrow _)              = [WillThrow]
@@ -229,8 +232,11 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
   ATryTakeVar var c -> stepTryTakeVar var c
   ANewRef  a c     -> stepNewRef      a c
   AReadRef ref c   -> stepReadRef     ref c
+  AReadRefCas ref c -> stepReadRefCas ref c
   AModRef  ref f c -> stepModRef      ref f c
+  AModRefCas ref f c -> stepModRefCas ref f c
   AWriteRef ref a c -> stepWriteRef   ref a c
+  ACasRef ref tick a c -> stepCasRef ref tick a c
   ACommit  t c     -> stepCommit      t c
   AAtom    stm c   -> stepAtom        stm c
   ALift    na      -> stepLift        na
@@ -291,11 +297,17 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       val <- readCRef fixed cref tid
       simple (goto (c val) tid threads) $ ReadRef crid
 
+    -- | Read from a @CRef@ for future compare-and-swap operations.
+    stepReadRefCas cref@(CRef (crid, _)) c = error "Unimplemented: stepReadRefCas"
+
     -- | Modify a @CRef@.
     stepModRef cref@(CRef (crid, _)) f c = synchronised $ do
       (new, val) <- f <$> readCRef fixed cref tid
       writeImmediate fixed cref new
       simple (goto (c val) tid threads) $ ModRef crid
+
+    -- | Modify a @CRef@ using a compare-and-swap.
+    stepModRefCas cref@(CRef (crid, _)) f c = error "Unimplemented: stepModRefCas"
 
     -- | Write to a @CRef@ without synchronising
     stepWriteRef cref@(CRef (crid, _)) a c = case memtype of
@@ -313,6 +325,9 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       PartialStoreOrder -> do
         wb' <- bufferWrite fixed wb crid cref a tid
         return $ Right (goto c tid threads, idSource, WriteRef crid, wb')
+
+    -- | Perform a compare-and-swap on a @CRef@.
+    stepCasRef cref@(CRef (crid, _)) tick a c = error "Unimplemented: stepCasRef"
 
     -- | Commit a @CRef@ write
     stepCommit c t = do

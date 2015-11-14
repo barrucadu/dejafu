@@ -298,7 +298,7 @@ dependentActions memtype buf a1 a2 = case (a1, a2) of
 
   (_, _)
     -- Two actions on the same CRef where at least one is synchronised
-    | same crefOf && (isSynchronised a1 || isSynchronised a2) -> True
+    | same crefOf && (synchronises a1 (fromJust $ crefOf a1) || synchronises a2 (fromJust $ crefOf a2)) -> True
     -- Two actions on the same CVar
     | same cvarOf -> True
 
