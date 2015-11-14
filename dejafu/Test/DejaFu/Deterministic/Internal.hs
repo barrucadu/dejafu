@@ -165,41 +165,6 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
             threads'' = if (interruptible <$> M.lookup chosen threads') /= Just False then unblockWaitingOn chosen threads' else threads'
         in go idSource' sofar' (Just chosen) g' (delCommitThreads threads'') wb'
 
--- | Look as far ahead in the given continuation as possible.
-lookahead :: Action n r s -> NonEmpty Lookahead
-lookahead = unsafeToNonEmpty . lookahead' where
-  lookahead' (AFork _ _)             = [WillFork]
-  lookahead' (AMyTId _)              = [WillMyThreadId]
-  lookahead' (ANewVar _)             = [WillNewVar]
-  lookahead' (APutVar (CVar (c, _)) _ k)    = WillPutVar c : lookahead' k
-  lookahead' (ATryPutVar (CVar (c, _)) _ _) = [WillTryPutVar c]
-  lookahead' (AReadVar (CVar (c, _)) _)     = [WillReadVar c]
-  lookahead' (ATakeVar (CVar (c, _)) _)     = [WillTakeVar c]
-  lookahead' (ATryTakeVar (CVar (c, _)) _)  = [WillTryTakeVar c]
-  lookahead' (ANewRef _ _)           = [WillNewRef]
-  lookahead' (AReadRef (CRef (r, _)) _)     = [WillReadRef r]
-  lookahead' (AReadRefCas (CRef (r, _)) _)  = [WillReadRefCas r]
-  lookahead' (APeekTicket (Ticket (r, _)) _) = [WillPeekTicket r]
-  lookahead' (AModRef (CRef (r, _)) _ _)    = [WillModRef r]
-  lookahead' (AModRefCas (CRef (r, _)) _ _) = [WillModRefCas r]
-  lookahead' (AWriteRef (CRef (r, _)) _ k) = WillWriteRef r : lookahead' k
-  lookahead' (ACasRef (CRef (r, _)) _ _ _) = [WillCasRef r]
-  lookahead' (ACommit t c)           = [WillCommitRef t c]
-  lookahead' (AAtom _ _)             = [WillSTM]
-  lookahead' (AThrow _)              = [WillThrow]
-  lookahead' (AThrowTo tid _ k)      = WillThrowTo tid : lookahead' k
-  lookahead' (ACatching _ _ _)       = [WillCatching]
-  lookahead' (APopCatching k)        = WillPopCatching : lookahead' k
-  lookahead' (AMasking ms _ _)       = [WillSetMasking False ms]
-  lookahead' (AResetMask b1 b2 ms k) = (if b1 then WillSetMasking else WillResetMasking) b2 ms : lookahead' k
-  lookahead' (ALift _)               = [WillLift]
-  lookahead' (AKnowsAbout _ k)       = WillKnowsAbout : lookahead' k
-  lookahead' (AForgets _ k)          = WillForgets : lookahead' k
-  lookahead' (AAllKnown k)           = WillAllKnown : lookahead' k
-  lookahead' (AYield k)              = WillYield : lookahead' k
-  lookahead' (AReturn k)             = WillReturn : lookahead' k
-  lookahead' AStop                   = [WillStop]
-
 --------------------------------------------------------------------------------
 -- * Single-step execution
 
