@@ -179,6 +179,7 @@ lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (ANewRef _ _)           = [WillNewRef]
   lookahead' (AReadRef (CRef (r, _)) _)     = [WillReadRef r]
   lookahead' (AReadRefCas (CRef (r, _)) _)  = [WillReadRefCas r]
+  lookahead' (APeekTicket (Ticket (r, _)) _) = [WillPeekTicket r]
   lookahead' (AModRef (CRef (r, _)) _ _)    = [WillModRef r]
   lookahead' (AModRefCas (CRef (r, _)) _ _) = [WillModRefCas r]
   lookahead' (AWriteRef (CRef (r, _)) _ k) = WillWriteRef r : lookahead' k
@@ -233,6 +234,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
   ANewRef  a c     -> stepNewRef      a c
   AReadRef ref c   -> stepReadRef     ref c
   AReadRefCas ref c -> stepReadRefCas ref c
+  APeekTicket tick c -> stepPeekTicket tick c
   AModRef  ref f c -> stepModRef      ref f c
   AModRefCas ref f c -> stepModRefCas ref f c
   AWriteRef ref a c -> stepWriteRef   ref a c
@@ -299,6 +301,9 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
 
     -- | Read from a @CRef@ for future compare-and-swap operations.
     stepReadRefCas cref@(CRef (crid, _)) c = error "Unimplemented: stepReadRefCas"
+
+    -- | Extract the value from a @Ticket@.
+    stepPeekTicket (Ticket (crid, a)) c = simple (goto (c a) tid threads) $ PeekTicket crid
 
     -- | Modify a @CRef@.
     stepModRef cref@(CRef (crid, _)) f c = synchronised $ do

@@ -119,7 +119,7 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
   readCRef   ref = toConc (AReadRef    ref)
   readForCAS ref = toConc (AReadRefCas ref)
 
-  peekTicket (Ticket a) = return a
+  peekTicket tick = toConc (APeekTicket tick)
 
   writeCRef ref      a = toConc (\c -> AWriteRef ref a (c ()))
   casCRef   ref tick a = toConc (ACasRef ref tick a)

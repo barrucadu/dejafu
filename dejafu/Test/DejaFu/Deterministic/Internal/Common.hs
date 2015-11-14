@@ -55,11 +55,12 @@ newtype CRef r a = CRef (CRefId, r (IntMap a, a))
 
 -- | The compare-and-swap proof type.
 --
--- @Ticket@s are represented as just a wrapper around an @a@
--- value. This doesn't work in the source package (atomic-primops)
--- because of the need to use pointer equality. Here we can just pack
--- extra information into 'CRef' to avoid that need.
-newtype Ticket a = Ticket a
+-- @Ticket@s are represented as just a wrapper around an @a@ value and
+-- the identifier of the 'CRef' it came from. This doesn't work in the
+-- source package (atomic-primops) because of the need to use pointer
+-- equality. Here we can just pack extra information into 'CRef' to
+-- avoid that need.
+newtype Ticket a = Ticket (CRefId, a)
 
 -- | Dict of methods for implementations to override.
 type Fixed n r s = Ref n r (M n r s)
@@ -93,6 +94,7 @@ data Action n r s =
   | forall a.   ANewRef a   (CRef r a -> Action n r s)
   | forall a.   AReadRef    (CRef r a) (a -> Action n r s)
   | forall a.   AReadRefCas (CRef r a) (Ticket a -> Action n r s)
+  | forall a.   APeekTicket (Ticket a) (a -> Action n r s)
   | forall a b. AModRef     (CRef r a) (a -> (a, b)) (b -> Action n r s)
   | forall a b. AModRefCas  (CRef r a) (a -> (a, b)) (b -> Action n r s)
   | forall a.   AWriteRef   (CRef r a) a (Action n r s)
@@ -252,6 +254,8 @@ data ThreadAction =
   -- ^ Read from a 'CRef'.
   | ReadRefCas CRefId
   -- ^ Read from a 'CRef' for a future compare-and-swap.
+  | PeekTicket CRefId
+  -- ^ Extract the value from a 'Ticket'.
   | ModRef CRefId
   -- ^ Modify a 'CRef'.
   | ModRefCas CRefId
@@ -322,6 +326,7 @@ instance NFData ThreadAction where
   rnf (NewRef c) = rnf c
   rnf (ReadRef c) = rnf c
   rnf (ReadRefCas c) = rnf c
+  rnf (PeekTicket c) = rnf c
   rnf (ModRef c) = rnf c
   rnf (ModRefCas c) = rnf c
   rnf (WriteRef c) = rnf c
@@ -358,6 +363,8 @@ data Lookahead =
   -- ^ Will create a new 'CRef'.
   | WillReadRef CRefId
   -- ^ Will read from a 'CRef'.
+  | WillPeekTicket CRefId
+  -- ^ Will extract the value from a 'Ticket'.
   | WillReadRefCas CRefId
   -- ^ Will read from a 'CRef' for a future compare-and-swap.
   | WillModRef CRefId
@@ -414,6 +421,7 @@ instance NFData Lookahead where
   rnf (WillTryTakeVar c) = rnf c
   rnf (WillReadRef c) = rnf c
   rnf (WillReadRefCas c) = rnf c
+  rnf (WillPeekTicket c) = rnf c
   rnf (WillModRef c) = rnf c
   rnf (WillModRefCas c) = rnf c
   rnf (WillWriteRef c) = rnf c
