@@ -194,6 +194,12 @@ class ( Applicative m, Monad m
   -- This is strict in the \"new\" value argument.
   modifyCRefCAS :: CRef m a -> (a -> (a, b)) -> m b
 
+  -- | A variant of 'modifyCRefCAS' which doesn't return a result.
+  --
+  -- > modifyCRefCAS_ cref f = modifyCRefCAS cref (\a -> (f a, ()))
+  modifyCRefCAS_ :: CRef m a -> (a -> a) -> m ()
+  modifyCRefCAS_ cref f = modifyCRefCAS cref (\a -> (f a, ()))
+
   -- | Perform an STM transaction atomically.
   atomically :: STMLike m a -> m a
 
