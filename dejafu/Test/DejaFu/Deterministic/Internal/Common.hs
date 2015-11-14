@@ -47,20 +47,22 @@ newtype CVar r a = CVar (CVarId, r (Maybe a))
 
 -- | The mutable non-blocking reference type. These are like 'IORef's.
 --
--- @CRef@s are represented as a unique numeric identifier, and a
+-- @CRef@s are represented as a unique numeric identifier and a
 -- reference containing (a) any thread-local non-synchronised writes
--- (so each thread sees its latest write) and the current value
--- visible to all threads.
-newtype CRef r a = CRef (CRefId, r (IntMap a, a))
+-- (so each thread sees its latest write), (b) a write count (used in
+-- compare-and-swaps), and (c) the current value visible to all
+-- threads.
+newtype CRef r a = CRef (CRefId, r (IntMap a, IntMap Integer, a))
 
 -- | The compare-and-swap proof type.
 --
--- @Ticket@s are represented as just a wrapper around an @a@ value and
--- the identifier of the 'CRef' it came from. This doesn't work in the
--- source package (atomic-primops) because of the need to use pointer
--- equality. Here we can just pack extra information into 'CRef' to
--- avoid that need.
-newtype Ticket a = Ticket (CRefId, a)
+-- @Ticket@s are represented as just a wrapper around the identifier
+-- of the 'CRef' it came from and the thread which created it, the
+-- write count value at the time it was produced, and an @a@
+-- value. This doesn't work in the source package (atomic-primops)
+-- because of the need to use pointer equality. Here we can just pack
+-- extra information into 'CRef' to avoid that need.
+newtype Ticket a = Ticket (CRefId, ThreadId, Integer, a)
 
 -- | Dict of methods for implementations to override.
 type Fixed n r s = Ref n r (M n r s)
@@ -446,7 +448,7 @@ lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (ANewRef _ _)           = [WillNewRef]
   lookahead' (AReadRef (CRef (r, _)) _)     = [WillReadRef r]
   lookahead' (AReadRefCas (CRef (r, _)) _)  = [WillReadRefCas r]
-  lookahead' (APeekTicket (Ticket (r, _)) _) = [WillPeekTicket r]
+  lookahead' (APeekTicket (Ticket (r, _, _, _)) _) = [WillPeekTicket r]
   lookahead' (AModRef (CRef (r, _)) _ _)    = [WillModRef r]
   lookahead' (AModRefCas (CRef (r, _)) _ _) = [WillModRefCas r]
   lookahead' (AWriteRef (CRef (r, _)) _ k) = WillWriteRef r : lookahead' k

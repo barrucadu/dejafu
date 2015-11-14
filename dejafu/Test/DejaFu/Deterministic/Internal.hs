@@ -265,10 +265,12 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       simple (goto (c val) tid threads) $ ReadRef crid
 
     -- | Read from a @CRef@ for future compare-and-swap operations.
-    stepReadRefCas cref@(CRef (crid, _)) c = error "Unimplemented: stepReadRefCas"
+    stepReadRefCas cref@(CRef (crid, _)) c = do
+      tick <- readForTicket fixed cref tid
+      simple (goto (c tick) tid threads) $ ReadRefCas crid
 
     -- | Extract the value from a @Ticket@.
-    stepPeekTicket (Ticket (crid, a)) c = simple (goto (c a) tid threads) $ PeekTicket crid
+    stepPeekTicket (Ticket (crid, _, _, a)) c = simple (goto (c a) tid threads) $ PeekTicket crid
 
     -- | Modify a @CRef@.
     stepModRef cref@(CRef (crid, _)) f c = synchronised $ do
@@ -397,7 +399,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
     -- | Create a new @CRef@, using the next 'CRefId'.
     stepNewRef a c = do
       let (idSource', newcrid) = nextCRId idSource
-      ref <- newRef fixed (I.empty, a)
+      ref <- newRef fixed (I.empty, I.fromList [(t,0) | t <- M.keys threads], a)
       let cref = CRef (newcrid, ref)
       return $ Right (goto (c cref) tid threads, idSource', NewRef newcrid, wb)
 

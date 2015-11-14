@@ -5,7 +5,7 @@
 module Test.DejaFu.Deterministic.Internal.Memory where
 
 import Control.Monad (when)
-import Data.IntMap.Strict (IntMap)
+import Data.IntMap.Strict (IntMap, (!))
 import Data.Maybe (isJust, fromJust)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..), (><), singleton, viewl)
@@ -48,8 +48,8 @@ bufferWrite fixed (WriteBuffer wb) i cref@(CRef (_, ref)) new tid = do
   let buffer' = I.insertWith (><) i write wb
 
   -- Write the thread-local value to the @CRef@'s update map.
-  (map, def) <- readRef fixed ref
-  writeRef fixed ref (I.insert tid new map, def)
+  (map, counts, def) <- readRef fixed ref
+  writeRef fixed ref (I.insert tid new map, I.insertWith (+) tid 1 counts, def)
 
   return $ WriteBuffer buffer'
 
@@ -65,14 +65,37 @@ commitWrite fixed w@(WriteBuffer wb) i = case maybe EmptyL viewl $ I.lookup i wb
 -- | Read from a @CRef@, returning a newer thread-local non-committed
 -- write if there is one.
 readCRef :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n a
-readCRef fixed (CRef (_, ref)) tid = do
-  (map, def) <- readRef fixed ref
-  return $ I.findWithDefault def tid map
+readCRef fixed cref tid = do
+  (val, _) <- readCRefPrim fixed cref tid
+  return val
 
--- | Write and commit to a @CRef@ immediately, clearing the update
--- map.
+-- | Read from a @CRef@, returning a @Ticket@ representing the current
+-- view of the thread.
+readForTicket :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n (Ticket a)
+readForTicket fixed cref@(CRef (crid, _)) tid = do
+  (val, count) <- readCRefPrim fixed cref tid
+  return $ Ticket (crid, tid, count, val)
+
+-- | Read the local state of a @CRef@, inserting an empty entry to the
+-- count map and adding the default value to the update map if
+-- necessary..
+readCRefPrim :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n (a, Integer)
+readCRefPrim fixed (CRef (_, ref)) tid = do
+  (vals, counts, def) <- readRef fixed ref
+
+  let vals'   = I.insertWith (flip const) tid def vals
+  let counts' = I.insertWith (flip const) tid 0 counts
+
+  writeRef fixed ref (vals', counts', def)
+
+  return (vals' ! tid, counts' ! tid)
+
+-- | Write and commit to a @CRef@ immediately, clearing the update map
+-- and incrementing all the write counts.
 writeImmediate :: Monad n => Fixed n r s -> CRef r a -> a -> n ()
-writeImmediate fixed (CRef (_, ref)) a = writeRef fixed ref (I.empty, a)
+writeImmediate fixed (CRef (_, ref)) a = do
+  (_, counts, _) <- readRef fixed ref
+  writeRef fixed ref (I.empty, (+1) <$> counts, a)
 
 -- | Flush all writes in the buffer.
 writeBarrier :: Monad n => Fixed n r s -> WriteBuffer r -> n ()
