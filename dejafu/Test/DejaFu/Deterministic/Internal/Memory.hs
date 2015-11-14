@@ -14,7 +14,6 @@ import Test.DejaFu.Deterministic.Internal.Threading
 import Test.DejaFu.Internal
 
 import qualified Data.IntMap.Strict as I
-import qualified Data.Map as M
 
 #if __GLASGOW_HASKELL__ < 710
 import Data.Foldable (mapM_)
@@ -104,14 +103,14 @@ writeBarrier fixed (WriteBuffer wb) = mapM_ flush $ I.elems wb where
 
 -- | Add phantom threads to the thread list to commit pending writes.
 addCommitThreads :: WriteBuffer r -> Threads n r s -> Threads n r s
-addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
+addCommitThreads (WriteBuffer wb) ts = ts <> I.fromList phantoms where
   phantoms = [(negate k - 1, mkthread $ fromJust c) | (k, b) <- I.toList wb, let c = go $ viewl b, isJust c]
   go (BufferedWrite tid (CRef (crid, _)) _ :< _) = Just $ ACommit tid crid
   go EmptyL = Nothing
 
 -- | Remove phantom threads.
 delCommitThreads :: Threads n r s -> Threads n r s
-delCommitThreads = M.filterWithKey $ \k _ -> k >= 0
+delCommitThreads = I.filterWithKey $ \k _ -> k >= 0
 
 --------------------------------------------------------------------------------
 -- * Manipulating @CVar@s
