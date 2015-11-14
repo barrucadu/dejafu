@@ -12,6 +12,7 @@ module Control.Monad.Conc.Class
   , spawn
   , forkFinally
   , killThread
+  , cas
 
   -- * Bound Threads
 
@@ -42,6 +43,7 @@ import qualified Control.Monad.State.Lazy as SL
 import qualified Control.Monad.State.Strict as SS
 import qualified Control.Monad.Writer.Lazy as WL
 import qualified Control.Monad.Writer.Strict as WS
+import qualified Data.Atomics as A
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative)
@@ -72,6 +74,11 @@ class ( Applicative m, Monad m
   -- relaxed memory effects if functions outside the set @newCRef@,
   -- @readCRef@, @modifyCRef@, and @atomicWriteCRef@ are used.
   type CRef m :: * -> *
+
+  -- | When performing compare-and-swap operations on @CRef@s, a
+  -- @Ticket@ is a proof that a thread observed a specific previous
+  -- value.
+  type Ticket m :: * -> *
 
   -- | An abstract handle to a thread.
   type ThreadId m :: *
@@ -144,9 +151,13 @@ class ( Applicative m, Monad m
   newCRef :: a -> m (CRef m a)
 
   -- | Read the current value stored in a reference.
+  --
+  -- > readCRef cref = readForCAS cref >>= peekTicket
   readCRef :: CRef m a -> m a
+  readCRef cref = readForCAS cref >>= peekTicket
 
-  -- | Atomically modify the value stored in a reference.
+  -- | Atomically modify the value stored in a reference. This imposes
+  -- a full memory barrier.
   modifyCRef :: CRef m a -> (a -> (a, b)) -> m b
 
   -- | Write a new value into an @CRef@, without imposing a memory
@@ -159,6 +170,29 @@ class ( Applicative m, Monad m
   -- > atomicWriteCRef r a = modifyCRef r $ const (a, ())
   atomicWriteCRef :: CRef m a -> a -> m ()
   atomicWriteCRef r a = modifyCRef r $ const (a, ())
+
+  -- | Read the current value stored in a reference, returning a
+  -- @Ticket@, for use in future compare-and-swap operations.
+  readForCAS :: CRef m a -> m (Ticket m a)
+
+  -- | Extract the actual Haskell value from a @Ticket@.
+  --
+  -- This shouldn't need to do any monadic computation, the @m@
+  -- appears in the result type because of the need for injectivity in
+  -- the @Ticket@ type family, which can't be expressed currently.
+  peekTicket :: Ticket m a -> m a
+
+  -- | Perform a machine-level compare-and-swap (CAS) operation on a
+  -- @CRef@. Returns an indication of success and a @Ticket@ for the
+  -- most current value in the @CRef@.
+  --
+  -- This is strict in the \"new\" value argument.
+  casCRef :: CRef m a -> Ticket m a -> a -> m (Bool, Ticket m a)
+
+  -- | A replacement for 'modifyCRef' that does not impose a full memory barrier.
+  --
+  -- This is strict in the \"new\" value argument.
+  modifyCRefCAS :: CRef m a -> (a -> (a, b)) -> m b
 
   -- | Perform an STM transaction atomically.
   atomically :: STMLike m a -> m a
@@ -266,6 +300,7 @@ instance MonadConc IO where
   type STMLike  IO = STM
   type CVar     IO = MVar
   type CRef     IO = IORef
+  type Ticket   IO = A.Ticket
   type ThreadId IO = C.ThreadId
 
   readCVar       = readMVar
@@ -287,6 +322,10 @@ instance MonadConc IO where
   modifyCRef     = atomicModifyIORef
   writeCRef      = writeIORef
   atomicWriteCRef = atomicWriteIORef
+  readForCAS     = A.readForCAS
+  peekTicket     = return . A.peekTicket
+  casCRef        = A.casIORef
+  modifyCRefCAS  = A.atomicModifyIORefCAS
   atomically     = S.atomically
 
 -- | Create a concurrent computation for the provided action, and
@@ -322,6 +361,16 @@ rtsSupportsBoundThreads = False
 isCurrentThreadBound :: MonadConc m => m Bool
 isCurrentThreadBound = return False
 
+-- | Compare-and-swap a value in a @CRef@, returning an indication of
+-- success and the new value.
+cas :: MonadConc m => CRef m a -> a -> m (Bool, a)
+cas cref a = do
+  tick         <- readForCAS cref
+  (suc, tick') <- casCRef cref tick a
+  a'           <- peekTicket tick'
+
+  return (suc, a')
+
 -------------------------------------------------------------------------------
 -- Transformer instances
 
@@ -329,6 +378,7 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   type STMLike  (ReaderT r m) = STMLike m
   type CVar     (ReaderT r m) = CVar m
   type CRef     (ReaderT r m) = CRef m
+  type Ticket   (ReaderT r m) = Ticket m
   type ThreadId (ReaderT r m) = ThreadId m
 
   fork              = reader fork
@@ -351,6 +401,10 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
   atomicWriteCRef r  = lift . atomicWriteCRef r
+  readForCAS         = lift . readForCAS
+  peekTicket         = lift . peekTicket
+  casCRef r t        = lift . casCRef r t
+  modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets
@@ -363,6 +417,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   type STMLike  (WL.WriterT w m) = STMLike m
   type CVar     (WL.WriterT w m) = CVar m
   type CRef     (WL.WriterT w m) = CRef m
+  type Ticket   (WL.WriterT w m) = Ticket m
   type ThreadId (WL.WriterT w m) = ThreadId m
 
   fork              = writerlazy fork
@@ -385,6 +440,10 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
   atomicWriteCRef r  = lift . atomicWriteCRef r
+  readForCAS         = lift . readForCAS
+  peekTicket         = lift . peekTicket
+  casCRef r t        = lift . casCRef r t
+  modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets
@@ -397,6 +456,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   type STMLike  (WS.WriterT w m) = STMLike m
   type CVar     (WS.WriterT w m) = CVar m
   type CRef     (WS.WriterT w m) = CRef m
+  type Ticket   (WS.WriterT w m) = Ticket m
   type ThreadId (WS.WriterT w m) = ThreadId m
 
   fork              = writerstrict fork
@@ -419,6 +479,10 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
   atomicWriteCRef r  = lift . atomicWriteCRef r
+  readForCAS         = lift . readForCAS
+  peekTicket         = lift . peekTicket
+  casCRef r t        = lift . casCRef r t
+  modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets
@@ -431,6 +495,7 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   type STMLike  (SL.StateT s m) = STMLike m
   type CVar     (SL.StateT s m) = CVar m
   type CRef     (SL.StateT s m) = CRef m
+  type Ticket   (SL.StateT s m) = Ticket m
   type ThreadId (SL.StateT s m) = ThreadId m
 
   fork              = statelazy fork
@@ -453,6 +518,10 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
   atomicWriteCRef r  = lift . atomicWriteCRef r
+  readForCAS         = lift . readForCAS
+  peekTicket         = lift . peekTicket
+  casCRef r t        = lift . casCRef r t
+  modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets
@@ -465,6 +534,7 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   type STMLike  (SS.StateT s m) = STMLike m
   type CVar     (SS.StateT s m) = CVar m
   type CRef     (SS.StateT s m) = CRef m
+  type Ticket   (SS.StateT s m) = Ticket m
   type ThreadId (SS.StateT s m) = ThreadId m
 
   fork              = statestrict fork
@@ -487,6 +557,10 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
   atomicWriteCRef r  = lift . atomicWriteCRef r
+  readForCAS         = lift . readForCAS
+  peekTicket         = lift . peekTicket
+  casCRef r t        = lift . casCRef r t
+  modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets
@@ -499,6 +573,7 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   type STMLike  (RL.RWST r w s m) = STMLike m
   type CVar     (RL.RWST r w s m) = CVar m
   type CRef     (RL.RWST r w s m) = CRef m
+  type Ticket   (RL.RWST r w s m) = Ticket m
   type ThreadId (RL.RWST r w s m) = ThreadId m
 
   fork              = rwslazy fork
@@ -521,6 +596,10 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
   atomicWriteCRef r  = lift . atomicWriteCRef r
+  readForCAS         = lift . readForCAS
+  peekTicket         = lift . peekTicket
+  casCRef r t        = lift . casCRef r t
+  modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets
@@ -533,6 +612,7 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   type STMLike  (RS.RWST r w s m) = STMLike m
   type CVar     (RS.RWST r w s m) = CVar m
   type CRef     (RS.RWST r w s m) = CRef m
+  type Ticket   (RS.RWST r w s m) = Ticket m
   type ThreadId (RS.RWST r w s m) = ThreadId m
 
   fork              = rwsstrict fork
@@ -555,6 +635,10 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
   atomicWriteCRef r  = lift . atomicWriteCRef r
+  readForCAS         = lift . readForCAS
+  peekTicket         = lift . peekTicket
+  casCRef r t        = lift . casCRef r t
+  modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
   _concKnowsAbout    = lift . _concKnowsAbout
   _concForgets       = lift . _concForgets

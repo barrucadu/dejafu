@@ -13,6 +13,7 @@ module Test.DejaFu.Deterministic.Internal
  , M(..)
  , CVar(..)
  , CRef(..)
+ , Ticket(..)
  , Fixed
  , cont
  , runCont

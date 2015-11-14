@@ -53,6 +53,14 @@ newtype CVar r a = CVar (CVarId, r (Maybe a))
 -- visible to all threads.
 newtype CRef r a = CRef (CRefId, r (IntMap a, a))
 
+-- | The compare-and-swap proof type.
+--
+-- @Ticket@s are represented as just a wrapper around an @a@
+-- value. This doesn't work in the source package (atomic-primops)
+-- because of the need to use pointer equality. Here we can just pack
+-- extra information into 'CRef' to avoid that need.
+newtype Ticket a = Ticket a
+
 -- | Dict of methods for implementations to override.
 type Fixed n r s = Ref n r (M n r s)
 

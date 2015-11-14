@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -93,6 +94,7 @@ instance Ca.MonadMask (Conc n r s) where
 instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
   type CVar     (Conc n r (STMLike n r)) = CVar r
   type CRef     (Conc n r (STMLike n r)) = CRef r
+  type Ticket   (Conc n r (STMLike n r)) = Ticket
   type STMLike  (Conc n r (STMLike n r)) = STMLike n r
   type ThreadId (Conc n r (STMLike n r)) = Int
 
@@ -115,9 +117,16 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 
   newCRef a = toConc (\c -> ANewRef a c)
 
-  readCRef   ref   = toConc (AReadRef ref)
-  writeCRef  ref a = toConc (\c -> AWriteRef ref a (c ()))
-  modifyCRef ref f = toConc (AModRef ref f)
+  readCRef   ref = toConc (AReadRef ref)
+  readForCAS ref = toConc (error "Unimplemented: Conc.readForCAS")
+
+  peekTicket (Ticket a) = return a
+
+  writeCRef ref       a = toConc (\c -> AWriteRef ref a (c ()))
+  casCRef   ref tick !a = toConc (error "Unimplemented: Conc.casCRef")
+
+  modifyCRef    ref f = toConc (AModRef ref f)
+  modifyCRefCAS ref f = toConc (error "Unimplemented: Conc.modifyCRefCAS")
 
   -- ----------
 
