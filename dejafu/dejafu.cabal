@@ -52,7 +52,7 @@ description:
     that they are created.
   .
   If a testing function does not take the memory model as a parameter,
-  it uses sequential consistency.
+  it uses TSO.
   .
   See the <https://github.com/barrucadu/dejafu README> for more
   details.

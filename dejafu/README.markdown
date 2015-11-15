@@ -63,7 +63,7 @@ supported models are:
     that they are created.
 
 If a testing function does not take the memory model as a parameter,
-it uses sequential consistency.
+it uses TSO.
 
 Contributing
 ------------
