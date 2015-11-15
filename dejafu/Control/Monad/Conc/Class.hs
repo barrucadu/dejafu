@@ -53,18 +53,6 @@ import Data.Monoid (Monoid, mempty)
 -- terms of how they can operate on shared state and in the presence
 -- of exceptions.
 --
--- There are a few notable differences between this and the @Par@
--- monad approach: firstly, @Par@ imposes 'NFData' constraints on
--- everything, as it achieves its speed-up by forcing evaluation in
--- separate threads. @MonadConc@ doesn't do that, and so you need to
--- be careful about where evaluation occurs, just like with
--- 'MVar's. Secondly, this builds on @Par@'s futures by allowing
--- @CVar@s which threads can read from and write to, possibly multiple
--- times, whereas with the @Par@ monads it is illegal to write
--- multiple times to the same @IVar@ (or to non-blockingly read from
--- it) which, when there are no exceptions, removes the possibility of
--- data races.
---
 -- Every @MonadConc@ has an associated 'MonadSTM', transactions of
 -- which can be run atomically.
 class ( Applicative m, Monad m
