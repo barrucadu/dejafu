@@ -278,12 +278,11 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       simple (goto (c val) tid threads) $ ModRef crid
 
     -- | Modify a @CRef@ using a compare-and-swap.
-    --
-    -- Not actually implemented with a CAS here because the observable
-    -- behaviour is the same, it's just the speed that may differ.
-    stepModRefCas cref f c = do
-      Right (threads', idSource', ModRef crid, wb') <- stepModRef cref f c
-      return $ Right (threads', idSource', ModRefCas crid, wb')
+    stepModRefCas cref@(CRef (crid, _)) f c = synchronised $ do
+      tick@(Ticket (_, _, old)) <- readForTicket fixed cref tid
+      let (new, val) = f old
+      casCRef fixed cref tid tick new
+      simple (goto (c val) tid threads) $ ModRefCas crid
 
     -- | Write to a @CRef@ without synchronising
     stepWriteRef cref@(CRef (crid, _)) a c = case memtype of
