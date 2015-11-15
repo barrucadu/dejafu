@@ -1,5 +1,6 @@
-{-# LANGUAGE CPP   #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP          #-}
+{-# LANGUAGE GADTs        #-}
 
 -- | Operations over @CRef@s and @CVar@s
 module Test.DejaFu.Deterministic.Internal.Memory where
@@ -14,7 +15,6 @@ import Test.DejaFu.Deterministic.Internal.Threading
 import Test.DejaFu.Internal
 
 import qualified Data.IntMap.Strict as I
-import qualified Data.Map as M
 
 #if __GLASGOW_HASKELL__ < 710
 import Data.Foldable (mapM_)
@@ -48,8 +48,8 @@ bufferWrite fixed (WriteBuffer wb) i cref@(CRef (_, ref)) new tid = do
   let buffer' = I.insertWith (><) i write wb
 
   -- Write the thread-local value to the @CRef@'s update map.
-  (map, def) <- readRef fixed ref
-  writeRef fixed ref (I.insert tid new map, def)
+  (map, count, def) <- readRef fixed ref
+  writeRef fixed ref (I.insert tid new map, count, def)
 
   return $ WriteBuffer buffer'
 
@@ -65,14 +65,43 @@ commitWrite fixed w@(WriteBuffer wb) i = case maybe EmptyL viewl $ I.lookup i wb
 -- | Read from a @CRef@, returning a newer thread-local non-committed
 -- write if there is one.
 readCRef :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n a
-readCRef fixed (CRef (_, ref)) tid = do
-  (map, def) <- readRef fixed ref
-  return $ I.findWithDefault def tid map
+readCRef fixed cref tid = do
+  (val, _) <- readCRefPrim fixed cref tid
+  return val
 
--- | Write and commit to a @CRef@ immediately, clearing the update
--- map.
+-- | Read from a @CRef@, returning a @Ticket@ representing the current
+-- view of the thread.
+readForTicket :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n (Ticket a)
+readForTicket fixed cref@(CRef (crid, _)) tid = do
+  (val, count) <- readCRefPrim fixed cref tid
+  return $ Ticket (crid, count, val)
+
+-- | Perform a compare-and-swap on a @CRef@ if the ticket is still
+-- valid. This is strict in the \"new\" value argument.
+casCRef :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> Ticket a -> a -> n (Bool, Ticket a)
+casCRef fixed cref tid (Ticket (_, cc, _)) !new = do
+  tick'@(Ticket (_, cc', _)) <- readForTicket fixed cref tid
+
+  if cc == cc'
+  then do
+    writeImmediate fixed cref new
+    tick'' <- readForTicket fixed cref tid
+    return (True, tick'')
+  else return (False, tick')
+
+-- | Read the local state of a @CRef@.
+readCRefPrim :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n (a, Integer)
+readCRefPrim fixed (CRef (_, ref)) tid = do
+  (vals, count, def) <- readRef fixed ref
+
+  return (I.findWithDefault def tid vals, count)
+
+-- | Write and commit to a @CRef@ immediately, clearing the update map
+-- and incrementing the write count.
 writeImmediate :: Monad n => Fixed n r s -> CRef r a -> a -> n ()
-writeImmediate fixed (CRef (_, ref)) a = writeRef fixed ref (I.empty, a)
+writeImmediate fixed (CRef (_, ref)) a = do
+  (_, count, _) <- readRef fixed ref
+  writeRef fixed ref (I.empty, count + 1, a)
 
 -- | Flush all writes in the buffer.
 writeBarrier :: Monad n => Fixed n r s -> WriteBuffer r -> n ()
@@ -81,14 +110,14 @@ writeBarrier fixed (WriteBuffer wb) = mapM_ flush $ I.elems wb where
 
 -- | Add phantom threads to the thread list to commit pending writes.
 addCommitThreads :: WriteBuffer r -> Threads n r s -> Threads n r s
-addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
+addCommitThreads (WriteBuffer wb) ts = ts <> I.fromList phantoms where
   phantoms = [(negate k - 1, mkthread $ fromJust c) | (k, b) <- I.toList wb, let c = go $ viewl b, isJust c]
   go (BufferedWrite tid (CRef (crid, _)) _ :< _) = Just $ ACommit tid crid
   go EmptyL = Nothing
 
 -- | Remove phantom threads.
 delCommitThreads :: Threads n r s -> Threads n r s
-delCommitThreads = M.filterWithKey $ \k _ -> k >= 0
+delCommitThreads = I.filterWithKey $ \k _ -> k >= 0
 
 --------------------------------------------------------------------------------
 -- * Manipulating @CVar@s

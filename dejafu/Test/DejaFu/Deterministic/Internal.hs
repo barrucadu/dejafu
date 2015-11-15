@@ -13,6 +13,7 @@ module Test.DejaFu.Deterministic.Internal
  , M(..)
  , CVar(..)
  , CRef(..)
+ , Ticket(..)
  , Fixed
  , cont
  , runCont
@@ -42,7 +43,7 @@ module Test.DejaFu.Deterministic.Internal
  -- * Synchronised and Unsynchronised Actions
  , ActionType(..)
  , isBarrier
- , isSynchronised
+ , synchronises
  , crefOf
  , cvarOf
  , simplify
@@ -64,7 +65,6 @@ import Test.DejaFu.Deterministic.Internal.Memory
 import Test.DejaFu.Deterministic.Internal.Threading
 
 import qualified Data.IntMap.Strict as I
-import qualified Data.Map as M
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>), (<*>))
@@ -92,7 +92,7 @@ runFixed' fixed runstm sched memtype s idSource ma = do
   ref <- newRef fixed Nothing
 
   let c       = ma >>= liftN fixed . writeRef fixed ref . Just . Right
-  let threads = launch' Unmasked 0 ((\a _ -> a) $ runCont c $ const AStop) M.empty
+  let threads = launch' Unmasked 0 ((\a _ -> a) $ runCont c $ const AStop) I.empty
 
   (s', idSource', trace) <- runThreads fixed runstm sched memtype s threads idSource ref
   out <- readRef fixed ref
@@ -127,19 +127,19 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
 
     where
       (chosen, g')  = sched g ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ unsafeToNonEmpty runnable'
-      runnable'     = [(t, nextActions t) | t <- sort $ M.keys runnable]
-      runnable      = M.filter (isNothing . _blocking) threadsc
-      thread        = M.lookup chosen threadsc
+      runnable'     = [(t, nextActions t) | t <- sort $ I.keys runnable]
+      runnable      = I.filter (isNothing . _blocking) threadsc
+      thread        = I.lookup chosen threadsc
       threadsc      = addCommitThreads wb threads
       isBlocked     = isJust . _blocking $ fromJust thread
       isNonexistant = isNothing thread
-      isTerminated  = 0 `notElem` M.keys threads
-      isDeadlocked  = isLocked 0 threads && (((~= OnCVarFull  undefined) <$> M.lookup 0 threads) == Just True ||
-                                           ((~=  OnCVarEmpty undefined) <$> M.lookup 0 threads) == Just True ||
-                                           ((~=  OnMask      undefined) <$> M.lookup 0 threads) == Just True)
-      isSTMLocked   = isLocked 0 threads && ((~=  OnCTVar    []) <$> M.lookup 0 threads) == Just True
+      isTerminated  = 0 `notElem` I.keys threads
+      isDeadlocked  = isLocked 0 threads && (((~= OnCVarFull  undefined) <$> I.lookup 0 threads) == Just True ||
+                                           ((~=  OnCVarEmpty undefined) <$> I.lookup 0 threads) == Just True ||
+                                           ((~=  OnMask      undefined) <$> I.lookup 0 threads) == Just True)
+      isSTMLocked   = isLocked 0 threads && ((~=  OnCTVar    []) <$> I.lookup 0 threads) == Just True
 
-      unblockWaitingOn tid = M.map unblock where
+      unblockWaitingOn tid = fmap unblock where
         unblock thrd = case _blocking thrd of
           Just (OnMask t) | t == tid -> thrd { _blocking = Nothing }
           _ -> thrd
@@ -154,46 +154,15 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
         | prior `notElem` map (Just . fst) runnable' = [(Start t, na) | (t, na) <- runnable', t /= chosen]
         | otherwise = [(if Just t == prior then Continue else SwitchTo t, na) | (t, na) <- runnable', t /= chosen]
 
-      nextActions t = lookahead . _continuation . fromJust $ M.lookup t threadsc
+      nextActions t = lookahead . _continuation . fromJust $ I.lookup t threadsc
 
       stop = return (g, idSource, sofar)
       die reason = writeRef fixed ref (Just $ Left reason) >> stop
 
       loop threads' idSource' act wb' =
         let sofar' = ((decision, alternatives, act) : sofar)
-            threads'' = if (interruptible <$> M.lookup chosen threads') /= Just False then unblockWaitingOn chosen threads' else threads'
+            threads'' = if (interruptible <$> I.lookup chosen threads') /= Just False then unblockWaitingOn chosen threads' else threads'
         in go idSource' sofar' (Just chosen) g' (delCommitThreads threads'') wb'
-
--- | Look as far ahead in the given continuation as possible.
-lookahead :: Action n r s -> NonEmpty Lookahead
-lookahead = unsafeToNonEmpty . lookahead' where
-  lookahead' (AFork _ _)             = [WillFork]
-  lookahead' (AMyTId _)              = [WillMyThreadId]
-  lookahead' (ANewVar _)             = [WillNewVar]
-  lookahead' (APutVar (CVar (c, _)) _ k)    = WillPutVar c : lookahead' k
-  lookahead' (ATryPutVar (CVar (c, _)) _ _) = [WillTryPutVar c]
-  lookahead' (AReadVar (CVar (c, _)) _)     = [WillReadVar c]
-  lookahead' (ATakeVar (CVar (c, _)) _)     = [WillTakeVar c]
-  lookahead' (ATryTakeVar (CVar (c, _)) _)  = [WillTryTakeVar c]
-  lookahead' (ANewRef _ _)           = [WillNewRef]
-  lookahead' (AReadRef (CRef (r, _)) _)    = [WillReadRef r]
-  lookahead' (AModRef (CRef (r, _)) _ _)   = [WillModRef r]
-  lookahead' (AWriteRef (CRef (r, _)) _ k) = WillWriteRef r : lookahead' k
-  lookahead' (ACommit t c)           = [WillCommitRef t c]
-  lookahead' (AAtom _ _)             = [WillSTM]
-  lookahead' (AThrow _)              = [WillThrow]
-  lookahead' (AThrowTo tid _ k)      = WillThrowTo tid : lookahead' k
-  lookahead' (ACatching _ _ _)       = [WillCatching]
-  lookahead' (APopCatching k)        = WillPopCatching : lookahead' k
-  lookahead' (AMasking ms _ _)       = [WillSetMasking False ms]
-  lookahead' (AResetMask b1 b2 ms k) = (if b1 then WillSetMasking else WillResetMasking) b2 ms : lookahead' k
-  lookahead' (ALift _)               = [WillLift]
-  lookahead' (AKnowsAbout _ k)       = WillKnowsAbout : lookahead' k
-  lookahead' (AForgets _ k)          = WillForgets : lookahead' k
-  lookahead' (AAllKnown k)           = WillAllKnown : lookahead' k
-  lookahead' (AYield k)              = WillYield : lookahead' k
-  lookahead' (AReturn k)             = WillReturn : lookahead' k
-  lookahead' AStop                   = [WillStop]
 
 --------------------------------------------------------------------------------
 -- * Single-step execution
@@ -228,8 +197,12 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
   ATryTakeVar var c -> stepTryTakeVar var c
   ANewRef  a c     -> stepNewRef      a c
   AReadRef ref c   -> stepReadRef     ref c
+  AReadRefCas ref c -> stepReadRefCas ref c
+  APeekTicket tick c -> stepPeekTicket tick c
   AModRef  ref f c -> stepModRef      ref f c
+  AModRefCas ref f c -> stepModRefCas ref f c
   AWriteRef ref a c -> stepWriteRef   ref a c
+  ACasRef ref tick a c -> stepCasRef ref tick a c
   ACommit  t c     -> stepCommit      t c
   AAtom    stm c   -> stepAtom        stm c
   ALift    na      -> stepLift        na
@@ -290,11 +263,27 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       val <- readCRef fixed cref tid
       simple (goto (c val) tid threads) $ ReadRef crid
 
+    -- | Read from a @CRef@ for future compare-and-swap operations.
+    stepReadRefCas cref@(CRef (crid, _)) c = do
+      tick <- readForTicket fixed cref tid
+      simple (goto (c tick) tid threads) $ ReadRefCas crid
+
+    -- | Extract the value from a @Ticket@.
+    stepPeekTicket (Ticket (crid, _, a)) c = simple (goto (c a) tid threads) $ PeekTicket crid
+
     -- | Modify a @CRef@.
     stepModRef cref@(CRef (crid, _)) f c = synchronised $ do
       (new, val) <- f <$> readCRef fixed cref tid
       writeImmediate fixed cref new
       simple (goto (c val) tid threads) $ ModRef crid
+
+    -- | Modify a @CRef@ using a compare-and-swap.
+    --
+    -- Not actually implemented with a CAS here because the observable
+    -- behaviour is the same, it's just the speed that may differ.
+    stepModRefCas cref f c = do
+      Right (threads', idSource', ModRef crid, wb') <- stepModRef cref f c
+      return $ Right (threads', idSource', ModRefCas crid, wb')
 
     -- | Write to a @CRef@ without synchronising
     stepWriteRef cref@(CRef (crid, _)) a c = case memtype of
@@ -312,6 +301,11 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       PartialStoreOrder -> do
         wb' <- bufferWrite fixed wb crid cref a tid
         return $ Right (goto c tid threads, idSource, WriteRef crid, wb')
+
+    -- | Perform a compare-and-swap on a @CRef@.
+    stepCasRef cref@(CRef (crid, _)) tick a c = synchronised $ do
+      (suc, tick') <- casCRef fixed cref tid tick a
+      simple (goto (c (suc, tick')) tid threads) $ CasRef crid suc
 
     -- | Commit a @CRef@ write
     stepCommit c t = do
@@ -367,7 +361,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
     stepThrowTo t e c = synchronised $
       let threads' = goto c tid threads
           blocked  = block (OnMask t) tid threads
-      in case M.lookup t threads of
+      in case I.lookup t threads of
            Just thread
              | interruptible thread -> case propagate (wrap e) t threads' of
                Just threads'' -> simple threads'' $ ThrowTo t
@@ -390,7 +384,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
     stepMasking m ma c = simple threads' $ SetMasking False m where
       a = runCont (ma umask) (AResetMask False False m' . c)
 
-      m' = _masking . fromJust $ M.lookup tid threads
+      m' = _masking . fromJust $ I.lookup tid threads
       umask mb = resetMask True m' >> mb >>= \b -> resetMask False m >> return b
       resetMask typ ms = cont $ \k -> AResetMask typ True ms $ k ()
 
@@ -411,7 +405,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
     -- | Create a new @CRef@, using the next 'CRefId'.
     stepNewRef a c = do
       let (idSource', newcrid) = nextCRId idSource
-      ref <- newRef fixed (I.empty, a)
+      ref <- newRef fixed (I.empty, 0, a)
       let cref = CRef (newcrid, ref)
       return $ Right (goto (c cref) tid threads, idSource', NewRef newcrid, wb)
 

@@ -7,12 +7,12 @@ module Test.DejaFu.Deterministic.Internal.Threading where
 
 import Control.Exception (Exception, MaskingState(..), SomeException, fromException)
 import Data.List (intersect, nub)
-import Data.Map (Map)
+import Data.IntMap.Strict (IntMap)
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import Test.DejaFu.STM (CTVarId)
 import Test.DejaFu.Deterministic.Internal.Common
 
-import qualified Data.Map as M
+import qualified Data.IntMap as I
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>))
@@ -22,7 +22,7 @@ import Control.Applicative ((<$>))
 -- * Threads
 
 -- | Threads are stored in a map index by 'ThreadId'.
-type Threads n r s = Map ThreadId (Thread n r s)
+type Threads n r s = IntMap (Thread n r s)
 
 -- | All the state of a thread.
 data Thread n r s = Thread
@@ -67,14 +67,14 @@ thread ~= theblock = case (_blocking thread, theblock) of
 -- deadlock.
 isLocked :: ThreadId -> Threads n r a -> Bool
 isLocked tid ts
-  | allKnown = case M.lookup tid ts of
+  | allKnown = case I.lookup tid ts of
     Just thread -> noRefs $ _blocking thread
     Nothing -> False
-  | otherwise = M.null $ M.filter (isNothing . _blocking) ts
+  | otherwise = I.null $ I.filter (isNothing . _blocking) ts
 
   where
     -- | Check if all threads are in a fully-known state.
-    allKnown = all _fullknown $ M.elems ts
+    allKnown = all _fullknown $ I.elems ts
 
     -- | Check if no other runnable thread has a reference to anything
     -- the block references.
@@ -85,11 +85,11 @@ isLocked tid ts
 
     -- | Get IDs of all threads (other than the one under
     -- consideration) which reference a 'CVar'.
-    findCVar cvarid = M.keys $ M.filterWithKey (check [Left cvarid]) ts
+    findCVar cvarid = I.keys $ I.filterWithKey (check [Left cvarid]) ts
 
     -- | Get IDs of all runnable threads (other than the one under
     -- consideration) which reference some 'CTVar's.
-    findCTVars ctvids = M.keys $ M.filterWithKey (check (map Right ctvids)) ts
+    findCTVars ctvids = I.keys $ I.filterWithKey (check (map Right ctvids)) ts
 
     -- | Check if a thread references a variable, and if it's not the
     -- thread under consideration.
@@ -106,7 +106,7 @@ data Handler n r s = forall e. Exception e => Handler (e -> Action n r s)
 -- | Propagate an exception upwards, finding the closest handler
 -- which can deal with it.
 propagate :: SomeException -> ThreadId -> Threads n r s -> Maybe (Threads n r s)
-propagate e tid threads = case M.lookup tid threads >>= go . _handlers of
+propagate e tid threads = case I.lookup tid threads >>= go . _handlers of
   Just (act, hs) -> Just $ except act hs tid threads
   Nothing -> Nothing
 
@@ -120,36 +120,36 @@ interruptible thread = _masking thread == Unmasked || (_masking thread == Masked
 
 -- | Register a new exception handler.
 catching :: Exception e => (e -> Action n r s) -> ThreadId -> Threads n r s -> Threads n r s
-catching h = M.alter $ \(Just thread) -> Just $ thread { _handlers = Handler h : _handlers thread }
+catching h = I.alter $ \(Just thread) -> Just $ thread { _handlers = Handler h : _handlers thread }
 
 -- | Remove the most recent exception handler.
 uncatching :: ThreadId -> Threads n r s -> Threads n r s
-uncatching = M.alter $ \(Just thread) -> Just $ thread { _handlers = tail $ _handlers thread }
+uncatching = I.alter $ \(Just thread) -> Just $ thread { _handlers = tail $ _handlers thread }
 
 -- | Raise an exception in a thread.
 except :: Action n r s -> [Handler n r s] -> ThreadId -> Threads n r s -> Threads n r s
-except act hs = M.alter $ \(Just thread) -> Just $ thread { _continuation = act, _handlers = hs, _blocking = Nothing }
+except act hs = I.alter $ \(Just thread) -> Just $ thread { _continuation = act, _handlers = hs, _blocking = Nothing }
 
 -- | Set the masking state of a thread.
 mask :: MaskingState -> ThreadId -> Threads n r s -> Threads n r s
-mask ms = M.alter $ \(Just thread) -> Just $ thread { _masking = ms }
+mask ms = I.alter $ \(Just thread) -> Just $ thread { _masking = ms }
 
 --------------------------------------------------------------------------------
 -- * Manipulating threads
 
 -- | Replace the @Action@ of a thread.
 goto :: Action n r s -> ThreadId -> Threads n r s -> Threads n r s
-goto a = M.alter $ \(Just thread) -> Just (thread { _continuation = a })
+goto a = I.alter $ \(Just thread) -> Just (thread { _continuation = a })
 
 -- | Start a thread with the given ID, inheriting the masking state
 -- from the parent thread. This ID must not already be in use!
 launch :: ThreadId -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
 launch parent tid a threads = launch' mask tid a threads where
-  mask = fromMaybe Unmasked $ _masking <$> M.lookup parent threads
+  mask = fromMaybe Unmasked $ _masking <$> I.lookup parent threads
 
 -- | Start a thread with the given ID and masking state. This must not already be in use!
 launch' :: MaskingState -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
-launch' mask tid a = M.insert tid thread where
+launch' mask tid a = I.insert tid thread where
   thread = Thread { _continuation = a umask, _blocking = Nothing, _handlers = [], _masking = mask, _known = [], _fullknown = False }
 
   umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False mask >> return b
@@ -157,11 +157,11 @@ launch' mask tid a = M.insert tid thread where
 
 -- | Kill a thread.
 kill :: ThreadId -> Threads n r s -> Threads n r s
-kill = M.delete
+kill = I.delete
 
 -- | Block a thread.
 block :: BlockedOn -> ThreadId -> Threads n r s -> Threads n r s
-block blockedOn = M.alter doBlock where
+block blockedOn = I.alter doBlock where
   doBlock (Just thread) = Just $ thread { _blocking = Just blockedOn }
   doBlock _ = error "Invariant failure in 'block': thread does NOT exist!"
 
@@ -169,7 +169,7 @@ block blockedOn = M.alter doBlock where
 -- blocks, this will wake all threads waiting on at least one of the
 -- given 'CTVar's.
 wake :: BlockedOn -> Threads n r s -> (Threads n r s, [ThreadId])
-wake blockedOn threads = (M.map unblock threads, M.keys $ M.filter isBlocked threads) where
+wake blockedOn threads = (I.map unblock threads, I.keys $ I.filter isBlocked threads) where
   unblock thread
     | isBlocked thread = thread { _blocking = Nothing }
     | otherwise = thread
@@ -180,18 +180,18 @@ wake blockedOn threads = (M.map unblock threads, M.keys $ M.filter isBlocked thr
 
 -- | Record that a thread knows about a shared variable.
 knows :: [Either CVarId CTVarId] -> ThreadId -> Threads n r s -> Threads n r s
-knows theids = M.alter go where
+knows theids = I.alter go where
   go (Just thread) = Just $ thread { _known = nub $ theids ++ _known thread }
   go _ = error "Invariant failure in 'knows': thread does NOT exist!"
 
 -- | Forget about a shared variable.
 forgets :: [Either CVarId CTVarId] -> ThreadId -> Threads n r s -> Threads n r s
-forgets theids = M.alter go where
+forgets theids = I.alter go where
   go (Just thread) = Just $ thread { _known = filter (`notElem` theids) $ _known thread }
   go _ = error "Invariant failure in 'forgets': thread does NOT exist!"
 
 -- | Record that a thread's shared variable state is fully known.
 fullknown :: ThreadId -> Threads n r s -> Threads n r s
-fullknown = M.alter go where
+fullknown = I.alter go where
   go (Just thread) = Just $ thread { _fullknown = True }
   go _ = error "Invariant failure in 'fullknown': thread does NOT exist!"
