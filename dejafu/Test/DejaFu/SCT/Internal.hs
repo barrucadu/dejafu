@@ -128,9 +128,9 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
           , _runnable  = I.fromList . toList $ e
           , _backtrack = I.fromList $ map (\i' -> (i', False)) i
           }
-        bs' = doBacktrack crstate' allThreads (toList e) bs
         allThreads' = allThreads `S.union` S.fromList (I.keys $ _runnable this)
-    in go crstate' allThreads' tid' (bs' ++ [this]) (Sq.viewl is) ts
+        bs' = doBacktrack crstate' allThreads' (toList e) (bs++[this])
+    in go crstate' allThreads' tid' bs' (Sq.viewl is) ts
   go _ _ _ bs _ _ = bs
 
   doBacktrack crstate allThreads enabledThreads bs =
