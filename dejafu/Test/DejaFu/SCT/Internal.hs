@@ -287,10 +287,11 @@ dependent' memtype buf (_, d1) (_, d2) = dependentActions memtype buf (simplify 
 -- being so great an over-approximation as to be useless!
 dependentActions :: MemType -> CRState -> ActionType -> ActionType -> Bool
 dependentActions memtype buf a1 a2 = case (a1, a2) of
-  -- Unsynchronised reads and writes under a sequentially consistent
-  -- memory model
-  (UnsynchronisedRead  r1, UnsynchronisedWrite r2) -> r1 == r2 && memtype == SequentialConsistency
-  (UnsynchronisedWrite r1, UnsynchronisedWrite r2) -> r1 == r2 && memtype == SequentialConsistency
+  -- Unsynchronised reads and writes are always dependent, even under
+  -- a relaxed memory model, as an unsynchronised write gives rise to
+  -- a commit, which synchronises.
+  (UnsynchronisedRead  r1, UnsynchronisedWrite r2) -> r1 == r2
+  (UnsynchronisedWrite r1, UnsynchronisedWrite r2) -> r1 == r2
 
   -- Unsynchronised reads where a memory barrier would flush a
   -- buffered write
