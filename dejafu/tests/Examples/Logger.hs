@@ -1,14 +1,22 @@
 -- Modification (to introduce bug) of an example in Parallel and
 -- Concurrent Programming in Haskell, chapter 7.
-module Tests.Logger
-  ( badLogger
-  , validResult, isGood, isBad
-  ) where
+module Examples.Logger (tests) where
 
 import Control.Concurrent.CVar
-import Control.Monad (void)
 import Control.Monad.Conc.Class
-import Test.DejaFu
+import Data.Functor (void)
+import Test.DejaFu hiding (MemType(..))
+import Test.HUnit (Test, test)
+import Test.HUnit.DejaFu
+
+tests :: Test
+tests = test
+  [ testDejafu raceyLogger "validResult" validResult
+  , testDejafu raceyLogger "isGood"      isGood
+  , testDejafu raceyLogger "isBad"       isBad
+  ]
+
+--------------------------------------------------------------------------------
 
 data Logger m = Logger (CVar m LogCommand) (CVar m [String])
 
@@ -45,8 +53,8 @@ logStop (Logger cmd logg) = do
   readCVar logg
 
 -- | Race condition! Can you see where?
-badLogger :: MonadConc m => m [String]
-badLogger = do
+raceyLogger :: MonadConc m => m [String]
+raceyLogger = do
   l <- initLogger
   logMessage l "Hello"
   logMessage l "World"
