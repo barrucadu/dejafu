@@ -307,7 +307,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       simple (goto (c (suc, tick')) tid threads) $ CasRef crid suc
 
     -- | Commit a @CRef@ write
-    stepCommit c t = do
+    stepCommit t c = do
       wb' <- case memtype of
         -- Shouldn't ever get here
         SequentialConsistency ->
