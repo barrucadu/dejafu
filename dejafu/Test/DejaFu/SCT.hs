@@ -73,7 +73,6 @@ module Test.DejaFu.SCT
 import Control.DeepSeq (force)
 import Data.Functor.Identity (Identity(..), runIdentity)
 import Data.List (nub, partition)
-import Data.List.Extra (unsafeToNonEmpty)
 import Data.Sequence (Seq, (|>))
 import Data.Maybe (maybeToList, isNothing, fromJust)
 import Test.DejaFu.Deterministic
@@ -86,6 +85,8 @@ import qualified Data.Set as S
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>), (<*>))
 #endif
+
+import qualified Debug.Trace as T
 
 -- * Pre-emption bounding
 
@@ -331,8 +332,6 @@ data SchedState = SchedState
   , _sbpoints :: Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
   -- ^ Which threads are runnable at each step, and the alternative
   -- decisions still to make.
-  , _scvstate :: CVState
-  -- ^ The 'CVar' block state.
   }
 
 -- | Initial scheduler state for a given prefix
@@ -340,64 +339,51 @@ initialSchedState :: [ThreadId] -> SchedState
 initialSchedState prefix = SchedState
   { _sprefix  = prefix
   , _sbpoints = Sq.empty
-  , _scvstate = initialCVState
   }
 
 -- | BPOR scheduler: takes a list of decisions, and maintains a trace
 -- including the runnable threads, and the alternative choices allowed
 -- by the bound-specific initialise function.
-bporSched :: ([(Decision, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
+bporSched :: ([(Decision, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> [ThreadId])
           -> Scheduler SchedState
 bporSched init = force $ \s trc prior threads -> case _sprefix s of
   -- If there is a decision available, make it
   (d:ds) ->
     let threads' = fmap (\(t,a:|_) -> (t,a)) threads
-        cvstate' = maybe (_scvstate s) (updateCVState (_scvstate s) . snd) prior
-    in  (d, s { _sprefix = ds, _sbpoints = _sbpoints s |> (threads', []), _scvstate = cvstate' })
+    in  (Just d, s { _sprefix = ds, _sbpoints = _sbpoints s |> (threads', []) })
 
   -- Otherwise query the initialise function for a list of possible
   -- choices, and make one of them arbitrarily (recording the others).
   [] ->
     let threads' = fmap (\(t,a:|_) -> (t,a)) threads
         choices  = init trc prior threads'
-        cvstate' = maybe (_scvstate s) (updateCVState (_scvstate s) . snd) prior
-        choices' = [t
-                   | t  <- toList choices
-                   , as <- maybeToList $ lookup t (toList threads)
-                   , not . willBlockSafely cvstate' $ toList as
-                   ]
-    in  case choices' of
-          (nextTid:rest) -> (nextTid, s { _sbpoints = _sbpoints s |> (threads', rest), _scvstate = cvstate' })
-
-          -- TODO: abort the execution here.
-          [] -> case choices of
-                 (nextTid:|_) -> (nextTid, s { _sbpoints = _sbpoints s |> (threads', []), _scvstate = cvstate' })
+    in  case choices of
+          (nextTid:rest) -> (Just nextTid, s { _sbpoints = _sbpoints s |> (threads', rest) })
+          [] -> (Nothing, s { _sbpoints = _sbpoints s |> (threads', []) })
 
 -- | Pick a new thread to run, which does not exceed the bound. Choose
 -- the current thread if available and it hasn't just yielded,
 -- otherwise add all runnable threads.
 --
 -- If there are no decisions which fall within the bound, return all
--- decisions. This is clearly suboptimal, the next commit will allow
--- for aborting mid-execution.
+-- decisions.
 initialise :: ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
   -> [(Decision, ThreadAction)]
   -> Maybe (ThreadId, ThreadAction)
   -> NonEmpty (ThreadId, Lookahead)
-  -> NonEmpty ThreadId
-initialise bf trc prior threads = unsafeToNonEmpty . restrictToBound . yieldsToEnd $ case prior of
-  Just (_, Yield) -> map fst threads'
-  Just (tid, _)
-    | any (\(t, _) -> t == tid) threads' -> [tid]
-  _ -> map fst threads'
+  -> [ThreadId]
+initialise bf trc prior threads =
+  let result =
+        restrictToBound . yieldsToEnd $ case prior of
+                                          Just (_, Yield) -> map fst threads'
+                                          Just (tid, _)
+                                              | any (\(t, _) -> t == tid) threads' -> [tid]
+                                          _ -> map fst threads'
+  in if null result then error "Bad result!" else result
 
   where
-    -- Restrict the possible decisions to those in the bound,
-    -- returning all decisions if none fall within the bound (TODO:
-    -- not that).
-    restrictToBound ts = case partition (\t -> bf trc (decision t, action t)) ts of
-      ([], outsideBound) -> outsideBound
-      (inBound, _) -> inBound
+    -- Restrict the possible decisions to those in the bound.
+    restrictToBound = fst . partition (\t -> bf trc (decision t, action t))
 
     -- Move the threads which will immediately yield to the end of the list
     yieldsToEnd ts = case partition ((== WillYield) . action) ts of

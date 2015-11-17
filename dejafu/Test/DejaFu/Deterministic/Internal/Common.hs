@@ -182,7 +182,7 @@ initialIdSource = Id 0 0 0 0
 -- attempts to (a) schedule a blocked thread, or (b) schedule a
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
-type Scheduler s = s -> [(Decision, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, NonEmpty Lookahead) -> (ThreadId, s)
+type Scheduler s = s -> [(Decision, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, NonEmpty Lookahead) -> (Maybe ThreadId, s)
 
 -- | One of the outputs of the runner is a @Trace@, which is a log of
 -- decisions made, alternative decisions (including what action would
@@ -603,6 +603,8 @@ data Failure =
   -- ^ Will be raised if the scheduler does something bad. This should
   -- never arise unless you write your own, faulty, scheduler! If it
   -- does, please file a bug report.
+  | Abort
+  -- ^ The scheduler chose to abort execution.
   | Deadlock
   -- ^ The computation became blocked indefinitely on @CVar@s.
   | STMDeadlock
@@ -616,9 +618,10 @@ instance NFData Failure where
 
 -- | Pretty-print a failure
 showFail :: Failure -> String
-showFail Deadlock          = "[deadlock]"
-showFail STMDeadlock       = "[stm-deadlock]"
-showFail InternalError     = "[internal-error]"
+showFail Abort = "[abort]"
+showFail Deadlock = "[deadlock]"
+showFail STMDeadlock = "[stm-deadlock]"
+showFail InternalError = "[internal-error]"
 showFail UncaughtException = "[exception]"
 
 --------------------------------------------------------------------------------

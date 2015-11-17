@@ -112,6 +112,7 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
     | isTerminated  = stop
     | isDeadlocked  = die Deadlock
     | isSTMLocked   = die STMDeadlock
+    | isAborted     = die Abort
     | isNonexistant = die InternalError
     | isBlocked     = die InternalError
     | otherwise = do
@@ -126,11 +127,13 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
         Left failure -> die failure
 
     where
-      (chosen, g')  = sched g (map (\(d,_,a) -> (d,a)) $ reverse sofar) ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ unsafeToNonEmpty runnable'
+      (choice, g')  = sched g (map (\(d,_,a) -> (d,a)) $ reverse sofar) ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ unsafeToNonEmpty runnable'
+      chosen        = fromJust choice
       runnable'     = [(t, nextActions t) | t <- sort $ M.keys runnable]
       runnable      = M.filter (isNothing . _blocking) threadsc
       thread        = M.lookup chosen threadsc
       threadsc      = addCommitThreads wb threads
+      isAborted     = isNothing choice
       isBlocked     = isJust . _blocking $ fromJust thread
       isNonexistant = isNothing thread
       isTerminated  = 0 `notElem` M.keys threads
