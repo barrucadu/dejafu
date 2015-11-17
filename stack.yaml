@@ -6,6 +6,8 @@ packages:
 - tasty-dejafu
 - dejafu
 
-extra-deps: []
+extra-deps:
+# Needed for building with lts-2
+- atomic-primops-0.8.0.2
 
 resolver: lts-3.0
