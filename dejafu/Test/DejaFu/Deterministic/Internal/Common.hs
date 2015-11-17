@@ -1,6 +1,7 @@
-{-# LANGUAGE CPP                       #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE ExistentialQuantification  #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RankNTypes                 #-}
 
 -- | Common types and utility functions for deterministic execution of
 -- 'MonadConc' implementations.
@@ -8,7 +9,7 @@ module Test.DejaFu.Deterministic.Internal.Common where
 
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception, MaskingState(..))
-import Data.IntMap.Strict (IntMap)
+import Data.Map.Strict (Map)
 import Data.List.Extra
 import Test.DejaFu.Internal
 import Test.DejaFu.STM (CTVarId)
@@ -52,7 +53,7 @@ newtype CVar r a = CVar (CVarId, r (Maybe a))
 -- (so each thread sees its latest write), (b) a commit count (used in
 -- compare-and-swaps), and (c) the current value visible to all
 -- threads.
-newtype CRef r a = CRef (CRefId, r (IntMap a, Integer, a))
+newtype CRef r a = CRef (CRefId, r (Map ThreadId a, Integer, a))
 
 -- | The compare-and-swap proof type.
 --
@@ -123,13 +124,25 @@ data Action n r s =
 -- * Identifiers
 
 -- | Every live thread has a unique identitifer.
-type ThreadId = Int
+newtype ThreadId = ThreadId Int
+  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral)
+
+instance Show ThreadId where
+  show (ThreadId i) = show i
 
 -- | Every 'CVar' has a unique identifier.
-type CVarId = Int
+newtype CVarId = CVarId Int
+  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral)
+
+instance Show CVarId where
+  show (CVarId i) = show i
 
 -- | Every 'CRef' has a unique identifier.
-type CRefId = Int
+newtype CRefId = CRefId Int
+  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral)
+
+instance Show CRefId where
+  show (CRefId i) = show i
 
 -- | The number of ID parameters was getting a bit unwieldy, so this
 -- hides them all away.

@@ -15,6 +15,7 @@ import Test.DejaFu.Deterministic.Internal.Threading
 import Test.DejaFu.Internal
 
 import qualified Data.IntMap.Strict as I
+import qualified Data.Map.Strict as M
 
 #if __GLASGOW_HASKELL__ < 710
 import Data.Foldable (mapM_)
@@ -49,7 +50,7 @@ bufferWrite fixed (WriteBuffer wb) i cref@(CRef (_, ref)) new tid = do
 
   -- Write the thread-local value to the @CRef@'s update map.
   (map, count, def) <- readRef fixed ref
-  writeRef fixed ref (I.insert tid new map, count, def)
+  writeRef fixed ref (M.insert tid new map, count, def)
 
   return $ WriteBuffer buffer'
 
@@ -94,14 +95,14 @@ readCRefPrim :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n (a, Integer)
 readCRefPrim fixed (CRef (_, ref)) tid = do
   (vals, count, def) <- readRef fixed ref
 
-  return (I.findWithDefault def tid vals, count)
+  return (M.findWithDefault def tid vals, count)
 
 -- | Write and commit to a @CRef@ immediately, clearing the update map
 -- and incrementing the write count.
 writeImmediate :: Monad n => Fixed n r s -> CRef r a -> a -> n ()
 writeImmediate fixed (CRef (_, ref)) a = do
   (_, count, _) <- readRef fixed ref
-  writeRef fixed ref (I.empty, count + 1, a)
+  writeRef fixed ref (M.empty, count + 1, a)
 
 -- | Flush all writes in the buffer.
 writeBarrier :: Monad n => Fixed n r s -> WriteBuffer r -> n ()
@@ -110,14 +111,14 @@ writeBarrier fixed (WriteBuffer wb) = mapM_ flush $ I.elems wb where
 
 -- | Add phantom threads to the thread list to commit pending writes.
 addCommitThreads :: WriteBuffer r -> Threads n r s -> Threads n r s
-addCommitThreads (WriteBuffer wb) ts = ts <> I.fromList phantoms where
-  phantoms = [(negate k - 1, mkthread $ fromJust c) | (k, b) <- I.toList wb, let c = go $ viewl b, isJust c]
+addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
+  phantoms = [(ThreadId $ negate k - 1, mkthread $ fromJust c) | (k, b) <- I.toList wb, let c = go $ viewl b, isJust c]
   go (BufferedWrite tid (CRef (crid, _)) _ :< _) = Just $ ACommit tid crid
   go EmptyL = Nothing
 
 -- | Remove phantom threads.
 delCommitThreads :: Threads n r s -> Threads n r s
-delCommitThreads = I.filterWithKey $ \k _ -> k >= 0
+delCommitThreads = M.filterWithKey $ \k _ -> k >= 0
 
 --------------------------------------------------------------------------------
 -- * Manipulating @CVar@s

@@ -4,8 +4,8 @@
 module Test.DejaFu.SCT.Internal where
 
 import Control.DeepSeq (NFData(..))
-import Data.IntMap.Strict (IntMap)
 import Data.List (foldl', partition, sortBy)
+import Data.Map.Strict (Map)
 import Data.Maybe (mapMaybe, isJust, fromJust)
 import Data.Ord (Down(..), comparing)
 import Data.Sequence (Seq, ViewL(..))
@@ -13,7 +13,7 @@ import Data.Set (Set)
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
 
-import qualified Data.IntMap.Strict as I
+import qualified Data.Map.Strict as M
 import qualified Data.Sequence as Sq
 import qualified Data.Set as S
 
@@ -31,9 +31,9 @@ data BacktrackStep = BacktrackStep
   -- ^ The thread running at this step
   , _decision  :: (Decision, ThreadAction)
   -- ^ What happened at this step.
-  , _runnable  :: IntMap Lookahead
+  , _runnable  :: Map ThreadId Lookahead
   -- ^ The threads runnable at this step
-  , _backtrack :: IntMap Bool
+  , _backtrack :: Map ThreadId Bool
   -- ^ The list of alternative threads to run, and whether those
   -- alternatives were added conservatively due to the bound.
   } deriving (Eq, Show)
@@ -46,7 +46,7 @@ instance NFData BacktrackStep where
 data BPOR = BPOR
   { _brunnable :: Set ThreadId
   -- ^ What threads are runnable at this step.
-  , _btodo     :: IntMap Bool
+  , _btodo     :: Map ThreadId Bool
   -- ^ Follow-on decisions still to make, and whether that decision
   -- was added conservatively due to the bound.
   , _bignore   :: Set ThreadId
@@ -54,16 +54,15 @@ data BPOR = BPOR
   -- the chosen thread immediately blocking without achieving
   -- anything, which can't have any effect on the result of the
   -- program.
-  , _bdone     :: IntMap BPOR
+  , _bdone     :: Map ThreadId BPOR
   -- ^ Follow-on decisions that have been made.
-  , _bsleep    :: IntMap ThreadAction
+  , _bsleep    :: Map ThreadId ThreadAction
   -- ^ Transitions to ignore (in this node and children) until a
   -- dependent transition happens.
-  , _btaken    :: IntMap ThreadAction
+  , _btaken    :: Map ThreadId ThreadAction
   -- ^ Transitions which have been taken, excluding
-  -- conservatively-added ones, in the (reverse) order that they were
-  -- taken, as the 'Map' doesn't preserve insertion order. This is
-  -- used in implementing sleep sets.
+  -- conservatively-added ones. This is used in implementing sleep
+  -- sets.
   , _baction    :: Maybe ThreadAction
   -- ^ What happened at this step. This will be 'Nothing' at the root,
   -- 'Just' everywhere else.
@@ -72,12 +71,12 @@ data BPOR = BPOR
 -- | Initial BPOR state.
 initialState :: BPOR
 initialState = BPOR
-  { _brunnable = S.singleton 0
-  , _btodo     = I.singleton 0 False
+  { _brunnable = S.singleton (ThreadId 0)
+  , _btodo     = M.singleton (ThreadId 0) False
   , _bignore   = S.empty
-  , _bdone     = I.empty
-  , _bsleep    = I.empty
-  , _btaken    = I.empty
+  , _bdone     = M.empty
+  , _bsleep    = M.empty
+  , _btaken    = M.empty
   , _baction   = Nothing
   }
 
@@ -93,7 +92,7 @@ next = go 0 where
   go tid bpor =
         -- All the possible prefix traces from this point, with
         -- updated BPOR subtrees if taken from the done list.
-    let prefixes = mapMaybe go' (I.toList $ _bdone bpor) ++ [([t], c) | (t, c) <- I.toList $ _btodo bpor]
+    let prefixes = mapMaybe go' (M.toList $ _bdone bpor) ++ [([t], c) | (t, c) <- M.toList $ _btodo bpor]
         -- Sort by number of preemptions, in descending order.
         cmp = preEmps tid bpor . fst
 
@@ -107,7 +106,7 @@ next = go 0 where
   go' (tid, bpor) = (\(ts,c) -> (tid:ts,c)) <$> go tid bpor
 
   preEmps tid bpor (t:ts) =
-    let rest = preEmps t (fromJust . I.lookup t $ _bdone bpor) ts
+    let rest = preEmps t (fromJust . M.lookup t $ _bdone bpor) ts
     in  if t > 0 && tid /= t && tid `S.member` _brunnable bpor then 1 + rest else rest
   preEmps _ _ [] = 0::Int
 
@@ -125,10 +124,10 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
         this = BacktrackStep
           { _threadid  = tid'
           , _decision  = (d, a)
-          , _runnable  = I.fromList . toList $ e
-          , _backtrack = I.fromList $ map (\i' -> (i', False)) i
+          , _runnable  = M.fromList . toList $ e
+          , _backtrack = M.fromList $ map (\i' -> (i', False)) i
           }
-        allThreads' = allThreads `S.union` S.fromList (I.keys $ _runnable this)
+        allThreads' = allThreads `S.union` S.fromList (M.keys $ _runnable this)
         bs' = doBacktrack crstate' allThreads' (toList e) (bs++[this])
     in go crstate' allThreads' tid' bs' (Sq.viewl is) ts
   go _ _ _ bs _ _ = bs
@@ -154,30 +153,30 @@ grow memtype conservative = grow' initialCVState initialCRState 0 where
     let tid'     = tidOf tid d
         cvstate' = updateCVState cvstate a
         crstate' = updateCRState crstate a
-    in  case I.lookup tid' $ _bdone bpor of
-          Just bpor' -> bpor { _bdone  = I.insert tid' (grow' cvstate' crstate' tid' rest bpor') $ _bdone bpor }
-          Nothing    -> bpor { _btaken = if conservative then _btaken bpor else I.insert tid' a $ _btaken bpor
-                            , _btodo  = I.delete tid' $ _btodo bpor
-                            , _bdone  = I.insert tid' (subtree cvstate' crstate' tid' (_bsleep bpor `I.union` _btaken bpor) trc) $ _bdone bpor }
+    in  case M.lookup tid' $ _bdone bpor of
+          Just bpor' -> bpor { _bdone  = M.insert tid' (grow' cvstate' crstate' tid' rest bpor') $ _bdone bpor }
+          Nothing    -> bpor { _btaken = if conservative then _btaken bpor else M.insert tid' a $ _btaken bpor
+                            , _btodo  = M.delete tid' $ _btodo bpor
+                            , _bdone  = M.insert tid' (subtree cvstate' crstate' tid' (_bsleep bpor `M.union` _btaken bpor) trc) $ _bdone bpor }
   grow' _ _ _ [] bpor = bpor
 
   subtree cvstate crstate tid sleep ((d, ts, a):rest) =
     let cvstate' = updateCVState cvstate a
         crstate' = updateCRState crstate a
-        sleep'   = I.filterWithKey (\t a' -> not $ dependent memtype crstate' (tid, a) (t,a')) sleep
+        sleep'   = M.filterWithKey (\t a' -> not $ dependent memtype crstate' (tid, a) (t,a')) sleep
     in BPOR
         { _brunnable = S.fromList $ tids tid d a ts
-        , _btodo     = I.empty
+        , _btodo     = M.empty
         , _bignore   = S.fromList [tidOf tid d' | (d',as) <- ts, willBlockSafely cvstate' $ toList as]
-        , _bdone     = I.fromList $ case rest of
+        , _bdone     = M.fromList $ case rest of
           ((d', _, _):_) ->
             let tid' = tidOf tid d'
             in  [(tid', subtree cvstate' crstate' tid' sleep' rest)]
           [] -> []
         , _bsleep = sleep'
         , _btaken = case rest of
-          ((d', _, a'):_) -> I.singleton (tidOf tid d') a'
-          [] -> I.empty
+          ((d', _, a'):_) -> M.singleton (tidOf tid d') a'
+          [] -> M.empty
         , _baction = Just a
         }
   subtree _ _ _ _ [] = error "Invariant failure in 'subtree': suffix empty!"
@@ -197,7 +196,7 @@ todo :: ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool) -> [Backtr
 todo bv = step where
   step bs bpor =
     let (bpor', bs') = go 0 [] Nothing bs bpor
-    in  if all (I.null . _backtrack) bs'
+    in  if all (M.null . _backtrack) bs'
         then bpor'
         else step bs' bpor'
 
@@ -205,26 +204,26 @@ todo bv = step where
     let (bpor', blocked) = backtrack pref b bpor
         tid'   = tidOf tid . fst $ _decision b
         pref'  = pref ++ [_decision b]
-        (child, blocked')  = go tid' pref' (Just b) bs . fromJust $ I.lookup tid' (_bdone bpor)
-        bpor'' = bpor' { _bdone = I.insert tid' child $ _bdone bpor' }
+        (child, blocked')  = go tid' pref' (Just b) bs . fromJust $ M.lookup tid' (_bdone bpor)
+        bpor'' = bpor' { _bdone = M.insert tid' child $ _bdone bpor' }
     in  case lastb of
          Just b' -> (bpor'', b' { _backtrack = blocked } : blocked')
          Nothing -> (bpor'', blocked')
 
-  go _ _ (Just b') _ bpor = (bpor, [b' { _backtrack = I.empty }])
+  go _ _ (Just b') _ bpor = (bpor, [b' { _backtrack = M.empty }])
   go _ _ Nothing   _ bpor = (bpor, [])
 
   backtrack pref b bpor =
     let todo' = [ x
-                | x@(t,c) <- I.toList $ _backtrack b
+                | x@(t,c) <- M.toList $ _backtrack b
                 , let decision  = decisionOf (Just . activeTid $ map fst pref) (_brunnable bpor) t
-                , let lookahead = fromJust . I.lookup t $ _runnable b
+                , let lookahead = fromJust . M.lookup t $ _runnable b
                 , bv pref (decision, lookahead)
-                , t `notElem` I.keys (_bdone bpor)
-                , c || I.notMember t (_bsleep bpor)
+                , t `notElem` M.keys (_bdone bpor)
+                , c || M.notMember t (_bsleep bpor)
                 ]
         (blocked, nxt) = partition (\(t,_) -> t `S.member` _bignore bpor) todo'
-    in  (bpor { _btodo = _btodo bpor `I.union` I.fromList nxt }, I.fromList blocked)
+    in  (bpor { _btodo = _btodo bpor `M.union` M.fromList nxt }, M.fromList blocked)
 
 -- | Remove commits from the todo sets where every other action will
 -- result in a write barrier (and so a commit) occurring.
@@ -234,13 +233,13 @@ todo bv = step where
 pruneCommits :: BPOR -> BPOR
 pruneCommits bpor
   | not onlycommits || not alldonesync = go bpor
-  | otherwise = go bpor { _btodo = I.empty, _bdone = pruneCommits <$> _bdone bpor }
+  | otherwise = go bpor { _btodo = M.empty, _bdone = pruneCommits <$> _bdone bpor }
 
   where
     go b = b { _bdone = pruneCommits <$> _bdone bpor }
 
-    onlycommits = all (<0) . I.keys $ _btodo bpor
-    alldonesync = all barrier . I.elems $ _bdone bpor
+    onlycommits = all (<0) . M.keys $ _btodo bpor
+    alldonesync = all barrier . M.elems $ _bdone bpor
 
     barrier = isBarrier . simplify . fromJust . _baction
 
@@ -310,25 +309,25 @@ dependentActions memtype buf a1 a2 = case (a1, a2) of
 
 -- * Keeping track of 'CVar' full/empty states
 
-type CVState = IntMap Bool
+type CVState = Map CVarId Bool
 
 -- | Initial global 'CVar' state
 initialCVState :: CVState
-initialCVState = I.empty
+initialCVState = M.empty
 
 -- | Update the 'CVar' state with the action that has just happened.
 updateCVState :: CVState -> ThreadAction -> CVState
-updateCVState cvstate (PutVar  c _) = I.insert c True  cvstate
-updateCVState cvstate (TakeVar c _) = I.insert c False cvstate
-updateCVState cvstate (TryPutVar  c True _) = I.insert c True  cvstate
-updateCVState cvstate (TryTakeVar c True _) = I.insert c False cvstate
+updateCVState cvstate (PutVar  c _) = M.insert c True  cvstate
+updateCVState cvstate (TakeVar c _) = M.insert c False cvstate
+updateCVState cvstate (TryPutVar  c True _) = M.insert c True  cvstate
+updateCVState cvstate (TryTakeVar c True _) = M.insert c False cvstate
 updateCVState cvstate _ = cvstate
 
 -- | Check if an action will block.
 willBlock :: CVState -> Lookahead -> Bool
-willBlock cvstate (WillPutVar  c) = I.lookup c cvstate == Just True
-willBlock cvstate (WillTakeVar c) = I.lookup c cvstate == Just False
-willBlock cvstate (WillReadVar c) = I.lookup c cvstate == Just False
+willBlock cvstate (WillPutVar  c) = M.lookup c cvstate == Just True
+willBlock cvstate (WillTakeVar c) = M.lookup c cvstate == Just False
+willBlock cvstate (WillReadVar c) = M.lookup c cvstate == Just False
 willBlock _ _ = False
 
 -- | Check if a list of actions will block safely (without modifying
@@ -348,21 +347,21 @@ willBlockSafely _ _ = False
 
 -- * Keeping track of 'CRef' buffer state
 
-type CRState = IntMap Bool
+type CRState = Map CRefId Bool
 
 -- | Initial global 'CRef buffer state.
 initialCRState :: CRState
-initialCRState = I.empty
+initialCRState = M.empty
 
 -- | Update the 'CRef' buffer state with the action that has just
 -- happened.
 updateCRState :: CRState -> ThreadAction -> CRState
-updateCRState crstate (CommitRef _ r) = I.delete r crstate
-updateCRState crstate (WriteRef r) = I.insert r True crstate
+updateCRState crstate (CommitRef _ r) = M.delete r crstate
+updateCRState crstate (WriteRef r) = M.insert r True crstate
 updateCRState crstate ta
   | isBarrier $ simplify ta = initialCRState
   | otherwise = crstate
 
 -- | Check if a 'CRef' has a buffered write pending.
 isBuffered :: CRState -> CRefId -> Bool
-isBuffered crefid r = I.findWithDefault False r crefid
+isBuffered crefid r = M.findWithDefault False r crefid

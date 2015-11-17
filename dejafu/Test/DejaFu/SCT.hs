@@ -73,13 +73,12 @@ import Control.DeepSeq (force)
 import Data.Functor.Identity (Identity(..), runIdentity)
 import Data.List (nub, partition)
 import Data.List.Extra (unsafeToNonEmpty)
-import Data.IntMap.Strict (IntMap)
 import Data.Sequence (Seq, (|>))
 import Data.Maybe (maybeToList, isNothing)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.SCT.Internal
 
-import qualified Data.IntMap.Strict as I
+import qualified Data.Map.Strict as M
 import qualified Data.Sequence as Sq
 
 #if __GLASGOW_HASKELL__ < 710
@@ -148,14 +147,14 @@ pbBacktrack bs i tid = maybe id (\j' b -> backtrack True b j' tid) j $ backtrack
     -- If the backtracking point is already present, don't re-add it,
     -- UNLESS this would force it to backtrack (it's conservative)
     -- where before it might not.
-    | t `I.member` _runnable b =
-      let val = I.lookup t $ _backtrack b
+    | t `M.member` _runnable b =
+      let val = M.lookup t $ _backtrack b
       in  if isNothing val || (val == Just False && c)
-          then b { _backtrack = I.insert t c $ _backtrack b } : rest
+          then b { _backtrack = M.insert t c $ _backtrack b } : rest
           else bx
 
     -- Otherwise just backtrack to everything runnable.
-    | otherwise = b { _backtrack = I.fromList [ (t',c) | t' <- I.keys $ _runnable b ] } : rest
+    | otherwise = b { _backtrack = M.fromList [ (t',c) | t' <- M.keys $ _runnable b ] } : rest
 
   backtrack c (b:rest) n t = b : backtrack c rest (n-1) t
   backtrack _ [] _ _ = error "Ran out of schedule whilst backtracking!"
@@ -226,14 +225,14 @@ fBacktrack bx@(b:rest) 0 t
   -- If the backtracking point is already present, don't re-add it,
   -- UNLESS this would force it to backtrack (it's conservative) where
   -- before it might not.
-  | Just True == (isNotRelease <$> I.lookup t (_runnable b)) =
-    let val = I.lookup t $ _backtrack b
+  | Just True == (isNotRelease <$> M.lookup t (_runnable b)) =
+    let val = M.lookup t $ _backtrack b
     in  if isNothing val
-        then b { _backtrack = I.insert t False $ _backtrack b } : rest
+        then b { _backtrack = M.insert t False $ _backtrack b } : rest
         else bx
 
   -- Otherwise just backtrack to everything runnable.
-  | otherwise = b { _backtrack = I.fromList [ (t',False) | t' <- I.keys $ _runnable b ] } : rest
+  | otherwise = b { _backtrack = M.fromList [ (t',False) | t' <- M.keys $ _runnable b ] } : rest
 
   where
     isNotRelease WillMyThreadId = True
@@ -349,7 +348,7 @@ data SchedState = SchedState
   , _sbpoints :: Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
   -- ^ Which threads are runnable at each step, and the alternative
   -- decisions still to make.
-  , _scvstate :: IntMap Bool
+  , _scvstate :: CVState
   -- ^ The 'CVar' block state.
   }
 
