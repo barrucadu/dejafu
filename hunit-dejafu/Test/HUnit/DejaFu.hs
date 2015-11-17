@@ -39,7 +39,7 @@ testAuto :: (Eq a, Show a)
   => (forall t. ConcST t a)
   -- ^ The computation to test
   -> Test
-testAuto = testAuto' TotalStoreOrder
+testAuto = testAuto' defaultMemType
 
 -- | Variant of 'testAuto' which tests a computation under a given
 -- memory model.
@@ -49,15 +49,15 @@ testAuto' :: (Eq a, Show a)
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Test
-testAuto' memtype conc = testDejafus' memtype 2 5 conc autocheckCases
+testAuto' memtype conc = testDejafus' memtype defaultPreemptionBound defaultFairBound conc autocheckCases
 
 -- | Variant of 'testAuto' for computations which do 'IO'.
 testAutoIO :: (Eq a, Show a) => ConcIO a -> Test
-testAutoIO = testAutoIO' TotalStoreOrder
+testAutoIO = testAutoIO' defaultMemType
 
 -- | Variant of 'testAuto'' for computations which do 'IO'.
 testAutoIO' :: (Eq a, Show a) => MemType -> ConcIO a -> Test
-testAutoIO' memtype concio = testDejafusIO' memtype 2 5 concio autocheckCases
+testAutoIO' memtype concio = testDejafusIO' memtype defaultPreemptionBound defaultFairBound concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
 autocheckCases :: Eq a => [(String, Predicate a)]
@@ -79,17 +79,17 @@ testDejafu :: Show a
   -> Predicate a
   -- ^ The predicate to check
   -> Test
-testDejafu = testDejafu' TotalStoreOrder 2 5
+testDejafu = testDejafu' defaultMemType defaultPreemptionBound defaultFairBound
 
 -- | Variant of 'testDejafu' which takes a memory model and
 -- pre-emption bound.
 testDejafu' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Int
+  -> PreemptionBound
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
-  -> Int
+  -> FairBound
   -- ^ The maximum difference between the number of yield operations
   -- across all threads.
   -> (forall t. ConcST t a)
@@ -110,17 +110,17 @@ testDejafus :: Show a
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> Test
-testDejafus = testDejafus' TotalStoreOrder 2 5
+testDejafus = testDejafus' defaultMemType defaultPreemptionBound defaultFairBound
 
 -- | Variant of 'testDejafus' which takes a memory model and pre-emption
 -- bound.
 testDejafus' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Int
+  -> PreemptionBound
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
-  -> Int
+  -> FairBound
   -- ^ The maximum difference between the number of yield operations
   -- across all threads.
   -> (forall t. ConcST t a)
@@ -132,25 +132,25 @@ testDejafus' = test
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
 testDejafuIO :: Show a => ConcIO a -> String -> Predicate a -> Test
-testDejafuIO = testDejafuIO' TotalStoreOrder 2 5
+testDejafuIO = testDejafuIO' defaultMemType defaultPreemptionBound defaultFairBound
 
 -- | Variant of 'testDejafu'' for computations which do 'IO'.
-testDejafuIO' :: Show a => MemType -> Int -> Int -> ConcIO a -> String -> Predicate a -> Test
+testDejafuIO' :: Show a => MemType -> PreemptionBound -> FairBound -> ConcIO a -> String -> Predicate a -> Test
 testDejafuIO' memtype pb fb concio name p = testDejafusIO' memtype pb fb concio [(name, p)]
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
 testDejafusIO :: Show a => ConcIO a -> [(String, Predicate a)] -> Test
-testDejafusIO = testDejafusIO' TotalStoreOrder 2 5
+testDejafusIO = testDejafusIO' defaultMemType defaultPreemptionBound defaultFairBound
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-testDejafusIO' :: Show a => MemType -> Int -> Int -> ConcIO a -> [(String, Predicate a)] -> Test
+testDejafusIO' :: Show a => MemType -> PreemptionBound -> FairBound -> ConcIO a -> [(String, Predicate a)] -> Test
 testDejafusIO' = testio
 
 --------------------------------------------------------------------------------
 -- HUnit integration
 
 -- | Produce a HUnit 'Test' from a Deja Fu test.
-test :: Show a => MemType -> Int -> Int -> (forall t. ConcST t a) -> [(String, Predicate a)] -> Test
+test :: Show a => MemType -> PreemptionBound -> FairBound -> (forall t. ConcST t a) -> [(String, Predicate a)] -> Test
 test memtype pb fb conc tests = case map toTest tests of
   [t] -> t
   ts  -> TestList ts
@@ -162,7 +162,7 @@ test memtype pb fb conc tests = case map toTest tests of
     traces = sctPFBound memtype pb fb conc
 
 -- | Produce a HUnit 'Test' from an IO-using Deja Fu test.
-testio :: Show a => MemType -> Int -> Int -> ConcIO a -> [(String, Predicate a)] -> Test
+testio :: Show a => MemType -> PreemptionBound -> FairBound -> ConcIO a -> [(String, Predicate a)] -> Test
 testio memtype pb fb concio tests = case map toTest tests of
   [t] -> t
   ts  -> TestList ts

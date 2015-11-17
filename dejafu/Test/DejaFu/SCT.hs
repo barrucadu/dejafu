@@ -1,5 +1,6 @@
-{-# LANGUAGE CPP        #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE RankNTypes                 #-}
 
 -- | Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
@@ -36,6 +37,8 @@ module Test.DejaFu.SCT
   --
   -- See the BPOR paper for more details.
 
+  , PreemptionBound(..)
+  , defaultPreemptionBound
   , sctPreBound
   , sctPreBoundIO
 
@@ -45,6 +48,8 @@ module Test.DejaFu.SCT
   --
   -- See the BPOR paper for more details.
 
+  , FairBound(..)
+  , defaultFairBound
   , sctFairBound
   , sctFairBoundIO
 
@@ -70,7 +75,7 @@ module Test.DejaFu.SCT
   , willBlockSafely
   ) where
 
-import Control.DeepSeq (force)
+import Control.DeepSeq (NFData, force)
 import Data.Functor.Identity (Identity(..), runIdentity)
 import Data.List (nub, partition)
 import Data.Sequence (Seq, (|>))
@@ -90,10 +95,17 @@ import qualified Debug.Trace as T
 
 -- * Pre-emption bounding
 
+newtype PreemptionBound = PreemptionBound Int
+  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | A sensible default pre-emption bound: 2
+defaultPreemptionBound :: PreemptionBound
+defaultPreemptionBound = 2
+
 -- | An SCT runner using a pre-emption bounding scheduler.
 sctPreBound :: MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Int
+  -> PreemptionBound
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
   -> (forall t. ConcST t a)
@@ -102,12 +114,12 @@ sctPreBound :: MemType
 sctPreBound memtype pb = sctBounded memtype (pbBound pb) pbBacktrack
 
 -- | Variant of 'sctPreBound' for computations which do 'IO'.
-sctPreBoundIO :: MemType -> Int -> ConcIO a -> IO [(Either Failure a, Trace)]
+sctPreBoundIO :: MemType -> PreemptionBound -> ConcIO a -> IO [(Either Failure a, Trace)]
 sctPreBoundIO memtype pb = sctBoundedIO memtype (pbBound pb) pbBacktrack
 
 -- | Pre-emption bound function
-pbBound :: Int -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
-pbBound pb ts dl = preEmpCount ts dl <= pb
+pbBound :: PreemptionBound -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
+pbBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb
 
 -- | Count the number of pre-emptions in a schedule prefix.
 preEmpCount :: [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Int
@@ -164,10 +176,17 @@ pbBacktrack bs i tid = maybe id (\j' b -> backtrack True b j' tid) j $ backtrack
 
 -- * Fair bounding
 
+newtype FairBound = FairBound Int
+  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | A sensible default fair bound: 5
+defaultFairBound :: FairBound
+defaultFairBound = 5
+
 -- | An SCT runner using a fair bounding scheduler.
 sctFairBound :: MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Int
+  -> FairBound
   -- ^ The maximum difference between the number of yield operations
   -- performed by different threads.
   -> (forall t. ConcST t a)
@@ -176,12 +195,12 @@ sctFairBound :: MemType
 sctFairBound memtype fb = sctBounded memtype (fBound fb) fBacktrack
 
 -- | Variant of 'sctFairBound' for computations which do 'IO'.
-sctFairBoundIO :: MemType -> Int -> ConcIO a -> IO [(Either Failure a, Trace)]
+sctFairBoundIO :: MemType -> FairBound -> ConcIO a -> IO [(Either Failure a, Trace)]
 sctFairBoundIO memtype fb = sctBoundedIO memtype (fBound fb) fBacktrack
 
 -- | Fair bound function
-fBound :: Int -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
-fBound fb ts dl = maxYieldCountDiff ts dl <= fb
+fBound :: FairBound -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
+fBound (FairBound fb) ts dl = maxYieldCountDiff ts dl <= fb
 
 -- | Count the number of yields by a thread in a schedule prefix.
 yieldCount :: ThreadId -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Int
@@ -247,9 +266,9 @@ fBacktrack [] _ _ = error "Ran out of schedule whilst backtracking!"
 -- | An SCT runner using a fair bounding scheduler.
 sctPFBound :: MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Int
+  -> PreemptionBound
   -- ^ The pre-emption bound
-  -> Int
+  -> FairBound
   -- ^ The fair bound
   -> (forall t. ConcST t a)
   -- ^ The computation to run many times
@@ -257,12 +276,12 @@ sctPFBound :: MemType
 sctPFBound memtype pb fb = sctBounded memtype (pfBound pb fb) pfBacktrack
 
 -- | Variant of 'sctPFBound' for computations which do 'IO'.
-sctPFBoundIO :: MemType -> Int -> Int -> ConcIO a -> IO [(Either Failure a, Trace)]
+sctPFBoundIO :: MemType -> PreemptionBound -> FairBound -> ConcIO a -> IO [(Either Failure a, Trace)]
 sctPFBoundIO memtype pb fb = sctBoundedIO memtype (pfBound pb fb) pfBacktrack
 
 -- | PB/Fair bound function
-pfBound :: Int -> Int -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
-pfBound pb fb ts dl = preEmpCount ts dl <= pb && maxYieldCountDiff ts dl <= fb
+pfBound :: PreemptionBound -> FairBound -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
+pfBound (PreemptionBound pb) (FairBound fb) ts dl = preEmpCount ts dl <= pb && maxYieldCountDiff ts dl <= fb
 
 -- | PB/Fair backtracking function. Add all backtracking points.
 pfBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]

@@ -142,6 +142,11 @@ module Test.DejaFu
   -- barrier.
 
   , MemType(..)
+  , defaultMemType
+  , PreemptionBound(..)
+  , defaultPreemptionBound
+  , FairBound(..)
+  , defaultFairBound
   , autocheck'
   , autocheckIO'
   , dejafu'
@@ -210,6 +215,10 @@ import Control.Applicative ((<$>))
 import Data.Foldable (Foldable(..))
 #endif
 
+-- | The default memory model: @TotalStoreOrder@
+defaultMemType :: MemType
+defaultMemType = TotalStoreOrder
+
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
 --
@@ -220,7 +229,7 @@ autocheck :: (Eq a, Show a)
   => (forall t. ConcST t a)
   -- ^ The computation to test
   -> IO Bool
-autocheck = autocheck' TotalStoreOrder
+autocheck = autocheck' defaultMemType
 
 -- | Variant of 'autocheck' which tests a computation under a given
 -- memory model.
@@ -230,15 +239,15 @@ autocheck' :: (Eq a, Show a)
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> IO Bool
-autocheck' memtype conc = dejafus' memtype 2 5 conc autocheckCases
+autocheck' memtype conc = dejafus' memtype defaultPreemptionBound defaultFairBound conc autocheckCases
 
 -- | Variant of 'autocheck' for computations which do 'IO'.
 autocheckIO :: (Eq a, Show a) => ConcIO a -> IO Bool
-autocheckIO = autocheckIO' TotalStoreOrder
+autocheckIO = autocheckIO' defaultMemType
 
 -- | Variant of 'autocheck'' for computations which do 'IO'.
 autocheckIO' :: (Eq a, Show a) => MemType -> ConcIO a -> IO Bool
-autocheckIO' memtype concio = dejafusIO' memtype 2 5 concio autocheckCases
+autocheckIO' memtype concio = dejafusIO' memtype defaultPreemptionBound defaultFairBound concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
 autocheckCases :: (Eq a, Show a) => [(String, Predicate a)]
@@ -256,7 +265,7 @@ dejafu :: Show a
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
   -> IO Bool
-dejafu = dejafu' TotalStoreOrder 2 5
+dejafu = dejafu' defaultMemType defaultPreemptionBound defaultFairBound
 
 -- | Variant of 'dejafu'' which takes a memory model and pre-emption
 -- bound.
@@ -273,10 +282,10 @@ dejafu = dejafu' TotalStoreOrder 2 5
 dejafu' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Int
+  -> PreemptionBound
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
-  -> Int
+  -> FairBound
   -- ^ The maximum difference between the number of yield operations
   -- across all threads.
   -> (forall t. ConcST t a)
@@ -294,17 +303,17 @@ dejafus :: Show a
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> IO Bool
-dejafus = dejafus' TotalStoreOrder 2 5
+dejafus = dejafus' defaultMemType defaultPreemptionBound defaultFairBound
 
 -- | Variant of 'dejafus' which takes a memory model and pre-emption
 -- bound.
 dejafus' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Int
+  -> PreemptionBound
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
-  -> Int
+  -> FairBound
   -- ^ The maximum difference between the number of yield operations
   -- across all threads.
   -> (forall t. ConcST t a)
@@ -319,18 +328,18 @@ dejafus' memtype pb fb conc tests = do
 
 -- | Variant of 'dejafu' for computations which do 'IO'.
 dejafuIO :: Show a => ConcIO a -> (String, Predicate a) -> IO Bool
-dejafuIO = dejafuIO' TotalStoreOrder 2 5
+dejafuIO = dejafuIO' defaultMemType defaultPreemptionBound defaultFairBound
 
 -- | Variant of 'dejafu'' for computations which do 'IO'.
-dejafuIO' :: Show a => MemType -> Int -> Int -> ConcIO a -> (String, Predicate a) -> IO Bool
+dejafuIO' :: Show a => MemType -> PreemptionBound -> FairBound -> ConcIO a -> (String, Predicate a) -> IO Bool
 dejafuIO' memtype pb fb concio test = dejafusIO' memtype pb fb concio [test]
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
 dejafusIO :: Show a => ConcIO a -> [(String, Predicate a)] -> IO Bool
-dejafusIO = dejafusIO' TotalStoreOrder 2 5
+dejafusIO = dejafusIO' defaultMemType defaultPreemptionBound defaultFairBound
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-dejafusIO' :: Show a => MemType -> Int -> Int -> ConcIO a -> [(String, Predicate a)] -> IO Bool
+dejafusIO' :: Show a => MemType -> PreemptionBound -> FairBound -> ConcIO a -> [(String, Predicate a)] -> IO Bool
 dejafusIO' memtype pb fb concio tests = do
   traces  <- sctPFBoundIO memtype pb fb concio
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
@@ -376,17 +385,17 @@ runTest ::
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Result a
-runTest = runTest' TotalStoreOrder 2 5
+runTest = runTest' defaultMemType defaultPreemptionBound defaultFairBound
 
 -- | Variant of 'runTest' which takes a memory model and pre-emption
 -- bound.
 runTest' ::
     MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Int
+  -> PreemptionBound
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
-  -> Int
+  -> FairBound
   -- ^ The maximum difference between the number of yield operations
   -- across all threads.
   -> Predicate a
@@ -398,10 +407,10 @@ runTest' memtype pb fb predicate conc = predicate $ sctPFBound memtype pb fb con
 
 -- | Variant of 'runTest' for computations which do 'IO'.
 runTestIO :: Predicate a -> ConcIO a -> IO (Result a)
-runTestIO = runTestIO' TotalStoreOrder 2 5
+runTestIO = runTestIO' defaultMemType defaultPreemptionBound defaultFairBound
 
 -- | Variant of 'runTest'' for computations which do 'IO'.
-runTestIO' :: MemType -> Int -> Int -> Predicate a -> ConcIO a -> IO (Result a)
+runTestIO' :: MemType -> PreemptionBound -> FairBound -> Predicate a -> ConcIO a -> IO (Result a)
 runTestIO' memtype pb fb predicate conc = predicate <$> sctPFBoundIO memtype pb fb conc
 
 -- * Predicates
