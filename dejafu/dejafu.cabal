@@ -86,6 +86,10 @@ library
                      , Control.Concurrent.STM.CTVar
                      , Control.Concurrent.STM.CTMVar
 
+                     , DejaFu.Control.Concurrent
+                     , DejaFu.Control.Concurrent.STM
+                     , DejaFu.Control.Concurrent.MVar
+
                      , Test.DejaFu
                      , Test.DejaFu.Deterministic
                      , Test.DejaFu.Deterministic.Schedule
