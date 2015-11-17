@@ -126,7 +126,7 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
         Left failure -> die failure
 
     where
-      (chosen, g')  = sched g ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ unsafeToNonEmpty runnable'
+      (chosen, g')  = sched g (map (\(d,_,a) -> (d,a)) $ reverse sofar) ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ unsafeToNonEmpty runnable'
       runnable'     = [(t, nextActions t) | t <- sort $ M.keys runnable]
       runnable      = M.filter (isNothing . _blocking) threadsc
       thread        = M.lookup chosen threadsc

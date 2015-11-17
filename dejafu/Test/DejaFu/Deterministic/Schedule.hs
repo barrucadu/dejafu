@@ -21,7 +21,7 @@ import Test.DejaFu.Deterministic.Internal
 -- | A simple random scheduler which, at every step, picks a random
 -- thread to run.
 randomSched :: RandomGen g => Scheduler g
-randomSched g _ threads = (threads' !! choice, g') where
+randomSched g _ _ threads = (threads' !! choice, g') where
   (choice, g') = randomR (0, length threads' - 1) g
   threads' = map fst $ toList threads
 
@@ -34,8 +34,8 @@ randomSchedNP = makeNP randomSched
 -- | A round-robin scheduler which, at every step, schedules the
 -- thread with the next 'ThreadId'.
 roundRobinSched :: Scheduler ()
-roundRobinSched _ Nothing _ = (0, ())
-roundRobinSched _ (Just (prior, _)) threads
+roundRobinSched _ _ Nothing _ = (0, ())
+roundRobinSched _ _ (Just (prior, _)) threads
   | prior >= maximum threads' = (minimum threads', ())
   | otherwise = (minimum $ filter (>prior) threads', ())
 
@@ -51,7 +51,7 @@ roundRobinSchedNP = makeNP roundRobinSched
 -- one.
 makeNP :: Scheduler s -> Scheduler s
 makeNP sched = newsched where
-  newsched s p@(Just (prior, _)) threads
+  newsched s trc p@(Just (prior, _)) threads
     | prior `elem` map fst (toList threads) = (prior, s)
-    | otherwise = sched s p threads
-  newsched s Nothing threads = sched s Nothing threads
+    | otherwise = sched s trc p threads
+  newsched s trc Nothing threads = sched s trc Nothing threads

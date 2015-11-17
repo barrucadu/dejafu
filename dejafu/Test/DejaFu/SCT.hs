@@ -63,6 +63,7 @@ module Test.DejaFu.SCT
   , preEmpCount'
   , yieldCount
   , maxYieldCountDiff
+  , initialise
   , initialCVState
   , updateCVState
   , willBlock
@@ -74,12 +75,13 @@ import Data.Functor.Identity (Identity(..), runIdentity)
 import Data.List (nub, partition)
 import Data.List.Extra (unsafeToNonEmpty)
 import Data.Sequence (Seq, (|>))
-import Data.Maybe (maybeToList, isNothing)
+import Data.Maybe (maybeToList, isNothing, fromJust)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.SCT.Internal
 
 import qualified Data.Map.Strict as M
 import qualified Data.Sequence as Sq
+import qualified Data.Set as S
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>), (<*>))
@@ -96,11 +98,11 @@ sctPreBound :: MemType
   -> (forall t. ConcST t a)
   -- ^ The computation to run many times
   -> [(Either Failure a, Trace)]
-sctPreBound memtype pb = sctBounded memtype (pbBound pb) pbBacktrack pbInitialise
+sctPreBound memtype pb = sctBounded memtype (pbBound pb) pbBacktrack
 
 -- | Variant of 'sctPreBound' for computations which do 'IO'.
 sctPreBoundIO :: MemType -> Int -> ConcIO a -> IO [(Either Failure a, Trace)]
-sctPreBoundIO memtype pb = sctBoundedIO memtype (pbBound pb) pbBacktrack pbInitialise
+sctPreBoundIO memtype pb = sctBoundedIO memtype (pbBound pb) pbBacktrack
 
 -- | Pre-emption bound function
 pbBound :: Int -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
@@ -159,21 +161,6 @@ pbBacktrack bs i tid = maybe id (\j' b -> backtrack True b j' tid) j $ backtrack
   backtrack c (b:rest) n t = b : backtrack c rest (n-1) t
   backtrack _ [] _ _ = error "Ran out of schedule whilst backtracking!"
 
--- | Pick a new thread to run. Choose the current thread if available
--- and it hasn't just yielded, otherwise add all runnable threads.
-pbInitialise :: Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId
-pbInitialise prior threads@((nextTid, _):|rest) = unsafeToNonEmpty . yieldsToEnd $ case prior of
-  Just (_, Yield) -> nextTid : map fst rest
-  Just (tid, _)
-    | any (\(t, _) -> t == tid) threads' -> [tid]
-  _ -> nextTid : map fst rest
-
-  where
-    yieldsToEnd ts = case partition ((== Just WillYield) . action) ts of
-      (willYield, noYield) -> noYield ++ willYield
-    action t = lookup t threads'
-    threads' = toList threads
-
 -- * Fair bounding
 
 -- | An SCT runner using a fair bounding scheduler.
@@ -185,11 +172,11 @@ sctFairBound :: MemType
   -> (forall t. ConcST t a)
   -- ^ The computation to run many times
   -> [(Either Failure a, Trace)]
-sctFairBound memtype fb = sctBounded memtype (fBound fb) fBacktrack pbInitialise
+sctFairBound memtype fb = sctBounded memtype (fBound fb) fBacktrack
 
 -- | Variant of 'sctFairBound' for computations which do 'IO'.
 sctFairBoundIO :: MemType -> Int -> ConcIO a -> IO [(Either Failure a, Trace)]
-sctFairBoundIO memtype fb = sctBoundedIO memtype (fBound fb) fBacktrack pbInitialise
+sctFairBoundIO memtype fb = sctBoundedIO memtype (fBound fb) fBacktrack
 
 -- | Fair bound function
 fBound :: Int -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
@@ -266,11 +253,11 @@ sctPFBound :: MemType
   -> (forall t. ConcST t a)
   -- ^ The computation to run many times
   -> [(Either Failure a, Trace)]
-sctPFBound memtype pb fb = sctBounded memtype (pfBound pb fb) pfBacktrack pbInitialise
+sctPFBound memtype pb fb = sctBounded memtype (pfBound pb fb) pfBacktrack
 
 -- | Variant of 'sctPFBound' for computations which do 'IO'.
 sctPFBoundIO :: MemType -> Int -> Int -> ConcIO a -> IO [(Either Failure a, Trace)]
-sctPFBoundIO memtype pb fb = sctBoundedIO memtype (pfBound pb fb) pfBacktrack pbInitialise
+sctPFBoundIO memtype pb fb = sctBoundedIO memtype (pfBound pb fb) pfBacktrack
 
 -- | PB/Fair bound function
 pfBound :: Int -> Int -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
@@ -303,19 +290,16 @@ sctBounded :: MemType
   -- execution so far, the index to insert the backtracking point, and
   -- the thread to backtrack to. This may insert more than one
   -- backtracking point.
-  -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
-  -- ^ Produce possible scheduling decisions, all will be tried.
   -> (forall t. ConcST t a) -> [(Either Failure a, Trace)]
-sctBounded memtype bf backtrack initialise c = runIdentity $ sctBoundedM memtype bf backtrack initialise run where
+sctBounded memtype bf backtrack c = runIdentity $ sctBoundedM memtype bf backtrack run where
   run memty sched s = Identity $ runConcST' sched memty s c
 
 -- | Variant of 'sctBounded' for computations which do 'IO'.
 sctBoundedIO :: MemType
   -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
-  -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -> ConcIO a -> IO [(Either Failure a, Trace)]
-sctBoundedIO memtype bf backtrack initialise c = sctBoundedM memtype bf backtrack initialise run where
+sctBoundedIO memtype bf backtrack c = sctBoundedM memtype bf backtrack run where
   run memty sched s = runConcIO' sched memty s c
 
 -- | Generic SCT runner.
@@ -323,14 +307,13 @@ sctBoundedM :: (Functor m, Monad m)
   => MemType
   -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
-  -> (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
   -> (MemType -> Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
   -- ^ Monadic runner, with computation fixed.
   -> m [(Either Failure a, Trace)]
-sctBoundedM memtype bf backtrack initialise run = go initialState where
+sctBoundedM memtype bf backtrack run = go initialState where
   go bpor = case next bpor of
     Just (sched, conservative) -> do
-      (res, s, trace) <- run memtype (bporSched initialise) (initialSchedState sched)
+      (res, s, trace) <- run memtype (bporSched $ initialise bf)  (initialSchedState sched)
 
       let bpoints = findBacktrack memtype backtrack (_sbpoints s) trace
       let newBPOR = pruneCommits . todo bf bpoints $ grow memtype conservative trace bpor
@@ -363,9 +346,9 @@ initialSchedState prefix = SchedState
 -- | BPOR scheduler: takes a list of decisions, and maintains a trace
 -- including the runnable threads, and the alternative choices allowed
 -- by the bound-specific initialise function.
-bporSched :: (Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
+bporSched :: ([(Decision, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> NonEmpty ThreadId)
           -> Scheduler SchedState
-bporSched initialise = force $ \s prior threads -> case _sprefix s of
+bporSched init = force $ \s trc prior threads -> case _sprefix s of
   -- If there is a decision available, make it
   (d:ds) ->
     let threads' = fmap (\(t,a:|_) -> (t,a)) threads
@@ -376,7 +359,7 @@ bporSched initialise = force $ \s prior threads -> case _sprefix s of
   -- choices, and make one of them arbitrarily (recording the others).
   [] ->
     let threads' = fmap (\(t,a:|_) -> (t,a)) threads
-        choices  = initialise prior threads'
+        choices  = init trc prior threads'
         cvstate' = maybe (_scvstate s) (updateCVState (_scvstate s) . snd) prior
         choices' = [t
                    | t  <- toList choices
@@ -389,3 +372,42 @@ bporSched initialise = force $ \s prior threads -> case _sprefix s of
           -- TODO: abort the execution here.
           [] -> case choices of
                  (nextTid:|_) -> (nextTid, s { _sbpoints = _sbpoints s |> (threads', []), _scvstate = cvstate' })
+
+-- | Pick a new thread to run, which does not exceed the bound. Choose
+-- the current thread if available and it hasn't just yielded,
+-- otherwise add all runnable threads.
+--
+-- If there are no decisions which fall within the bound, return all
+-- decisions. This is clearly suboptimal, the next commit will allow
+-- for aborting mid-execution.
+initialise :: ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
+  -> [(Decision, ThreadAction)]
+  -> Maybe (ThreadId, ThreadAction)
+  -> NonEmpty (ThreadId, Lookahead)
+  -> NonEmpty ThreadId
+initialise bf trc prior threads = unsafeToNonEmpty . restrictToBound . yieldsToEnd $ case prior of
+  Just (_, Yield) -> map fst threads'
+  Just (tid, _)
+    | any (\(t, _) -> t == tid) threads' -> [tid]
+  _ -> map fst threads'
+
+  where
+    -- Restrict the possible decisions to those in the bound,
+    -- returning all decisions if none fall within the bound (TODO:
+    -- not that).
+    restrictToBound ts = case partition (\t -> bf trc (decision t, action t)) ts of
+      ([], outsideBound) -> outsideBound
+      (inBound, _) -> inBound
+
+    -- Move the threads which will immediately yield to the end of the list
+    yieldsToEnd ts = case partition ((== WillYield) . action) ts of
+      (willYield, noYield) -> noYield ++ willYield
+
+    -- Get the decision that will lead to a thread being scheduled.
+    decision = decisionOf (fst <$> prior) (S.fromList $ map fst threads')
+
+    -- Get the action of a thread
+    action t = fromJust $ lookup t threads'
+
+    -- The list of threads
+    threads' = toList threads
