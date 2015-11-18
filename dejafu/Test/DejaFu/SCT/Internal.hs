@@ -128,11 +128,11 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
           , _backtrack = M.fromList $ map (\i' -> (i', False)) i
           }
         allThreads' = allThreads `S.union` S.fromList (M.keys $ _runnable this)
-        bs' = doBacktrack crstate' allThreads' (toList e) (bs++[this])
+        bs' = doBacktrack (null ts) crstate' allThreads' (toList e) (bs++[this])
     in go crstate' allThreads' tid' bs' (Sq.viewl is) ts
   go _ _ _ bs _ _ = bs
 
-  doBacktrack crstate allThreads enabledThreads bs =
+  doBacktrack isEnd crstate allThreads enabledThreads bs =
     let tagged = reverse $ zip [0..] bs
         idxs   = [ (head is, u)
                  | (u, n) <- enabledThreads
@@ -141,7 +141,13 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
                  , let is = [ i
                             | (i, b) <- tagged
                             , _threadid b == v
-                            , dependent' memtype crstate (_threadid b, snd $ _decision b) (u, n)
+
+                            -- There is a dependency between the actions
+                            , let isDependent = dependent' memtype crstate (_threadid b, snd $ _decision b) (u, n)
+                            -- This is the final action and threads will be killed
+                            , let killsEarly  = isEnd && any (/=0) (M.keys $ _runnable b)
+
+                            , killsEarly || isDependent
                             ]
                  , not $ null is] :: [(Int, ThreadId)]
     in foldl' (\b (i, u) -> backtrack b i u) bs idxs

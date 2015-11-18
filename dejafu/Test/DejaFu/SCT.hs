@@ -483,7 +483,7 @@ bporSched init = force $ \s trc prior threads -> case _sprefix s of
 --
 -- If there are no decisions which fall within the bound, return all
 -- decisions.
-initialise :: ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
+initialise :: Bound
   -> [(Decision, ThreadAction)]
   -> Maybe (ThreadId, ThreadAction)
   -> NonEmpty (ThreadId, Lookahead)
