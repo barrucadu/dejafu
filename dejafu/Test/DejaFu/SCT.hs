@@ -25,10 +25,11 @@ module Test.DejaFu.SCT
   -- K. McKinley for more details.
 
     BacktrackStep(..)
+  , Bound
   , sctBounded
   , sctBoundedIO
 
-  -- * Pre-emption and Fair Bounding
+  -- * Individual Bounds
 
   -- | BPOR using pre-emption bounding. This adds conservative
   -- backtracking points at the prior context switch whenever a
@@ -53,14 +54,32 @@ module Test.DejaFu.SCT
   , sctFairBound
   , sctFairBoundIO
 
-  -- | Combination pre-emption and fair bounding, this is what is used
-  -- by the testing functionality in @Test.DejaFu@.
+  -- | BPOR using length bounding. This bounds the maximum length (in
+  -- terms of primitive actions) of an execution.
+
+  , LengthBound(..)
+  , defaultLengthBound
+  , sctLengthBound
+  , sctLengthBoundIO
+
+  -- * Combined Bounds
+
+  -- | Combined pre-emption and fair bounding. Useful for programs
+  -- which use loop/yield control flows but are otherwise
+  -- terminating. Used by the testing functionality in @Test.DejaFu@.
 
   , sctPFBound
   , sctPFBoundIO
 
+  -- | Combined pre-emption, fair, and length bounding. Useful for
+  -- non-terminating programs.
+
+  , sctPFLBound
+  , sctPFLBoundIO
+
   -- * Utilities
 
+  , (&+&)
   , tidOf
   , decisionOf
   , activeTid
@@ -91,7 +110,15 @@ import qualified Data.Set as S
 import Control.Applicative ((<$>), (<*>))
 #endif
 
-import qualified Debug.Trace as T
+-- | A bounding function takes the scheduling decisions so far and a
+-- decision chosen to come next, and returns if that decision is
+-- within the bound.
+type Bound = [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
+
+-- | Combine two bounds into a larger bound, where both must be
+-- satisfied.
+(&+&) :: Bound -> Bound -> Bound
+(&+&) b1 b2 ts dl = b1 ts dl && b2 ts dl
 
 -- * Pre-emption bounding
 
@@ -118,7 +145,7 @@ sctPreBoundIO :: MemType -> PreemptionBound -> ConcIO a -> IO [(Either Failure a
 sctPreBoundIO memtype pb = sctBoundedIO memtype (pbBound pb) pbBacktrack
 
 -- | Pre-emption bound function
-pbBound :: PreemptionBound -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
+pbBound :: PreemptionBound -> Bound
 pbBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb
 
 -- | Count the number of pre-emptions in a schedule prefix.
@@ -199,7 +226,7 @@ sctFairBoundIO :: MemType -> FairBound -> ConcIO a -> IO [(Either Failure a, Tra
 sctFairBoundIO memtype fb = sctBoundedIO memtype (fBound fb) fBacktrack
 
 -- | Fair bound function
-fBound :: FairBound -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
+fBound :: FairBound -> Bound
 fBound (FairBound fb) ts dl = maxYieldCountDiff ts dl <= fb
 
 -- | Count the number of yields by a thread in a schedule prefix.
@@ -261,6 +288,47 @@ fBacktrack bx@(b:rest) 0 t
 fBacktrack (b:rest) n t = b : fBacktrack rest (n-1) t
 fBacktrack [] _ _ = error "Ran out of schedule whilst backtracking!"
 
+-- * Length Bounding
+
+newtype LengthBound = LengthBound Int
+  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | A sensible default length bound: 250
+defaultLengthBound :: LengthBound
+defaultLengthBound = 250
+
+-- | An SCT runner using a length bounding scheduler.
+sctLengthBound :: MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> LengthBound
+  -- ^ The maximum length of a schedule, in terms of primitive
+  -- actions.
+  -> (forall t. ConcST t a)
+  -- ^ The computation to run many times
+  -> [(Either Failure a, Trace)]
+sctLengthBound memtype lb = sctBounded memtype (lBound lb) lBacktrack
+
+-- | Variant of 'sctFairBound' for computations which do 'IO'.
+sctLengthBoundIO :: MemType -> LengthBound -> ConcIO a -> IO [(Either Failure a, Trace)]
+sctLengthBoundIO memtype lb = sctBoundedIO memtype (lBound lb) lBacktrack
+
+-- | Length bound function
+lBound :: LengthBound -> Bound
+lBound (LengthBound lb) ts _ = length ts < lb
+
+-- | Add a backtrack point. If the thread isn't runnable, add all
+-- runnable threads.
+lBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
+lBacktrack bx@(b:rest) 0 t
+  | isNothing (M.lookup t $ _runnable b) =
+    let val = M.lookup t $ _backtrack b
+    in  if isNothing val
+        then b { _backtrack = M.insert t False $ _backtrack b } : rest
+        else bx
+  | otherwise = b { _backtrack = M.fromList [ (t',False) | t' <- M.keys $ _runnable b ] } : rest
+lBacktrack (b:rest) n t = b : lBacktrack rest (n-1) t
+lBacktrack [] _ _ = error "Ran out of schedule whilst backtracking!"
+
 -- * Combined PB and Fair bounding
 
 -- | An SCT runner using a fair bounding scheduler.
@@ -280,12 +348,41 @@ sctPFBoundIO :: MemType -> PreemptionBound -> FairBound -> ConcIO a -> IO [(Eith
 sctPFBoundIO memtype pb fb = sctBoundedIO memtype (pfBound pb fb) pfBacktrack
 
 -- | PB/Fair bound function
-pfBound :: PreemptionBound -> FairBound -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
-pfBound (PreemptionBound pb) (FairBound fb) ts dl = preEmpCount ts dl <= pb && maxYieldCountDiff ts dl <= fb
+pfBound :: PreemptionBound -> FairBound -> Bound
+pfBound pb fb = pbBound pb &+& fBound fb
 
 -- | PB/Fair backtracking function. Add all backtracking points.
 pfBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
 pfBacktrack bs i t = fBacktrack (pbBacktrack bs i t) i t
+
+-- * Combined PB, Fair, and Length bounding.
+
+-- | An SCT runner using a fair bounding scheduler.
+sctPFLBound :: MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> PreemptionBound
+  -- ^ The pre-emption bound
+  -> FairBound
+  -- ^ The fair bound
+  -> LengthBound
+  -- ^ The length bound
+  -> (forall t. ConcST t a)
+  -- ^ The computation to run many times
+  -> [(Either Failure a, Trace)]
+sctPFLBound memtype pb fb lb = sctBounded memtype (pflBound pb fb lb) pfBacktrack
+
+-- | Variant of 'sctPFBound' for computations which do 'IO'.
+sctPFLBoundIO :: MemType -> PreemptionBound -> FairBound -> LengthBound -> ConcIO a -> IO [(Either Failure a, Trace)]
+sctPFLBoundIO memtype pb fb lb = sctBoundedIO memtype (pflBound pb fb lb) pflBacktrack
+
+-- | PB/Fair/Length bound function
+pflBound :: PreemptionBound -> FairBound -> LengthBound -> Bound
+pflBound pb fb lb = pbBound pb &+& fBound fb &+& lBound lb
+
+-- | PB/Fair/Length backtracking function. Add all backtracking points.
+pflBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
+-- l-bounding backtracking points are a subset of pf-bounding ones.
+pflBacktrack = pfBacktrack
 
 -- * BPOR
 
@@ -303,7 +400,7 @@ pfBacktrack bs i t = fBacktrack (pbBacktrack bs i t) i t
 -- previously non-interfering events interfere with each other.
 sctBounded :: MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
+  -> Bound
   -- ^ Check if a prefix trace is within the bound
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -- ^ Add a new backtrack point, this takes the history of the
@@ -391,14 +488,11 @@ initialise :: ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
   -> Maybe (ThreadId, ThreadAction)
   -> NonEmpty (ThreadId, Lookahead)
   -> [ThreadId]
-initialise bf trc prior threads =
-  let result =
-        restrictToBound . yieldsToEnd $ case prior of
-                                          Just (_, Yield) -> map fst threads'
-                                          Just (tid, _)
-                                              | any (\(t, _) -> t == tid) threads' -> [tid]
-                                          _ -> map fst threads'
-  in if null result then error "Bad result!" else result
+initialise bf trc prior threads = restrictToBound . yieldsToEnd $ case prior of
+  Just (_, Yield) -> map fst threads'
+  Just (tid, _)
+    | any (\(t, _) -> t == tid) threads' -> [tid]
+  _ -> map fst threads'
 
   where
     -- Restrict the possible decisions to those in the bound.
