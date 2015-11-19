@@ -77,7 +77,16 @@ module Test.DejaFu
   , dejafuIO
   , dejafusIO
 
-  -- * Testing under Alternative Memory Models
+  -- * Testing with different settings
+
+  , autocheck'
+  , autocheckIO'
+  , dejafu'
+  , dejafus'
+  , dejafuIO'
+  , dejafusIO'
+
+  -- ** Memory Models
 
   -- | Threads running under modern multicore processors do not behave
   -- as a simple interleaving of the individual thread
@@ -143,16 +152,29 @@ module Test.DejaFu
 
   , MemType(..)
   , defaultMemType
+
+  -- ** Schedule Bounding
+
+  -- | Schedule bounding is an optimisation which only considers
+  -- schedules within some /bound/. This sacrifices completeness
+  -- outside of the bound, but can drastically reduce the number of
+  -- schedules to test, and is in fact necessary for non-terminating
+  -- programs.
+  --
+  -- The standard testing mechanism uses a combination of pre-emption
+  -- bounding, fair bounding, and length bounding. Pre-emption + fair
+  -- bounding is useful for programs which use loop/yield control
+  -- flows but are otherwise terminating. Length bounding makes it
+  -- possible to test potentially non-terminating programs.
+
+  , Bounds(..)
+  , defaultBounds
   , PreemptionBound(..)
   , defaultPreemptionBound
   , FairBound(..)
   , defaultFairBound
-  , autocheck'
-  , autocheckIO'
-  , dejafu'
-  , dejafus'
-  , dejafuIO'
-  , dejafusIO'
+  , LengthBound(..)
+  , defaultLengthBound
 
   -- * Results
 
@@ -239,7 +261,7 @@ autocheck' :: (Eq a, Show a)
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> IO Bool
-autocheck' memtype conc = dejafus' memtype defaultPreemptionBound defaultFairBound conc autocheckCases
+autocheck' memtype conc = dejafus' memtype defaultBounds conc autocheckCases
 
 -- | Variant of 'autocheck' for computations which do 'IO'.
 autocheckIO :: (Eq a, Show a) => ConcIO a -> IO Bool
@@ -247,7 +269,7 @@ autocheckIO = autocheckIO' defaultMemType
 
 -- | Variant of 'autocheck'' for computations which do 'IO'.
 autocheckIO' :: (Eq a, Show a) => MemType -> ConcIO a -> IO Bool
-autocheckIO' memtype concio = dejafusIO' memtype defaultPreemptionBound defaultFairBound concio autocheckCases
+autocheckIO' memtype concio = dejafusIO' memtype defaultBounds concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
 autocheckCases :: (Eq a, Show a) => [(String, Predicate a)]
@@ -265,35 +287,32 @@ dejafu :: Show a
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
   -> IO Bool
-dejafu = dejafu' defaultMemType defaultPreemptionBound defaultFairBound
+dejafu = dejafu' defaultMemType defaultBounds
 
--- | Variant of 'dejafu'' which takes a memory model and pre-emption
--- bound.
+-- | Variant of 'dejafu'' which takes a memory model and schedule
+-- bounds.
 --
--- Pre-emption bounding is used to filter the large number of possible
+-- Schedule bounding is used to filter the large number of possible
 -- schedules, and can be iteratively increased for further coverage
--- guarantees. Empirical studies (/Concurrency Testing Using Schedule Bounding: an Empirical Study/,
--- P. Thompson, A. Donaldson, and A. Betts) have found that many
--- concurrency bugs can be exhibited with as few as two threads and
--- two pre-emptions, which is what 'dejafus' uses.
+-- guarantees. Empirical studies (/Concurrency Testing Using Schedule
+-- Bounding: an Empirical Study/, P. Thompson, A. Donaldson, and
+-- A. Betts) have found that many concurrency bugs can be exhibited
+-- with as few as two threads and two pre-emptions, which is part of
+-- what 'dejafus' uses.
 --
--- __Warning:__ Using a larger pre-emption bound will almost certainly
+-- __Warning:__ Using largers bounds will almost certainly
 -- significantly increase the time taken to test!
 dejafu' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> PreemptionBound
-  -- ^ The maximum number of pre-emptions to allow in a single
-  -- execution
-  -> FairBound
-  -- ^ The maximum difference between the number of yield operations
-  -- across all threads.
+  -> Bounds
+  -- ^ The schedule bounds
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
   -> IO Bool
-dejafu' memtype pb fb conc test = dejafus' memtype pb fb conc [test]
+dejafu' memtype cb conc test = dejafus' memtype cb conc [test]
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
@@ -303,45 +322,41 @@ dejafus :: Show a
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> IO Bool
-dejafus = dejafus' defaultMemType defaultPreemptionBound defaultFairBound
+dejafus = dejafus' defaultMemType defaultBounds
 
--- | Variant of 'dejafus' which takes a memory model and pre-emption
--- bound.
+-- | Variant of 'dejafus' which takes a memory model and schedule
+-- bounds.
 dejafus' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> PreemptionBound
-  -- ^ The maximum number of pre-emptions to allow in a single
-  -- execution
-  -> FairBound
-  -- ^ The maximum difference between the number of yield operations
-  -- across all threads.
+  -> Bounds
+  -- ^ The schedule bounds.
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> IO Bool
-dejafus' memtype pb fb conc tests = do
-  let traces = sctPFBound memtype pb fb conc
+dejafus' memtype cb conc tests = do
+  let traces = sctBound memtype cb conc
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
 -- | Variant of 'dejafu' for computations which do 'IO'.
 dejafuIO :: Show a => ConcIO a -> (String, Predicate a) -> IO Bool
-dejafuIO = dejafuIO' defaultMemType defaultPreemptionBound defaultFairBound
+dejafuIO = dejafuIO' defaultMemType defaultBounds
 
 -- | Variant of 'dejafu'' for computations which do 'IO'.
-dejafuIO' :: Show a => MemType -> PreemptionBound -> FairBound -> ConcIO a -> (String, Predicate a) -> IO Bool
-dejafuIO' memtype pb fb concio test = dejafusIO' memtype pb fb concio [test]
+dejafuIO' :: Show a => MemType -> Bounds -> ConcIO a -> (String, Predicate a) -> IO Bool
+dejafuIO' memtype cb concio test = dejafusIO' memtype cb concio [test]
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
 dejafusIO :: Show a => ConcIO a -> [(String, Predicate a)] -> IO Bool
-dejafusIO = dejafusIO' defaultMemType defaultPreemptionBound defaultFairBound
+dejafusIO = dejafusIO' defaultMemType defaultBounds
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-dejafusIO' :: Show a => MemType -> PreemptionBound -> FairBound -> ConcIO a -> [(String, Predicate a)] -> IO Bool
-dejafusIO' memtype pb fb concio tests = do
-  traces  <- sctPFBoundIO memtype pb fb concio
+dejafusIO' :: Show a => MemType -> Bounds -> ConcIO a -> [(String, Predicate a)] -> IO Bool
+dejafusIO' memtype cb concio tests = do
+  traces  <- sctBoundIO memtype cb concio
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
@@ -377,41 +392,37 @@ instance Functor Result where
 instance Foldable Result where
   foldMap f r = foldMap f [a | (Right a, _) <- _failures r]
 
--- | Run a predicate over all executions with two or fewer
--- pre-emptions.
+-- | Run a predicate over all executions within the default schedule
+-- bounds.
 runTest ::
     Predicate a
   -- ^ The predicate to check
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Result a
-runTest = runTest' defaultMemType defaultPreemptionBound defaultFairBound
+runTest = runTest' defaultMemType defaultBounds
 
--- | Variant of 'runTest' which takes a memory model and pre-emption
--- bound.
+-- | Variant of 'runTest' which takes a memory model and schedule
+-- bounds.
 runTest' ::
     MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> PreemptionBound
-  -- ^ The maximum number of pre-emptions to allow in a single
-  -- execution
-  -> FairBound
-  -- ^ The maximum difference between the number of yield operations
-  -- across all threads.
+  -> Bounds
+  -- ^ The schedule bounds.
   -> Predicate a
   -- ^ The predicate to check
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Result a
-runTest' memtype pb fb predicate conc = predicate $ sctPFBound memtype pb fb conc
+runTest' memtype cb predicate conc = predicate $ sctBound memtype cb conc
 
 -- | Variant of 'runTest' for computations which do 'IO'.
 runTestIO :: Predicate a -> ConcIO a -> IO (Result a)
-runTestIO = runTestIO' defaultMemType defaultPreemptionBound defaultFairBound
+runTestIO = runTestIO' defaultMemType defaultBounds
 
 -- | Variant of 'runTest'' for computations which do 'IO'.
-runTestIO' :: MemType -> PreemptionBound -> FairBound -> Predicate a -> ConcIO a -> IO (Result a)
-runTestIO' memtype pb fb predicate conc = predicate <$> sctPFBoundIO memtype pb fb conc
+runTestIO' :: MemType -> Bounds -> Predicate a -> ConcIO a -> IO (Result a)
+runTestIO' memtype cb predicate conc = predicate <$> sctBoundIO memtype cb conc
 
 -- * Predicates
 
