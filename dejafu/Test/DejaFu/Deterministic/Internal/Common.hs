@@ -481,6 +481,22 @@ lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (AReturn k)             = WillReturn : lookahead' k
   lookahead' AStop                   = [WillStop]
 
+-- | Check if an operation could enable another thread.
+willRelease :: Lookahead -> Bool
+willRelease WillFork = True
+willRelease WillYield = True
+willRelease (WillPutVar _) = True
+willRelease (WillTryPutVar _) = True
+willRelease (WillReadVar _) = True
+willRelease (WillTakeVar _) = True
+willRelease (WillTryTakeVar _) = True
+willRelease WillSTM = True
+willRelease WillThrow = True
+willRelease (WillSetMasking _ _) = True
+willRelease (WillResetMasking _ _) = True
+willRelease WillStop = True
+willRelease _ = False
+
 -- | A simplified view of the possible actions a thread can perform.
 data ActionType =
     UnsynchronisedRead  CRefId

@@ -36,6 +36,8 @@ module Test.DejaFu.Deterministic.Internal
  , ThreadAction(..)
  , Lookahead(..)
  , Trace'
+ , lookahead
+ , willRelease
  , toTrace
  , showTrace
  , showFail

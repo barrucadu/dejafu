@@ -111,6 +111,7 @@ import Data.List (nub, partition)
 import Data.Sequence (Seq, (|>))
 import Data.Maybe (maybeToList, isNothing, isJust, fromJust)
 import Test.DejaFu.Deterministic
+import Test.DejaFu.Deterministic.Internal (willRelease)
 import Test.DejaFu.SCT.Internal
 
 import qualified Data.Map.Strict as M
@@ -316,7 +317,7 @@ fBacktrack bx@(b:rest) 0 t
   -- If the backtracking point is already present, don't re-add it,
   -- UNLESS this would force it to backtrack (it's conservative) where
   -- before it might not.
-  | Just True == (isNotRelease <$> M.lookup t (_runnable b)) =
+  | Just False == (willRelease <$> M.lookup t (_runnable b)) =
     let val = M.lookup t $ _backtrack b
     in  if isNothing val
         then b { _backtrack = M.insert t False $ _backtrack b } : rest
@@ -324,23 +325,6 @@ fBacktrack bx@(b:rest) 0 t
 
   -- Otherwise just backtrack to everything runnable.
   | otherwise = b { _backtrack = M.fromList [ (t',False) | t' <- M.keys $ _runnable b ] } : rest
-
-  where
-    isNotRelease WillMyThreadId = True
-    isNotRelease WillNewVar = True
-    isNotRelease (WillReadVar _) = True
-    isNotRelease WillNewRef = True
-    isNotRelease (WillReadRef _) = True
-    isNotRelease (WillModRef _) = True
-    isNotRelease (WillWriteRef _) = True
-    isNotRelease (WillCommitRef _ _) = True
-    isNotRelease WillCatching = True
-    isNotRelease WillPopCatching = True
-    isNotRelease WillLift = True
-    isNotRelease WillKnowsAbout = True
-    isNotRelease WillForgets = True
-    isNotRelease WillAllKnown = True
-    isNotRelease _ = False
 
 fBacktrack (b:rest) n t = b : fBacktrack rest (n-1) t
 fBacktrack [] _ _ = error "Ran out of schedule whilst backtracking!"
