@@ -6,7 +6,7 @@ module Test.DejaFu.SCT.Internal where
 import Control.DeepSeq (NFData(..))
 import Data.List (foldl', partition, sortBy)
 import Data.Map.Strict (Map)
-import Data.Maybe (mapMaybe, isJust, fromJust)
+import Data.Maybe (mapMaybe, isJust, fromJust, listToMaybe)
 import Data.Ord (Down(..), comparing)
 import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
@@ -82,28 +82,32 @@ initialState = BPOR
 
 -- | Produce a new schedule from a BPOR tree. If there are no new
 -- schedules remaining, return 'Nothing'. Also returns whether the
--- decision made was added conservatively.
+-- decision was added conservatively, and the sleep set at the point
+-- where divergence happens.
 --
 -- This returns the longest prefix, on the assumption that this will
 -- lead to lots of backtracking points being identified before
 -- higher-up decisions are reconsidered, so enlarging the sleep sets.
-next :: BPOR -> Maybe ([ThreadId], Bool)
+next :: BPOR -> Maybe ([ThreadId], Bool, Map ThreadId ThreadAction)
 next = go 0 where
   go tid bpor =
         -- All the possible prefix traces from this point, with
         -- updated BPOR subtrees if taken from the done list.
-    let prefixes = mapMaybe go' (M.toList $ _bdone bpor) ++ [([t], c) | (t, c) <- M.toList $ _btodo bpor]
+    let prefixes = mapMaybe go' (M.toList $ _bdone bpor) ++ [([t], c, sleeps bpor) | (t, c) <- M.toList $ _btodo bpor]
         -- Sort by number of preemptions, in descending order.
-        cmp = preEmps tid bpor . fst
+        cmp = preEmps tid bpor . (\(a,_,_) -> a)
 
     in if null prefixes
        then Nothing
-       else case partition (\(t:_,_) -> t < 0) $ sortBy (comparing $ Down . cmp) prefixes of
-              (_, (ts,c):_) -> Just (ts, c)
-              ((ts,c):_, _) -> Just (ts, c)
-              ([], []) -> error "Invariant failure in 'next': empty prefix list!"
+       else case partition (\(t:_,_,_) -> t < 0) $ sortBy (comparing $ Down . cmp) prefixes of
+              (commits, others)
+                | not $ null others  -> listToMaybe others
+                | not $ null commits -> listToMaybe commits
+                | otherwise -> error "Invariant failure in 'next': empty prefix list!"
 
-  go' (tid, bpor) = (\(ts,c) -> (tid:ts,c)) <$> go tid bpor
+  go' (tid, bpor) = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> go tid bpor
+
+  sleeps bpor = _bsleep bpor `M.union` _btaken bpor
 
   preEmps tid bpor (t:ts) =
     let rest = preEmps t (fromJust . M.lookup t $ _bdone bpor) ts
@@ -353,21 +357,29 @@ willBlockSafely _ _ = False
 
 -- * Keeping track of 'CRef' buffer state
 
-type CRState = Map CRefId Bool
+data CRState = Known (Map CRefId Bool) | Unknown
 
 -- | Initial global 'CRef buffer state.
 initialCRState :: CRState
-initialCRState = M.empty
+initialCRState = Known M.empty
+
+-- | 'CRef' buffer state with nothing known.
+unknownCRState :: CRState
+unknownCRState = Unknown
 
 -- | Update the 'CRef' buffer state with the action that has just
 -- happened.
 updateCRState :: CRState -> ThreadAction -> CRState
-updateCRState crstate (CommitRef _ r) = M.delete r crstate
-updateCRState crstate (WriteRef r) = M.insert r True crstate
+updateCRState Unknown _ = Unknown
+updateCRState (Known crstate) (CommitRef _ r) = Known $ M.delete r crstate
+updateCRState (Known crstate) (WriteRef r) = Known $ M.insert r True crstate
 updateCRState crstate ta
   | isBarrier $ simplify ta = initialCRState
   | otherwise = crstate
 
 -- | Check if a 'CRef' has a buffered write pending.
+--
+-- If the state is @Unknown@, this assumes @True@.
 isBuffered :: CRState -> CRefId -> Bool
-isBuffered crefid r = M.findWithDefault False r crefid
+isBuffered Unknown _ = True
+isBuffered (Known crstate) r = M.findWithDefault False r crstate

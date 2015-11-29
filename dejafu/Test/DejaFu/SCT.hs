@@ -109,7 +109,8 @@ import Control.DeepSeq (NFData, force)
 import Data.Functor.Identity (Identity(..), runIdentity)
 import Data.List (nub, partition)
 import Data.Sequence (Seq, (|>))
-import Data.Maybe (maybeToList, isNothing, isJust, fromJust)
+import Data.Map (Map)
+import Data.Maybe (isNothing, isJust, fromJust)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.Internal (willRelease)
 import Test.DejaFu.SCT.Internal
@@ -414,13 +415,15 @@ sctBoundedM :: (Functor m, Monad m)
   -> m [(Either Failure a, Trace)]
 sctBoundedM memtype bf backtrack run = go initialState where
   go bpor = case next bpor of
-    Just (sched, conservative) -> do
-      (res, s, trace) <- run memtype (bporSched $ initialise bf)  (initialSchedState sched)
+    Just (sched, conservative, sleep) -> do
+      (res, s, trace) <- run memtype (bporSched memtype $ initialise bf) (initialSchedState sleep sched)
 
       let bpoints = findBacktrack memtype backtrack (_sbpoints s) trace
-      let newBPOR = pruneCommits . todo bf bpoints $ grow memtype conservative trace bpor
+      let newBPOR = grow memtype conservative trace bpor
 
-      ((res, toTrace trace):) <$> go newBPOR
+      if _signore s
+      then go newBPOR
+      else ((res, toTrace trace):) <$> go (pruneCommits $ todo bf bpoints newBPOR)
 
     Nothing -> return []
 
@@ -428,39 +431,57 @@ sctBoundedM memtype bf backtrack run = go initialState where
 
 -- | The scheduler state
 data SchedState = SchedState
-  { _sprefix  :: [ThreadId]
+  { _ssleep   :: Map ThreadId ThreadAction
+  -- ^ The sleep set: decisions not to make until something dependent
+  -- with them happens.
+  , _sprefix  :: [ThreadId]
   -- ^ Decisions still to make
   , _sbpoints :: Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
   -- ^ Which threads are runnable at each step, and the alternative
   -- decisions still to make.
-  }
+  , _signore  :: Bool
+  -- ^ Whether to ignore this execution or not: @True@ if the
+  -- execution is aborted due to all possible decisions being in the
+  -- sleep set, as then everything in this execution is covered by
+  -- another.
+  } deriving Show
 
 -- | Initial scheduler state for a given prefix
-initialSchedState :: [ThreadId] -> SchedState
-initialSchedState prefix = SchedState
-  { _sprefix  = prefix
+initialSchedState :: Map ThreadId ThreadAction -> [ThreadId] -> SchedState
+initialSchedState sleep prefix = SchedState
+  { _ssleep   = sleep
+  , _sprefix  = prefix
   , _sbpoints = Sq.empty
+  , _signore  = False
   }
 
 -- | BPOR scheduler: takes a list of decisions, and maintains a trace
 -- including the runnable threads, and the alternative choices allowed
 -- by the bound-specific initialise function.
-bporSched :: ([(Decision, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> [ThreadId])
-          -> Scheduler SchedState
-bporSched init = force $ \s trc prior threads -> case _sprefix s of
+bporSched :: MemType
+  -> ([(Decision, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> [ThreadId])
+  -> Scheduler SchedState
+bporSched memtype init = force $ \s trc prior threads -> case _sprefix s of
   -- If there is a decision available, make it
   (d:ds) ->
     let threads' = fmap (\(t,a:|_) -> (t,a)) threads
     in  (Just d, s { _sprefix = ds, _sbpoints = _sbpoints s |> (threads', []) })
 
   -- Otherwise query the initialise function for a list of possible
-  -- choices, and make one of them arbitrarily (recording the others).
+  -- choices, filter out anything in the sleep set, and make one of
+  -- them arbitrarily (recording the others).
   [] ->
     let threads' = fmap (\(t,a:|_) -> (t,a)) threads
         choices  = init trc prior threads'
-    in  case choices of
-          (nextTid:rest) -> (Just nextTid, s { _sbpoints = _sbpoints s |> (threads', rest) })
-          [] -> (Nothing, s { _sbpoints = _sbpoints s |> (threads', []) })
+        checkDep t a = case prior of
+          Just (tid, act) -> dependent memtype unknownCRState (tid, act) (t, a)
+          Nothing -> False
+        ssleep'  = M.filterWithKey (\t a -> not $ checkDep t a) $ _ssleep s
+        choices' = filter (`notElem` M.keys ssleep') choices
+        signore' = not (null choices) && all (`elem` M.keys ssleep') choices
+    in  case choices' of
+          (nextTid:rest) -> (Just nextTid, s { _sbpoints = _sbpoints s |> (threads', rest), _ssleep = ssleep' })
+          [] -> (Nothing, s { _sbpoints = _sbpoints s |> (threads', []), _signore = signore' })
 
 -- | Pick a new thread to run, which does not exceed the bound. Choose
 -- the current thread if available and it hasn't just yielded,
