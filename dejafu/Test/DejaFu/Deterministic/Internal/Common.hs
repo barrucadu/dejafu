@@ -627,7 +627,7 @@ data Failure =
   -- ^ The computation became blocked indefinitely on @CTVar@s.
   | UncaughtException
   -- ^ An uncaught exception bubbled to the top of the computation.
-  deriving (Eq, Show)
+  deriving (Eq, Show, Read, Ord, Enum, Bounded)
 
 instance NFData Failure where
   rnf f = f `seq` () -- WHNF == NF
@@ -660,7 +660,7 @@ data MemType =
   -- committed, which may happen later. Writes to different 'CRef's
   -- are not necessarily committed in the same order that they are
   -- created.
-  deriving (Eq, Show, Read)
+  deriving (Eq, Show, Read, Ord, Enum, Bounded)
 
 instance NFData MemType where
   rnf m = m `seq` () -- WHNF == NF
