@@ -274,16 +274,16 @@ activeTid = foldl' tidOf 0
 -- | Check if an action is dependent on another.
 dependent :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, ThreadAction) -> Bool
 dependent _ _ (_, Lift) (_, Lift) = True
-dependent _ _ (_, ThrowTo t) (t2, _) = t == t2
-dependent _ _ (t2, _) (_, ThrowTo t) = t == t2
+dependent _ _ (_, ThrowTo t) (t2, a) = t == t2 && a /= Stop
+dependent _ _ (t2, a) (_, ThrowTo t) = t == t2 && a /= Stop
 dependent _ _ (_, STM _) (_, STM _) = True
 dependent memtype buf (_, d1) (_, d2) = dependentActions memtype buf (simplify d1) (simplify d2)
 
 -- | Variant of 'dependent' to handle 'ThreadAction''s
 dependent' :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool
 dependent' _ _ (_, Lift) (_, WillLift) = True
-dependent' _ _ (_, ThrowTo t) (t2, _)     = t == t2
-dependent' _ _ (t2, _) (_, WillThrowTo t) = t == t2
+dependent' _ _ (_, ThrowTo t) (t2, a)     = t == t2 && a /= WillStop
+dependent' _ _ (t2, a) (_, WillThrowTo t) = t == t2 && a /= Stop
 dependent' _ _ (_, STM _) (_, WillSTM) = True
 dependent' memtype buf (_, d1) (_, d2) = dependentActions memtype buf (simplify d1) (simplify' d2)
 
