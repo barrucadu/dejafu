@@ -4,7 +4,7 @@
 module Test.DejaFu.SCT.Internal where
 
 import Control.DeepSeq (NFData(..))
-import Data.List (foldl', partition, sortBy)
+import Data.List (foldl', partition, sortBy, intercalate)
 import Data.Map.Strict (Map)
 import Data.Maybe (mapMaybe, isJust, fromJust, listToMaybe)
 import Data.Ord (Down(..), comparing)
@@ -67,6 +67,29 @@ data BPOR = BPOR
   -- ^ What happened at this step. This will be 'Nothing' at the root,
   -- 'Just' everywhere else.
   }
+
+-- | Render a 'BPOR' value as a graph in GraphViz \"dot\" format.
+toDot :: BPOR -> String
+toDot bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
+  go l b = unlines $ node l b : [edge l l' i ++ go l' b' | (i, b') <- M.toList (_bdone b), let l' = l ++ show' i]
+
+  -- Display a labelled node.
+  node n b = n ++ " [label=\"" ++ label b ++ "\"]"
+
+  -- A node label, summary of the BPOR state at that node.
+  label b = intercalate ","
+    [ show $ _baction b
+    , "Run:" ++ show (S.toList $ _brunnable b)
+    , "Tod:" ++ show (M.keys   $ _btodo     b)
+    , "Ign:" ++ show (S.toList $ _bignore   b)
+    , "Slp:" ++ show (M.toList $ _bsleep    b)
+    ]
+
+  -- Display a labelled edge
+  edge n1 n2 l = n1 ++ "-> " ++ n2 ++ " [label=\"" ++ show l ++ "\"]\n"
+
+  -- Show a number, replacing a minus sign for \"N\".
+  show' i = if i < 0 then "N" ++ show (negate i) else show i
 
 -- | Initial BPOR state.
 initialState :: BPOR
