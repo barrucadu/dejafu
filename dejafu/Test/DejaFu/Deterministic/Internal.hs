@@ -109,22 +109,22 @@ runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s x -> CTVarId -
            -> Scheduler g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace')
 runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer where
   go idSource sofar prior g threads wb
-    | isTerminated  = stop
-    | isDeadlocked  = die Deadlock
-    | isSTMLocked   = die STMDeadlock
-    | isAborted     = die Abort
-    | isNonexistant = die InternalError
-    | isBlocked     = die InternalError
+    | isTerminated  = stop g
+    | isDeadlocked  = die g Deadlock
+    | isSTMLocked   = die g STMDeadlock
+    | isAborted     = die g' Abort
+    | isNonexistant = die g' InternalError
+    | isBlocked     = die g' InternalError
     | otherwise = do
       stepped <- stepThread fixed runstm memtype (_continuation $ fromJust thread) idSource chosen threads wb
       case stepped of
         Right (threads', idSource', act, wb') -> loop threads' idSource' act wb'
 
         Left UncaughtException
-          | chosen == 0 -> die UncaughtException
+          | chosen == 0 -> die g' UncaughtException
           | otherwise -> loop (kill chosen threads) idSource Killed wb
 
-        Left failure -> die failure
+        Left failure -> die g' failure
 
     where
       (choice, g')  = sched g (map (\(d,_,a) -> (d,a)) $ reverse sofar) ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ unsafeToNonEmpty runnable'
@@ -159,8 +159,8 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
 
       nextActions t = lookahead . _continuation . fromJust $ M.lookup t threadsc
 
-      stop = return (g, idSource, sofar)
-      die reason = writeRef fixed ref (Just $ Left reason) >> stop
+      stop outg = return (outg, idSource, sofar)
+      die  outg reason = writeRef fixed ref (Just $ Left reason) >> stop outg
 
       loop threads' idSource' act wb' =
         let sofar' = ((decision, alternatives, act) : sofar)
