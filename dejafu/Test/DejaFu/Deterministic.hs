@@ -102,11 +102,11 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
   forkWithUnmask  ma = toConc (AFork (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop)))
   forkOnWithUnmask _ = C.forkWithUnmask
 
-  -- This implementation lies and always returns 2. There is no way to
-  -- verify in the computation that this is a lie, and will
-  -- potentially avoid special-case behaviour for 1 capability, so it
-  -- seems a sane choice.
-  getNumCapabilities = return 2
+  -- This implementation lies and returns 2 until a value is set. This
+  -- will potentially avoid special-case behaviour for 1 capability,
+  -- so it seems a sane choice.
+  getNumCapabilities      = toConc AGetNumCapabilities
+  setNumCapabilities caps = toConc (\c -> ASetNumCapabilities caps (c ()))
 
   myThreadId = toConc AMyTId
 

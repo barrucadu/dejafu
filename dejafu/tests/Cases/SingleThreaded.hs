@@ -39,6 +39,8 @@ tests = test
   , testDejafu excCatchAll "excCatchAll" $ gives' [(True, True)]
   , testDejafu excSTM      "excSTM"      $ gives' [True]
 
+  , testDejafu capsGet "capsGet" $ gives' [True]
+  , testDejafu capsSet "capsSet" $ gives' [True]
   ]
 
 --------------------------------------------------------------------------------
@@ -219,3 +221,17 @@ excSTM :: MonadConc m => m Bool
 excSTM = catchArithException
   (atomically $ throwSTM Overflow)
   (\_ -> return True)
+
+--------------------------------------------------------------------------------
+-- Capabilities
+
+-- | Check that the capabilities are consistent when retrieved.
+capsGet :: MonadConc m => m Bool
+capsGet = (==) <$> getNumCapabilities <*> getNumCapabilities
+
+-- | Check that the capabilities can be set.
+capsSet :: MonadConc m => m Bool
+capsSet = do
+  caps <- getNumCapabilities
+  setNumCapabilities $ caps + 1
+  (== caps + 1) <$> getNumCapabilities

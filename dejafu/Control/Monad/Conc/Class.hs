@@ -112,6 +112,9 @@ class ( Applicative m, Monad m
   -- | Get the number of Haskell threads that can run simultaneously.
   getNumCapabilities :: m Int
 
+  -- | Set the number of Haskell threads that can run simultaneously.
+  setNumCapabilities :: Int -> m ()
+
   -- | Get the @ThreadId@ of the current thread.
   myThreadId :: m (ThreadId m)
 
@@ -315,6 +318,7 @@ instance MonadConc IO where
   forkOn         = C.forkOn
   forkOnWithUnmask = C.forkOnWithUnmask
   getNumCapabilities = C.getNumCapabilities
+  setNumCapabilities = C.setNumCapabilities
   myThreadId     = C.myThreadId
   yield          = C.yield
   throwTo        = C.throwTo
@@ -393,6 +397,7 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   forkOnWithUnmask i ma = ReaderT $ \r -> forkOnWithUnmask i (\f -> runReaderT (ma $ reader f) r)
 
   getNumCapabilities = lift getNumCapabilities
+  setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
   throwTo t          = lift . throwTo t
@@ -432,6 +437,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   forkOnWithUnmask i ma = lift $ forkOnWithUnmask i (\f -> fst `liftM` WL.runWriterT (ma $ writerlazy f))
 
   getNumCapabilities = lift getNumCapabilities
+  setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
   throwTo t          = lift . throwTo t
@@ -471,6 +477,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   forkOnWithUnmask i ma = lift $ forkOnWithUnmask i (\f -> fst `liftM` WS.runWriterT (ma $ writerstrict f))
 
   getNumCapabilities = lift getNumCapabilities
+  setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
   throwTo t          = lift . throwTo t
@@ -510,6 +517,7 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   forkOnWithUnmask i ma = SL.StateT $ \s -> (\a -> (a,s)) `liftM` forkOnWithUnmask i (\f -> SL.evalStateT (ma $ statelazy f) s)
 
   getNumCapabilities = lift getNumCapabilities
+  setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
   throwTo t          = lift . throwTo t
@@ -549,6 +557,7 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   forkOnWithUnmask i ma = SS.StateT $ \s -> (\a -> (a,s)) `liftM` forkOnWithUnmask i (\f -> SS.evalStateT (ma $ statestrict f) s)
 
   getNumCapabilities = lift getNumCapabilities
+  setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
   throwTo t          = lift . throwTo t
@@ -588,6 +597,7 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   forkOnWithUnmask i ma = RL.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkOnWithUnmask i (\f -> fst `liftM` RL.evalRWST (ma $ rwslazy f) r s)
 
   getNumCapabilities = lift getNumCapabilities
+  setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
   throwTo t          = lift . throwTo t
@@ -627,6 +637,7 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   forkOnWithUnmask i ma = RS.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkOnWithUnmask i (\f -> fst `liftM` RS.evalRWST (ma $ rwsstrict f) r s)
 
   getNumCapabilities = lift getNumCapabilities
+  setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
   throwTo t          = lift . throwTo t

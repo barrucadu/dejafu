@@ -304,6 +304,9 @@ dependent _ _ (_, Lift) (_, Lift) = True
 dependent _ _ (_, ThrowTo t) (t2, a) = t == t2 && a /= Stop
 dependent _ _ (t2, a) (_, ThrowTo t) = t == t2 && a /= Stop
 dependent _ _ (_, STM _) (_, STM _) = True
+dependent _ _ (_, GetNumCapabilities a) (_, SetNumCapabilities b) = a /= b
+dependent _ _ (_, SetNumCapabilities a) (_, GetNumCapabilities b) = a /= b
+dependent _ _ (_, SetNumCapabilities a) (_, SetNumCapabilities b) = a /= b
 dependent memtype buf (_, d1) (_, d2) = dependentActions memtype buf (simplify d1) (simplify d2)
 
 -- | Variant of 'dependent' to handle 'ThreadAction''s
@@ -312,6 +315,9 @@ dependent' _ _ (_, Lift) (_, WillLift) = True
 dependent' _ _ (_, ThrowTo t) (t2, a)     = t == t2 && a /= WillStop
 dependent' _ _ (t2, a) (_, WillThrowTo t) = t == t2 && a /= Stop
 dependent' _ _ (_, STM _) (_, WillSTM) = True
+dependent' _ _ (_, GetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
+dependent' _ _ (_, SetNumCapabilities a) (_, WillGetNumCapabilities)   = True
+dependent' _ _ (_, SetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
 dependent' memtype buf (_, d1) (_, d2) = dependentActions memtype buf (simplify d1) (simplify' d2)
 
 -- | Check if two 'ActionType's are dependent. Note that this is not

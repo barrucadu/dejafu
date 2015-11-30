@@ -86,6 +86,9 @@ data Action n r s =
     AFork  ((forall b. M n r s b -> M n r s b) -> Action n r s) (ThreadId -> Action n r s)
   | AMyTId (ThreadId -> Action n r s)
 
+  | AGetNumCapabilities (Int -> Action n r s)
+  | ASetNumCapabilities Int (Action n r s)
+
   | forall a. ANewVar     (CVar r a -> Action n r s)
   | forall a. APutVar     (CVar r a) a (Action n r s)
   | forall a. ATryPutVar  (CVar r a) a (Bool -> Action n r s)
@@ -242,6 +245,10 @@ data ThreadAction =
   -- ^ Start a new thread.
   | MyThreadId
   -- ^ Get the 'ThreadId' of the current thread.
+  | GetNumCapabilities Int
+  -- ^ Get the number of Haskell threads that can run simultaneously.
+  | SetNumCapabilities Int
+  -- ^ Set the number of Haskell threads that can run simultaneously.
   | Yield
   -- ^ Yield the current thread.
   | NewVar CVarId
@@ -328,6 +335,8 @@ data ThreadAction =
 
 instance NFData ThreadAction where
   rnf (Fork t) = rnf t
+  rnf (GetNumCapabilities i) = rnf i
+  rnf (SetNumCapabilities i) = rnf i
   rnf (NewVar c) = rnf c
   rnf (PutVar c ts) = rnf (c, ts)
   rnf (BlockedPutVar c) = rnf c
@@ -359,6 +368,12 @@ data Lookahead =
   -- ^ Will start a new thread.
   | WillMyThreadId
   -- ^ Will get the 'ThreadId'.
+  | WillGetNumCapabilities
+  -- ^ Will get the number of Haskell threads that can run
+  -- simultaneously.
+  | WillSetNumCapabilities Int
+  -- ^ Will set the number of Haskell threads that can run
+  -- simultaneously.
   | WillYield
   -- ^ Will yield the current thread.
   | WillNewVar
@@ -428,6 +443,7 @@ data Lookahead =
   deriving (Eq, Show)
 
 instance NFData Lookahead where
+  rnf (WillSetNumCapabilities i) = rnf i
   rnf (WillPutVar c) = rnf c
   rnf (WillTryPutVar c) = rnf c
   rnf (WillReadVar c) = rnf c
@@ -451,6 +467,8 @@ lookahead :: Action n r s -> NonEmpty Lookahead
 lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (AFork _ _)             = [WillFork]
   lookahead' (AMyTId _)              = [WillMyThreadId]
+  lookahead' (AGetNumCapabilities _) = [WillGetNumCapabilities]
+  lookahead' (ASetNumCapabilities i k) = WillSetNumCapabilities i : lookahead' k
   lookahead' (ANewVar _)             = [WillNewVar]
   lookahead' (APutVar (CVar (c, _)) _ k)    = WillPutVar c : lookahead' k
   lookahead' (ATryPutVar (CVar (c, _)) _ _) = [WillTryPutVar c]

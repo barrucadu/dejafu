@@ -109,8 +109,8 @@ runFixed' fixed runstm sched memtype s idSource ma = do
 -- watch out for.
 runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s x -> CTVarId -> n (Result x, CTVarId))
            -> Scheduler g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace')
-runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer where
-  go idSource sofar prior g threads wb
+runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer 2 where
+  go idSource sofar prior g threads wb caps
     | isTerminated  = stop g
     | isDeadlocked  = die g Deadlock
     | isSTMLocked   = die g STMDeadlock
@@ -118,13 +118,13 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
     | isNonexistant = die g' InternalError
     | isBlocked     = die g' InternalError
     | otherwise = do
-      stepped <- stepThread fixed runstm memtype (_continuation $ fromJust thread) idSource chosen threads wb
+      stepped <- stepThread fixed runstm memtype (_continuation $ fromJust thread) idSource chosen threads wb caps
       case stepped of
-        Right (threads', idSource', act, wb') -> loop threads' idSource' act wb'
+        Right (threads', idSource', act, wb', caps') -> loop threads' idSource' act wb' caps'
 
         Left UncaughtException
           | chosen == 0 -> die g' UncaughtException
-          | otherwise -> loop (kill chosen threads) idSource Killed wb
+          | otherwise -> loop (kill chosen threads) idSource Killed wb caps
 
         Left failure -> die g' failure
 
@@ -189,10 +189,14 @@ stepThread :: forall n r s. (Functor n, Monad n) => Fixed n r s
   -- ^ Current state of threads
   -> WriteBuffer r
   -- ^ @CRef@ write buffer
-  -> n (Either Failure (Threads n r s, IdSource, ThreadAction, WriteBuffer r))
-stepThread fixed runstm memtype action idSource tid threads wb = case action of
+  -> Int
+  -- ^ The number of capabilities
+  -> n (Either Failure (Threads n r s, IdSource, ThreadAction, WriteBuffer r, Int))
+stepThread fixed runstm memtype action idSource tid threads wb caps = case action of
   AFork    a b     -> stepFork        a b
   AMyTId   c       -> stepMyTId       c
+  AGetNumCapabilities   c -> stepGetNumCapabilities c
+  ASetNumCapabilities i c -> stepSetNumCapabilities i c
   AYield   c       -> stepYield       c
   ANewVar  c       -> stepNewVar      c
   APutVar  var a c -> stepPutVar      var a c
@@ -225,12 +229,18 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
 
   where
     -- | Start a new thread, assigning it the next 'ThreadId'
-    stepFork a b = return $ Right (goto (b newtid) tid threads', idSource', Fork newtid, wb) where
+    stepFork a b = return $ Right (goto (b newtid) tid threads', idSource', Fork newtid, wb, caps) where
       threads' = launch tid newtid a threads
       (idSource', newtid) = nextTId idSource
 
     -- | Get the 'ThreadId' of the current thread
     stepMyTId c = simple (goto (c tid) tid threads) MyThreadId
+
+    -- | Get the number of capabilities
+    stepGetNumCapabilities c = simple (goto (c caps) tid threads) $ GetNumCapabilities caps
+
+    -- | Set the number of capabilities
+    stepSetNumCapabilities i c = return $ Right (goto c tid threads, idSource, SetNumCapabilities i, wb, i)
 
     -- | Yield the current thread
     stepYield c = simple (goto c tid threads) Yield
@@ -300,13 +310,13 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       TotalStoreOrder -> do
         let (ThreadId tid') = tid
         wb' <- bufferWrite fixed wb tid' cref a tid
-        return $ Right (goto c tid threads, idSource, WriteRef crid, wb')
+        return $ Right (goto c tid threads, idSource, WriteRef crid, wb', caps)
 
       -- Add to buffer using cref id
       PartialStoreOrder -> do
         let (CRefId crid') = crid
         wb' <- bufferWrite fixed wb crid' cref a tid
-        return $ Right (goto c tid threads, idSource, WriteRef crid, wb')
+        return $ Right (goto c tid threads, idSource, WriteRef crid, wb', caps)
 
     -- | Perform a compare-and-swap on a @CRef@.
     stepCasRef cref@(CRef (crid, _)) tick a c = synchronised $ do
@@ -326,7 +336,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
         -- Commit using the cref id.
         PartialStoreOrder -> commitWrite fixed wb c'
 
-      return $ Right (threads, idSource, CommitRef t c, wb')
+      return $ Right (threads, idSource, CommitRef t c, wb', caps)
 
     -- | Run a STM transaction atomically.
     stepAtom stm c = synchronised $ do
@@ -336,12 +346,12 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
         Success readen written val
           | any (<oldctvid) readen || any (<oldctvid) written ->
             let (threads', woken) = wake (OnCTVar written) threads
-            in return $ Right (knows (map Right written) tid $ goto (c val) tid threads', idSource { _nextCTVId = newctvid }, STM woken, wb)
+            in return $ Right (knows (map Right written) tid $ goto (c val) tid threads', idSource { _nextCTVId = newctvid }, STM woken, wb, caps)
           | otherwise ->
-           return $ Right (knows (map Right written) tid $ goto (c val) tid threads, idSource { _nextCTVId = newctvid }, FreshSTM, wb)
+           return $ Right (knows (map Right written) tid $ goto (c val) tid threads, idSource { _nextCTVId = newctvid }, FreshSTM, wb, caps)
         Retry touched ->
           let threads' = block (OnCTVar touched) tid threads
-          in return $ Right (threads', idSource { _nextCTVId = newctvid }, BlockedSTM, wb)
+          in return $ Right (threads', idSource { _nextCTVId = newctvid }, BlockedSTM, wb, caps)
         Exception e -> stepThrow e
 
     -- | Run a subcomputation in an exception-catching context.
@@ -386,7 +396,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
     stepMasking :: MaskingState
                 -> ((forall b. M n r s b -> M n r s b) -> M n r s a)
                 -> (a -> Action n r s)
-                -> n (Either Failure (Threads n r s, IdSource, ThreadAction, WriteBuffer r))
+                -> n (Either Failure (Threads n r s, IdSource, ThreadAction, WriteBuffer r, Int))
     stepMasking m ma c = simple threads' $ SetMasking False m where
       a = runCont (ma umask) (AResetMask False False m' . c)
 
@@ -406,14 +416,14 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       let (idSource', newcvid) = nextCVId idSource
       ref <- newRef fixed Nothing
       let cvar = CVar (newcvid, ref)
-      return $ Right (knows [Left newcvid] tid $ goto (c cvar) tid threads, idSource', NewVar newcvid, wb)
+      return $ Right (knows [Left newcvid] tid $ goto (c cvar) tid threads, idSource', NewVar newcvid, wb, caps)
 
     -- | Create a new @CRef@, using the next 'CRefId'.
     stepNewRef a c = do
       let (idSource', newcrid) = nextCRId idSource
       ref <- newRef fixed (M.empty, 0, a)
       let cref = CRef (newcrid, ref)
-      return $ Right (goto (c cref) tid threads, idSource', NewRef newcrid, wb)
+      return $ Right (goto (c cref) tid threads, idSource', NewRef newcrid, wb, caps)
 
     -- | Lift an action from the underlying monad into the @Conc@
     -- computation.
@@ -438,7 +448,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
 
     -- | Helper for actions which don't touch the 'IdSource' or
     -- 'WriteBuffer'
-    simple threads' act = return $ Right (threads', idSource, act, wb)
+    simple threads' act = return $ Right (threads', idSource, act, wb, caps)
 
     -- | Helper for actions impose a write barrier.
     synchronised ma = do
@@ -446,7 +456,7 @@ stepThread fixed runstm memtype action idSource tid threads wb = case action of
       res <- ma
 
       return $ case res of
-        Right (threads', idSource', act', _) -> Right (threads', idSource', act', emptyBuffer)
+        Right (threads', idSource', act', _, caps') -> Right (threads', idSource', act', emptyBuffer, caps')
         _ -> res
 
     -- | Helper function for wrapping up exceptions.
