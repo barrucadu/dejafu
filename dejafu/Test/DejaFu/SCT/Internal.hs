@@ -329,11 +329,13 @@ dependentActions memtype buf a1 a2 = case (a1, a2) of
   -- a relaxed memory model, as an unsynchronised write gives rise to
   -- a commit, which synchronises.
   (UnsynchronisedRead  r1, UnsynchronisedWrite r2) -> r1 == r2
+  (UnsynchronisedWrite r1, UnsynchronisedRead  r2) -> r1 == r2
   (UnsynchronisedWrite r1, UnsynchronisedWrite r2) -> r1 == r2
 
   -- Unsynchronised reads where a memory barrier would flush a
   -- buffered write
   (UnsynchronisedRead r1, _) | isBarrier a2 -> isBuffered buf r1 && memtype /= SequentialConsistency
+  (_, UnsynchronisedRead r2) | isBarrier a1 -> isBuffered buf r2 && memtype /= SequentialConsistency
 
   (_, _)
     -- Two actions on the same CRef where at least one is synchronised
