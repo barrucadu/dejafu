@@ -6,6 +6,7 @@ import qualified Cases.SingleThreaded as ST
 import qualified Cases.MultiThreaded  as MT
 import qualified Cases.Litmus         as L
 import qualified Examples.Logger      as EL
+import qualified Examples.ClassLaws   as EC
 
 main :: IO ()
 main = defaultMain
@@ -16,5 +17,6 @@ main = defaultMain
     ]
   , testGroup "Examples"
     [ testGroup "Message Logger" EL.tests
+    , testGroup "Class Laws"     EC.tests
     ]
   ]

@@ -127,6 +127,8 @@ test-suite tests
                      , exceptions
                      , HUnit
                      , hunit-dejafu
+                     , QuickCheck
                      , test-framework
                      , test-framework-hunit
+                     , test-framework-quickcheck2
   default-language:    Haskell2010
