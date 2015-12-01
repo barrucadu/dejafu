@@ -206,6 +206,9 @@ module Test.DejaFu
 
   , Predicate
   , representative
+  , abortsNever
+  , abortsAlways
+  , abortsSometimes
   , deadlocksNever
   , deadlocksAlways
   , deadlocksSometimes
@@ -449,6 +452,18 @@ representative p xs = result { _failures = choose . collect $ _failures result }
   insert' eq x (ys@(y:_):yss)
     | x `eq` y  = (x:ys) : yss
     | otherwise = ys : insert' eq x yss
+
+-- | Check that a computation never aborts.
+abortsNever :: Predicate a
+abortsNever = alwaysTrue (not . either (==Abort) (const False))
+
+-- | Check that a computation always aborts.
+abortsAlways :: Predicate a
+abortsAlways = alwaysTrue $ either (==Abort) (const False)
+
+-- | Check that a computation aborts at least once.
+abortsSometimes :: Predicate a
+abortsSometimes = somewhereTrue $ either (==Abort) (const False)
 
 -- | Check that a computation never deadlocks.
 deadlocksNever :: Predicate a

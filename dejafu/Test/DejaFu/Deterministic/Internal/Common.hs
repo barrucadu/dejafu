@@ -638,7 +638,10 @@ data Failure =
   -- never arise unless you write your own, faulty, scheduler! If it
   -- does, please file a bug report.
   | Abort
-  -- ^ The scheduler chose to abort execution.
+  -- ^ The scheduler chose to abort execution. This will be produced
+  -- if, for example, all possible decisions exceed the specified
+  -- bounds (there have been too many pre-emptions, the computation
+  -- has executed for too long, or there have been too many yields).
   | Deadlock
   -- ^ The computation became blocked indefinitely on @CVar@s.
   | STMDeadlock
