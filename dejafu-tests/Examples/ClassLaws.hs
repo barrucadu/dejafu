@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
@@ -21,6 +22,11 @@ import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.QuickCheck (Arbitrary(..), expectFailure, monomorphic)
 import Test.QuickCheck.Function (Fun, apply)
 import Unsafe.Coerce (unsafeCoerce)
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>), (<*>))
+import Data.Monoid (Monoid(..))
+#endif
 
 -- Tests at bottom of file due to Template Haskell silliness.
 

@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Cases.SingleThreaded (tests) where
 
 import Control.Exception (ArithException(..), ArrayException(..))
@@ -12,6 +14,10 @@ import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
 
 import Utils
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>), (<*>))
+#endif
 
 tests :: [Test]
 tests =

@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Cases.Litmus (tests) where
 
 import Test.DejaFu (MemType(..), defaultBounds, gives')
@@ -7,6 +9,10 @@ import Test.HUnit (test)
 import Test.HUnit.DejaFu (testDejafu')
 
 import Control.Monad.Conc.Class
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>), (<*>))
+#endif
 
 tests :: [Test]
 tests = hUnitTestToTests $ test

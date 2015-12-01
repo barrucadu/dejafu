@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ImpredicativeTypes #-}
 
 module Cases.MultiThreaded (tests) where
@@ -12,6 +13,10 @@ import Test.HUnit.DejaFu (testDejafu)
 import Control.Concurrent.CVar
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>), (<*>))
+#endif
 
 tests :: [Test]
 tests =
