@@ -91,6 +91,32 @@ toDot bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
   -- Show a number, replacing a minus sign for \"N\".
   show' i = if i < 0 then "N" ++ show (negate i) else show i
 
+-- | Variant of 'toDot' which doesn't include aborted subtrees.
+toDotSmall :: BPOR -> String
+toDotSmall bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
+  go l b = unlines $ node l b : [edge l l' i ++ go l' b' | (i, b') <- M.toList (_bdone b), check b', let l' = l ++ show' i]
+
+  -- Check that a subtree has at least one non-aborted branch.
+  check b = null (_brunnable b) || any check (M.elems $ _bdone b)
+
+  -- Display a labelled node.
+  node n b = n ++ " [label=\"" ++ label b ++ "\"]"
+
+  -- A node label, summary of the BPOR state at that node.
+  label b = intercalate ","
+    [ show $ _baction b
+    , "Run:" ++ show (S.toList $ _brunnable b)
+    , "Tod:" ++ show (M.keys   $ _btodo     b)
+    , "Ign:" ++ show (S.toList $ _bignore   b)
+    , "Slp:" ++ show (M.toList $ _bsleep    b)
+    ]
+
+  -- Display a labelled edge
+  edge n1 n2 l = n1 ++ "-> " ++ n2 ++ " [label=\"" ++ show l ++ "\"]\n"
+
+  -- Show a number, replacing a minus sign for \"N\".
+  show' i = if i < 0 then "N" ++ show (negate i) else show i
+
 -- | Initial BPOR state.
 initialState :: BPOR
 initialState = BPOR
