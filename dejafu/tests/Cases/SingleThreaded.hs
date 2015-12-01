@@ -2,7 +2,9 @@ module Cases.SingleThreaded (tests) where
 
 import Control.Exception (ArithException(..), ArrayException(..))
 import Test.DejaFu (Failure(..), gives, gives')
-import Test.HUnit (Test, test)
+import Test.Framework (Test, testGroup)
+import Test.Framework.Providers.HUnit (hUnitTestToTests)
+import Test.HUnit (test)
 import Test.HUnit.DejaFu (testDejafu)
 
 import Control.Concurrent.CVar
@@ -11,36 +13,46 @@ import Control.Monad.STM.Class
 
 import Utils
 
-tests :: Test
-tests = test
-  [ testDejafu emptyCVarTake "emptyCVarTake" $ gives' [True]
-  , testDejafu emptyCVarPut  "emptyCVarPut"  $ gives' [()]
-  , testDejafu fullCVarPut   "fullCVarPut"   $ gives' [True]
-  , testDejafu fullCVarTake  "fullCVarTake"  $ gives' [True]
-  , testDejafu fullCVarRead  "fullCVarRead"  $ gives' [True]
+tests :: [Test]
+tests =
+  [ testGroup "CVar" . hUnitTestToTests $ test
+    [ testDejafu emptyCVarTake "empty take" $ gives' [True]
+    , testDejafu emptyCVarPut  "empty put"  $ gives' [()]
+    , testDejafu fullCVarPut   "full put"   $ gives' [True]
+    , testDejafu fullCVarTake  "full take"  $ gives' [True]
+    , testDejafu fullCVarRead  "full read"  $ gives' [True]
+    ]
 
-  , testDejafu crefRead       "crefRead"       $ gives' [True]
-  , testDejafu crefWrite      "crefWrite"      $ gives' [True]
-  , testDejafu crefModify     "crefModify"     $ gives' [True]
-  , testDejafu crefTicketPeek "crefTicketPeek" $ gives' [True]
-  , testDejafu crefCas1       "crefCas1"       $ gives' [(True, True)]
-  , testDejafu crefCas2       "crefCas2"       $ gives' [(False, False)]
+  , testGroup "CRef" . hUnitTestToTests $ test
+    [ testDejafu crefRead       "read"        $ gives' [True]
+    , testDejafu crefWrite      "write"       $ gives' [True]
+    , testDejafu crefModify     "modify"      $ gives' [True]
+    , testDejafu crefTicketPeek "ticket peek" $ gives' [True]
+    , testDejafu crefCas1       "cas"         $ gives' [(True, True)]
+    , testDejafu crefCas2       "cas (modified)" $ gives' [(False, False)]
+    ]
 
-  , testDejafu stmWrite    "stmWrite"    $ gives' [True]
-  , testDejafu stmPreserve "stmPreserve" $ gives' [True]
-  , testDejafu stmRetry    "stmRetry"    $ gives  [Left STMDeadlock]
-  , testDejafu stmOrElse   "stmOrElse"   $ gives' [True]
-  , testDejafu stmCatch1   "stmCatch1"   $ gives' [True]
-  , testDejafu stmCatch2   "stmCatch2"   $ gives' [True]
+  , testGroup "STM" . hUnitTestToTests $ test
+    [ testDejafu stmWrite    "write"   $ gives' [True]
+    , testDejafu stmPreserve "write (across transactions)" $ gives' [True]
+    , testDejafu stmRetry    "retry"   $ gives  [Left STMDeadlock]
+    , testDejafu stmOrElse   "or else" $ gives' [True]
+    , testDejafu stmCatch1   "single catch" $ gives' [True]
+    , testDejafu stmCatch2   "nested catch" $ gives' [True]
+    ]
 
-  , testDejafu excCatch    "excCatch"    $ gives' [True]
-  , testDejafu excNest     "excNest"     $ gives' [True]
-  , testDejafu excEscape   "excEscape"   $ gives  [Left UncaughtException]
-  , testDejafu excCatchAll "excCatchAll" $ gives' [(True, True)]
-  , testDejafu excSTM      "excSTM"      $ gives' [True]
+  , testGroup "Exceptions" . hUnitTestToTests $ test
+    [ testDejafu excCatch    "single catch" $ gives' [True]
+    , testDejafu excNest     "nested catch" $ gives' [True]
+    , testDejafu excEscape   "uncaught"     $ gives  [Left UncaughtException]
+    , testDejafu excCatchAll "catch all"    $ gives' [(True, True)]
+    , testDejafu excSTM      "from stm"     $ gives' [True]
+    ]
 
-  , testDejafu capsGet "capsGet" $ gives' [True]
-  , testDejafu capsSet "capsSet" $ gives' [True]
+  , testGroup "Capabilities" . hUnitTestToTests $ test
+    [ testDejafu capsGet "get" $ gives' [True]
+    , testDejafu capsSet "set" $ gives' [True]
+    ]
   ]
 
 --------------------------------------------------------------------------------

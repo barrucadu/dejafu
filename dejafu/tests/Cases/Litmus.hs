@@ -1,13 +1,15 @@
 module Cases.Litmus (tests) where
 
 import Test.DejaFu (MemType(..), defaultBounds, gives')
-import Test.HUnit (Test, test)
+import Test.Framework (Test)
+import Test.Framework.Providers.HUnit (hUnitTestToTests)
+import Test.HUnit (test)
 import Test.HUnit.DejaFu (testDejafu')
 
 import Control.Monad.Conc.Class
 
-tests :: Test
-tests = test
+tests :: [Test]
+tests = hUnitTestToTests $ test
   [ testDejafu' SequentialConsistency defaultBounds iorefRelaxed "iorefRelaxed-SQ"  $
       gives' [(True, True), (True, False), (False, True)]
   , testDejafu' TotalStoreOrder defaultBounds iorefRelaxed "iorefRelaxed-TSO" $

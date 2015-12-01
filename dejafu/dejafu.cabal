@@ -121,5 +121,12 @@ test-suite tests
   hs-source-dirs:      tests
   type:                exitcode-stdio-1.0
   main-is:             Main.hs
-  build-depends:       base, dejafu, exceptions, HUnit, hunit-dejafu
+  build-depends:       base
+                     , containers
+                     , dejafu
+                     , exceptions
+                     , HUnit
+                     , hunit-dejafu
+                     , test-framework
+                     , test-framework-hunit
   default-language:    Haskell2010

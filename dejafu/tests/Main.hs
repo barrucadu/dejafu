@@ -1,7 +1,6 @@
 module Main (main) where
 
-import Data.Functor (void)
-import Test.HUnit (Test(..), runTestTT)
+import Test.Framework (defaultMain, testGroup)
 
 import qualified Cases.SingleThreaded as ST
 import qualified Cases.MultiThreaded  as MT
@@ -9,9 +8,13 @@ import qualified Cases.Litmus         as L
 import qualified Examples.Logger      as EL
 
 main :: IO ()
-main = void . runTestTT $ TestList
-  [ TestLabel "Single Threaded" ST.tests
-  , TestLabel "Multi Threaded"  MT.tests
-  , TestLabel "Litmus Tests"    L.tests
-  , TestLabel "Logger Example"  EL.tests
+main = defaultMain
+  [ testGroup "Test Cases"
+    [ testGroup "Single Threaded" ST.tests
+    , testGroup "Multi Threaded"  MT.tests
+    , testGroup "Litmus"          L.tests
+    ]
+  , testGroup "Examples"
+    [ testGroup "Message Logger" EL.tests
+    ]
   ]

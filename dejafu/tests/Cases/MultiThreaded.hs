@@ -4,29 +4,41 @@ module Cases.MultiThreaded (tests) where
 
 import Control.Monad (void)
 import Test.DejaFu (Failure(..), gives, gives')
-import Test.HUnit (Test, test)
+import Test.Framework (Test, testGroup)
+import Test.Framework.Providers.HUnit (hUnitTestToTests)
+import Test.HUnit (test)
 import Test.HUnit.DejaFu (testDejafu)
 
 import Control.Concurrent.CVar
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
 
-tests :: Test
-tests = test
-  [ testDejafu threadId1    "threadId1"    $ gives' [True]
-  , testDejafu threadId2    "threadId2"    $ gives' [True]
-  , testDejafu threadNoWait "threadNoWait" $ gives' [Nothing, Just ()]
+tests :: [Test]
+tests =
+  [ testGroup "Threading" . hUnitTestToTests $ test
+    [ testDejafu threadId1    "child thread ID"  $ gives' [True]
+    , testDejafu threadId2    "parent thread ID" $ gives' [True]
+    , testDejafu threadNoWait "no wait" $ gives' [Nothing, Just ()]
+    ]
 
-  , testDejafu cvarLock "cvarLock" $ gives [Left Deadlock, Right 0]
-  , testDejafu cvarRace "cvarRace" $ gives' [0,1]
+  , testGroup "CVar" . hUnitTestToTests $ test
+    [ testDejafu cvarLock "deadlock" $ gives [Left Deadlock, Right 0]
+    , testDejafu cvarRace "race"     $ gives' [0,1]
+    ]
 
-  , testDejafu crefRace "crefRace" $ gives' [0,1]
+  , testGroup "CRef" . hUnitTestToTests $ test
+    [ testDejafu crefRace "race" $ gives' [0,1]
+    ]
 
-  , testDejafu stmAtomic "stmAtomic" $ gives' [0,2]
+  , testGroup "STM" . hUnitTestToTests $ test
+    [ testDejafu stmAtomic "atomicity" $ gives' [0,2]
+    ]
 
-  , testDejafu threadKill      "threadKill"      $ gives  [Left Deadlock, Right ()]
-  , testDejafu threadKillMask  "threadKillMask"  $ gives' [()]
-  , testDejafu threadKillUmask "threadKillUmask" $ gives  [Left Deadlock, Right ()]
+  , testGroup "Killing Threads" . hUnitTestToTests $ test
+    [ testDejafu threadKill      "no masking" $ gives  [Left Deadlock, Right ()]
+    , testDejafu threadKillMask  "masked"     $ gives' [()]
+    , testDejafu threadKillUmask "unmasked"   $ gives  [Left Deadlock, Right ()]
+    ]
   ]
 
 --------------------------------------------------------------------------------
