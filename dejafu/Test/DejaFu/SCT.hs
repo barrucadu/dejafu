@@ -208,15 +208,14 @@ pbBound :: PreemptionBound -> BoundFunc
 pbBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb
 
 -- | Count the number of pre-emptions in a schedule prefix.
-preEmpCount :: [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Int
-preEmpCount ts (d, l) = go ts where
-  go ((d, a):rest) = preEmpC (d, Left a) + go rest
-  go [] = preEmpC (d, Right l)
+preEmpCount :: [(Decision, ThreadAction)] -> (Decision, a) -> Int
+preEmpCount ts (d, _) = go Nothing ts where
+  go p ((d, a):rest) = preEmpC p d + go (Just a) rest
+  go p [] = preEmpC p d
 
-  preEmpC (SwitchTo _, Left Yield) = 0
-  preEmpC (SwitchTo _, Right WillYield) = 0
-  preEmpC (SwitchTo t, _) = if t >= 0 then 1 else 0
-  preEmpC _ = 0
+  preEmpC (Just Yield) (SwitchTo _) = 0
+  preEmpC _ (SwitchTo t) = if t >= 0 then 1 else 0
+  preEmpC _ _ = 0
 
 -- | Count the number of pre-emptions in an entire trace
 preEmpCount' :: Trace -> Int
