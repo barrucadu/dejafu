@@ -97,7 +97,7 @@ toDotSmall bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
   go l b = unlines $ node l b : [edge l l' i ++ go l' b' | (i, b') <- M.toList (_bdone b), check b', let l' = l ++ show' i]
 
   -- Check that a subtree has at least one non-aborted branch.
-  check b = null (_brunnable b) || any check (M.elems $ _bdone b)
+  check b = S.null (_brunnable b) || any check (M.elems $ _bdone b)
 
   -- Display a labelled node.
   node n b = n ++ " [label=\"" ++ label b ++ "\"]"
