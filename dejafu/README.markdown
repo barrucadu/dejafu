@@ -17,15 +17,11 @@ nondeterministic concurrency, with an interface in the spirit of GHC's
 normal concurrency abstraction.
 
 The documentation of the latest developmental version is
-[available online][docs].
+[available online][docs]. Examples can be found in the test suite.
 
-**Note on running the test suite:** I can't seem to figure out how to
-have `cabal` or `stack` nicely build both dejafu and hunit-dejafu, and
-then run the dejafu test suite without getting conflicting package IDs
-(dejafu gets built at least twice, it seems). However, using
-`runhaskell` to execute Tests.hs from within the tests directory
-works. I expected this to just work, so I've filed an [issue][] with
-`stack` in the hope that this workflow becomes supported.
+**Note on the test suite:** This is in a separate project
+(dejafu-tests) because Cabal-the-library is a bit naff. See this
+[issue][].
 
 `MonadConc` and `IO`
 --------------------

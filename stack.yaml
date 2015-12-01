@@ -5,6 +5,7 @@ packages:
 - hunit-dejafu
 - tasty-dejafu
 - dejafu
+- dejafu-tests
 
 extra-deps:
 # Needed for building with lts-2
