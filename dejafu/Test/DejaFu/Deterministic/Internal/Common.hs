@@ -590,12 +590,12 @@ cvarOf _ = Nothing
 -- alternative scheduling decisions.
 simplify :: ThreadAction -> ActionType
 simplify (PutVar c _)       = SynchronisedWrite c
-simplify (BlockedPutVar _)  = SynchronisedOther
+simplify (BlockedPutVar c)  = SynchronisedWrite c
 simplify (TryPutVar c _ _)  = SynchronisedWrite c
 simplify (ReadVar c)        = SynchronisedRead c
-simplify (BlockedReadVar _) = SynchronisedOther
+simplify (BlockedReadVar c) = SynchronisedRead c
 simplify (TakeVar c _)      = SynchronisedRead c
-simplify (BlockedTakeVar _) = SynchronisedOther
+simplify (BlockedTakeVar c) = SynchronisedRead c
 simplify (TryTakeVar c _ _) = SynchronisedRead c
 simplify (ReadRef r)     = UnsynchronisedRead r
 simplify (ReadRefCas r)  = UnsynchronisedRead r
