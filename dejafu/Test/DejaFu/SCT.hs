@@ -44,6 +44,7 @@ module Test.DejaFu.SCT
 
   , Bounds(..)
   , defaultBounds
+  , noBounds
 
   , sctBound
   , sctBoundIO
@@ -152,6 +153,16 @@ defaultBounds = Bounds
   { preemptionBound = Just defaultPreemptionBound
   , fairBound       = Just defaultFairBound
   , lengthBound     = Just defaultLengthBound
+  }
+
+-- | No bounds enabled. This forces the scheduler to just use
+-- partial-order reduction and sleep sets to prune the search
+-- space. This will /ONLY/ work if your computation always terminated!
+noBounds :: Bounds
+noBounds = Bounds
+  { preemptionBound = Nothing
+  , fairBound       = Nothing
+  , lengthBound     = Nothing
   }
 
 -- | An SCT runner using a bounded scheduler

@@ -169,6 +169,7 @@ module Test.DejaFu
 
   , Bounds(..)
   , defaultBounds
+  , noBounds
   , PreemptionBound(..)
   , defaultPreemptionBound
   , FairBound(..)
