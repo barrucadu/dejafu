@@ -91,6 +91,7 @@ module Test.DejaFu.SCT
 
   , (&+&)
   , trueBound
+  , backtrackAt
   , tidOf
   , decisionOf
   , activeTid
@@ -179,6 +180,43 @@ cBacktrack (Bounds pb fb lb) bs i t = lBack . fBack $ pBack bs where
   fBack backs = if isJust fb then fBacktrack  backs i t else backs
   lBack backs = if isJust lb then lBacktrack  backs i t else backs
 
+-- | Add a backtracking point. If the thread isn't runnable, add all
+-- runnable threads.
+--
+-- If the backtracking point is already present, don't re-add it
+-- UNLESS this is a conservative backtracking point.
+backtrackAt :: (BacktrackStep -> Bool)
+  -- ^ If this returns @True@, backtrack to all runnable threads,
+  -- rather than just the given thread.
+  -> Bool
+  -- ^ Is this backtracking point conservative? Conservative points
+  -- are always explored, whereas non-conservative ones might be
+  -- skipped based on future information.
+  -> [BacktrackStep]
+  -- ^ Original list of backtracking steps.
+  -> Int
+  -- ^ Index in the list to add the step. MUST be in the list.
+  -> ThreadId
+  -- ^ The thread to backtrack to. If not runnable at that step, all
+  -- runnable threads will be backtracked to instead.
+  -> [BacktrackStep]
+backtrackAt toAll conservative bs i tid = go bs i where
+  go bx@(b:rest) 0
+    -- If the backtracking point is already present, don't re-add it,
+    -- UNLESS this would force it to backtrack (it's conservative)
+    -- where before it might not.
+    | not (toAll b) && tid `M.member` _runnable b =
+      let val = M.lookup tid $ _backtrack b
+      in  if isNothing val || (val == Just False && conservative)
+          then b { _backtrack = M.insert tid conservative $ _backtrack b } : rest
+          else bx
+
+    -- Otherwise just backtrack to everything runnable.
+    | otherwise = b { _backtrack = M.fromList [ (t',conservative) | t' <- M.keys $ _runnable b ] } : rest
+
+  go (b:rest) n = b : go rest (n-1)
+  go [] _ = error "Ran out of schedule whilst backtracking!"
+
 -- * Pre-emption bounding
 
 newtype PreemptionBound = PreemptionBound Int
@@ -241,23 +279,7 @@ pbBacktrack bs i tid = maybe id (\j' b -> backtrack True b j' tid) j $ backtrack
     (_, CommitRef _ _) -> True
     _ -> False
 
-  -- Add a backtracking point. If the thread isn't runnable, add all
-  -- runnable threads.
-  backtrack c bx@(b:rest) 0 t
-    -- If the backtracking point is already present, don't re-add it,
-    -- UNLESS this would force it to backtrack (it's conservative)
-    -- where before it might not.
-    | t `M.member` _runnable b =
-      let val = M.lookup t $ _backtrack b
-      in  if isNothing val || (val == Just False && c)
-          then b { _backtrack = M.insert t c $ _backtrack b } : rest
-          else bx
-
-    -- Otherwise just backtrack to everything runnable.
-    | otherwise = b { _backtrack = M.fromList [ (t',c) | t' <- M.keys $ _runnable b ] } : rest
-
-  backtrack c (b:rest) n t = b : backtrack c rest (n-1) t
-  backtrack _ [] _ _ = error "Ran out of schedule whilst backtracking!"
+  backtrack = backtrackAt $ const False
 
 -- * Fair bounding
 
@@ -313,21 +335,9 @@ maxYieldCountDiff ts dl = maximum yieldCountDiffs where
 -- | Add a backtrack point. If the thread isn't runnable, or performs
 -- a release operation, add all runnable threads.
 fBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
-fBacktrack bx@(b:rest) 0 t
-  -- If the backtracking point is already present, don't re-add it,
-  -- UNLESS this would force it to backtrack (it's conservative) where
-  -- before it might not.
-  | Just False == (willRelease <$> M.lookup t (_runnable b)) =
-    let val = M.lookup t $ _backtrack b
-    in  if isNothing val
-        then b { _backtrack = M.insert t False $ _backtrack b } : rest
-        else bx
-
-  -- Otherwise just backtrack to everything runnable.
-  | otherwise = b { _backtrack = M.fromList [ (t',False) | t' <- M.keys $ _runnable b ] } : rest
-
-fBacktrack (b:rest) n t = b : fBacktrack rest (n-1) t
-fBacktrack [] _ _ = error "Ran out of schedule whilst backtracking!"
+fBacktrack bs i t = backtrackAt check False bs i t where
+  -- True if a release operation is performed.
+  check b = Just True == (willRelease <$> M.lookup t (_runnable b))
 
 -- * Length Bounding
 
@@ -360,15 +370,7 @@ lBound (LengthBound lb) ts _ = length ts < lb
 -- | Add a backtrack point. If the thread isn't runnable, add all
 -- runnable threads.
 lBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
-lBacktrack bx@(b:rest) 0 t
-  | t `M.member` _runnable b =
-    let val = M.lookup t $ _backtrack b
-    in  if isNothing val
-        then b { _backtrack = M.insert t False $ _backtrack b } : rest
-        else bx
-  | otherwise = b { _backtrack = M.fromList [ (t',False) | t' <- M.keys $ _runnable b ] } : rest
-lBacktrack (b:rest) n t = b : lBacktrack rest (n-1) t
-lBacktrack [] _ _ = error "Ran out of schedule whilst backtracking!"
+lBacktrack = backtrackAt (const False) False
 
 -- * BPOR
 
