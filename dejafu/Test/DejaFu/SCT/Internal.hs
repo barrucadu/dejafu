@@ -49,11 +49,6 @@ data BPOR = BPOR
   , _btodo     :: Map ThreadId Bool
   -- ^ Follow-on decisions still to make, and whether that decision
   -- was added conservatively due to the bound.
-  , _bignore   :: Set ThreadId
-  -- ^ Follow-on decisions never to make, because they will result in
-  -- the chosen thread immediately blocking without achieving
-  -- anything, which can't have any effect on the result of the
-  -- program.
   , _bdone     :: Map ThreadId BPOR
   -- ^ Follow-on decisions that have been made.
   , _bsleep    :: Map ThreadId ThreadAction
@@ -81,7 +76,6 @@ toDot bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
     [ show $ _baction b
     , "Run:" ++ show (S.toList $ _brunnable b)
     , "Tod:" ++ show (M.keys   $ _btodo     b)
-    , "Ign:" ++ show (S.toList $ _bignore   b)
     , "Slp:" ++ show (M.toList $ _bsleep    b)
     ]
 
@@ -107,7 +101,6 @@ toDotSmall bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
     [ show $ _baction b
     , "Run:" ++ show (S.toList $ _brunnable b)
     , "Tod:" ++ show (M.keys   $ _btodo     b)
-    , "Ign:" ++ show (S.toList $ _bignore   b)
     , "Slp:" ++ show (M.toList $ _bsleep    b)
     ]
 
@@ -122,7 +115,6 @@ initialState :: BPOR
 initialState = BPOR
   { _brunnable = S.singleton (ThreadId 0)
   , _btodo     = M.singleton (ThreadId 0) False
-  , _bignore   = S.empty
   , _bdone     = M.empty
   , _bsleep    = M.empty
   , _btaken    = M.empty
@@ -221,7 +213,6 @@ grow memtype conservative = grow' initialCVState initialCRState 0 where
     in BPOR
         { _brunnable = S.fromList $ tids tid d a ts
         , _btodo     = M.empty
-        , _bignore   = S.fromList [tidOf tid d' | (d',as) <- ts, willBlockSafely cvstate' $ toList as]
         , _bdone     = M.fromList $ case rest of
           ((d', _, _):_) ->
             let tid' = tidOf tid d'
@@ -247,25 +238,15 @@ grow memtype conservative = grow' initialCVState initialCRState 0 where
 -- | Add new backtracking points, if they have not already been
 -- visited, fit into the bound, and aren't in the sleep set.
 todo :: ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool) -> [BacktrackStep] -> BPOR -> BPOR
-todo bv = step where
-  step bs bpor =
-    let (bpor', bs') = go 0 [] Nothing bs bpor
-    in  if all (M.null . _backtrack) bs'
-        then bpor'
-        else step bs' bpor'
+todo bv = go 0 [] where
+  go tid pref (b:bs) bpor =
+    let bpor' = backtrack pref b bpor
+        tid'  = tidOf tid . fst $ _decision b
+        pref' = pref ++ [_decision b]
+        child = go tid' pref' bs . fromJust $ M.lookup tid' (_bdone bpor)
+    in bpor' { _bdone = M.insert tid' child $ _bdone bpor' }
 
-  go tid pref lastb (b:bs) bpor =
-    let (bpor', blocked) = backtrack pref b bpor
-        tid'   = tidOf tid . fst $ _decision b
-        pref'  = pref ++ [_decision b]
-        (child, blocked')  = go tid' pref' (Just b) bs . fromJust $ M.lookup tid' (_bdone bpor)
-        bpor'' = bpor' { _bdone = M.insert tid' child $ _bdone bpor' }
-    in  case lastb of
-         Just b' -> (bpor'', b' { _backtrack = blocked } : blocked')
-         Nothing -> (bpor'', blocked')
-
-  go _ _ (Just b') _ bpor = (bpor, [b' { _backtrack = M.empty }])
-  go _ _ Nothing   _ bpor = (bpor, [])
+  go _ _ [] bpor = bpor
 
   backtrack pref b bpor =
     let todo' = [ x
@@ -276,8 +257,7 @@ todo bv = step where
                 , t `notElem` M.keys (_bdone bpor)
                 , c || M.notMember t (_bsleep bpor)
                 ]
-        (blocked, nxt) = partition (\(t,_) -> t `S.member` _bignore bpor) todo'
-    in  (bpor { _btodo = _btodo bpor `M.union` M.fromList nxt }, M.fromList blocked)
+    in bpor { _btodo = _btodo bpor `M.union` M.fromList todo' }
 
 -- | Remove commits from the todo sets where every other action will
 -- result in a write barrier (and so a commit) occurring.
