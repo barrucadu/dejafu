@@ -174,7 +174,10 @@ cBound (Bounds pb fb lb) = maybe trueBound pbBound pb &+& maybe trueBound fBound
 
 -- | Combination backtracking function. Add all backtracking points
 -- corresponding to enabled bound functions.
+--
+-- If no bounds are enabled, just backtrack to the given point.
 cBacktrack :: Bounds -> [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
+cBacktrack (Bounds Nothing Nothing Nothing) bs i t = backtrackAt (const False) False bs i t
 cBacktrack (Bounds pb fb lb) bs i t = lBack . fBack $ pBack bs where
   pBack backs = if isJust pb then pbBacktrack backs i t else backs
   fBack backs = if isJust fb then fBacktrack  backs i t else backs
