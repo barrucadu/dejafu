@@ -246,7 +246,7 @@ tests =
     [ testProperty "identity" $(monomorphic 'prop_applicative_id)
     , testProperty "homomorphism" $(monomorphic 'prop_applicative_homo)
     , testProperty "interchange"  $(monomorphic 'prop_applicative_inter)
-    --, testProperty "composition"  $(monomorphic 'prop_applicative_comp)
+    , testProperty "composition"  $(monomorphic 'prop_applicative_comp)
     , testProperty "fmap" $(monomorphic 'prop_applicative_fmap)
     ]
   , testGroup "Monad Laws"

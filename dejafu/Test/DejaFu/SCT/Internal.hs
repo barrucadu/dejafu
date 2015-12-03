@@ -175,11 +175,11 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
           , _backtrack = M.fromList $ map (\i' -> (i', False)) i
           , _crstate   = crstate'
           }
+        bs' = doBacktrack killsEarly allThreads' (toList e) (bs++[this])
         allThreads' = allThreads `S.union` S.fromList (M.keys $ _runnable this)
         killsEarly = null ts && any (/=0) (M.keys $ _runnable this)
     in go crstate' allThreads' tid' bs' (Sq.viewl is) ts
   go _ _ _ bs _ _ = bs
-        bs' = doBacktrack killsEarly allThreads' (toList e) (bs++[this])
 
   doBacktrack killsEarly allThreads enabledThreads bs =
     let tagged = reverse $ zip [0..] bs
@@ -325,6 +325,12 @@ dependent' _ _ (_, STM _) (_, WillSTM) = True
 dependent' _ _ (_, GetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
 dependent' _ _ (_, SetNumCapabilities a) (_, WillGetNumCapabilities)   = True
 dependent' _ _ (_, SetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
+-- This is safe because, if the thread blocks anyway, a context switch
+-- will occur anyway so there's no point pre-empting the action.
+--
+-- UNLESS the pre-emption would possibly allow for a different relaxed
+-- memory stage.
+dependent' _ _ (_, a1) (_, a2) | isBlock a1 && isBarrier (simplify' a2) = False
 dependent' memtype buf (_, d1) (_, d2) = dependentActions memtype buf (simplify d1) (simplify' d2)
 
 -- | Check if two 'ActionType's are dependent. Note that this is not

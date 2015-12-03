@@ -362,6 +362,15 @@ instance NFData ThreadAction where
   rnf (ResetMasking b m) = b `seq` m `seq` ()
   rnf a = a `seq` ()
 
+-- | Check if a @ThreadAction@ immediately blocks.
+isBlock :: ThreadAction -> Bool
+isBlock (BlockedThrowTo  _) = True
+isBlock (BlockedTakeVar _) = True
+isBlock (BlockedReadVar _) = True
+isBlock (BlockedPutVar  _) = True
+isBlock BlockedSTM = True
+isBlock _ = False
+
 -- | A one-step look-ahead at what a thread will do next.
 data Lookahead =
     WillFork
