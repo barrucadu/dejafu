@@ -256,7 +256,7 @@ tests =
     , testProperty "fmap" $(monomorphic 'prop_monad_fmap)
     , testProperty "pure" $(monomorphic 'prop_monad_pure)
     , testProperty "ap"   $(monomorphic 'prop_monad_ap)
-    , testProperty "ap (side effects)" . expectFailure $ \f g a -> not (prop_monad_ap' (f :: Fun Int Bool) (g :: Fun Int Bool) (a :: Int))
+    , testProperty "ap (side effects)" $ expectFailure $(monomorphic 'prop_monad_ap')
     ]
   , testGroup "Alternative Laws"
     [ testProperty "left identity"  $(monomorphic 'prop_alternative_left_id)
