@@ -36,6 +36,8 @@ data BacktrackStep = BacktrackStep
   , _backtrack :: Map ThreadId Bool
   -- ^ The list of alternative threads to run, and whether those
   -- alternatives were added conservatively due to the bound.
+  , _crstate :: CRState
+  -- ^ The relaxed memory state of the @CRef@s at this point.
   } deriving (Eq, Show)
 
 instance NFData BacktrackStep where
@@ -171,14 +173,15 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
           , _decision  = (d, a)
           , _runnable  = M.fromList . toList $ e
           , _backtrack = M.fromList $ map (\i' -> (i', False)) i
+          , _crstate   = crstate'
           }
         allThreads' = allThreads `S.union` S.fromList (M.keys $ _runnable this)
         killsEarly = null ts && any (/=0) (M.keys $ _runnable this)
-        bs' = doBacktrack killsEarly crstate' allThreads' (toList e) (bs++[this])
     in go crstate' allThreads' tid' bs' (Sq.viewl is) ts
   go _ _ _ bs _ _ = bs
+        bs' = doBacktrack killsEarly allThreads' (toList e) (bs++[this])
 
-  doBacktrack killsEarly crstate allThreads enabledThreads bs =
+  doBacktrack killsEarly allThreads enabledThreads bs =
     let tagged = reverse $ zip [0..] bs
         idxs   = [ (head is, u)
                  | (u, n) <- enabledThreads
@@ -192,8 +195,7 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
             | _threadid b == v && (killsEarly || isDependent b) = Just i
             | otherwise = Nothing
 
-          isDependent b = dependent' memtype crstate (_threadid b, snd $ _decision b) (u, n)
-
+          isDependent b = dependent' memtype (_crstate b) (_threadid b, snd $ _decision b) (u, n)
     in foldl' (\b (i, u) -> backtrack b i u) bs idxs
 
 -- | Add a new trace to the tree, creating a new subtree.
@@ -394,6 +396,7 @@ willBlockSafely _ _ = False
 -- * Keeping track of 'CRef' buffer state
 
 data CRState = Known (Map CRefId Bool) | Unknown
+  deriving (Eq, Show)
 
 -- | Initial global 'CRef buffer state.
 initialCRState :: CRState
