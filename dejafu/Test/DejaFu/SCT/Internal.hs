@@ -184,12 +184,16 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
                  | (u, n) <- enabledThreads
                  , v <- S.toList allThreads
                  , u /= v
-                 , let is = [ i
-                            | (i, b) <- tagged
-                            , _threadid b == v
-                            , killsEarly || dependent' memtype crstate (_threadid b, snd $ _decision b) (u, n)
-                            ]
-                 , not $ null is] :: [(Int, ThreadId)]
+                 , let is = idxs' u n v tagged
+                 , not $ null is]
+
+        idxs' u n v = mapMaybe go where
+          go (i, b)
+            | _threadid b == v && (killsEarly || isDependent b) = Just i
+            | otherwise = Nothing
+
+          isDependent b = dependent' memtype crstate (_threadid b, snd $ _decision b) (u, n)
+
     in foldl' (\b (i, u) -> backtrack b i u) bs idxs
 
 -- | Add a new trace to the tree, creating a new subtree.
