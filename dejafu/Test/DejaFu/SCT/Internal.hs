@@ -200,21 +200,19 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
 
 -- | Add a new trace to the tree, creating a new subtree.
 grow :: MemType -> Bool -> Trace' -> BPOR -> BPOR
-grow memtype conservative = grow' initialCVState initialCRState 0 where
-  grow' cvstate crstate tid trc@((d, _, a):rest) bpor =
+grow memtype conservative = grow' initialCRState 0 where
+  grow' crstate tid trc@((d, _, a):rest) bpor =
     let tid'     = tidOf tid d
-        cvstate' = updateCVState cvstate a
         crstate' = updateCRState crstate a
     in  case M.lookup tid' $ _bdone bpor of
-          Just bpor' -> bpor { _bdone  = M.insert tid' (grow' cvstate' crstate' tid' rest bpor') $ _bdone bpor }
+          Just bpor' -> bpor { _bdone  = M.insert tid' (grow' crstate' tid' rest bpor') $ _bdone bpor }
           Nothing    -> bpor { _btaken = if conservative then _btaken bpor else M.insert tid' a $ _btaken bpor
                             , _btodo  = M.delete tid' $ _btodo bpor
-                            , _bdone  = M.insert tid' (subtree cvstate' crstate' tid' (_bsleep bpor `M.union` _btaken bpor) trc) $ _bdone bpor }
-  grow' _ _ _ [] bpor = bpor
+                            , _bdone  = M.insert tid' (subtree crstate' tid' (_bsleep bpor `M.union` _btaken bpor) trc) $ _bdone bpor }
+  grow' _ _ [] bpor = bpor
 
-  subtree cvstate crstate tid sleep ((d, ts, a):rest) =
-    let cvstate' = updateCVState cvstate a
-        crstate' = updateCRState crstate a
+  subtree crstate tid sleep ((d, ts, a):rest) =
+    let crstate' = updateCRState crstate a
         sleep'   = M.filterWithKey (\t a' -> not $ dependent memtype crstate' (tid, a) (t,a')) sleep
     in BPOR
         { _brunnable = S.fromList $ tids tid d a ts
@@ -222,7 +220,7 @@ grow memtype conservative = grow' initialCVState initialCRState 0 where
         , _bdone     = M.fromList $ case rest of
           ((d', _, _):_) ->
             let tid' = tidOf tid d'
-            in  [(tid', subtree cvstate' crstate' tid' sleep' rest)]
+            in  [(tid', subtree crstate' tid' sleep' rest)]
           [] -> []
         , _bsleep = sleep'
         , _btaken = case rest of
@@ -230,7 +228,7 @@ grow memtype conservative = grow' initialCVState initialCRState 0 where
           [] -> M.empty
         , _baction = Just a
         }
-  subtree _ _ _ _ [] = error "Invariant failure in 'subtree': suffix empty!"
+  subtree _ _ _ [] = error "Invariant failure in 'subtree': suffix empty!"
 
   tids tid d (Fork t)           ts = tidOf tid d : t : map (tidOf tid . fst) ts
   tids tid _ (BlockedPutVar _)  ts = map (tidOf tid . fst) ts
