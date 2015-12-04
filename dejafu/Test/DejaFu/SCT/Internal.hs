@@ -271,7 +271,7 @@ todo bv = go 0 [] where
 pruneCommits :: BPOR -> BPOR
 pruneCommits bpor
   | not onlycommits || not alldonesync = go bpor
-  | otherwise = go bpor { _btodo = M.empty, _bdone = pruneCommits <$> _bdone bpor }
+  | otherwise = go bpor { _btodo = M.empty }
 
   where
     go b = b { _bdone = pruneCommits <$> _bdone bpor }
