@@ -90,10 +90,10 @@ toDot bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
 -- | Variant of 'toDot' which doesn't include aborted subtrees.
 toDotSmall :: BPOR -> String
 toDotSmall bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
-  go l b = unlines $ node l b : [edge l l' i ++ go l' b' | (i, b') <- M.toList (_bdone b), check b', let l' = l ++ show' i]
+  go l b = unlines $ node l b : [edge l l' i ++ go l' b' | (i, b') <- M.toList (_bdone b), check (i, b'), let l' = l ++ show' i]
 
   -- Check that a subtree has at least one non-aborted branch.
-  check b = S.null (_brunnable b) || any check (M.elems $ _bdone b)
+  check (i, b) = (i == 0 && _baction b == Just Stop) || any check (M.toList $ _bdone b)
 
   -- Display a labelled node.
   node n b = n ++ " [label=\"" ++ label b ++ "\"]"
