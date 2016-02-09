@@ -97,14 +97,14 @@ data Action n r s =
   | AGetNumCapabilities (Int -> Action n r s)
   | ASetNumCapabilities Int (Action n r s)
 
-  | forall a. ANewVar     (CVar r a -> Action n r s)
+  | forall a. ANewVar String (CVar r a -> Action n r s)
   | forall a. APutVar     (CVar r a) a (Action n r s)
   | forall a. ATryPutVar  (CVar r a) a (Bool -> Action n r s)
   | forall a. AReadVar    (CVar r a) (a -> Action n r s)
   | forall a. ATakeVar    (CVar r a) (a -> Action n r s)
   | forall a. ATryTakeVar (CVar r a) (Maybe a -> Action n r s)
 
-  | forall a.   ANewRef a   (CRef r a -> Action n r s)
+  | forall a.   ANewRef String a (CRef r a -> Action n r s)
   | forall a.   AReadRef    (CRef r a) (a -> Action n r s)
   | forall a.   AReadRefCas (CRef r a) (Ticket a -> Action n r s)
   | forall a.   APeekTicket (Ticket a) (a -> Action n r s)
@@ -182,17 +182,40 @@ instance NFData CRefId where
 
 -- | The number of ID parameters was getting a bit unwieldy, so this
 -- hides them all away.
-data IdSource = Id { _nextCRId :: Int, _nextCVId :: Int, _nextCTVId :: CTVarId, _nextTId :: Int }
+data IdSource = Id
+  { _nextCRId  :: Int
+  , _nextCVId  :: Int
+  , _nextCTVId :: CTVarId
+  , _nextTId   :: Int
+  , _usedCRNames :: [String]
+  , _usedCVNames :: [String]
+  , _usedTNames  :: [String] }
 
 -- | Get the next free 'CRefId'.
-nextCRId :: IdSource -> (IdSource, CRefId)
-nextCRId idsource = (idsource { _nextCRId = newid }, CRefId Nothing newid)
-  where newid = _nextCRId idsource + 1
+nextCRId :: String -> IdSource -> (IdSource, CRefId)
+nextCRId name idsource = (idsource { _nextCRId = newid, _usedCRNames = newlst }, CRefId newname newid) where
+  newid  = _nextCRId idsource + 1
+  newlst
+    | null name = _usedCRNames idsource
+    | otherwise = name : _usedCRNames idsource
+  newname
+    | null name       = Nothing
+    | occurrences > 0 = Just (name ++ "-" ++ show occurrences)
+    | otherwise       = Just name
+  occurrences = length . filter (==name) $ _usedCRNames idsource
 
 -- | Get the next free 'CVarId'.
-nextCVId :: IdSource -> (IdSource, CVarId)
-nextCVId idsource = (idsource { _nextCVId = newid }, CVarId Nothing newid) where
-  newid = _nextCVId idsource + 1
+nextCVId :: String -> IdSource -> (IdSource, CVarId)
+nextCVId name idsource = (idsource { _nextCVId = newid, _usedCVNames = newlst }, CVarId newname newid) where
+  newid  = _nextCVId idsource + 1
+  newlst
+    | null name = _usedCVNames idsource
+    | otherwise = name : _usedCVNames idsource
+  newname
+    | null name       = Nothing
+    | occurrences > 0 = Just (name ++ "-" ++ show occurrences)
+    | otherwise       = Just name
+  occurrences = length . filter (==name) $ _usedCVNames idsource
 
 -- | Get the next free 'CTVarId'.
 nextCTVId :: IdSource -> (IdSource, CTVarId)
@@ -200,13 +223,21 @@ nextCTVId idsource = (idsource { _nextCTVId = newid }, newid) where
   newid = _nextCTVId idsource + 1
 
 -- | Get the next free 'ThreadId'.
-nextTId :: IdSource -> (IdSource, ThreadId)
-nextTId idsource = (idsource { _nextTId = newid }, ThreadId Nothing newid) where
-  newid = _nextTId idsource + 1
+nextTId :: String -> IdSource -> (IdSource, ThreadId)
+nextTId name idsource = (idsource { _nextTId = newid, _usedTNames = newlst }, ThreadId newname newid) where
+  newid  = _nextTId idsource + 1
+  newlst
+    | null name = _usedTNames idsource
+    | otherwise = name : _usedTNames idsource
+  newname
+    | null name       = Nothing
+    | occurrences > 0 = Just (name ++ "-" ++ show occurrences)
+    | otherwise       = Just name
+  occurrences = length . filter (==name) $ _usedTNames idsource
 
 -- | The initial ID source.
 initialIdSource :: IdSource
-initialIdSource = Id 0 0 0 0
+initialIdSource = Id 0 0 0 0 [] [] []
 
 --------------------------------------------------------------------------------
 -- * Scheduling & Traces
@@ -519,13 +550,13 @@ lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (AMyTId _)              = [WillMyThreadId]
   lookahead' (AGetNumCapabilities _) = [WillGetNumCapabilities]
   lookahead' (ASetNumCapabilities i k) = WillSetNumCapabilities i : lookahead' k
-  lookahead' (ANewVar _)             = [WillNewVar]
+  lookahead' (ANewVar _ _)           = [WillNewVar]
   lookahead' (APutVar (CVar c _) _ k)    = WillPutVar c : lookahead' k
   lookahead' (ATryPutVar (CVar c _) _ _) = [WillTryPutVar c]
   lookahead' (AReadVar (CVar c _) _)     = [WillReadVar c]
   lookahead' (ATakeVar (CVar c _) _)     = [WillTakeVar c]
   lookahead' (ATryTakeVar (CVar c _) _)  = [WillTryTakeVar c]
-  lookahead' (ANewRef _ _)           = [WillNewRef]
+  lookahead' (ANewRef _ _ _)         = [WillNewRef]
   lookahead' (AReadRef (CRef r _) _)     = [WillReadRef r]
   lookahead' (AReadRefCas (CRef r _) _)  = [WillReadRefCas r]
   lookahead' (APeekTicket (Ticket r _ _) _) = [WillPeekTicket r]

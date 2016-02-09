@@ -202,13 +202,13 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
   AGetNumCapabilities   c -> stepGetNumCapabilities c
   ASetNumCapabilities i c -> stepSetNumCapabilities i c
   AYield   c       -> stepYield       c
-  ANewVar  c       -> stepNewVar      c
+  ANewVar  n c     -> stepNewVar      n c
   APutVar  var a c -> stepPutVar      var a c
   ATryPutVar var a c -> stepTryPutVar var a c
   AReadVar var c   -> stepReadVar     var c
   ATakeVar var c   -> stepTakeVar     var c
   ATryTakeVar var c -> stepTryTakeVar var c
-  ANewRef  a c     -> stepNewRef      a c
+  ANewRef  n a c   -> stepNewRef      n a c
   AReadRef ref c   -> stepReadRef     ref c
   AReadRefCas ref c -> stepReadRefCas ref c
   APeekTicket tick c -> stepPeekTicket tick c
@@ -235,8 +235,7 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
     -- | Start a new thread, assigning it the next 'ThreadId'
     stepFork n a b = return $ Right (goto (b newtid) tid threads', idSource', Fork newtid, wb, caps) where
       threads' = launch tid newtid a threads
-      (idSource', tid'@(ThreadId _ i)) = nextTId idSource
-      newtid = if null n then tid' else ThreadId (Just n) i
+      (idSource', newtid) = nextTId n idSource
 
     -- | Get the 'ThreadId' of the current thread
     stepMyTId c = simple (goto (c tid) tid threads) MyThreadId
@@ -417,15 +416,15 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
       threads' = goto c tid (mask m tid threads)
 
     -- | Create a new @CVar@, using the next 'CVarId'.
-    stepNewVar c = do
-      let (idSource', newcvid) = nextCVId idSource
+    stepNewVar n c = do
+      let (idSource', newcvid) = nextCVId n idSource
       ref <- newRef fixed Nothing
       let cvar = CVar newcvid ref
       return $ Right (knows [Left newcvid] tid $ goto (c cvar) tid threads, idSource', NewVar newcvid, wb, caps)
 
     -- | Create a new @CRef@, using the next 'CRefId'.
-    stepNewRef a c = do
-      let (idSource', newcrid) = nextCRId idSource
+    stepNewRef n a c = do
+      let (idSource', newcrid) = nextCRId n idSource
       ref <- newRef fixed (M.empty, 0, a)
       let cref = CRef newcrid ref
       return $ Right (goto (c cref) tid threads, idSource', NewRef newcrid, wb, caps)

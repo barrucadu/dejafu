@@ -114,7 +114,7 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 
   -- ----------
 
-  newCRef a = toConc (\c -> ANewRef a c)
+  newCRefN n a = toConc (\c -> ANewRef n a c)
 
   readCRef   ref = toConc (AReadRef    ref)
   readForCAS ref = toConc (AReadRefCas ref)
@@ -129,7 +129,7 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 
   -- ----------
 
-  newEmptyCVar = toConc (\c -> ANewVar c)
+  newEmptyCVarN n = toConc (\c -> ANewVar n c)
 
   putCVar  var a = toConc (\c -> APutVar var a (c ()))
   readCVar var   = toConc (AReadVar var)
