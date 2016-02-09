@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP              #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes       #-}
+{-# LANGUAGE TemplateHaskell  #-}
 {-# LANGUAGE TypeFamilies     #-}
 
 -- | This module captures in a typeclass the interface of concurrency
@@ -42,7 +43,7 @@ import Control.Monad.STM (STM)
 import Control.Monad.STM.Class (MonadSTM, CTVar)
 import Control.Monad.Trans (lift)
 import Data.IORef (IORef, atomicModifyIORef, newIORef, readIORef, writeIORef, atomicWriteIORef)
-import Language.Haskell.TH (Q, Loc(..), location)
+import Language.Haskell.TH (Q, Exp, Loc(..), location)
 
 import qualified Control.Concurrent as C
 import qualified Control.Monad.Catch as Ca
@@ -395,18 +396,20 @@ class ( Applicative m, Monad m
 -------------------------------------------------------------------------------
 -- Utilities
 
--- | Get the current line number. Useful for automatically naming
--- threads, @CVar@s, and @CRef@s.
+-- | Get the current line number as a String. Useful for automatically
+-- naming threads, @CVar@s, and @CRef@s.
 --
 -- Example usage:
 --
--- > forkN (show $lineNum) ...
+-- > forkN $lineNum ...
 --
 -- Unfortunately this can't be packaged up into a
 -- @forkL@/@forkOnL@/etc set of functions, because this imposes a
 -- 'Lift' constraint on the monad, which 'IO' does not have.
-lineNum :: Q Int
-lineNum = fst . loc_start <$> location
+lineNum :: Q Exp
+lineNum = do
+  line <- show . fst . loc_start <$> location
+  [| line |]
 
 -- Threads
 
