@@ -35,6 +35,14 @@ import Data.Monoid (Monoid)
 -- A minimal implementation consists of 'retry', 'orElse', 'newCTVar',
 -- 'readCTVar', and 'writeCTVar'.
 class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
+  {-# MINIMAL
+        retry
+      , orElse
+      , (newCTVar | newCTVarN)
+      , readCTVar
+      , writeCTVar
+    #-}
+
   -- | The mutable reference type. These behave like 'TVar's, in that
   -- they always contain a value and updates are non-blocking and
   -- synchronised.
@@ -59,7 +67,22 @@ class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
   check b = unless b retry
 
   -- | Create a new @CTVar@ containing the given value.
+  --
+  -- > newCTVar = newCTVarN ""
   newCTVar :: a -> m (CTVar m a)
+  newCTVar = newCTVarN ""
+
+  -- | Create a new @CTVar@ containing the given value, but it is
+  -- given a name which may be used to present more useful debugging
+  -- information.
+  --
+  -- If an empty name is given, a counter starting from 0 is used. If
+  -- names conflict, successive @CTVar@s with the same name are given
+  -- a numeric suffix, counting up from 1.
+  --
+  -- > newCTVarN _ = newCTVar
+  newCTVarN :: String -> a -> m (CTVar m a)
+  newCTVarN _ = newCTVar
 
   -- | Return the current value stored in a @CTVar@.
   readCTVar :: CTVar m a -> m a
@@ -99,6 +122,7 @@ instance MonadSTM m => MonadSTM (ReaderT r m) where
   orElse ma mb = ReaderT $ \r -> orElse (runReaderT ma r) (runReaderT mb r)
   check        = lift . check
   newCTVar     = lift . newCTVar
+  newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
   writeCTVar v = lift . writeCTVar v
 
@@ -109,6 +133,7 @@ instance (MonadSTM m, Monoid w) => MonadSTM (WL.WriterT w m) where
   orElse ma mb = WL.WriterT $ orElse (WL.runWriterT ma) (WL.runWriterT mb)
   check        = lift . check
   newCTVar     = lift . newCTVar
+  newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
   writeCTVar v = lift . writeCTVar v
 
@@ -119,6 +144,7 @@ instance (MonadSTM m, Monoid w) => MonadSTM (WS.WriterT w m) where
   orElse ma mb = WS.WriterT $ orElse (WS.runWriterT ma) (WS.runWriterT mb)
   check        = lift . check
   newCTVar     = lift . newCTVar
+  newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
   writeCTVar v = lift . writeCTVar v
 
@@ -129,6 +155,7 @@ instance MonadSTM m => MonadSTM (SL.StateT s m) where
   orElse ma mb = SL.StateT $ \s -> orElse (SL.runStateT ma s) (SL.runStateT mb s)
   check        = lift . check
   newCTVar     = lift . newCTVar
+  newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
   writeCTVar v = lift . writeCTVar v
 
@@ -139,6 +166,7 @@ instance MonadSTM m => MonadSTM (SS.StateT s m) where
   orElse ma mb = SS.StateT $ \s -> orElse (SS.runStateT ma s) (SS.runStateT mb s)
   check        = lift . check
   newCTVar     = lift . newCTVar
+  newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
   writeCTVar v = lift . writeCTVar v
 
@@ -149,6 +177,7 @@ instance (MonadSTM m, Monoid w) => MonadSTM (RL.RWST r w s m) where
   orElse ma mb = RL.RWST $ \r s -> orElse (RL.runRWST ma r s) (RL.runRWST mb r s)
   check        = lift . check
   newCTVar     = lift . newCTVar
+  newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
   writeCTVar v = lift . writeCTVar v
 
@@ -159,5 +188,6 @@ instance (MonadSTM m, Monoid w) => MonadSTM (RS.RWST r w s m) where
   orElse ma mb = RS.RWST $ \r s -> orElse (RS.runRWST ma r s) (RS.runRWST mb r s)
   check        = lift . check
   newCTVar     = lift . newCTVar
+  newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
   writeCTVar v = lift . writeCTVar v

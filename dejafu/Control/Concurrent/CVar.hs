@@ -4,7 +4,9 @@ module Control.Concurrent.CVar
  ( -- *@CVar@s
   CVar
  , newEmptyCVar
+ , newEmptyCVarN
  , newCVar
+ , newCVarN
  , takeCVar
  , putCVar
  , readCVar
@@ -30,13 +32,6 @@ module Control.Concurrent.CVar
 import Control.Monad (liftM)
 import Control.Monad.Catch (mask_, onException)
 import Control.Monad.Conc.Class
-
--- | Create a new @CVar@ containing a value.
-newCVar :: MonadConc m => a -> m (CVar m a)
-newCVar a = do
-  cvar <- newEmptyCVar
-  putCVar cvar a
-  return cvar
 
 -- | Swap the contents of a @CVar@, and return the value taken. This
 -- function is atomic only if there are no other producers fro this

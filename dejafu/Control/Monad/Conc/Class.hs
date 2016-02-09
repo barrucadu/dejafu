@@ -8,19 +8,28 @@
 module Control.Monad.Conc.Class
   ( MonadConc(..)
 
-  -- * Utilities
+  -- * Threads
   , spawn
   , forkFinally
   , killThread
-  , cas
 
-  -- * Bound Threads
+  -- ** Named Threads
+  , forkN
+  , forkOnN
+  , lineNum
+
+  -- ** Bound Threads
 
   -- | @MonadConc@ does not support bound threads, if you need that
   -- sort of thing you will have to use regular @IO@.
 
   , rtsSupportsBoundThreads
   , isCurrentThreadBound
+
+  -- * Mutable State
+  , newCVar
+  , newCVarN
+  , cas
   ) where
 
 import Control.Concurrent (forkIO)
@@ -33,6 +42,7 @@ import Control.Monad.STM (STM)
 import Control.Monad.STM.Class (MonadSTM, CTVar)
 import Control.Monad.Trans (lift)
 import Data.IORef (IORef, atomicModifyIORef, newIORef, readIORef, writeIORef, atomicWriteIORef)
+import Language.Haskell.TH (Q, Loc(..), location)
 
 import qualified Control.Concurrent as C
 import qualified Control.Monad.Catch as Ca
@@ -61,6 +71,31 @@ class ( Applicative m, Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STMLike m)
       , Eq (ThreadId m), Show (ThreadId m)) => MonadConc m  where
+
+  {-# MINIMAL
+        (forkWithUnmask | forkWithUnmaskN)
+      , (forkOnWithUnmask | forkOnWithUnmaskN)
+      , getNumCapabilities
+      , setNumCapabilities
+      , myThreadId
+      , yield
+      , (newEmptyCVar | newEmptyCVarN)
+      , putCVar
+      , tryPutCVar
+      , readCVar
+      , takeCVar
+      , tryTakeCVar
+      , (newCRef | newCRefN)
+      , modifyCRef
+      , writeCRef
+      , readForCAS
+      , peekTicket
+      , casCRef
+      , modifyCRefCAS
+      , atomically
+      , throwTo
+    #-}
+
   -- | The associated 'MonadSTM' for this class.
   type STMLike m :: * -> *
 
@@ -93,7 +128,21 @@ class ( Applicative m, Monad m
   -- | Like 'fork', but the child thread is passed a function that can
   -- be used to unmask asynchronous exceptions. This function should
   -- not be used within a 'mask' or 'uninterruptibleMask'.
+  --
+  -- > forkWithUnmask = forkWithUnmaskN ""
   forkWithUnmask :: ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
+  forkWithUnmask = forkWithUnmaskN ""
+
+  -- | Like 'forkWithUnmask', but the thread is given a name which may
+  -- be used to present more useful debugging information.
+  --
+  -- If an empty name is given, the @ThreadId@ is used. If names
+  -- conflict, successive threads with the same name are given a
+  -- numeric suffix, counting up from 1.
+  --
+  -- > forkWithUnmaskN _ = forkWithUnmask
+  forkWithUnmaskN :: String -> ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
+  forkWithUnmaskN _ = forkWithUnmask
 
   -- | Fork a computation to happen on a specific processor. The
   -- specified int is the /capability number/, typically capabilities
@@ -105,9 +154,19 @@ class ( Applicative m, Monad m
   forkOn :: Int -> m () -> m (ThreadId m)
   forkOn c ma = forkOnWithUnmask c (\_ -> ma)
 
-  -- | Like 'forkWithUnmask' but the child thread is pinned to the
+  -- | Like 'forkWithUnmask', but the child thread is pinned to the
   -- given CPU, as with 'forkOn'.
+  --
+  -- > forkOnWithUnmask = forkOnWithUnmaskN ""
   forkOnWithUnmask :: Int -> ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
+  forkOnWithUnmask = forkOnWithUnmaskN ""
+
+  -- | Like 'forkWithUnmaskN', but the child thread is pinned to the
+  -- given CPU, as with 'forkOn'.
+  --
+  -- > forkOnWithUnmaskN _ = forkOnWithUnmask
+  forkOnWithUnmaskN :: String -> Int -> ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
+  forkOnWithUnmaskN _ = forkOnWithUnmask
 
   -- | Get the number of Haskell threads that can run simultaneously.
   getNumCapabilities :: m Int
@@ -123,7 +182,21 @@ class ( Applicative m, Monad m
   yield :: m ()
 
   -- | Create a new empty @CVar@.
+  --
+  -- > newEmptyCVar = newEmptyCVarN ""
   newEmptyCVar :: m (CVar m a)
+  newEmptyCVar = newEmptyCVarN ""
+
+  -- | Create a new empty @CVar@, but it is given a name which may be
+  -- used to present more useful debugging information.
+  --
+  -- If an empty name is given, a counter starting from 0 is used. If
+  -- names conflict, successive @CVar@s with the same name are given a
+  -- numeric suffix, counting up from 1.
+  --
+  -- > newEmptyCVarN _ = newEmptyCVar
+  newEmptyCVarN :: String -> m (CVar m a)
+  newEmptyCVarN _ = newEmptyCVar
 
   -- | Put a value into a @CVar@. If there is already a value there,
   -- this will block until that value has been taken, at which point
@@ -151,7 +224,21 @@ class ( Applicative m, Monad m
   tryTakeCVar :: CVar m a -> m (Maybe a)
 
   -- | Create a new reference.
+  --
+  -- > newCRef = newCRefN ""
   newCRef :: a -> m (CRef m a)
+  newCRef = newCRefN ""
+
+  -- | Create a new reference, but it is given a name which may be
+  -- used to present more useful debugging information.
+  --
+  -- If an empty name is given, a counter starting from 0 is used. If
+  -- names conflict, successive @CRef@s with the same name are given a
+  -- numeric suffix, counting up from 1.
+  --
+  -- > newCRefN _ = newCRef
+  newCRefN :: String -> a -> m (CRef m a)
+  newCRefN _ = newCRef
 
   -- | Read the current value stored in a reference.
   --
@@ -305,6 +392,111 @@ class ( Applicative m, Monad m
   _concAllKnown :: m ()
   _concAllKnown = return ()
 
+-------------------------------------------------------------------------------
+-- Utilities
+
+-- | Get the current line number. Useful for automatically naming
+-- threads, @CVar@s, and @CRef@s.
+--
+-- Example usage:
+--
+-- > forkN (show $lineNum) ...
+--
+-- Unfortunately this can't be packaged up into a
+-- @forkL@/@forkOnL@/etc set of functions, because this imposes a
+-- 'Lift' constraint on the monad, which 'IO' does not have.
+lineNum :: Q Int
+lineNum = fst . loc_start <$> location
+
+-- Threads
+
+-- | Create a concurrent computation for the provided action, and
+-- return a @CVar@ which can be used to query the result.
+spawn :: MonadConc m => m a -> m (CVar m a)
+spawn ma = do
+  cvar <- newEmptyCVar
+  _ <- fork $ _concKnowsAbout (Left cvar) >> ma >>= putCVar cvar
+  return cvar
+
+-- | Fork a thread and call the supplied function when the thread is
+-- about to terminate, with an exception or a returned value. The
+-- function is called with asynchronous exceptions masked.
+--
+-- This function is useful for informing the parent when a child
+-- terminates, for example.
+forkFinally :: MonadConc m => m a -> (Either SomeException a -> m ()) -> m (ThreadId m)
+forkFinally action and_then =
+  mask $ \restore ->
+    fork $ Ca.try (restore action) >>= and_then
+
+-- | Raise the 'ThreadKilled' exception in the target thread. Note
+-- that if the thread is prepared to catch this exception, it won't
+-- actually kill it.
+killThread :: MonadConc m => ThreadId m -> m ()
+killThread tid = throwTo tid ThreadKilled
+
+-- | Like 'fork', but the thread is given a name which may be used to
+-- present more useful debugging information.
+--
+-- If no name is given, the @ThreadId@ is used. If names conflict,
+-- successive threads with the same name are given a numeric suffix,
+-- counting up from 1.
+forkN :: MonadConc m => String -> m () -> m (ThreadId m)
+forkN name ma = forkWithUnmaskN name (\_ -> ma)
+
+-- | Like 'forkOn', but the thread is given a name which may be used
+-- to present more useful debugging information.
+--
+-- If no name is given, the @ThreadId@ is used. If names conflict,
+-- successive threads with the same name are given a numeric suffix,
+-- counting up from 1.
+forkOnN :: MonadConc m => String -> Int -> m () -> m (ThreadId m)
+forkOnN name i ma = forkOnWithUnmaskN name i (\_ -> ma)
+
+-- Bound Threads
+
+-- | Provided for compatibility, always returns 'False'.
+rtsSupportsBoundThreads :: Bool
+rtsSupportsBoundThreads = False
+
+-- | Provided for compatibility, always returns 'False'.
+isCurrentThreadBound :: MonadConc m => m Bool
+isCurrentThreadBound = return False
+
+-- Mutable Variables
+
+-- | Create a new @CVar@ containing a value.
+newCVar :: MonadConc m => a -> m (CVar m a)
+newCVar a = do
+  cvar <- newEmptyCVar
+  putCVar cvar a
+  return cvar
+
+-- | Create a new @CVar@ containing a value, but it is given a name
+-- which may be used to present more useful debugging information.
+--
+-- If no name is given, a counter starting from 0 is used. If names
+-- conflict, successive @CVar@s with the same name are given a numeric
+-- suffix, counting up from 1.
+newCVarN :: MonadConc m => String -> a -> m (CVar m a)
+newCVarN n a = do
+  cvar <- newEmptyCVarN n
+  putCVar cvar a
+  return cvar
+
+-- | Compare-and-swap a value in a @CRef@, returning an indication of
+-- success and the new value.
+cas :: MonadConc m => CRef m a -> a -> m (Bool, a)
+cas cref a = do
+  tick         <- readForCAS cref
+  (suc, tick') <- casCRef cref tick a
+  a'           <- peekTicket tick'
+
+  return (suc, a')
+
+-------------------------------------------------------------------------------
+-- Concrete instances
+
 instance MonadConc IO where
   type STMLike  IO = STM
   type CVar     IO = MVar
@@ -338,49 +530,6 @@ instance MonadConc IO where
   modifyCRefCAS  = A.atomicModifyIORefCAS
   atomically     = S.atomically
 
--- | Create a concurrent computation for the provided action, and
--- return a @CVar@ which can be used to query the result.
-spawn :: MonadConc m => m a -> m (CVar m a)
-spawn ma = do
-  cvar <- newEmptyCVar
-  _ <- fork $ _concKnowsAbout (Left cvar) >> ma >>= putCVar cvar
-  return cvar
-
--- | Fork a thread and call the supplied function when the thread is
--- about to terminate, with an exception or a returned value. The
--- function is called with asynchronous exceptions masked.
---
--- This function is useful for informing the parent when a child
--- terminates, for example.
-forkFinally :: MonadConc m => m a -> (Either SomeException a -> m ()) -> m (ThreadId m)
-forkFinally action and_then =
-  mask $ \restore ->
-    fork $ Ca.try (restore action) >>= and_then
-
--- | Raise the 'ThreadKilled' exception in the target thread. Note
--- that if the thread is prepared to catch this exception, it won't
--- actually kill it.
-killThread :: MonadConc m => ThreadId m -> m ()
-killThread tid = throwTo tid ThreadKilled
-
--- | Provided for compatibility, always returns 'False'.
-rtsSupportsBoundThreads :: Bool
-rtsSupportsBoundThreads = False
-
--- | Provided for compatibility, always returns 'False'.
-isCurrentThreadBound :: MonadConc m => m Bool
-isCurrentThreadBound = return False
-
--- | Compare-and-swap a value in a @CRef@, returning an indication of
--- success and the new value.
-cas :: MonadConc m => CRef m a -> a -> m (Bool, a)
-cas cref a = do
-  tick         <- readForCAS cref
-  (suc, tick') <- casCRef cref tick a
-  a'           <- peekTicket tick'
-
-  return (suc, a')
-
 -------------------------------------------------------------------------------
 -- Transformer instances
 
@@ -394,7 +543,9 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   fork              = reader fork
   forkOn i          = reader (forkOn i)
   forkWithUnmask ma = ReaderT $ \r -> forkWithUnmask (\f -> runReaderT (ma $ reader f) r)
+  forkWithUnmaskN n ma = ReaderT $ \r -> forkWithUnmaskN n (\f -> runReaderT (ma $ reader f) r)
   forkOnWithUnmask i ma = ReaderT $ \r -> forkOnWithUnmask i (\f -> runReaderT (ma $ reader f) r)
+  forkOnWithUnmaskN n i ma = ReaderT $ \r -> forkOnWithUnmaskN n i (\f -> runReaderT (ma $ reader f) r)
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -402,12 +553,14 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
+  newEmptyCVarN      = lift . newEmptyCVarN
   readCVar           = lift . readCVar
   putCVar v          = lift . putCVar v
   tryPutCVar v       = lift . tryPutCVar v
   takeCVar           = lift . takeCVar
   tryTakeCVar        = lift . tryTakeCVar
   newCRef            = lift . newCRef
+  newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
@@ -434,7 +587,9 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   fork              = writerlazy fork
   forkOn i          = writerlazy (forkOn i)
   forkWithUnmask ma = lift $ forkWithUnmask (\f -> fst `liftM` WL.runWriterT (ma $ writerlazy f))
+  forkWithUnmaskN n ma = lift $ forkWithUnmaskN n (\f -> fst `liftM` WL.runWriterT (ma $ writerlazy f))
   forkOnWithUnmask i ma = lift $ forkOnWithUnmask i (\f -> fst `liftM` WL.runWriterT (ma $ writerlazy f))
+  forkOnWithUnmaskN n i ma = lift $ forkOnWithUnmaskN n i (\f -> fst `liftM` WL.runWriterT (ma $ writerlazy f))
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -442,12 +597,14 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
+  newEmptyCVarN      = lift . newEmptyCVarN
   readCVar           = lift . readCVar
   putCVar v          = lift . putCVar v
   tryPutCVar v       = lift . tryPutCVar v
   takeCVar           = lift . takeCVar
   tryTakeCVar        = lift . tryTakeCVar
   newCRef            = lift . newCRef
+  newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
@@ -474,7 +631,9 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   fork              = writerstrict fork
   forkOn i          = writerstrict (forkOn i)
   forkWithUnmask ma = lift $ forkWithUnmask (\f -> fst `liftM` WS.runWriterT (ma $ writerstrict f))
+  forkWithUnmaskN n ma = lift $ forkWithUnmaskN n (\f -> fst `liftM` WS.runWriterT (ma $ writerstrict f))
   forkOnWithUnmask i ma = lift $ forkOnWithUnmask i (\f -> fst `liftM` WS.runWriterT (ma $ writerstrict f))
+  forkOnWithUnmaskN n i ma = lift $ forkOnWithUnmaskN n i (\f -> fst `liftM` WS.runWriterT (ma $ writerstrict f))
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -482,12 +641,14 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
+  newEmptyCVarN      = lift . newEmptyCVarN
   readCVar           = lift . readCVar
   putCVar v          = lift . putCVar v
   tryPutCVar v       = lift . tryPutCVar v
   takeCVar           = lift . takeCVar
   tryTakeCVar        = lift . tryTakeCVar
   newCRef            = lift . newCRef
+  newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
@@ -514,7 +675,9 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   fork              = statelazy fork
   forkOn i          = statelazy (forkOn i)
   forkWithUnmask ma = SL.StateT $ \s -> (\a -> (a,s)) `liftM` forkWithUnmask (\f -> SL.evalStateT (ma $ statelazy f) s)
+  forkWithUnmaskN n ma = SL.StateT $ \s -> (\a -> (a,s)) `liftM` forkWithUnmaskN n (\f -> SL.evalStateT (ma $ statelazy f) s)
   forkOnWithUnmask i ma = SL.StateT $ \s -> (\a -> (a,s)) `liftM` forkOnWithUnmask i (\f -> SL.evalStateT (ma $ statelazy f) s)
+  forkOnWithUnmaskN n i ma = SL.StateT $ \s -> (\a -> (a,s)) `liftM` forkOnWithUnmaskN n i (\f -> SL.evalStateT (ma $ statelazy f) s)
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -522,12 +685,14 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
+  newEmptyCVarN      = lift . newEmptyCVarN
   readCVar           = lift . readCVar
   putCVar v          = lift . putCVar v
   tryPutCVar v       = lift . tryPutCVar v
   takeCVar           = lift . takeCVar
   tryTakeCVar        = lift . tryTakeCVar
   newCRef            = lift . newCRef
+  newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
@@ -554,7 +719,9 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   fork              = statestrict fork
   forkOn i          = statestrict (forkOn i)
   forkWithUnmask ma = SS.StateT $ \s -> (\a -> (a,s)) `liftM` forkWithUnmask (\f -> SS.evalStateT (ma $ statestrict f) s)
+  forkWithUnmaskN n ma = SS.StateT $ \s -> (\a -> (a,s)) `liftM` forkWithUnmaskN n (\f -> SS.evalStateT (ma $ statestrict f) s)
   forkOnWithUnmask i ma = SS.StateT $ \s -> (\a -> (a,s)) `liftM` forkOnWithUnmask i (\f -> SS.evalStateT (ma $ statestrict f) s)
+  forkOnWithUnmaskN n i ma = SS.StateT $ \s -> (\a -> (a,s)) `liftM` forkOnWithUnmaskN n i (\f -> SS.evalStateT (ma $ statestrict f) s)
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -562,12 +729,14 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
+  newEmptyCVarN      = lift . newEmptyCVarN
   readCVar           = lift . readCVar
   putCVar v          = lift . putCVar v
   tryPutCVar v       = lift . tryPutCVar v
   takeCVar           = lift . takeCVar
   tryTakeCVar        = lift . tryTakeCVar
   newCRef            = lift . newCRef
+  newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
@@ -594,7 +763,9 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   fork              = rwslazy fork
   forkOn i          = rwslazy (forkOn i)
   forkWithUnmask ma = RL.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkWithUnmask (\f -> fst `liftM` RL.evalRWST (ma $ rwslazy f) r s)
+  forkWithUnmaskN n ma = RL.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkWithUnmaskN n (\f -> fst `liftM` RL.evalRWST (ma $ rwslazy f) r s)
   forkOnWithUnmask i ma = RL.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkOnWithUnmask i (\f -> fst `liftM` RL.evalRWST (ma $ rwslazy f) r s)
+  forkOnWithUnmaskN n i ma = RL.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkOnWithUnmaskN n i (\f -> fst `liftM` RL.evalRWST (ma $ rwslazy f) r s)
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -602,12 +773,14 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
+  newEmptyCVarN      = lift . newEmptyCVarN
   readCVar           = lift . readCVar
   putCVar v          = lift . putCVar v
   tryPutCVar v       = lift . tryPutCVar v
   takeCVar           = lift . takeCVar
   tryTakeCVar        = lift . tryTakeCVar
   newCRef            = lift . newCRef
+  newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r
@@ -634,7 +807,9 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   fork              = rwsstrict fork
   forkOn i          = rwsstrict (forkOn i)
   forkWithUnmask ma = RS.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkWithUnmask (\f -> fst `liftM` RS.evalRWST (ma $ rwsstrict f) r s)
+  forkWithUnmaskN n ma = RS.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkWithUnmaskN n (\f -> fst `liftM` RS.evalRWST (ma $ rwsstrict f) r s)
   forkOnWithUnmask i ma = RS.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkOnWithUnmask i (\f -> fst `liftM` RS.evalRWST (ma $ rwsstrict f) r s)
+  forkOnWithUnmaskN n i ma = RS.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkOnWithUnmaskN n i (\f -> fst `liftM` RS.evalRWST (ma $ rwsstrict f) r s)
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -642,12 +817,14 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   yield              = lift yield
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
+  newEmptyCVarN      = lift . newEmptyCVarN
   readCVar           = lift . readCVar
   putCVar v          = lift . putCVar v
   tryPutCVar v       = lift . tryPutCVar v
   takeCVar           = lift . takeCVar
   tryTakeCVar        = lift . tryTakeCVar
   newCRef            = lift . newCRef
+  newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
   modifyCRef r       = lift . modifyCRef r
   writeCRef r        = lift . writeCRef r

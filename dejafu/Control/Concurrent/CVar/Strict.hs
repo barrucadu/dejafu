@@ -5,7 +5,9 @@ module Control.Concurrent.CVar.Strict
  ( -- *@CVar@s
   CVar
  , newEmptyCVar
+ , newEmptyCVarN
  , newCVar
+ , newCVarN
  , takeCVar
  , putCVar
  , readCVar
@@ -32,7 +34,7 @@ import Control.Concurrent.CVar (isEmptyCVar, withCVar, withCVarMasked, lock, unl
 import Control.DeepSeq (NFData, force)
 import Control.Monad (liftM)
 import Control.Monad.Catch (mask_, onException)
-import Control.Monad.Conc.Class hiding (newEmptyCVar, putCVar, tryPutCVar)
+import Control.Monad.Conc.Class hiding (newEmptyCVar, newEmptyCVarN, newCVar, newCVarN, putCVar, tryPutCVar)
 
 import qualified Control.Concurrent.CVar  as V
 import qualified Control.Monad.Conc.Class as C
@@ -41,9 +43,27 @@ import qualified Control.Monad.Conc.Class as C
 newEmptyCVar :: (MonadConc m, NFData a) => m (CVar m a)
 newEmptyCVar = C.newEmptyCVar
 
+-- | Create a new empty @CVar@, but it is given a name which may be
+-- used to present more useful debugging information.
+--
+-- If no name is given, a counter starting from 0 is used. If names
+-- conflict, successive @CVar@s with the same name are given a numeric
+-- suffix, counting up from 1.
+newEmptyCVarN :: (MonadConc m, NFData a) => String -> m (CVar m a)
+newEmptyCVarN n = C.newEmptyCVarN (force n)
+
 -- | Create a new @CVar@ containing a value.
 newCVar :: (MonadConc m, NFData a) => a -> m (CVar m a)
-newCVar = V.newCVar . force
+newCVar = C.newCVar . force
+
+-- | Create a new @CVar@ containing a value, but it is given a name
+-- which may be used to present more useful debugging information.
+--
+-- If no name is given, a counter starting from 0 is used. If names
+-- conflict, successive @CVar@s with the same name are given a numeric
+-- suffix, counting up from 1.
+newCVarN :: (MonadConc m, NFData a) => String -> a -> m (CVar m a)
+newCVarN n = C.newCVarN (force n) . force
 
 -- | Swap the contents of a @CVar@, and return the value taken.
 swapCVar :: (MonadConc m, NFData a) => CVar m a -> a -> m a

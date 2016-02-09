@@ -3,7 +3,9 @@ module Control.Concurrent.STM.CTMVar
   ( -- * @CTMVar@s
     CTMVar
   , newCTMVar
+  , newCTMVarN
   , newEmptyCTMVar
+  , newEmptyCTMVarN
   , takeCTMVar
   , putCTMVar
   , readCTMVar
@@ -25,14 +27,31 @@ newtype CTMVar m a = CTMVar (CTVar m (Maybe a))
 
 -- | Create a 'CTMVar' containing the given value.
 newCTMVar :: MonadSTM m => a -> m (CTMVar m a)
-newCTMVar a = do
-  ctvar <- newCTVar $ Just a
+newCTMVar = newCTMVarN ""
+
+-- | Create a 'CTMVar' containing the given value, with the given
+-- name.
+--
+-- Name conflicts are handled as usual for 'CTVar's. The name is
+-- prefixed with \"ctmvar-\".
+newCTMVarN :: MonadSTM m => String -> a -> m (CTMVar m a)
+newCTMVarN n a = do
+  let n' = if null n then "ctmvar" else "ctmvar-" ++ n
+  ctvar <- newCTVarN n' $ Just a
   return $ CTMVar ctvar
 
 -- | Create a new empty 'CTMVar'.
 newEmptyCTMVar :: MonadSTM m => m (CTMVar m a)
-newEmptyCTMVar = do
-  ctvar <- newCTVar Nothing
+newEmptyCTMVar = newEmptyCTMVarN ""
+
+-- | Create a new empty 'CTMVar' with the given name.
+--
+-- Name conflicts are handled as usual for 'CTVar's. The name is
+-- prefixed with \"ctmvar-\".
+newEmptyCTMVarN :: MonadSTM m => String -> m (CTMVar m a)
+newEmptyCTMVarN n = do
+  let n' = if null n then "ctmvar" else "ctmvar-" ++ n
+  ctvar <- newCTVarN n' Nothing
   return $ CTMVar ctvar
 
 -- | Take the contents of a 'CTMVar', or 'retry' if it is empty.

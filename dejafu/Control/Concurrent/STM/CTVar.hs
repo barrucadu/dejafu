@@ -3,6 +3,7 @@ module Control.Concurrent.STM.CTVar
   ( -- * @CTVar@s
     CTVar
   , newCTVar
+  , newCTVarN
   , readCTVar
   , writeCTVar
   , modifyCTVar
