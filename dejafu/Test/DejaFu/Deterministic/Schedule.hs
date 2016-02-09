@@ -34,7 +34,7 @@ randomSchedNP = makeNP randomSched
 -- | A round-robin scheduler which, at every step, schedules the
 -- thread with the next 'ThreadId'.
 roundRobinSched :: Scheduler ()
-roundRobinSched _ _ Nothing _ = (Just 0, ())
+roundRobinSched _ _ Nothing _ = (Just initialThread, ())
 roundRobinSched _ _ (Just (prior, _)) threads
   | prior >= maximum threads' = (Just $ minimum threads', ())
   | otherwise = (Just . minimum $ filter (>prior) threads', ())

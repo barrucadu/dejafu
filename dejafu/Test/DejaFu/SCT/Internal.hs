@@ -82,10 +82,12 @@ toDot bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
     ]
 
   -- Display a labelled edge
+  --
+  -- TODO: Incorporate the thread name.
   edge n1 n2 l = n1 ++ "-> " ++ n2 ++ " [label=\"" ++ show l ++ "\"]\n"
 
-  -- Show a number, replacing a minus sign for \"N\".
-  show' i = if i < 0 then "N" ++ show (negate i) else show i
+  -- Show a 'ThreadId', replacing a minus sign for \"N\".
+  show' (ThreadId _ i) = map (\c -> if c == '-' then 'N' else c) $ show i
 
 -- | Variant of 'toDot' which doesn't include aborted subtrees.
 toDotSmall :: BPOR -> String
@@ -93,7 +95,7 @@ toDotSmall bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
   go l b = unlines $ node l b : [edge l l' i ++ go l' b' | (i, b') <- M.toList (_bdone b), check (i, b'), let l' = l ++ show' i]
 
   -- Check that a subtree has at least one non-aborted branch.
-  check (i, b) = (i == 0 && _baction b == Just Stop) || any check (M.toList $ _bdone b)
+  check (i, b) = (i == initialThread && _baction b == Just Stop) || any check (M.toList $ _bdone b)
 
   -- Display a labelled node.
   node n b = n ++ " [label=\"" ++ label b ++ "\"]"
@@ -107,16 +109,18 @@ toDotSmall bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
     ]
 
   -- Display a labelled edge
+  --
+  -- TODO: Incorporate the thread name.
   edge n1 n2 l = n1 ++ "-> " ++ n2 ++ " [label=\"" ++ show l ++ "\"]\n"
 
   -- Show a number, replacing a minus sign for \"N\".
-  show' i = if i < 0 then "N" ++ show (negate i) else show i
+  show' (ThreadId _ i) = map (\c -> if c == '-' then 'N' else c) $ show i
 
 -- | Initial BPOR state.
 initialState :: BPOR
 initialState = BPOR
-  { _brunnable = S.singleton (ThreadId 0)
-  , _btodo     = M.singleton (ThreadId 0) False
+  { _brunnable = S.singleton initialThread
+  , _btodo     = M.singleton initialThread False
   , _bdone     = M.empty
   , _bsleep    = M.empty
   , _btaken    = M.empty
@@ -132,7 +136,7 @@ initialState = BPOR
 -- lead to lots of backtracking points being identified before
 -- higher-up decisions are reconsidered, so enlarging the sleep sets.
 next :: BPOR -> Maybe ([ThreadId], Bool, Map ThreadId ThreadAction)
-next = go 0 where
+next = go initialThread where
   go tid bpor =
         -- All the possible prefix traces from this point, with
         -- updated BPOR subtrees if taken from the done list.
@@ -142,7 +146,7 @@ next = go 0 where
 
     in if null prefixes
        then Nothing
-       else case partition (\(t:_,_,_) -> t < 0) $ sortBy (comparing $ Down . cmp) prefixes of
+       else case partition (\(t:_,_,_) -> t < initialThread) $ sortBy (comparing $ Down . cmp) prefixes of
               (commits, others)
                 | not $ null others  -> listToMaybe others
                 | not $ null commits -> listToMaybe commits
@@ -154,7 +158,7 @@ next = go 0 where
 
   preEmps tid bpor (t:ts) =
     let rest = preEmps t (fromJust . M.lookup t $ _bdone bpor) ts
-    in  if t > 0 && tid /= t && tid `S.member` _brunnable bpor then 1 + rest else rest
+    in  if t > initialThread && tid /= t && tid `S.member` _brunnable bpor then 1 + rest else rest
   preEmps _ _ [] = 0::Int
 
 -- | Produce a list of new backtracking points from an execution
@@ -164,7 +168,7 @@ findBacktrack :: MemType
   -> Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
   -> Trace'
   -> [BacktrackStep]
-findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl where
+findBacktrack memtype backtrack = go initialCRState S.empty initialThread [] . Sq.viewl where
   go crstate allThreads tid bs ((e,i):<is) ((d,_,a):ts) =
     let tid' = tidOf tid d
         crstate' = updateCRState crstate a
@@ -177,7 +181,7 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
           }
         bs' = doBacktrack killsEarly allThreads' (toList e) (bs++[this])
         allThreads' = allThreads `S.union` S.fromList (M.keys $ _runnable this)
-        killsEarly = null ts && any (/=0) (M.keys $ _runnable this)
+        killsEarly = null ts && any (/=initialThread) (M.keys $ _runnable this)
     in go crstate' allThreads' tid' bs' (Sq.viewl is) ts
   go _ _ _ bs _ _ = bs
 
@@ -200,7 +204,7 @@ findBacktrack memtype backtrack = go initialCRState S.empty 0 [] . Sq.viewl wher
 
 -- | Add a new trace to the tree, creating a new subtree.
 grow :: MemType -> Bool -> Trace' -> BPOR -> BPOR
-grow memtype conservative = grow' initialCRState 0 where
+grow memtype conservative = grow' initialCRState initialThread where
   grow' crstate tid trc@((d, _, a):rest) bpor =
     let tid'     = tidOf tid d
         crstate' = updateCRState crstate a
@@ -242,7 +246,7 @@ grow memtype conservative = grow' initialCRState 0 where
 -- | Add new backtracking points, if they have not already been
 -- visited, fit into the bound, and aren't in the sleep set.
 todo :: ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool) -> [BacktrackStep] -> BPOR -> BPOR
-todo bv = go 0 [] where
+todo bv = go initialThread [] where
   go tid pref (b:bs) bpor =
     let bpor' = backtrack pref b bpor
         tid'  = tidOf tid . fst $ _decision b
@@ -276,7 +280,7 @@ pruneCommits bpor
   where
     go b = b { _bdone = pruneCommits <$> _bdone bpor }
 
-    onlycommits = all (<0) . M.keys $ _btodo bpor
+    onlycommits = all (<initialThread) . M.keys $ _btodo bpor
     alldonesync = all barrier . M.elems $ _bdone bpor
 
     barrier = isBarrier . simplify . fromJust . _baction
@@ -301,7 +305,7 @@ decisionOf prior runnable chosen
 -- | Get the tid of the currently active thread after executing a
 -- series of decisions. The list MUST begin with a 'Start'.
 activeTid :: [Decision] -> ThreadId
-activeTid = foldl' tidOf 0
+activeTid = foldl' tidOf initialThread
 
 -- | Check if an action is dependent on another.
 dependent :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, ThreadAction) -> Bool

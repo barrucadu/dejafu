@@ -99,8 +99,8 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 
   -- ----------
 
-  forkWithUnmask  ma = toConc (AFork (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop)))
-  forkOnWithUnmask _ = C.forkWithUnmask
+  forkWithUnmaskN   n ma = toConc (AFork n (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop)))
+  forkOnWithUnmaskN n _  = C.forkWithUnmaskN n
 
   -- This implementation lies and returns 2 until a value is set. This
   -- will potentially avoid special-case behaviour for 1 capability,
@@ -148,10 +148,10 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 
   -- ----------
 
-  _concKnowsAbout (Left  (CVar  (cvarid,  _))) = toConc (\c -> AKnowsAbout (Left  cvarid)  (c ()))
+  _concKnowsAbout (Left  (CVar  cvarid  _)) = toConc (\c -> AKnowsAbout (Left  cvarid)  (c ()))
   _concKnowsAbout (Right (CTVar (ctvarid, _))) = toConc (\c -> AKnowsAbout (Right ctvarid) (c ()))
 
-  _concForgets (Left  (CVar  (cvarid,  _))) = toConc (\c -> AForgets (Left  cvarid)  (c ()))
+  _concForgets (Left  (CVar  cvarid  _)) = toConc (\c -> AForgets (Left  cvarid)  (c ()))
   _concForgets (Right (CTVar (ctvarid, _))) = toConc (\c -> AForgets (Right ctvarid) (c ()))
 
   _concAllKnown = toConc (\c -> AAllKnown (c ()))

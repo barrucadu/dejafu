@@ -229,7 +229,7 @@ import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when, unless)
 import Data.Function (on)
-import Data.List (minimumBy)
+import Data.List (intercalate, intersperse, minimumBy)
 import Data.List.Extra
 import Data.Monoid ((<>))
 import Data.Ord (comparing)
@@ -599,12 +599,17 @@ doTest name result = do
       putStrLn $ _failureMsg result
 
     let failures = _failures result
-    mapM_ (\(r, t) -> putStrLn $ "\t" ++ either showFail show r ++ " " ++ showTrace t) $ take 5 failures
+    let output = map (\(r, t) -> putStrLn . indent $ either showFail show r ++ " " ++ showTrace t) $ take 5 failures
+    sequence_ $ intersperse (putStrLn "") output
     when (moreThan failures 5) $
-      putStrLn "\t..."
+      putStrLn (indent "...")
 
   return $ _pass result
 
 -- | Increment the cases
 incCC :: Result a -> Result a
 incCC r = r { _casesChecked = _casesChecked r + 1 }
+
+-- | Indent every line of a string.
+indent :: String -> String
+indent = intercalate "\n" . map ('\t':) . lines

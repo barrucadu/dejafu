@@ -1,7 +1,6 @@
-{-# LANGUAGE CPP                        #-}
-{-# LANGUAGE ExistentialQuantification  #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE CPP                       #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE RankNTypes                #-}
 
 -- | Common types and utility functions for deterministic execution of
 -- 'MonadConc' implementations.
@@ -10,6 +9,8 @@ module Test.DejaFu.Deterministic.Internal.Common where
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception, MaskingState(..))
 import Data.Map.Strict (Map)
+import Data.Maybe (mapMaybe)
+import Data.List (sort, nub, intercalate)
 import Data.List.Extra
 import Test.DejaFu.Internal
 import Test.DejaFu.STM (CTVarId)
@@ -41,10 +42,10 @@ instance Monad (M n r s) where
 -- wakes up all threads blocked on reading it, and it is up to the
 -- scheduler which one runs next. Taking from a @CVar@ behaves
 -- analogously.
---
--- @CVar@s are represented as a unique numeric identifier, and a
--- reference containing a Maybe value.
-newtype CVar r a = CVar (CVarId, r (Maybe a))
+data CVar r a = CVar
+  { _cvarId   :: CVarId
+  , _cvarVal  :: r (Maybe a)
+  }
 
 -- | The mutable non-blocking reference type. These are like 'IORef's.
 --
@@ -53,7 +54,10 @@ newtype CVar r a = CVar (CVarId, r (Maybe a))
 -- (so each thread sees its latest write), (b) a commit count (used in
 -- compare-and-swaps), and (c) the current value visible to all
 -- threads.
-newtype CRef r a = CRef (CRefId, r (Map ThreadId a, Integer, a))
+data CRef r a = CRef
+  { _crefId   :: CRefId
+  , _crefVal  :: r (Map ThreadId a, Integer, a)
+  }
 
 -- | The compare-and-swap proof type.
 --
@@ -62,7 +66,11 @@ newtype CRef r a = CRef (CRefId, r (Map ThreadId a, Integer, a))
 -- produced, and an @a@ value. This doesn't work in the source package
 -- (atomic-primops) because of the need to use pointer equality. Here
 -- we can just pack extra information into 'CRef' to avoid that need.
-newtype Ticket a = Ticket (CRefId, Integer, a)
+data Ticket a = Ticket
+  { _ticketCRef   :: CRefId
+  , _ticketWrites :: Integer
+  , _ticketVal    :: a
+  }
 
 -- | Dict of methods for implementations to override.
 type Fixed n r s = Ref n r (M n r s)
@@ -83,7 +91,7 @@ runCont = runM
 -- primitives of the concurrency. 'spawn' is absent as it is
 -- implemented in terms of 'newEmptyCVar', 'fork', and 'putCVar'.
 data Action n r s =
-    AFork  ((forall b. M n r s b -> M n r s b) -> Action n r s) (ThreadId -> Action n r s)
+    AFork  String ((forall b. M n r s b -> M n r s b) -> Action n r s) (ThreadId -> Action n r s)
   | AMyTId (ThreadId -> Action n r s)
 
   | AGetNumCapabilities (Int -> Action n r s)
@@ -127,45 +135,74 @@ data Action n r s =
 -- * Identifiers
 
 -- | Every live thread has a unique identitifer.
-newtype ThreadId = ThreadId Int
-  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral)
+data ThreadId = ThreadId (Maybe String) Int
+  deriving Eq
+
+instance Ord ThreadId where
+  compare (ThreadId _ i) (ThreadId _ j) = compare i j
 
 instance Show ThreadId where
-  show (ThreadId i) = show i
+  show (ThreadId (Just n) _) = n
+  show (ThreadId Nothing  i) = show i
+
+instance NFData ThreadId where
+  rnf (ThreadId n i) = rnf (n, i)
+
+-- | The ID of the initial thread.
+initialThread :: ThreadId
+initialThread = ThreadId (Just "main") 0
 
 -- | Every 'CVar' has a unique identifier.
-newtype CVarId = CVarId Int
-  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral)
+data CVarId = CVarId (Maybe String) Int
+  deriving Eq
+
+instance Ord CVarId where
+  compare (CVarId _ i) (CVarId _ j) = compare i j
 
 instance Show CVarId where
-  show (CVarId i) = show i
+  show (CVarId (Just n) _) = n
+  show (CVarId Nothing  i) = show i
+
+instance NFData CVarId where
+  rnf (CVarId n i) = rnf (n, i)
 
 -- | Every 'CRef' has a unique identifier.
-newtype CRefId = CRefId Int
-  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral)
+data CRefId = CRefId (Maybe String) Int
+  deriving Eq
+
+instance Ord CRefId where
+  compare (CRefId _ i) (CRefId _ j) = compare i j
 
 instance Show CRefId where
-  show (CRefId i) = show i
+  show (CRefId (Just n) _) = n
+  show (CRefId Nothing  i) = show i
+
+instance NFData CRefId where
+  rnf (CRefId n i) = rnf (n, i)
 
 -- | The number of ID parameters was getting a bit unwieldy, so this
 -- hides them all away.
-data IdSource = Id { _nextCRId :: CRefId, _nextCVId :: CVarId, _nextCTVId :: CTVarId, _nextTId :: ThreadId }
+data IdSource = Id { _nextCRId :: Int, _nextCVId :: Int, _nextCTVId :: CTVarId, _nextTId :: Int }
 
 -- | Get the next free 'CRefId'.
 nextCRId :: IdSource -> (IdSource, CRefId)
-nextCRId idsource = let newid = _nextCRId idsource + 1 in (idsource { _nextCRId = newid }, newid)
+nextCRId idsource = (idsource { _nextCRId = newid }, CRefId Nothing newid)
+  where newid = _nextCRId idsource + 1
 
 -- | Get the next free 'CVarId'.
 nextCVId :: IdSource -> (IdSource, CVarId)
-nextCVId idsource = let newid = _nextCVId idsource + 1 in (idsource { _nextCVId = newid }, newid)
+nextCVId idsource = (idsource { _nextCVId = newid }, CVarId Nothing newid) where
+  newid = _nextCVId idsource + 1
 
 -- | Get the next free 'CTVarId'.
 nextCTVId :: IdSource -> (IdSource, CTVarId)
-nextCTVId idsource = let newid = _nextCTVId idsource + 1 in (idsource { _nextCTVId = newid }, newid)
+nextCTVId idsource = (idsource { _nextCTVId = newid }, newid) where
+  newid = _nextCTVId idsource + 1
 
 -- | Get the next free 'ThreadId'.
 nextTId :: IdSource -> (IdSource, ThreadId)
-nextTId idsource = let newid = _nextTId idsource + 1 in (idsource { _nextTId = newid }, newid)
+nextTId idsource = (idsource { _nextTId = newid }, ThreadId Nothing newid) where
+  newid = _nextTId idsource + 1
 
 -- | The initial ID source.
 initialIdSource :: IdSource
@@ -207,16 +244,20 @@ toTrace = map go where
     (_, WillCommitRef t c:|_) -> (Commit, WillCommitRef t c)
     (d, a:|_) -> (d, a)
 
--- | Pretty-print a trace.
+-- | Pretty-print a trace, including a key of the thread IDs. Each
+-- line of the key is indented by two spaces.
 showTrace :: Trace -> String
-showTrace = trace "" 0 where
-  trace prefix num ((Start tid,_,_):ds)    = thread prefix num ++ trace ("S" ++ show tid) 1 ds
-  trace prefix num ((SwitchTo tid,_,_):ds) = thread prefix num ++ trace ("P" ++ show tid) 1 ds
-  trace prefix num ((Continue,_,_):ds)     = trace prefix (num + 1) ds
-  trace prefix num ((Commit,_,_):ds)       = thread prefix num ++ trace "C" 1 ds
-  trace prefix num []                      = thread prefix num
+showTrace trc = intercalate "\n" $ trace "" 0 trc : (map ("  "++) . sort . nub $ mapMaybe toKey trc) where
+  trace prefix num ((Start    (ThreadId _ i),_,_):ds) = thread prefix num ++ trace ("S" ++ show i) 1 ds
+  trace prefix num ((SwitchTo (ThreadId _ i),_,_):ds) = thread prefix num ++ trace ("P" ++ show i) 1 ds
+  trace prefix num ((Continue,_,_):ds) = trace prefix (num + 1) ds
+  trace prefix num ((Commit,_,_):ds)   = thread prefix num ++ trace "C" 1 ds
+  trace prefix num [] = thread prefix num
 
   thread prefix num = prefix ++ replicate num '-'
+
+  toKey (Start (ThreadId (Just name) i), _, _) = Just $ show i ++ ": " ++ name
+  toKey _ = Nothing
 
 -- | Scheduling decisions are based on the state of the running
 -- program, and so we can capture some of that state in recording what
@@ -474,24 +515,24 @@ instance NFData Lookahead where
 -- | Look as far ahead in the given continuation as possible.
 lookahead :: Action n r s -> NonEmpty Lookahead
 lookahead = unsafeToNonEmpty . lookahead' where
-  lookahead' (AFork _ _)             = [WillFork]
+  lookahead' (AFork _ _ _)           = [WillFork]
   lookahead' (AMyTId _)              = [WillMyThreadId]
   lookahead' (AGetNumCapabilities _) = [WillGetNumCapabilities]
   lookahead' (ASetNumCapabilities i k) = WillSetNumCapabilities i : lookahead' k
   lookahead' (ANewVar _)             = [WillNewVar]
-  lookahead' (APutVar (CVar (c, _)) _ k)    = WillPutVar c : lookahead' k
-  lookahead' (ATryPutVar (CVar (c, _)) _ _) = [WillTryPutVar c]
-  lookahead' (AReadVar (CVar (c, _)) _)     = [WillReadVar c]
-  lookahead' (ATakeVar (CVar (c, _)) _)     = [WillTakeVar c]
-  lookahead' (ATryTakeVar (CVar (c, _)) _)  = [WillTryTakeVar c]
+  lookahead' (APutVar (CVar c _) _ k)    = WillPutVar c : lookahead' k
+  lookahead' (ATryPutVar (CVar c _) _ _) = [WillTryPutVar c]
+  lookahead' (AReadVar (CVar c _) _)     = [WillReadVar c]
+  lookahead' (ATakeVar (CVar c _) _)     = [WillTakeVar c]
+  lookahead' (ATryTakeVar (CVar c _) _)  = [WillTryTakeVar c]
   lookahead' (ANewRef _ _)           = [WillNewRef]
-  lookahead' (AReadRef (CRef (r, _)) _)     = [WillReadRef r]
-  lookahead' (AReadRefCas (CRef (r, _)) _)  = [WillReadRefCas r]
-  lookahead' (APeekTicket (Ticket (r, _, _)) _) = [WillPeekTicket r]
-  lookahead' (AModRef (CRef (r, _)) _ _)    = [WillModRef r]
-  lookahead' (AModRefCas (CRef (r, _)) _ _) = [WillModRefCas r]
-  lookahead' (AWriteRef (CRef (r, _)) _ k) = WillWriteRef r : lookahead' k
-  lookahead' (ACasRef (CRef (r, _)) _ _ _) = [WillCasRef r]
+  lookahead' (AReadRef (CRef r _) _)     = [WillReadRef r]
+  lookahead' (AReadRefCas (CRef r _) _)  = [WillReadRefCas r]
+  lookahead' (APeekTicket (Ticket r _ _) _) = [WillPeekTicket r]
+  lookahead' (AModRef (CRef r _) _ _)    = [WillModRef r]
+  lookahead' (AModRefCas (CRef r _) _ _) = [WillModRefCas r]
+  lookahead' (AWriteRef (CRef r _) _ k) = WillWriteRef r : lookahead' k
+  lookahead' (ACasRef (CRef r _) _ _ _) = [WillCasRef r]
   lookahead' (ACommit t c)           = [WillCommitRef t c]
   lookahead' (AAtom _ _)             = [WillSTM]
   lookahead' (AThrow _)              = [WillThrow]

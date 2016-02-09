@@ -23,6 +23,7 @@ module Test.Tasty.DejaFu
   , testDejafusIO'
   ) where
 
+import Data.List (intercalate, intersperse)
 import Data.Typeable (Typeable)
 import Test.DejaFu
 import Test.DejaFu.Deterministic (ConcST, ConcIO, Trace, showFail, showTrace)
@@ -201,7 +202,7 @@ showErr res
 
   msg = if null (_failureMsg res) then "" else _failureMsg res ++ "\n"
 
-  failures = map (\(r, t) -> "\t" ++ either showFail show r ++ " " ++ showTrace t) . take 5 $ _failures res
+  failures = intersperse "" . map (\(r, t) -> indent $ either showFail show r ++ " " ++ showTrace t) . take 5 $ _failures res
 
   rest = if moreThan (_failures res) 5 then "\n\t..." else ""
 
@@ -211,3 +212,6 @@ moreThan [] n = n < 0
 moreThan _ 0  = True
 moreThan (_:xs) n = moreThan xs (n-1)
 
+-- | Indent every line of a string.
+indent :: String -> String
+indent = intercalate "\n" . map ('\t':) . lines

@@ -43,7 +43,7 @@ emptyBuffer = WriteBuffer I.empty
 
 -- | Add a new write to the end of a buffer.
 bufferWrite :: Monad n => Fixed n r s -> WriteBuffer r -> Int -> CRef r a -> a -> ThreadId -> n (WriteBuffer r)
-bufferWrite fixed (WriteBuffer wb) i cref@(CRef (_, ref)) new tid = do
+bufferWrite fixed (WriteBuffer wb) i cref@(CRef _ ref) new tid = do
   -- Construct the new write buffer
   let write = singleton $ BufferedWrite tid cref new
   let buffer' = I.insertWith (><) i write wb
@@ -73,15 +73,15 @@ readCRef fixed cref tid = do
 -- | Read from a @CRef@, returning a @Ticket@ representing the current
 -- view of the thread.
 readForTicket :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n (Ticket a)
-readForTicket fixed cref@(CRef (crid, _)) tid = do
+readForTicket fixed cref@(CRef crid _) tid = do
   (val, count) <- readCRefPrim fixed cref tid
-  return $ Ticket (crid, count, val)
+  return $ Ticket crid count val
 
 -- | Perform a compare-and-swap on a @CRef@ if the ticket is still
 -- valid. This is strict in the \"new\" value argument.
 casCRef :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> Ticket a -> a -> n (Bool, Ticket a)
-casCRef fixed cref tid (Ticket (_, cc, _)) !new = do
-  tick'@(Ticket (_, cc', _)) <- readForTicket fixed cref tid
+casCRef fixed cref tid (Ticket _ cc _) !new = do
+  tick'@(Ticket _ cc' _) <- readForTicket fixed cref tid
 
   if cc == cc'
   then do
@@ -92,7 +92,7 @@ casCRef fixed cref tid (Ticket (_, cc, _)) !new = do
 
 -- | Read the local state of a @CRef@.
 readCRefPrim :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n (a, Integer)
-readCRefPrim fixed (CRef (_, ref)) tid = do
+readCRefPrim fixed (CRef _ ref) tid = do
   (vals, count, def) <- readRef fixed ref
 
   return (M.findWithDefault def tid vals, count)
@@ -100,7 +100,7 @@ readCRefPrim fixed (CRef (_, ref)) tid = do
 -- | Write and commit to a @CRef@ immediately, clearing the update map
 -- and incrementing the write count.
 writeImmediate :: Monad n => Fixed n r s -> CRef r a -> a -> n ()
-writeImmediate fixed (CRef (_, ref)) a = do
+writeImmediate fixed (CRef _ ref) a = do
   (_, count, _) <- readRef fixed ref
   writeRef fixed ref (M.empty, count + 1, a)
 
@@ -112,13 +112,13 @@ writeBarrier fixed (WriteBuffer wb) = mapM_ flush $ I.elems wb where
 -- | Add phantom threads to the thread list to commit pending writes.
 addCommitThreads :: WriteBuffer r -> Threads n r s -> Threads n r s
 addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
-  phantoms = [(ThreadId $ negate k - 1, mkthread $ fromJust c) | (k, b) <- I.toList wb, let c = go $ viewl b, isJust c]
-  go (BufferedWrite tid (CRef (crid, _)) _ :< _) = Just $ ACommit tid crid
+  phantoms = [(ThreadId Nothing $ negate k - 1, mkthread $ fromJust c) | (k, b) <- I.toList wb, let c = go $ viewl b, isJust c]
+  go (BufferedWrite tid (CRef crid _) _ :< _) = Just $ ACommit tid crid
   go EmptyL = Nothing
 
 -- | Remove phantom threads.
 delCommitThreads :: Threads n r s -> Threads n r s
-delCommitThreads = M.filterWithKey $ \k _ -> k >= 0
+delCommitThreads = M.filterWithKey $ \k _ -> k >= initialThread
 
 --------------------------------------------------------------------------------
 -- * Manipulating @CVar@s
@@ -152,7 +152,7 @@ tryTakeFromCVar = seeCVar True False
 mutCVar :: Monad n
          => Bool -> CVar r a -> a -> (Bool -> Action n r s)
          -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-mutCVar blocking (CVar (cvid, ref)) a c fixed threadid threads = do
+mutCVar blocking (CVar cvid ref) a c fixed threadid threads = do
   val <- readRef fixed ref
 
   case val of
@@ -174,7 +174,7 @@ mutCVar blocking (CVar (cvid, ref)) a c fixed threadid threads = do
 seeCVar :: Monad n
          => Bool -> Bool -> CVar r a -> (Maybe a -> Action n r s)
          -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-seeCVar emptying blocking (CVar (cvid, ref)) c fixed threadid threads = do
+seeCVar emptying blocking (CVar cvid ref) c fixed threadid threads = do
   val <- readRef fixed ref
 
   case val of

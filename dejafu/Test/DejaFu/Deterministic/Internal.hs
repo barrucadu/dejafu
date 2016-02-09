@@ -25,6 +25,7 @@ module Test.DejaFu.Deterministic.Internal
  , ThreadId(..)
  , CVarId(..)
  , CRefId(..)
+ , initialThread
 
  -- * Memory Models
  , MemType(..)
@@ -95,7 +96,7 @@ runFixed' fixed runstm sched memtype s idSource ma = do
   ref <- newRef fixed Nothing
 
   let c       = ma >>= liftN fixed . writeRef fixed ref . Just . Right
-  let threads = launch' Unmasked 0 ((\a _ -> a) $ runCont c $ const AStop) M.empty
+  let threads = launch' Unmasked initialThread ((\a _ -> a) $ runCont c $ const AStop) M.empty
 
   (s', idSource', trace) <- runThreads fixed runstm sched memtype s threads idSource ref
   out <- readRef fixed ref
@@ -124,7 +125,7 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
         Right (threads', idSource', act, wb', caps') -> loop threads' idSource' act wb' caps'
 
         Left UncaughtException
-          | chosen == 0 -> die g' UncaughtException
+          | chosen == initialThread -> die g' UncaughtException
           | otherwise -> loop (kill chosen threads) idSource Killed wb caps
 
         Left failure -> die g' failure
@@ -139,11 +140,13 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
       isAborted     = isNothing choice
       isBlocked     = isJust . _blocking $ fromJust thread
       isNonexistant = isNothing thread
-      isTerminated  = 0 `notElem` M.keys threads
-      isDeadlocked  = isLocked 0 threads && (((~= OnCVarFull  undefined) <$> M.lookup 0 threads) == Just True ||
-                                           ((~=  OnCVarEmpty undefined) <$> M.lookup 0 threads) == Just True ||
-                                           ((~=  OnMask      undefined) <$> M.lookup 0 threads) == Just True)
-      isSTMLocked   = isLocked 0 threads && ((~=  OnCTVar    []) <$> M.lookup 0 threads) == Just True
+      isTerminated  = initialThread `notElem` M.keys threads
+      isDeadlocked  = isLocked initialThread threads &&
+        (((~=  OnCVarFull  undefined) <$> M.lookup initialThread threads) == Just True ||
+         ((~=  OnCVarEmpty undefined) <$> M.lookup initialThread threads) == Just True ||
+         ((~=  OnMask      undefined) <$> M.lookup initialThread threads) == Just True)
+      isSTMLocked = isLocked initialThread threads &&
+        ((~=  OnCTVar []) <$> M.lookup initialThread threads) == Just True
 
       unblockWaitingOn tid = fmap unblock where
         unblock thrd = case _blocking thrd of
@@ -194,7 +197,7 @@ stepThread :: forall n r s. (Functor n, Monad n) => Fixed n r s
   -- ^ The number of capabilities
   -> n (Either Failure (Threads n r s, IdSource, ThreadAction, WriteBuffer r, Int))
 stepThread fixed runstm memtype action idSource tid threads wb caps = case action of
-  AFork    a b     -> stepFork        a b
+  AFork    n a b   -> stepFork        n a b
   AMyTId   c       -> stepMyTId       c
   AGetNumCapabilities   c -> stepGetNumCapabilities c
   ASetNumCapabilities i c -> stepSetNumCapabilities i c
@@ -230,9 +233,10 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
 
   where
     -- | Start a new thread, assigning it the next 'ThreadId'
-    stepFork a b = return $ Right (goto (b newtid) tid threads', idSource', Fork newtid, wb, caps) where
+    stepFork n a b = return $ Right (goto (b newtid) tid threads', idSource', Fork newtid, wb, caps) where
       threads' = launch tid newtid a threads
-      (idSource', newtid) = nextTId idSource
+      (idSource', tid'@(ThreadId _ i)) = nextTId idSource
+      newtid = if null n then tid' else ThreadId (Just n) i
 
     -- | Get the 'ThreadId' of the current thread
     stepMyTId c = simple (goto (c tid) tid threads) MyThreadId
@@ -248,60 +252,60 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
 
     -- | Put a value into a @CVar@, blocking the thread until it's
     -- empty.
-    stepPutVar cvar@(CVar (cvid, _)) a c = synchronised $ do
+    stepPutVar cvar@(CVar cvid _) a c = synchronised $ do
       (success, threads', woken) <- putIntoCVar cvar a c fixed tid threads
       simple threads' $ if success then PutVar cvid woken else BlockedPutVar cvid
 
     -- | Try to put a value into a @CVar@, without blocking.
-    stepTryPutVar cvar@(CVar (cvid, _)) a c = synchronised $ do
+    stepTryPutVar cvar@(CVar cvid _) a c = synchronised $ do
       (success, threads', woken) <- tryPutIntoCVar cvar a c fixed tid threads
       simple threads' $ TryPutVar cvid success woken
 
     -- | Get the value from a @CVar@, without emptying, blocking the
     -- thread until it's full.
-    stepReadVar cvar@(CVar (cvid, _)) c = synchronised $ do
+    stepReadVar cvar@(CVar cvid _) c = synchronised $ do
       (success, threads', _) <- readFromCVar cvar c fixed tid threads
       simple threads' $ if success then ReadVar cvid else BlockedReadVar cvid
 
     -- | Take the value from a @CVar@, blocking the thread until it's
     -- full.
-    stepTakeVar cvar@(CVar (cvid, _)) c = synchronised $ do
+    stepTakeVar cvar@(CVar cvid _) c = synchronised $ do
       (success, threads', woken) <- takeFromCVar cvar c fixed tid threads
       simple threads' $ if success then TakeVar cvid woken else BlockedTakeVar cvid
 
     -- | Try to take the value from a @CVar@, without blocking.
-    stepTryTakeVar cvar@(CVar (cvid, _)) c = synchronised $ do
+    stepTryTakeVar cvar@(CVar cvid _) c = synchronised $ do
       (success, threads', woken) <- tryTakeFromCVar cvar c fixed tid threads
       simple threads' $ TryTakeVar cvid success woken
 
     -- | Read from a @CRef@.
-    stepReadRef cref@(CRef (crid, _)) c = do
+    stepReadRef cref@(CRef crid _) c = do
       val <- readCRef fixed cref tid
       simple (goto (c val) tid threads) $ ReadRef crid
 
     -- | Read from a @CRef@ for future compare-and-swap operations.
-    stepReadRefCas cref@(CRef (crid, _)) c = do
+    stepReadRefCas cref@(CRef crid _) c = do
       tick <- readForTicket fixed cref tid
       simple (goto (c tick) tid threads) $ ReadRefCas crid
 
     -- | Extract the value from a @Ticket@.
-    stepPeekTicket (Ticket (crid, _, a)) c = simple (goto (c a) tid threads) $ PeekTicket crid
+    stepPeekTicket (Ticket crid _ a) c = simple (goto (c a) tid threads) $ PeekTicket crid
 
     -- | Modify a @CRef@.
-    stepModRef cref@(CRef (crid, _)) f c = synchronised $ do
+    stepModRef cref@(CRef crid _) f c = synchronised $ do
       (new, val) <- f <$> readCRef fixed cref tid
       writeImmediate fixed cref new
       simple (goto (c val) tid threads) $ ModRef crid
 
     -- | Modify a @CRef@ using a compare-and-swap.
-    stepModRefCas cref@(CRef (crid, _)) f c = synchronised $ do
-      tick@(Ticket (_, _, old)) <- readForTicket fixed cref tid
+    stepModRefCas cref@(CRef crid _) f c = synchronised $ do
+      tick@(Ticket _ _ old) <- readForTicket fixed cref tid
       let (new, val) = f old
       casCRef fixed cref tid tick new
       simple (goto (c val) tid threads) $ ModRefCas crid
 
     -- | Write to a @CRef@ without synchronising
-    stepWriteRef cref@(CRef (crid, _)) a c = case memtype of
+    stepWriteRef cref@(CRef crid _) a c = case memtype of
       -- Write immediately.
       SequentialConsistency -> do
         writeImmediate fixed cref a
@@ -309,23 +313,23 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
 
       -- Add to buffer using thread id.
       TotalStoreOrder -> do
-        let (ThreadId tid') = tid
+        let (ThreadId _ tid') = tid
         wb' <- bufferWrite fixed wb tid' cref a tid
         return $ Right (goto c tid threads, idSource, WriteRef crid, wb', caps)
 
       -- Add to buffer using cref id
       PartialStoreOrder -> do
-        let (CRefId crid') = crid
+        let (CRefId _ crid') = crid
         wb' <- bufferWrite fixed wb crid' cref a tid
         return $ Right (goto c tid threads, idSource, WriteRef crid, wb', caps)
 
     -- | Perform a compare-and-swap on a @CRef@.
-    stepCasRef cref@(CRef (crid, _)) tick a c = synchronised $ do
+    stepCasRef cref@(CRef crid _) tick a c = synchronised $ do
       (suc, tick') <- casCRef fixed cref tid tick a
       simple (goto (c (suc, tick')) tid threads) $ CasRef crid suc
 
     -- | Commit a @CRef@ write
-    stepCommit t@(ThreadId t') c@(CRefId c') = do
+    stepCommit t@(ThreadId _ t') c@(CRefId _ c') = do
       wb' <- case memtype of
         -- Shouldn't ever get here
         SequentialConsistency ->
@@ -383,7 +387,7 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
              | interruptible thread -> case propagate (wrap e) t threads' of
                Just threads'' -> simple threads'' $ ThrowTo t
                Nothing
-                 | t == 0     -> return $ Left UncaughtException
+                 | t == initialThread -> return $ Left UncaughtException
                  | otherwise -> simple (kill t threads') $ ThrowTo t
              | otherwise -> simple blocked $ BlockedThrowTo t
            Nothing -> simple threads' $ ThrowTo t
@@ -416,14 +420,14 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
     stepNewVar c = do
       let (idSource', newcvid) = nextCVId idSource
       ref <- newRef fixed Nothing
-      let cvar = CVar (newcvid, ref)
+      let cvar = CVar newcvid ref
       return $ Right (knows [Left newcvid] tid $ goto (c cvar) tid threads, idSource', NewVar newcvid, wb, caps)
 
     -- | Create a new @CRef@, using the next 'CRefId'.
     stepNewRef a c = do
       let (idSource', newcrid) = nextCRId idSource
       ref <- newRef fixed (M.empty, 0, a)
-      let cref = CRef (newcrid, ref)
+      let cref = CRef newcrid ref
       return $ Right (goto (c cref) tid threads, idSource', NewRef newcrid, wb, caps)
 
     -- | Lift an action from the underlying monad into the @Conc@

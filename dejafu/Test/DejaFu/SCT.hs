@@ -114,7 +114,7 @@ import Data.Sequence (Seq, (|>))
 import Data.Map (Map)
 import Data.Maybe (isNothing, isJust, fromJust)
 import Test.DejaFu.Deterministic
-import Test.DejaFu.Deterministic.Internal (willRelease)
+import Test.DejaFu.Deterministic.Internal (initialThread, willRelease)
 import Test.DejaFu.SCT.Internal
 
 import qualified Data.Map.Strict as M
@@ -266,7 +266,7 @@ preEmpCount ts (d, _) = go Nothing ts where
   go p [] = preEmpC p d
 
   preEmpC (Just Yield) (SwitchTo _) = 0
-  preEmpC _ (SwitchTo t) = if t >= 0 then 1 else 0
+  preEmpC _ (SwitchTo t) = if t >= initialThread then 1 else 0
   preEmpC _ _ = 0
 
 -- | Count the number of pre-emptions in an entire trace
@@ -325,7 +325,7 @@ fBound (FairBound fb) ts dl = maxYieldCountDiff ts dl <= fb
 
 -- | Count the number of yields by a thread in a schedule prefix.
 yieldCount :: ThreadId -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Int
-yieldCount tid ts (_, l) = go 0 ts where
+yieldCount tid ts (_, l) = go initialThread ts where
   go t ((Start    t', Yield):rest) = (if t == tid then 1 else 0) + go t' rest
   go t ((SwitchTo t', Yield):rest) = (if t == tid then 1 else 0) + go t' rest
   go t ((Continue,    Yield):rest) = (if t == tid then 1 else 0) + go t  rest
@@ -344,7 +344,7 @@ maxYieldCountDiff ts dl = maximum yieldCountDiffs where
 
   allTids ((_, Fork tid):rest) = tid : allTids rest
   allTids (_:rest) = allTids rest
-  allTids [] = [0]
+  allTids [] = [initialThread]
 
 -- | Add a backtrack point. If the thread isn't runnable, or performs
 -- a release operation, add all runnable threads.
