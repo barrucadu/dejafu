@@ -82,7 +82,7 @@ library
                      , Control.Monad.STM.Class
 
                      , Control.Concurrent.CVar
-                     --, Control.Concurrent.CVar.Strict
+                     , Control.Concurrent.CVar.Strict
                      , Control.Concurrent.STM.CTVar
                      , Control.Concurrent.STM.CTMVar
 
