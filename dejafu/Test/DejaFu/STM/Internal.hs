@@ -7,6 +7,7 @@
 -- definitions.
 module Test.DejaFu.STM.Internal where
 
+import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception, SomeException(..), fromException)
 import Control.Monad.Cont (Cont, runCont)
 import Data.List (nub)
@@ -58,6 +59,48 @@ newtype CTVar r a = CTVar (CTVarId, r a)
 type CTVarId = Int
 
 --------------------------------------------------------------------------------
+-- * Traces
+
+-- | A trace of an STM transaction is just a list of actions that
+-- occurred, as there are no scheduling decisions to make.
+type TTrace = [TAction]
+
+-- | All the actions that an STM transaction can perform.
+data TAction =
+    TNew
+  -- ^ Create a new @CTVar@
+  | TRead  CTVarId
+  -- ^ Read from a @CTVar@.
+  | TWrite CTVarId
+  -- ^ Write to a @CTVar@.
+  | TRetry
+  -- ^ Abort and discard effects.
+  | TOrElse TTrace (Maybe TTrace)
+  -- ^ Execute a transaction until it succeeds (@STMStop@) or aborts
+  -- (@STMRetry@) and, if it aborts, execute the other transaction.
+  | TThrow
+  -- ^ Throw an exception, abort, and discard effects.
+  | TCatch TTrace (Maybe TTrace)
+  -- ^ Execute a transaction until it succeeds (@STMStop@) or aborts
+  -- (@STMThrow@). If the exception is of the appropriate type, it is
+  -- handled and execution continues; otherwise aborts, propagating
+  -- the exception upwards.
+  | TStop
+  -- ^ Terminate successfully and commit effects.
+  | TLift
+  -- ^ Lifts an action from the underlying monad. Note that the
+  -- penultimate action in a trace will always be a @Lift@, this is an
+  -- artefact of how the runner works.
+  deriving (Eq, Show)
+
+instance NFData TAction where
+  rnf (TRead  v) = rnf v
+  rnf (TWrite v) = rnf v
+  rnf (TCatch  s m) = rnf (s, m)
+  rnf (TOrElse s m) = rnf (s, m)
+  rnf a = a `seq` ()
+
+--------------------------------------------------------------------------------
 -- * Output
 
 -- | The result of an STM transaction, along with which 'CTVar's it
@@ -87,32 +130,41 @@ instance Foldable Result where
 -- * Execution
 
 -- | Run a STM transaction, returning an action to undo its effects.
-doTransaction :: Monad n => Fixed n r -> M n r a -> CTVarId -> n (Result a, n (), CTVarId)
+doTransaction :: Monad n => Fixed n r -> M n r a -> CTVarId -> n (Result a, n (), CTVarId, TTrace)
 doTransaction fixed ma newctvid = do
   ref <- newRef fixed Nothing
 
   let c = runCont (ma >>= liftN fixed . writeRef fixed ref . Just . Right) $ const SStop
 
-  (newctvid', undo, readen, written) <- go ref c (return ()) newctvid [] []
+  (newctvid', undo, readen, written, trace) <- go ref c (return ()) newctvid [] [] []
 
   res <- readRef fixed ref
 
   case res of
-    Just (Right val) -> return (Success (nub readen) (nub written) val, undo, newctvid')
+    Just (Right val) -> return (Success (nub readen) (nub written) val, undo, newctvid', reverse trace)
 
-    Just (Left  exc) -> undo >> return (Exception exc,      return (), newctvid)
-    Nothing          -> undo >> return (Retry $ nub readen, return (), newctvid)
+    Just (Left  exc) -> undo >> return (Exception exc,      return (), newctvid, reverse trace)
+    Nothing          -> undo >> return (Retry $ nub readen, return (), newctvid, reverse trace)
 
   where
-    go ref act undo nctvid readen written = do
-      (act', undo', nctvid', readen', written') <- stepTrans fixed act nctvid
-      let ret = (nctvid', undo >> undo', readen' ++ readen, written' ++ written)
-      case act' of
-        SStop  -> return ret
-        SRetry -> writeRef fixed ref Nothing >> return ret
-        SThrow exc -> writeRef fixed ref (Just . Left $ wrap exc) >> return ret
+    go ref act undo nctvid readen written sofar = do
+      (act', undo', nctvid', readen', written', tact) <- stepTrans fixed act nctvid
 
-        _ -> go ref act' (undo >> undo') nctvid' (readen' ++ readen) (written' ++ written)
+      let newCTVid = nctvid'
+          newAct = act'
+          newUndo = undo >> undo'
+          newReaden = readen' ++ readen
+          newWritten = written' ++ written
+          newSofar = tact : sofar
+
+      case tact of
+        TStop  -> return (newCTVid, newUndo, newReaden, newWritten, TStop:newSofar)
+        TRetry -> writeRef fixed ref Nothing
+          >> return (newCTVid, newUndo, newReaden, newWritten, TRetry:newSofar)
+        TThrow -> writeRef fixed ref (Just . Left $ case act of SThrow e -> wrap e)
+          >> return (newCTVid, newUndo, newReaden, newWritten, TThrow:newSofar)
+
+        _ -> go ref newAct newUndo newCTVid newReaden newWritten newSofar
 
     -- | This wraps up an uncaught exception inside a @SomeException@,
     -- unless it already is a @SomeException@. This is because
@@ -121,7 +173,7 @@ doTransaction fixed ma newctvid = do
     wrap e = fromMaybe (SomeException e) $ cast e
 
 -- | Run a transaction for one step.
-stepTrans :: Monad n => Fixed n r -> STMAction n r -> CTVarId -> n (STMAction n r, n (), CTVarId, [CTVarId], [CTVarId])
+stepTrans :: Monad n => Fixed n r -> STMAction n r -> CTVarId -> n (STMAction n r, n (), CTVarId, [CTVarId], [CTVarId], TAction)
 stepTrans fixed act newctvid = case act of
   SCatch  h stm c -> stepCatch h stm c
   SRead   ref c   -> stepRead ref c
@@ -130,47 +182,49 @@ stepTrans fixed act newctvid = case act of
   SOrElse a b c   -> stepOrElse a b c
   SLift   na      -> stepLift na
 
-  halt -> return (halt, nothing, newctvid, [], [])
+  SThrow e -> return (SThrow e, nothing, newctvid, [], [], TThrow)
+  SRetry   -> return (SRetry,   nothing, newctvid, [], [], TRetry)
+  SStop    -> return (SStop,    nothing, newctvid, [], [], TStop)
 
   where
     nothing = return ()
 
-    stepCatch h stm c = onFailure stm c
-      (\readen -> return (SRetry, nothing, newctvid, readen, []))
-      (\exc    -> case fromException exc of
-        Just exc' -> transaction (h exc') c
-        Nothing   -> return (SThrow exc, nothing, newctvid, [], []))
+    stepCatch h stm c = cases TCatch stm c
+      (\trace readen -> return (SRetry, nothing, newctvid, readen, [], TCatch trace Nothing))
+      (\trace exc    -> case fromException exc of
+        Just exc' -> transaction (TCatch trace . Just) (h exc') c
+        Nothing   -> return (SThrow exc, nothing, newctvid, [], [], TCatch trace Nothing))
 
     stepRead (CTVar (ctvid, ref)) c = do
       val <- readRef fixed ref
-      return (c val, nothing, newctvid, [ctvid], [])
+      return (c val, nothing, newctvid, [ctvid], [], TRead ctvid)
 
     stepWrite (CTVar (ctvid, ref)) a c = do
       old <- readRef fixed ref
       writeRef fixed ref a
-      return (c, writeRef fixed ref old, newctvid, [], [ctvid])
+      return (c, writeRef fixed ref old, newctvid, [], [ctvid], TWrite ctvid)
 
     stepNew a c = do
       let newctvid' = newctvid + 1
       ref <- newRef fixed a
       let ctvar = CTVar (newctvid, ref)
-      return (c ctvar, nothing, newctvid', [], [newctvid])
+      return (c ctvar, nothing, newctvid', [], [newctvid], TNew)
 
-    stepOrElse a b c = onFailure a c
-      (\_   -> transaction b c)
-      (\exc -> return (SThrow exc, nothing, newctvid, [], []))
+    stepOrElse a b c = cases TOrElse a c
+      (\trace _   -> transaction (TOrElse trace . Just) b c)
+      (\trace exc -> return (SThrow exc, nothing, newctvid, [], [], TOrElse trace Nothing))
 
     stepLift na = do
       a <- na
-      return (a, nothing, newctvid, [], [])
+      return (a, nothing, newctvid, [], [], TLift)
 
-    onFailure stm onSuccess onRetry onException = do
-      (res, undo, newctvid') <- doTransaction fixed stm newctvid
+    cases tact stm onSuccess onRetry onException = do
+      (res, undo, newctvid', trace) <- doTransaction fixed stm newctvid
       case res of
-        Success readen written val -> return (onSuccess val, undo, newctvid', readen, written)
-        Retry readen  -> onRetry readen
-        Exception exc -> onException exc
+        Success readen written val -> return (onSuccess val, undo, newctvid', readen, written, tact trace Nothing)
+        Retry readen  -> onRetry     trace readen
+        Exception exc -> onException trace exc
 
-    transaction stm onSuccess = onFailure stm onSuccess
-      (\readen -> return (SRetry, nothing, newctvid, readen, []))
-      (\exc    -> return (SThrow exc, nothing, newctvid, [], []))
+    transaction tact stm onSuccess = cases (\t _ -> tact t) stm onSuccess
+      (\trace readen -> return (SRetry, nothing, newctvid, readen, [], tact trace))
+      (\trace exc    -> return (SThrow exc, nothing, newctvid, [], [], tact trace))

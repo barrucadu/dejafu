@@ -13,6 +13,8 @@ module Test.DejaFu.STM
 
   -- * Executing Transactions
   , Result(..)
+  , TTrace
+  , TAction(..)
   , CTVarId
   , runTransactionST
   , runTransactionIO
@@ -79,23 +81,23 @@ instance Monad n => C.MonadSTM (STMLike n r) where
 -- | Run a transaction in the 'ST' monad, returning the result and new
 -- initial 'CTVarId'. If the transaction ended by calling 'retry', any
 -- 'CTVar' modifications are undone.
-runTransactionST :: STMST t a -> CTVarId -> ST t (Result a, CTVarId)
+runTransactionST :: STMST t a -> CTVarId -> ST t (Result a, CTVarId, TTrace)
 runTransactionST = runTransactionM fixedST where
   fixedST = refST $ \mb -> cont (\c -> SLift $ c `liftM` mb)
 
 -- | Run a transaction in the 'IO' monad, returning the result and new
 -- initial 'CTVarId'. If the transaction ended by calling 'retry', any
 -- 'CTVar' modifications are undone.
-runTransactionIO :: STMIO a -> CTVarId -> IO (Result a, CTVarId)
+runTransactionIO :: STMIO a -> CTVarId -> IO (Result a, CTVarId, TTrace)
 runTransactionIO = runTransactionM fixedIO where
   fixedIO = refIO $ \mb -> cont (\c -> SLift $ c `liftM` mb)
 
 -- | Run a transaction in an arbitrary monad.
 runTransactionM :: Monad n
-  => Fixed n r -> STMLike n r a -> CTVarId -> n (Result a, CTVarId)
+  => Fixed n r -> STMLike n r a -> CTVarId -> n (Result a, CTVarId, TTrace)
 runTransactionM ref ma ctvid = do
-  (res, undo, ctvid') <- doTransaction ref (runSTM ma) ctvid
+  (res, undo, ctvid', trace) <- doTransaction ref (runSTM ma) ctvid
 
   case res of
-    Success _ _ _ -> return (res, ctvid')
-    _ -> undo >> return (res, ctvid)
+    Success _ _ _ -> return (res, ctvid', trace)
+    _ -> undo >> return (res, ctvid, trace)

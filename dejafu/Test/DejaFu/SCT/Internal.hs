@@ -238,7 +238,7 @@ grow memtype conservative = grow' initialCRState initialThread where
   tids tid _ (BlockedPutVar _)  ts = map (tidOf tid . fst) ts
   tids tid _ (BlockedReadVar _) ts = map (tidOf tid . fst) ts
   tids tid _ (BlockedTakeVar _) ts = map (tidOf tid . fst) ts
-  tids tid _ BlockedSTM         ts = map (tidOf tid . fst) ts
+  tids tid _ (BlockedSTM _)     ts = map (tidOf tid . fst) ts
   tids tid _ (BlockedThrowTo _) ts = map (tidOf tid . fst) ts
   tids tid _ Stop               ts = map (tidOf tid . fst) ts
   tids tid d _ ts = tidOf tid d : map (tidOf tid . fst) ts
@@ -312,7 +312,7 @@ dependent :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, Thread
 dependent _ _ (_, Lift) (_, Lift) = True
 dependent _ _ (_, ThrowTo t) (t2, a) = t == t2 && a /= Stop
 dependent _ _ (t2, a) (_, ThrowTo t) = t == t2 && a /= Stop
-dependent _ _ (_, STM _) (_, STM _) = True
+dependent _ _ (_, STM _ _) (_, STM _ _) = True
 dependent _ _ (_, GetNumCapabilities a) (_, SetNumCapabilities b) = a /= b
 dependent _ _ (_, SetNumCapabilities a) (_, GetNumCapabilities b) = a /= b
 dependent _ _ (_, SetNumCapabilities a) (_, SetNumCapabilities b) = a /= b
@@ -323,7 +323,7 @@ dependent' :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, Looka
 dependent' _ _ (_, Lift) (_, WillLift) = True
 dependent' _ _ (_, ThrowTo t) (t2, a)     = t == t2 && a /= WillStop
 dependent' _ _ (t2, a) (_, WillThrowTo t) = t == t2 && a /= Stop
-dependent' _ _ (_, STM _) (_, WillSTM) = True
+dependent' _ _ (_, STM _ _) (_, WillSTM) = True
 dependent' _ _ (_, GetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
 dependent' _ _ (_, SetNumCapabilities a) (_, WillGetNumCapabilities)   = True
 dependent' _ _ (_, SetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b

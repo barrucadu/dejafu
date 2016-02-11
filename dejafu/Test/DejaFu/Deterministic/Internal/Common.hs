@@ -13,7 +13,7 @@ import Data.Maybe (mapMaybe)
 import Data.List (sort, nub, intercalate)
 import Data.List.Extra
 import Test.DejaFu.Internal
-import Test.DejaFu.STM (CTVarId)
+import Test.DejaFu.STM (CTVarId, TTrace)
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative(..))
@@ -369,13 +369,13 @@ data ThreadAction =
   | CommitRef ThreadId CRefId
   -- ^ Commit the last write to the given 'CRef' by the given thread,
   -- so that all threads can see the updated value.
-  | STM [ThreadId]
+  | STM TTrace [ThreadId]
   -- ^ An STM transaction was executed, possibly waking up some
   -- threads.
-  | FreshSTM
+  | FreshSTM TTrace
   -- ^ An STM transaction was executed, and all it did was create and
   -- write to new 'CTVar's, no existing 'CTVar's were touched.
-  | BlockedSTM
+  | BlockedSTM TTrace
   -- ^ Got blocked in an STM transaction.
   | Catching
   -- ^ Register a new exception handler
@@ -435,7 +435,9 @@ instance NFData ThreadAction where
   rnf (WriteRef c) = rnf c
   rnf (CasRef c b) = rnf (c, b)
   rnf (CommitRef t c) = rnf (t, c)
-  rnf (STM ts) = rnf ts
+  rnf (STM s ts) = rnf (s, ts)
+  rnf (FreshSTM s) = rnf s
+  rnf (BlockedSTM s) = rnf s
   rnf (ThrowTo t) = rnf t
   rnf (BlockedThrowTo t) = rnf t
   rnf (SetMasking b m) = b `seq` m `seq` ()
@@ -448,7 +450,7 @@ isBlock (BlockedThrowTo  _) = True
 isBlock (BlockedTakeVar _) = True
 isBlock (BlockedReadVar _) = True
 isBlock (BlockedPutVar  _) = True
-isBlock BlockedSTM = True
+isBlock (BlockedSTM _) = True
 isBlock _ = False
 
 -- | A one-step look-ahead at what a thread will do next.
@@ -693,8 +695,9 @@ simplify (ModRefCas r)   = PartiallySynchronisedModify r
 simplify (WriteRef r)    = UnsynchronisedWrite r
 simplify (CasRef r _)    = PartiallySynchronisedWrite r
 simplify (CommitRef _ r) = PartiallySynchronisedCommit r
-simplify (STM _)            = SynchronisedOther
-simplify BlockedSTM         = SynchronisedOther
+simplify (STM _ _)          = SynchronisedOther
+simplify (FreshSTM _)       = SynchronisedOther
+simplify (BlockedSTM _)     = SynchronisedOther
 simplify (ThrowTo _)        = SynchronisedOther
 simplify (BlockedThrowTo _) = SynchronisedOther
 simplify _ = UnsynchronisedOther
