@@ -22,7 +22,15 @@ import Control.Applicative (Applicative(..))
 --------------------------------------------------------------------------------
 -- * The @Conc@ Monad
 
--- | The underlying monad is based on continuations over Actions.
+-- | The underlying monad is based on continuations over 'Action's.
+--
+-- One might wonder why the return type isn't reflected in 'Action',
+-- and a free monad formulation used. This would remove the need for a
+-- @Lift@ action as the penultimate action of thread 0 used to
+-- communicate back the result, and be more pleasing in a
+-- sense. However, this makes the current expression of threads and
+-- exception handlers very difficult (perhaps even not possible
+-- without significant reworking), so I abandoned the attempt.
 newtype M n r s a = M { runM :: (a -> Action n r s) -> Action n r s }
 
 instance Functor (M n r s) where
