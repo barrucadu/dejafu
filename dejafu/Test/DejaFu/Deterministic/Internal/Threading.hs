@@ -9,7 +9,6 @@ import Control.Exception (Exception, MaskingState(..), SomeException, fromExcept
 import Data.List (intersect, nub)
 import Data.Map.Strict (Map)
 import Data.Maybe (fromMaybe, isJust, isNothing)
-import Test.DejaFu.STM (CTVarId)
 import Test.DejaFu.Deterministic.Internal.Common
 
 import qualified Data.Map.Strict as M

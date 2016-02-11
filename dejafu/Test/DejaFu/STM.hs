@@ -26,6 +26,7 @@ import Control.Monad.Cont (cont)
 import Control.Monad.ST (ST)
 import Data.IORef (IORef)
 import Data.STRef (STRef)
+import Test.DejaFu.Deterministic.Internal.Common (CTVarId, IdSource, TAction(..), TTrace)
 import Test.DejaFu.Internal
 import Test.DejaFu.STM.Internal
 
@@ -72,7 +73,7 @@ instance Monad n => C.MonadSTM (STMLike n r) where
 
   orElse a b = toSTM (SOrElse (runSTM a) (runSTM b))
 
-  newCTVar a = toSTM (SNew a)
+  newCTVarN n a = toSTM (SNew n a)
 
   readCTVar ctvar = toSTM (SRead ctvar)
 
@@ -81,20 +82,20 @@ instance Monad n => C.MonadSTM (STMLike n r) where
 -- | Run a transaction in the 'ST' monad, returning the result and new
 -- initial 'CTVarId'. If the transaction ended by calling 'retry', any
 -- 'CTVar' modifications are undone.
-runTransactionST :: STMST t a -> CTVarId -> ST t (Result a, CTVarId, TTrace)
+runTransactionST :: STMST t a -> IdSource -> ST t (Result a, IdSource, TTrace)
 runTransactionST = runTransactionM fixedST where
   fixedST = refST $ \mb -> cont (\c -> SLift $ c `liftM` mb)
 
 -- | Run a transaction in the 'IO' monad, returning the result and new
 -- initial 'CTVarId'. If the transaction ended by calling 'retry', any
 -- 'CTVar' modifications are undone.
-runTransactionIO :: STMIO a -> CTVarId -> IO (Result a, CTVarId, TTrace)
+runTransactionIO :: STMIO a -> IdSource -> IO (Result a, IdSource, TTrace)
 runTransactionIO = runTransactionM fixedIO where
   fixedIO = refIO $ \mb -> cont (\c -> SLift $ c `liftM` mb)
 
 -- | Run a transaction in an arbitrary monad.
 runTransactionM :: Monad n
-  => Fixed n r -> STMLike n r a -> CTVarId -> n (Result a, CTVarId, TTrace)
+  => Fixed n r -> STMLike n r a -> IdSource -> n (Result a, IdSource, TTrace)
 runTransactionM ref ma ctvid = do
   (res, undo, ctvid', trace) <- doTransaction ref (runSTM ma) ctvid
 

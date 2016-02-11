@@ -62,7 +62,7 @@ import Data.List (sort)
 import Data.List.Extra
 import Data.Maybe (fromJust, isJust, fromMaybe, isNothing, listToMaybe)
 import Data.Typeable (cast)
-import Test.DejaFu.STM (CTVarId, Result(..), TTrace)
+import Test.DejaFu.STM (Result(..))
 import Test.DejaFu.Internal
 import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.Deterministic.Internal.Memory
@@ -84,13 +84,13 @@ import Control.Applicative ((<$>), (<*>))
 -- state, returning a 'Just' if it terminates, and 'Nothing' if a
 -- deadlock is detected. Also returned is the final state of the
 -- scheduler, and an execution trace.
-runFixed :: (Functor n, Monad n) => Fixed n r s -> (forall x. s x -> CTVarId -> n (Result x, CTVarId, TTrace))
+runFixed :: (Functor n, Monad n) => Fixed n r s -> (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
          -> Scheduler g -> MemType -> g -> M n r s a -> n (Either Failure a, g, Trace')
 runFixed fixed runstm sched memtype s ma = (\(e,g,_,t) -> (e,g,t)) <$> runFixed' fixed runstm sched memtype s initialIdSource ma
 
 -- | Same as 'runFixed', be parametrised by an 'IdSource'.
 runFixed' :: forall n r s g a. (Functor n, Monad n)
-  => Fixed n r s -> (forall x. s x -> CTVarId -> n (Result x, CTVarId, TTrace))
+  => Fixed n r s -> (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
   -> Scheduler g -> MemType -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace')
 runFixed' fixed runstm sched memtype s idSource ma = do
   ref <- newRef fixed Nothing
@@ -109,7 +109,7 @@ runFixed' fixed runstm sched memtype s idSource ma = do
 -- efficient to prepend to a list than append. As this function isn't
 -- exposed to users of the library, this is just an internal gotcha to
 -- watch out for.
-runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s x -> CTVarId -> n (Result x, CTVarId, TTrace))
+runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
            -> Scheduler g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace')
 runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer 2 where
   go idSource sofar prior g threads wb caps
@@ -179,7 +179,7 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
 stepThread :: forall n r s. (Functor n, Monad n) => Fixed n r s
-  -> (forall x. s x -> CTVarId -> n (Result x, CTVarId, TTrace))
+  -> (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
   -- ^ Run a 'MonadSTM' transaction atomically.
   -> MemType
   -- ^ The memory model
@@ -344,19 +344,19 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
 
     -- | Run a STM transaction atomically.
     stepAtom stm c = synchronised $ do
-      let oldctvid = _nextCTVId idSource
-      (res, newctvid, trace) <- runstm stm oldctvid
+      (res, idSource', trace) <- runstm stm idSource
       case res of
-        Success readen written val
-          | any (<oldctvid) readen || any (<oldctvid) written ->
-            let (threads', woken) = wake (OnCTVar written) threads
-            in return $ Right (knows (map Right written) tid $ goto (c val) tid threads', idSource { _nextCTVId = newctvid }, STM trace woken, wb, caps)
-          | otherwise ->
-           return $ Right (knows (map Right written) tid $ goto (c val) tid threads, idSource { _nextCTVId = newctvid }, FreshSTM trace, wb, caps)
+        Success _ written val ->
+          let (threads', woken) = wake (OnCTVar written) threads
+          in return $ Right (knows (map Right written) tid $ goto (c val) tid threads', idSource', STM trace woken, wb, caps)
         Retry touched ->
           let threads' = block (OnCTVar touched) tid threads
-          in return $ Right (threads', idSource { _nextCTVId = newctvid }, BlockedSTM trace, wb, caps)
-        Exception e -> stepThrow e
+          in return $ Right (threads', idSource', BlockedSTM trace, wb, caps)
+        Exception e -> do
+          res' <- stepThrow e
+          return $ case res' of
+            Right (threads', _, _, _, _) -> Right (threads', idSource', Throw, wb, caps)
+            Left err -> Left err
 
     -- | Run a subcomputation in an exception-catching context.
     stepCatching h ma c = simple threads' Catching where

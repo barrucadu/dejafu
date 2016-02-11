@@ -13,7 +13,6 @@ import Data.Maybe (mapMaybe)
 import Data.List (sort, nub, intercalate)
 import Data.List.Extra
 import Test.DejaFu.Internal
-import Test.DejaFu.STM (CTVarId, TTrace)
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative (Applicative(..))
@@ -160,7 +159,7 @@ instance NFData ThreadId where
 initialThread :: ThreadId
 initialThread = ThreadId (Just "main") 0
 
--- | Every 'CVar' has a unique identifier.
+-- | Every @CVar@ has a unique identifier.
 data CVarId = CVarId (Maybe String) Int
   deriving Eq
 
@@ -174,7 +173,7 @@ instance Show CVarId where
 instance NFData CVarId where
   rnf (CVarId n i) = rnf (n, i)
 
--- | Every 'CRef' has a unique identifier.
+-- | Every @CRef@ has a unique identifier.
 data CRefId = CRefId (Maybe String) Int
   deriving Eq
 
@@ -188,16 +187,31 @@ instance Show CRefId where
 instance NFData CRefId where
   rnf (CRefId n i) = rnf (n, i)
 
+-- | Every @CTVar@ has a unique identifier.
+data CTVarId = CTVarId (Maybe String) Int
+  deriving Eq
+
+instance Ord CTVarId where
+  compare (CTVarId _ i) (CTVarId _ j) = compare i j
+
+instance Show CTVarId where
+  show (CTVarId (Just n) _) = n
+  show (CTVarId Nothing  i) = show i
+
+instance NFData CTVarId where
+  rnf (CTVarId n i) = rnf (n, i)
+
 -- | The number of ID parameters was getting a bit unwieldy, so this
 -- hides them all away.
 data IdSource = Id
   { _nextCRId  :: Int
   , _nextCVId  :: Int
-  , _nextCTVId :: CTVarId
+  , _nextCTVId :: Int
   , _nextTId   :: Int
-  , _usedCRNames :: [String]
-  , _usedCVNames :: [String]
-  , _usedTNames  :: [String] }
+  , _usedCRNames  :: [String]
+  , _usedCVNames  :: [String]
+  , _usedCTVNames :: [String]
+  , _usedTNames   :: [String] }
 
 -- | Get the next free 'CRefId'.
 nextCRId :: String -> IdSource -> (IdSource, CRefId)
@@ -226,9 +240,17 @@ nextCVId name idsource = (idsource { _nextCVId = newid, _usedCVNames = newlst },
   occurrences = length . filter (==name) $ _usedCVNames idsource
 
 -- | Get the next free 'CTVarId'.
-nextCTVId :: IdSource -> (IdSource, CTVarId)
-nextCTVId idsource = (idsource { _nextCTVId = newid }, newid) where
-  newid = _nextCTVId idsource + 1
+nextCTVId :: String -> IdSource -> (IdSource, CTVarId)
+nextCTVId name idsource = (idsource { _nextCTVId = newid, _usedCTVNames = newlst }, CTVarId newname newid) where
+  newid  = _nextCTVId idsource + 1
+  newlst
+    | null name = _usedCTVNames idsource
+    | otherwise = name : _usedCTVNames idsource
+  newname
+    | null name       = Nothing
+    | occurrences > 0 = Just (name ++ "-" ++ show occurrences)
+    | otherwise       = Just name
+  occurrences = length . filter (==name) $ _usedCTVNames idsource
 
 -- | Get the next free 'ThreadId'.
 nextTId :: String -> IdSource -> (IdSource, ThreadId)
@@ -245,7 +267,7 @@ nextTId name idsource = (idsource { _nextTId = newid, _usedTNames = newlst }, Th
 
 -- | The initial ID source.
 initialIdSource :: IdSource
-initialIdSource = Id 0 0 0 0 [] [] []
+initialIdSource = Id 0 0 0 0 [] [] [] []
 
 --------------------------------------------------------------------------------
 -- * Scheduling & Traces
@@ -372,9 +394,6 @@ data ThreadAction =
   | STM TTrace [ThreadId]
   -- ^ An STM transaction was executed, possibly waking up some
   -- threads.
-  | FreshSTM TTrace
-  -- ^ An STM transaction was executed, and all it did was create and
-  -- write to new 'CTVar's, no existing 'CTVar's were touched.
   | BlockedSTM TTrace
   -- ^ Got blocked in an STM transaction.
   | Catching
@@ -436,7 +455,6 @@ instance NFData ThreadAction where
   rnf (CasRef c b) = rnf (c, b)
   rnf (CommitRef t c) = rnf (t, c)
   rnf (STM s ts) = rnf (s, ts)
-  rnf (FreshSTM s) = rnf s
   rnf (BlockedSTM s) = rnf s
   rnf (ThrowTo t) = rnf t
   rnf (BlockedThrowTo t) = rnf t
@@ -452,6 +470,45 @@ isBlock (BlockedReadVar _) = True
 isBlock (BlockedPutVar  _) = True
 isBlock (BlockedSTM _) = True
 isBlock _ = False
+
+-- | A trace of an STM transaction is just a list of actions that
+-- occurred, as there are no scheduling decisions to make.
+type TTrace = [TAction]
+
+-- | All the actions that an STM transaction can perform.
+data TAction =
+    TNew
+  -- ^ Create a new @CTVar@
+  | TRead  CTVarId
+  -- ^ Read from a @CTVar@.
+  | TWrite CTVarId
+  -- ^ Write to a @CTVar@.
+  | TRetry
+  -- ^ Abort and discard effects.
+  | TOrElse TTrace (Maybe TTrace)
+  -- ^ Execute a transaction until it succeeds (@STMStop@) or aborts
+  -- (@STMRetry@) and, if it aborts, execute the other transaction.
+  | TThrow
+  -- ^ Throw an exception, abort, and discard effects.
+  | TCatch TTrace (Maybe TTrace)
+  -- ^ Execute a transaction until it succeeds (@STMStop@) or aborts
+  -- (@STMThrow@). If the exception is of the appropriate type, it is
+  -- handled and execution continues; otherwise aborts, propagating
+  -- the exception upwards.
+  | TStop
+  -- ^ Terminate successfully and commit effects.
+  | TLift
+  -- ^ Lifts an action from the underlying monad. Note that the
+  -- penultimate action in a trace will always be a @Lift@, this is an
+  -- artefact of how the runner works.
+  deriving (Eq, Show)
+
+instance NFData TAction where
+  rnf (TRead  v) = rnf v
+  rnf (TWrite v) = rnf v
+  rnf (TCatch  s m) = rnf (s, m)
+  rnf (TOrElse s m) = rnf (s, m)
+  rnf a = a `seq` ()
 
 -- | A one-step look-ahead at what a thread will do next.
 data Lookahead =
@@ -696,7 +753,6 @@ simplify (WriteRef r)    = UnsynchronisedWrite r
 simplify (CasRef r _)    = PartiallySynchronisedWrite r
 simplify (CommitRef _ r) = PartiallySynchronisedCommit r
 simplify (STM _ _)          = SynchronisedOther
-simplify (FreshSTM _)       = SynchronisedOther
 simplify (BlockedSTM _)     = SynchronisedOther
 simplify (ThrowTo _)        = SynchronisedOther
 simplify (BlockedThrowTo _) = SynchronisedOther
