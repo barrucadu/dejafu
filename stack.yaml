@@ -7,8 +7,6 @@ packages:
 - dejafu
 - dejafu-tests
 
-extra-deps:
-# Needed for building with lts-2
-- atomic-primops-0.8.0.2
+extra-deps: []
 
-resolver: lts-4.2
+resolver: lts-5.5

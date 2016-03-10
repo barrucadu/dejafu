@@ -1,19 +1,9 @@
-{-# LANGUAGE CPP #-}
 -- | Extra list functions and list-like types.
 module Data.List.Extra where
 
 import Control.DeepSeq (NFData(..))
-import Data.Traversable (fmapDefault, foldMapDefault)
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative ((<$>), (<*>))
 import Data.Foldable (Foldable(..))
-import Data.Traversable (Traversable(..))
-#else
--- Why does this give a redundancy warning? It's necessary in order to
--- define the toList function in the Foldable instance for NonEmpty!
-import Data.Foldable (toList)
-#endif
+import Data.Traversable (fmapDefault, foldMapDefault)
 
 -- * Regular lists
 
@@ -38,10 +28,7 @@ instance Functor NonEmpty where
 instance Foldable NonEmpty where
   foldMap = foldMapDefault
 
-#if __GLASGOW_HASKELL__ >= 710
-  -- toList isn't in Foldable until GHC 7.10
   toList (a :| as) = a : as
-#endif
 
 instance Traversable NonEmpty where
   traverse f (a:|as) = (:|) <$> f a <*> traverse f as
@@ -51,7 +38,7 @@ instance NFData a => NFData (NonEmpty a) where
 
 -- | Convert a 'NonEmpty' to a regular non-empty list.
 toList :: NonEmpty a -> [a]
-toList (a :| as) = a : as
+toList = Data.Foldable.toList
 
 -- | Convert a regular non-empty list to a 'NonEmpty'. This is
 -- necessarily partial.

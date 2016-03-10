@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 
@@ -14,9 +13,7 @@ import Data.List (sort, nub, intercalate)
 import Data.List.Extra
 import Test.DejaFu.Internal
 
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative (Applicative(..))
-#endif
+import Prelude
 
 --------------------------------------------------------------------------------
 -- * The @Conc@ Monad

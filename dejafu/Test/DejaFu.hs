@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP        #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | Deterministic testing for concurrent computations.
@@ -231,15 +230,9 @@ import Control.Monad (when, unless)
 import Data.Function (on)
 import Data.List (intercalate, intersperse, minimumBy)
 import Data.List.Extra
-import Data.Monoid ((<>))
 import Data.Ord (comparing)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.SCT
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative ((<$>))
-import Data.Foldable (Foldable(..))
-#endif
 
 -- | The default memory model: @TotalStoreOrder@
 defaultMemType :: MemType

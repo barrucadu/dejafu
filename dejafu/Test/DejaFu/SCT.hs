@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes                 #-}
 
@@ -120,10 +119,6 @@ import Test.DejaFu.SCT.Internal
 import qualified Data.Map.Strict as M
 import qualified Data.Sequence as Sq
 import qualified Data.Set as S
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative ((<$>), (<*>))
-#endif
 
 -- | A bounding function takes the scheduling decisions so far and a
 -- decision chosen to come next, and returns if that decision is

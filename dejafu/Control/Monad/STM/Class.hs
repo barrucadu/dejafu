@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | This module provides an abstraction over 'STM', which can be used
@@ -20,11 +19,6 @@ import qualified Control.Monad.State.Lazy as SL
 import qualified Control.Monad.State.Strict as SS
 import qualified Control.Monad.Writer.Lazy as WL
 import qualified Control.Monad.Writer.Strict as WS
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative (Applicative)
-import Data.Monoid (Monoid)
-#endif
 
 -- | @MonadSTM@ is an abstraction over 'STM'.
 --

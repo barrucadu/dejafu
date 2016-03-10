@@ -1,5 +1,4 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP          #-}
 {-# LANGUAGE GADTs        #-}
 
 -- | Operations over @CRef@s and @CVar@s
@@ -16,11 +15,6 @@ import Test.DejaFu.Internal
 
 import qualified Data.IntMap.Strict as I
 import qualified Data.Map.Strict as M
-
-#if __GLASGOW_HASKELL__ < 710
-import Data.Foldable (mapM_)
-import Prelude hiding (mapM_)
-#endif
 
 --------------------------------------------------------------------------------
 -- * Manipulating @CRef@s

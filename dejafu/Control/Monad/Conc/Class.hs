@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP              #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes       #-}
 {-# LANGUAGE TemplateHaskell  #-}
@@ -55,11 +54,6 @@ import qualified Control.Monad.State.Strict as SS
 import qualified Control.Monad.Writer.Lazy as WL
 import qualified Control.Monad.Writer.Strict as WS
 import qualified Data.Atomics as A
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative (Applicative)
-import Data.Monoid (Monoid, mempty)
-#endif
 
 -- | @MonadConc@ is an abstraction over GHC's typical concurrency
 -- abstraction. It captures the interface of concurrency monads in

@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -69,10 +68,6 @@ import Test.DejaFu.Deterministic.Internal.Memory
 import Test.DejaFu.Deterministic.Internal.Threading
 
 import qualified Data.Map.Strict as M
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative ((<$>), (<*>))
-#endif
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 {-# ANN module ("HLint: ignore Use const"           :: String) #-}

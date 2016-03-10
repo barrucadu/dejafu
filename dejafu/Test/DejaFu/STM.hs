@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -31,10 +30,6 @@ import Test.DejaFu.Internal
 import Test.DejaFu.STM.Internal
 
 import qualified Control.Monad.STM.Class as C
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative (Applicative)
-#endif
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 

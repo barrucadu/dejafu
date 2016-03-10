@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                        #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -54,10 +53,6 @@ import Test.DejaFu.STM.Internal (CTVar(..))
 import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
 import qualified Control.Monad.IO.Class as IO
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative (Applicative(..), (<$>))
-#endif
 
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
 {-# ANN module ("HLint: ignore Use const"    :: String) #-}

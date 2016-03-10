@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 
@@ -12,10 +11,6 @@ import Data.Maybe (fromMaybe, isJust, isNothing)
 import Test.DejaFu.Deterministic.Internal.Common
 
 import qualified Data.Map.Strict as M
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative ((<$>))
-#endif
 
 --------------------------------------------------------------------------------
 -- * Threads

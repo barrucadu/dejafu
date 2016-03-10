@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                       #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 
@@ -11,13 +10,8 @@ import Control.Monad.Cont (Cont, runCont)
 import Data.List (nub)
 import Data.Maybe (fromMaybe)
 import Data.Typeable (cast)
-import Test.DejaFu.Internal
 import Test.DejaFu.Deterministic.Internal.Common (CTVarId, IdSource, TAction(..), TTrace, nextCTVId)
-
-#if __GLASGOW_HASKELL__ < 710
-import Data.Foldable (Foldable(..))
-import Data.Monoid (mempty)
-#endif
+import Test.DejaFu.Internal
 
 --------------------------------------------------------------------------------
 -- The @STMLike@ monad
