@@ -43,8 +43,8 @@ bufferWrite fixed (WriteBuffer wb) i cref@(CRef _ ref) new tid = do
   let buffer' = I.insertWith (><) i write wb
 
   -- Write the thread-local value to the @CRef@'s update map.
-  (map, count, def) <- readRef fixed ref
-  writeRef fixed ref (M.insert tid new map, count, def)
+  (locals, count, def) <- readRef fixed ref
+  writeRef fixed ref (M.insert tid new locals, count, def)
 
   return $ WriteBuffer buffer'
 
@@ -54,7 +54,7 @@ commitWrite fixed w@(WriteBuffer wb) i = case maybe EmptyL viewl $ I.lookup i wb
   BufferedWrite _ cref a :< rest -> do
     writeImmediate fixed cref a
     return . WriteBuffer $ I.insert i rest wb
-    
+
   EmptyL -> return w
 
 -- | Read from a @CRef@, returning a newer thread-local non-committed

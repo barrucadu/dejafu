@@ -257,7 +257,7 @@ pbBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb
 -- | Count the number of pre-emptions in a schedule prefix.
 preEmpCount :: [(Decision, ThreadAction)] -> (Decision, a) -> Int
 preEmpCount ts (d, _) = go Nothing ts where
-  go p ((d, a):rest) = preEmpC p d + go (Just a) rest
+  go p ((d', a):rest) = preEmpC p d' + go (Just a) rest
   go p [] = preEmpC p d
 
   preEmpC (Just Yield) (SwitchTo _) = 0
@@ -471,7 +471,7 @@ initialSchedState sleep prefix = SchedState
 bporSched :: MemType
   -> ([(Decision, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> [ThreadId])
   -> Scheduler SchedState
-bporSched memtype init = force $ \s trc prior threads -> case _sprefix s of
+bporSched memtype initials = force $ \s trc prior threads -> case _sprefix s of
   -- If there is a decision available, make it
   (d:ds) ->
     let threads' = fmap (\(t,a:|_) -> (t,a)) threads
@@ -482,7 +482,7 @@ bporSched memtype init = force $ \s trc prior threads -> case _sprefix s of
   -- them arbitrarily (recording the others).
   [] ->
     let threads' = fmap (\(t,a:|_) -> (t,a)) threads
-        choices  = init trc prior threads'
+        choices  = initials trc prior threads'
         checkDep t a = case prior of
           Just (tid, act) -> dependent memtype unknownCRState (tid, act) (t, a)
           Nothing -> False

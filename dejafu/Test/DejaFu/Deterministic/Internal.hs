@@ -57,6 +57,7 @@ module Test.DejaFu.Deterministic.Internal
  ) where
 
 import Control.Exception (MaskingState(..), SomeException(..))
+import Data.Functor (void)
 import Data.List (sort)
 import Data.List.Extra
 import Data.Maybe (fromJust, isJust, fromMaybe, isNothing, listToMaybe)
@@ -295,7 +296,7 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
     stepModRefCas cref@(CRef crid _) f c = synchronised $ do
       tick@(Ticket _ _ old) <- readForTicket fixed cref tid
       let (new, val) = f old
-      casCRef fixed cref tid tick new
+      void $ casCRef fixed cref tid tick new
       simple (goto (c val) tid threads) $ ModRefCas crid
 
     -- | Write to a @CRef@ without synchronising
@@ -406,8 +407,8 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
       threads' = goto a tid (mask m tid threads)
 
     -- | Reset the masking thread of the state.
-    stepResetMask b1 b2 m c = simple threads' action where
-      action   = (if b1 then SetMasking else ResetMasking) b2 m
+    stepResetMask b1 b2 m c = simple threads' act where
+      act      = (if b1 then SetMasking else ResetMasking) b2 m
       threads' = goto c tid (mask m tid threads)
 
     -- | Create a new @CVar@, using the next 'CVarId'.

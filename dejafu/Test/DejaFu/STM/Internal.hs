@@ -108,9 +108,8 @@ doTransaction fixed ma idsource = do
         TStop  -> return (newIDSource, newUndo, newReaden, newWritten, TStop:newSofar)
         TRetry -> writeRef fixed ref Nothing
           >> return (newIDSource, newUndo, newReaden, newWritten, TRetry:newSofar)
-        TThrow -> writeRef fixed ref (Just . Left $ case act of SThrow e -> wrap e)
+        TThrow -> writeRef fixed ref (Just . Left $ case act of SThrow e -> wrap e; _ -> undefined)
           >> return (newIDSource, newUndo, newReaden, newWritten, TThrow:newSofar)
-
         _ -> go ref newAct newUndo newIDSource newReaden newWritten newSofar
 
     -- | This wraps up an uncaught exception inside a @SomeException@,

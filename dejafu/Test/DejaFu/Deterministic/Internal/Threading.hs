@@ -138,15 +138,15 @@ goto a = M.alter $ \(Just thread) -> Just (thread { _continuation = a })
 -- | Start a thread with the given ID, inheriting the masking state
 -- from the parent thread. This ID must not already be in use!
 launch :: ThreadId -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
-launch parent tid a threads = launch' mask tid a threads where
-  mask = fromMaybe Unmasked $ _masking <$> M.lookup parent threads
+launch parent tid a threads = launch' ms tid a threads where
+  ms = fromMaybe Unmasked $ _masking <$> M.lookup parent threads
 
 -- | Start a thread with the given ID and masking state. This must not already be in use!
 launch' :: MaskingState -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
-launch' mask tid a = M.insert tid thread where
-  thread = Thread { _continuation = a umask, _blocking = Nothing, _handlers = [], _masking = mask, _known = [], _fullknown = False }
+launch' ms tid a = M.insert tid thread where
+  thread = Thread { _continuation = a umask, _blocking = Nothing, _handlers = [], _masking = ms, _known = [], _fullknown = False }
 
-  umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False mask >> return b
+  umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False ms >> return b
   resetMask typ m = cont $ \k -> AResetMask typ True m $ k ()
 
 -- | Kill a thread.

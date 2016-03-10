@@ -440,12 +440,13 @@ representative p xs = result { _failures = choose . collect $ _failures result }
   choose  = map $ minimumBy (comparing $ \(_, trc) -> (preEmpCount' trc, length trc))
 
   groupBy' res _ [] = res
-  groupBy' res eq (x:xs) = groupBy' (insert' eq x res) eq xs
+  groupBy' res eq (y:ys) = groupBy' (insert' eq y res) eq ys
 
-  insert' eq x [] = [[x]]
+  insert' _ x [] = [[x]]
   insert' eq x (ys@(y:_):yss)
     | x `eq` y  = (x:ys) : yss
     | otherwise = ys : insert' eq x yss
+  insert' _ _ ([]:_) = undefined
 
 -- | Check that a computation never aborts.
 abortsNever :: Predicate a

@@ -188,8 +188,8 @@ findBacktrack memtype backtrack = go initialCRState S.empty initialThread [] . S
                  , let is = idxs' u n v tagged
                  , not $ null is]
 
-        idxs' u n v = mapMaybe go where
-          go (i, b)
+        idxs' u n v = mapMaybe go' where
+          go' (i, b)
             | _threadid b == v && (killsEarly || isDependent b) = Just i
             | otherwise = Nothing
 
@@ -254,8 +254,8 @@ todo bv = go initialThread [] where
     let todo' = [ x
                 | x@(t,c) <- M.toList $ _backtrack b
                 , let decision  = decisionOf (Just . activeTid $ map fst pref) (_brunnable bpor) t
-                , let lookahead = fromJust . M.lookup t $ _runnable b
-                , bv pref (decision, lookahead)
+                , let lahead = fromJust . M.lookup t $ _runnable b
+                , bv pref (decision, lahead)
                 , t `notElem` M.keys (_bdone bpor)
                 , c || M.notMember t (_bsleep bpor)
                 ]
@@ -319,7 +319,7 @@ dependent' _ _ (_, ThrowTo t) (t2, a)     = t == t2 && a /= WillStop
 dependent' _ _ (t2, a) (_, WillThrowTo t) = t == t2 && a /= Stop
 dependent' _ _ (_, STM _ _) (_, WillSTM) = True
 dependent' _ _ (_, GetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
-dependent' _ _ (_, SetNumCapabilities a) (_, WillGetNumCapabilities)   = True
+dependent' _ _ (_, SetNumCapabilities _) (_, WillGetNumCapabilities)   = True
 dependent' _ _ (_, SetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
 -- This is safe because, if the thread blocks anyway, a context switch
 -- will occur anyway so there's no point pre-empting the action.
