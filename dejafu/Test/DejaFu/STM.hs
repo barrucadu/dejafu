@@ -56,21 +56,21 @@ type STMST t = STMLike (ST t) (STRef t)
 type STMIO = STMLike IO IORef
 
 instance MonadThrow (STMLike n r) where
-  throwM e = toSTM (\_ -> SThrow e)
+  throwM = toSTM . const . SThrow
 
 instance MonadCatch (STMLike n r) where
-  catch stm handler = toSTM (SCatch (runSTM . handler) (runSTM stm))
+  catch (S stm) handler = toSTM (SCatch (runSTM . handler) stm)
 
 instance Monad n => C.MonadSTM (STMLike n r) where
   type CTVar (STMLike n r) = CTVar r
 
-  retry = toSTM (\_ -> SRetry)
+  retry = toSTM (const SRetry)
 
-  orElse a b = toSTM (SOrElse (runSTM a) (runSTM b))
+  orElse (S a) (S b) = toSTM (SOrElse a b)
 
-  newCTVarN n a = toSTM (SNew n a)
+  newCTVarN n = toSTM . SNew n
 
-  readCTVar ctvar = toSTM (SRead ctvar)
+  readCTVar = toSTM . SRead
 
   writeCTVar ctvar a = toSTM (\c -> SWrite ctvar a (c ()))
 

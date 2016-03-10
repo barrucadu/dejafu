@@ -61,8 +61,19 @@ data BPOR = BPOR
 
 -- | Render a 'BPOR' value as a graph in GraphViz \"dot\" format.
 toDot :: BPOR -> String
-toDot bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
-  go l b = unlines $ node l b : [edge l l' i ++ go l' b' | (i, b') <- M.toList (_bdone b), let l' = l ++ show' i]
+toDot = toDotFilter (\_ _ -> True)
+
+-- | Variant of 'toDot' which doesn't include aborted subtrees.
+toDotSmall :: BPOR -> String
+toDotSmall = toDotFilter (curry check) where
+  -- Check that a subtree has at least one non-aborted branch.
+  check (i, b) = (i == initialThread && _baction b == Just Stop) || any check (M.toList $ _bdone b)
+
+-- | Render a 'BPOR' value as a graph in GraphViz \"dot\" format, with
+-- a function to determine if a subtree should be included or not.
+toDotFilter :: (ThreadId -> BPOR -> Bool) -> BPOR -> String
+toDotFilter check bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
+  go l b = unlines $ node l b : [edge l l' i ++ go l' b' | (i, b') <- M.toList (_bdone b), check i b', let l' = l ++ show' i]
 
   -- Display a labelled node.
   node n b = n ++ " [label=\"" ++ label b ++ "\"]"
@@ -81,33 +92,6 @@ toDot bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
   edge n1 n2 l = n1 ++ "-> " ++ n2 ++ " [label=\"" ++ show l ++ "\"]\n"
 
   -- Show a 'ThreadId', replacing a minus sign for \"N\".
-  show' (ThreadId _ i) = map (\c -> if c == '-' then 'N' else c) $ show i
-
--- | Variant of 'toDot' which doesn't include aborted subtrees.
-toDotSmall :: BPOR -> String
-toDotSmall bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
-  go l b = unlines $ node l b : [edge l l' i ++ go l' b' | (i, b') <- M.toList (_bdone b), check (i, b'), let l' = l ++ show' i]
-
-  -- Check that a subtree has at least one non-aborted branch.
-  check (i, b) = (i == initialThread && _baction b == Just Stop) || any check (M.toList $ _bdone b)
-
-  -- Display a labelled node.
-  node n b = n ++ " [label=\"" ++ label b ++ "\"]"
-
-  -- A node label, summary of the BPOR state at that node.
-  label b = intercalate ","
-    [ show $ _baction b
-    , "Run:" ++ show (S.toList $ _brunnable b)
-    , "Tod:" ++ show (M.keys   $ _btodo     b)
-    , "Slp:" ++ show (M.toList $ _bsleep    b)
-    ]
-
-  -- Display a labelled edge
-  --
-  -- TODO: Incorporate the thread name.
-  edge n1 n2 l = n1 ++ "-> " ++ n2 ++ " [label=\"" ++ show l ++ "\"]\n"
-
-  -- Show a number, replacing a minus sign for \"N\".
   show' (ThreadId _ i) = map (\c -> if c == '-' then 'N' else c) $ show i
 
 -- | Initial BPOR state.

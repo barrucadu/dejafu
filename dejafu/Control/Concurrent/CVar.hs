@@ -29,7 +29,6 @@ module Control.Concurrent.CVar
  , unlock
  ) where
 
-import Control.Monad (liftM)
 import Control.Monad.Catch (mask_, onException)
 import Control.Monad.Conc.Class
 
@@ -81,7 +80,7 @@ withCVarMasked cvar f = mask_ $ do
 -- @CVar@.
 {-# INLINE modifyCVar_ #-}
 modifyCVar_ :: MonadConc m => CVar m a -> (a -> m a) -> m ()
-modifyCVar_ cvar f = modifyCVar cvar $ liftM (\a -> (a,())) . f
+modifyCVar_ cvar f = modifyCVar cvar $ fmap (\a -> (a,())) . f
 
 -- | A slight variation on 'modifyCVar_' that allows a value to be
 -- returned (@b@) in addition to the modified value of the @CVar@.
@@ -97,7 +96,7 @@ modifyCVar cvar f = mask $ \restore -> do
 -- executed with asynchronous exceptions masked.
 {-# INLINE modifyCVarMasked_ #-}
 modifyCVarMasked_ :: MonadConc m => CVar m a -> (a -> m a) -> m ()
-modifyCVarMasked_ cvar f = modifyCVarMasked cvar $ liftM (\a -> (a,())) . f
+modifyCVarMasked_ cvar f = modifyCVarMasked cvar $ fmap (\a -> (a,())) . f
 
 -- | Like 'modifyCVar', but the @IO@ action in the second argument is
 -- executed with asynchronous exceptions masked.

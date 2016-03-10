@@ -13,7 +13,7 @@ import Data.List (sort, nub, intercalate)
 import Data.List.Extra
 import Test.DejaFu.Internal
 
-import Prelude
+{-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 
 --------------------------------------------------------------------------------
 -- * The @Conc@ Monad

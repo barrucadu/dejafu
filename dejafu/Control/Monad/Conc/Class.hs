@@ -55,6 +55,8 @@ import qualified Control.Monad.Writer.Lazy as WL
 import qualified Control.Monad.Writer.Strict as WS
 import qualified Data.Atomics as A
 
+{-# ANN module ("HLint: ignore Use const" :: String) #-}
+
 -- | @MonadConc@ is an abstraction over GHC's typical concurrency
 -- abstraction. It captures the interface of concurrency monads in
 -- terms of how they can operate on shared state and in the presence
