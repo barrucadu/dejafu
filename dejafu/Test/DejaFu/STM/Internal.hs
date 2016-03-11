@@ -5,11 +5,9 @@
 -- definitions.
 module Test.DejaFu.STM.Internal where
 
-import Control.Exception (Exception, SomeException(..), fromException)
+import Control.Exception (Exception, SomeException, fromException, toException)
 import Control.Monad.Cont (Cont, runCont)
 import Data.List (nub)
-import Data.Maybe (fromMaybe)
-import Data.Typeable (cast)
 import Test.DejaFu.Deterministic.Internal.Common (CTVarId, IdSource, TAction(..), TTrace, nextCTVId)
 import Test.DejaFu.Internal
 
@@ -108,15 +106,9 @@ doTransaction fixed ma idsource = do
         TStop  -> return (newIDSource, newUndo, newReaden, newWritten, TStop:newSofar)
         TRetry -> writeRef fixed ref Nothing
           >> return (newIDSource, newUndo, newReaden, newWritten, TRetry:newSofar)
-        TThrow -> writeRef fixed ref (Just . Left $ case act of SThrow e -> wrap e; _ -> undefined)
+        TThrow -> writeRef fixed ref (Just . Left $ case act of SThrow e -> toException e; _ -> undefined)
           >> return (newIDSource, newUndo, newReaden, newWritten, TThrow:newSofar)
         _ -> go ref newAct newUndo newIDSource newReaden newWritten newSofar
-
-    -- | This wraps up an uncaught exception inside a @SomeException@,
-    -- unless it already is a @SomeException@. This is because
-    -- multiple levels of @SomeException@ do not play nicely with
-    -- @fromException@.
-    wrap e = fromMaybe (SomeException e) $ cast e
 
 -- | Run a transaction for one step.
 stepTrans :: Monad n => Fixed n r -> STMAction n r -> IdSource -> n (STMAction n r, n (), IdSource, [CTVarId], [CTVarId], TAction)

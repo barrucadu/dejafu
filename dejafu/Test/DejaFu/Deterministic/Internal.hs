@@ -56,12 +56,11 @@ module Test.DejaFu.Deterministic.Internal
  , Failure(..)
  ) where
 
-import Control.Exception (MaskingState(..), SomeException(..))
+import Control.Exception (MaskingState(..), toException)
 import Data.Functor (void)
 import Data.List (sort)
 import Data.List.Extra
-import Data.Maybe (fromJust, isJust, fromMaybe, isNothing, listToMaybe)
-import Data.Typeable (cast)
+import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
 import Test.DejaFu.STM (Result(..))
 import Test.DejaFu.Internal
 import Test.DejaFu.Deterministic.Internal.Common
@@ -368,7 +367,7 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
     -- | Throw an exception, and propagate it to the appropriate
     -- handler.
     stepThrow e =
-      case propagate (wrap e) tid threads of
+      case propagate (toException e) tid threads of
         Just threads' -> simple threads' Throw
         Nothing -> return $ Left UncaughtException
 
@@ -379,7 +378,7 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
           blocked  = block (OnMask t) tid threads
       in case M.lookup t threads of
            Just thread
-             | interruptible thread -> case propagate (wrap e) t threads' of
+             | interruptible thread -> case propagate (toException e) t threads' of
                Just threads'' -> simple threads'' $ ThrowTo t
                Nothing
                  | t == initialThread -> return $ Left UncaughtException
@@ -458,6 +457,3 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
       return $ case res of
         Right (threads', idSource', act', _, caps') -> Right (threads', idSource', act', emptyBuffer, caps')
         _ -> res
-
-    -- | Helper function for wrapping up exceptions.
-    wrap e = fromMaybe (SomeException e) $ cast e
