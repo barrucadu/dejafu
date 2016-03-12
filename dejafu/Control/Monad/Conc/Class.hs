@@ -32,28 +32,28 @@ module Control.Monad.Conc.Class
   , cas
   ) where
 
-import Control.Concurrent (forkIO)
-import Control.Concurrent.MVar (MVar, readMVar, newEmptyMVar, putMVar, tryPutMVar, takeMVar, tryTakeMVar)
+-- for the class and utilities
 import Control.Exception (Exception, AsyncException(ThreadKilled), SomeException)
-import Control.Monad (liftM)
 import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
-import Control.Monad.Reader (ReaderT(..), runReaderT)
-import Control.Monad.STM (STM)
+import qualified Control.Monad.Catch as Ca
 import Control.Monad.STM.Class (MonadSTM, CTVar)
-import Control.Monad.Trans (lift)
-import Data.IORef (IORef, atomicModifyIORef, newIORef, readIORef, writeIORef, atomicWriteIORef)
 import Language.Haskell.TH (Q, Exp, Loc(..), location)
 
-import qualified Control.Concurrent as C
-import qualified Control.Monad.Catch as Ca
+-- for the 'IO' instance
+import qualified Control.Concurrent as IO
+import qualified Control.Monad.STM as IO
+import qualified Data.Atomics as IO
+import qualified Data.IORef as IO
+
+-- for the transformer instances
+import Control.Monad.Trans (lift)
+import Control.Monad.Reader (ReaderT(..), runReaderT)
 import qualified Control.Monad.RWS.Lazy as RL
 import qualified Control.Monad.RWS.Strict as RS
-import qualified Control.Monad.STM as S
 import qualified Control.Monad.State.Lazy as SL
 import qualified Control.Monad.State.Strict as SS
 import qualified Control.Monad.Writer.Lazy as WL
 import qualified Control.Monad.Writer.Strict as WS
-import qualified Data.Atomics as A
 
 {-# ANN module ("HLint: ignore Use const" :: String) #-}
 
@@ -355,9 +355,9 @@ class ( Applicative m, Monad m
   -- main thread is blocked on a variable no runnable thread has a
   -- reference to, which is a deadlock situation.
   --
-  -- > _concKnowsAbout _ = return ()
+  -- > _concKnowsAbout _ = pure ()
   _concKnowsAbout :: Either (CVar m a) (CTVar (STMLike m) a) -> m ()
-  _concKnowsAbout _ = return ()
+  _concKnowsAbout _ = pure ()
 
   -- | Does nothing.
   --
@@ -369,9 +369,9 @@ class ( Applicative m, Monad m
   -- positives! Be very sure that the current thread will /never/
   -- refer to the variable again, for instance when leaving its scope.
   --
-  -- > _concForgets _ = return ()
+  -- > _concForgets _ = pure ()
   _concForgets :: Either (CVar m a) (CTVar (STMLike m) a) -> m ()
-  _concForgets _ = return ()
+  _concForgets _ = pure ()
 
   -- | Does nothing.
   --
@@ -385,9 +385,9 @@ class ( Applicative m, Monad m
   -- '_concKnowsAbout' should be called immediately, otherwise there
   -- is a risk of identifying false positives.
   --
-  -- > _concAllKnown = return ()
+  -- > _concAllKnown = pure ()
   _concAllKnown :: m ()
-  _concAllKnown = return ()
+  _concAllKnown = pure ()
 
 -------------------------------------------------------------------------------
 -- Utilities
@@ -415,7 +415,7 @@ spawn :: MonadConc m => m a -> m (CVar m a)
 spawn ma = do
   cvar <- newEmptyCVar
   _ <- fork $ _concKnowsAbout (Left cvar) >> ma >>= putCVar cvar
-  return cvar
+  pure cvar
 
 -- | Fork a thread and call the supplied function when the thread is
 -- about to terminate, with an exception or a returned value. The
@@ -460,7 +460,7 @@ rtsSupportsBoundThreads = False
 
 -- | Provided for compatibility, always returns 'False'.
 isCurrentThreadBound :: MonadConc m => m Bool
-isCurrentThreadBound = return False
+isCurrentThreadBound = pure False
 
 -- Mutable Variables
 
@@ -469,7 +469,7 @@ newCVar :: MonadConc m => a -> m (CVar m a)
 newCVar a = do
   cvar <- newEmptyCVar
   putCVar cvar a
-  return cvar
+  pure cvar
 
 -- | Create a new @CVar@ containing a value, but it is given a name
 -- which may be used to present more useful debugging information.
@@ -481,7 +481,7 @@ newCVarN :: MonadConc m => String -> a -> m (CVar m a)
 newCVarN n a = do
   cvar <- newEmptyCVarN n
   putCVar cvar a
-  return cvar
+  pure cvar
 
 -- | Compare-and-swap a value in a @CRef@, returning an indication of
 -- success and the new value.
@@ -491,43 +491,45 @@ cas cref a = do
   (suc, tick') <- casCRef cref tick a
   a'           <- peekTicket tick'
 
-  return (suc, a')
+  pure (suc, a')
 
 -------------------------------------------------------------------------------
 -- Concrete instances
 
 instance MonadConc IO where
-  type STMLike  IO = STM
-  type CVar     IO = MVar
-  type CRef     IO = IORef
-  type Ticket   IO = A.Ticket
-  type ThreadId IO = C.ThreadId
+  type STMLike  IO = IO.STM
+  type CVar     IO = IO.MVar
+  type CRef     IO = IO.IORef
+  type Ticket   IO = IO.Ticket
+  type ThreadId IO = IO.ThreadId
 
-  readCVar       = readMVar
-  fork           = forkIO
-  forkWithUnmask = C.forkIOWithUnmask
-  forkOn         = C.forkOn
-  forkOnWithUnmask = C.forkOnWithUnmask
-  getNumCapabilities = C.getNumCapabilities
-  setNumCapabilities = C.setNumCapabilities
-  myThreadId     = C.myThreadId
-  yield          = C.yield
-  throwTo        = C.throwTo
-  newEmptyCVar   = newEmptyMVar
-  putCVar        = putMVar
-  tryPutCVar     = tryPutMVar
-  takeCVar       = takeMVar
-  tryTakeCVar    = tryTakeMVar
-  newCRef        = newIORef
-  readCRef       = readIORef
-  modifyCRef     = atomicModifyIORef
-  writeCRef      = writeIORef
-  atomicWriteCRef = atomicWriteIORef
-  readForCAS     = A.readForCAS
-  peekTicket     = return . A.peekTicket
-  casCRef        = A.casIORef
-  modifyCRefCAS  = A.atomicModifyIORefCAS
-  atomically     = S.atomically
+  fork   = IO.forkIO
+  forkOn = IO.forkOn
+
+  forkWithUnmask   = IO.forkIOWithUnmask
+  forkOnWithUnmask = IO.forkOnWithUnmask
+
+  getNumCapabilities = IO.getNumCapabilities
+  setNumCapabilities = IO.setNumCapabilities
+  readCVar           = IO.readMVar
+  myThreadId         = IO.myThreadId
+  yield              = IO.yield
+  throwTo            = IO.throwTo
+  newEmptyCVar       = IO.newEmptyMVar
+  putCVar            = IO.putMVar
+  tryPutCVar         = IO.tryPutMVar
+  takeCVar           = IO.takeMVar
+  tryTakeCVar        = IO.tryTakeMVar
+  newCRef            = IO.newIORef
+  readCRef           = IO.readIORef
+  modifyCRef         = IO.atomicModifyIORef
+  writeCRef          = IO.writeIORef
+  atomicWriteCRef    = IO.atomicWriteIORef
+  readForCAS         = IO.readForCAS
+  peekTicket         = pure . IO.peekTicket
+  casCRef            = IO.casIORef
+  modifyCRefCAS      = IO.atomicModifyIORefCAS
+  atomically         = IO.atomically
 
 -------------------------------------------------------------------------------
 -- Transformer instances
@@ -539,12 +541,13 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   type Ticket   (ReaderT r m) = Ticket m
   type ThreadId (ReaderT r m) = ThreadId m
 
-  fork              = reader fork
-  forkOn i          = reader (forkOn i)
-  forkWithUnmask ma = ReaderT $ \r -> forkWithUnmask (\f -> runReaderT (ma $ reader f) r)
-  forkWithUnmaskN n ma = ReaderT $ \r -> forkWithUnmaskN n (\f -> runReaderT (ma $ reader f) r)
-  forkOnWithUnmask i ma = ReaderT $ \r -> forkOnWithUnmask i (\f -> runReaderT (ma $ reader f) r)
-  forkOnWithUnmaskN n i ma = ReaderT $ \r -> forkOnWithUnmaskN n i (\f -> runReaderT (ma $ reader f) r)
+  fork   = reader fork
+  forkOn = reader . forkOn
+
+  forkWithUnmask        = reader' forkWithUnmask
+  forkWithUnmaskN   n   = reader' (forkWithUnmaskN   n  )
+  forkOnWithUnmask    i = reader' (forkOnWithUnmask    i)
+  forkOnWithUnmaskN n i = reader' (forkOnWithUnmaskN n i)
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -573,8 +576,18 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   _concForgets       = lift . _concForgets
   _concAllKnown      = lift _concAllKnown
 
-reader :: Monad m => (m a -> m b) -> ReaderT r m a -> ReaderT r m b
+reader :: Monad m
+       => (m a -> m b)
+       -> ReaderT r m a
+       -> ReaderT r m b
 reader f ma = ReaderT $ \r -> f (runReaderT ma r)
+
+reader' :: Monad m
+        => (((forall x. m x -> m x) -> m a) -> m b)
+        -> ((forall x. ReaderT r m x -> ReaderT r m x)
+          -> ReaderT r m a)
+        -> ReaderT r m b
+reader' f ma = ReaderT $ \r -> f (\g -> runReaderT (ma $ reader g) r)
 
 instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   type STMLike  (WL.WriterT w m) = STMLike m
@@ -583,12 +596,13 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   type Ticket   (WL.WriterT w m) = Ticket m
   type ThreadId (WL.WriterT w m) = ThreadId m
 
-  fork              = writerlazy fork
-  forkOn i          = writerlazy (forkOn i)
-  forkWithUnmask ma = lift $ forkWithUnmask (\f -> fst `liftM` WL.runWriterT (ma $ writerlazy f))
-  forkWithUnmaskN n ma = lift $ forkWithUnmaskN n (\f -> fst `liftM` WL.runWriterT (ma $ writerlazy f))
-  forkOnWithUnmask i ma = lift $ forkOnWithUnmask i (\f -> fst `liftM` WL.runWriterT (ma $ writerlazy f))
-  forkOnWithUnmaskN n i ma = lift $ forkOnWithUnmaskN n i (\f -> fst `liftM` WL.runWriterT (ma $ writerlazy f))
+  fork   = writerlazy fork
+  forkOn = writerlazy . forkOn
+
+  forkWithUnmask        = writerlazy' forkWithUnmask
+  forkWithUnmaskN   n   = writerlazy' (forkWithUnmaskN   n  )
+  forkOnWithUnmask    i = writerlazy' (forkOnWithUnmask    i)
+  forkOnWithUnmaskN n i = writerlazy' (forkOnWithUnmaskN n i)
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -617,8 +631,18 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   _concForgets       = lift . _concForgets
   _concAllKnown      = lift _concAllKnown
 
-writerlazy :: (Monad m, Monoid w) => (m a -> m b) -> WL.WriterT w m a -> WL.WriterT w m b
-writerlazy f ma = lift . f $ fst `liftM` WL.runWriterT ma
+writerlazy :: (Monad m, Monoid w)
+           => (m a -> m b)
+           -> WL.WriterT w m a
+           -> WL.WriterT w m b
+writerlazy f ma = lift $ f (fst <$> WL.runWriterT ma)
+
+writerlazy' :: (Monad m, Monoid w)
+            => (((forall x. m x -> m x) -> m a) -> m b)
+            -> ((forall x. WL.WriterT w m x -> WL.WriterT w m x)
+               -> WL.WriterT w m a)
+            -> WL.WriterT w m b
+writerlazy' f ma = lift $ f (\g -> fst <$> WL.runWriterT (ma $ writerlazy g))
 
 instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   type STMLike  (WS.WriterT w m) = STMLike m
@@ -627,12 +651,13 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   type Ticket   (WS.WriterT w m) = Ticket m
   type ThreadId (WS.WriterT w m) = ThreadId m
 
-  fork              = writerstrict fork
-  forkOn i          = writerstrict (forkOn i)
-  forkWithUnmask ma = lift $ forkWithUnmask (\f -> fst `liftM` WS.runWriterT (ma $ writerstrict f))
-  forkWithUnmaskN n ma = lift $ forkWithUnmaskN n (\f -> fst `liftM` WS.runWriterT (ma $ writerstrict f))
-  forkOnWithUnmask i ma = lift $ forkOnWithUnmask i (\f -> fst `liftM` WS.runWriterT (ma $ writerstrict f))
-  forkOnWithUnmaskN n i ma = lift $ forkOnWithUnmaskN n i (\f -> fst `liftM` WS.runWriterT (ma $ writerstrict f))
+  fork   = writerstrict fork
+  forkOn = writerstrict . forkOn
+
+  forkWithUnmask        = writerstrict' forkWithUnmask
+  forkWithUnmaskN   n   = writerstrict' (forkWithUnmaskN   n  )
+  forkOnWithUnmask    i = writerstrict' (forkOnWithUnmask    i)
+  forkOnWithUnmaskN n i = writerstrict' (forkOnWithUnmaskN n i)
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -661,8 +686,18 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   _concForgets       = lift . _concForgets
   _concAllKnown      = lift _concAllKnown
 
-writerstrict :: (Monad m, Monoid w) => (m a -> m b) -> WS.WriterT w m a -> WS.WriterT w m b
-writerstrict f ma = lift . f $ fst `liftM` WS.runWriterT ma
+writerstrict :: (Monad m, Monoid w)
+             => (m a -> m b)
+             -> WS.WriterT w m a
+             -> WS.WriterT w m b
+writerstrict f ma = lift . f $ fst <$> WS.runWriterT ma
+
+writerstrict' :: (Monad m, Monoid w)
+              => (((forall x. m x -> m x) -> m a) -> m b)
+              -> ((forall x. WS.WriterT w m x -> WS.WriterT w m x)
+                 -> WS.WriterT w m a)
+              -> WS.WriterT w m b
+writerstrict' f ma = lift $ f (\g -> fst <$> WS.runWriterT (ma $ writerstrict g))
 
 instance MonadConc m => MonadConc (SL.StateT s m) where
   type STMLike  (SL.StateT s m) = STMLike m
@@ -671,12 +706,13 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   type Ticket   (SL.StateT s m) = Ticket m
   type ThreadId (SL.StateT s m) = ThreadId m
 
-  fork              = statelazy fork
-  forkOn i          = statelazy (forkOn i)
-  forkWithUnmask ma = SL.StateT $ \s -> (\a -> (a,s)) `liftM` forkWithUnmask (\f -> SL.evalStateT (ma $ statelazy f) s)
-  forkWithUnmaskN n ma = SL.StateT $ \s -> (\a -> (a,s)) `liftM` forkWithUnmaskN n (\f -> SL.evalStateT (ma $ statelazy f) s)
-  forkOnWithUnmask i ma = SL.StateT $ \s -> (\a -> (a,s)) `liftM` forkOnWithUnmask i (\f -> SL.evalStateT (ma $ statelazy f) s)
-  forkOnWithUnmaskN n i ma = SL.StateT $ \s -> (\a -> (a,s)) `liftM` forkOnWithUnmaskN n i (\f -> SL.evalStateT (ma $ statelazy f) s)
+  fork   = statelazy fork
+  forkOn = statelazy . forkOn
+
+  forkWithUnmask        = statelazy' forkWithUnmask
+  forkWithUnmaskN   n   = statelazy' (forkWithUnmaskN   n  )
+  forkOnWithUnmask    i = statelazy' (forkOnWithUnmask    i)
+  forkOnWithUnmaskN n i = statelazy' (forkOnWithUnmaskN n i)
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -705,8 +741,18 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   _concForgets       = lift . _concForgets
   _concAllKnown      = lift _concAllKnown
 
-statelazy :: Monad m => (m a -> m b) -> SL.StateT s m a -> SL.StateT s m b
-statelazy f ma = SL.StateT $ \s -> (\b -> (b,s)) `liftM` f (SL.evalStateT ma s)
+statelazy :: Monad m
+          => (m a -> m b)
+          -> SL.StateT s m a
+          -> SL.StateT s m b
+statelazy f ma = SL.StateT $ \s -> (\b -> (b,s)) <$> f (SL.evalStateT ma s)
+
+statelazy' :: Monad m
+           => (((forall x. m x -> m x) -> m a) -> m b)
+           -> ((forall x. SL.StateT s m x -> SL.StateT s m x)
+              -> SL.StateT s m a)
+           -> SL.StateT s m b
+statelazy' f ma = SL.StateT $ \s -> (\a -> (a,s)) <$> f (\g -> SL.evalStateT (ma $ statelazy g) s)
 
 instance MonadConc m => MonadConc (SS.StateT s m) where
   type STMLike  (SS.StateT s m) = STMLike m
@@ -715,12 +761,13 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   type Ticket   (SS.StateT s m) = Ticket m
   type ThreadId (SS.StateT s m) = ThreadId m
 
-  fork              = statestrict fork
-  forkOn i          = statestrict (forkOn i)
-  forkWithUnmask ma = SS.StateT $ \s -> (\a -> (a,s)) `liftM` forkWithUnmask (\f -> SS.evalStateT (ma $ statestrict f) s)
-  forkWithUnmaskN n ma = SS.StateT $ \s -> (\a -> (a,s)) `liftM` forkWithUnmaskN n (\f -> SS.evalStateT (ma $ statestrict f) s)
-  forkOnWithUnmask i ma = SS.StateT $ \s -> (\a -> (a,s)) `liftM` forkOnWithUnmask i (\f -> SS.evalStateT (ma $ statestrict f) s)
-  forkOnWithUnmaskN n i ma = SS.StateT $ \s -> (\a -> (a,s)) `liftM` forkOnWithUnmaskN n i (\f -> SS.evalStateT (ma $ statestrict f) s)
+  fork   = statestrict fork
+  forkOn = statestrict . forkOn
+
+  forkWithUnmask        = statestrict' forkWithUnmask
+  forkWithUnmaskN   n   = statestrict' (forkWithUnmaskN   n  )
+  forkOnWithUnmask    i = statestrict' (forkOnWithUnmask    i)
+  forkOnWithUnmaskN n i = statestrict' (forkOnWithUnmaskN n i)
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -749,8 +796,18 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   _concForgets       = lift . _concForgets
   _concAllKnown      = lift _concAllKnown
 
-statestrict :: Monad m => (m a -> m b) -> SS.StateT s m a -> SS.StateT s m b
-statestrict f ma = SS.StateT $ \s -> (\b -> (b,s)) `liftM` f (SS.evalStateT ma s)
+statestrict :: Monad m
+            => (m a -> m b)
+            -> SS.StateT s m a
+            -> SS.StateT s m b
+statestrict f ma = SS.StateT $ \s -> (\b -> (b,s)) <$> f (SS.evalStateT ma s)
+
+statestrict' :: Monad m
+             => (((forall x. m x -> m x) -> m a) -> m b)
+             -> ((forall x. SS.StateT s m x -> SS.StateT s m x)
+                -> SS.StateT s m a)
+             -> SS.StateT s m b
+statestrict' f ma = SS.StateT $ \s -> (\a -> (a,s)) <$> f (\g -> SS.evalStateT (ma $ statestrict g) s)
 
 instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   type STMLike  (RL.RWST r w s m) = STMLike m
@@ -759,12 +816,13 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   type Ticket   (RL.RWST r w s m) = Ticket m
   type ThreadId (RL.RWST r w s m) = ThreadId m
 
-  fork              = rwslazy fork
-  forkOn i          = rwslazy (forkOn i)
-  forkWithUnmask ma = RL.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkWithUnmask (\f -> fst `liftM` RL.evalRWST (ma $ rwslazy f) r s)
-  forkWithUnmaskN n ma = RL.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkWithUnmaskN n (\f -> fst `liftM` RL.evalRWST (ma $ rwslazy f) r s)
-  forkOnWithUnmask i ma = RL.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkOnWithUnmask i (\f -> fst `liftM` RL.evalRWST (ma $ rwslazy f) r s)
-  forkOnWithUnmaskN n i ma = RL.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkOnWithUnmaskN n i (\f -> fst `liftM` RL.evalRWST (ma $ rwslazy f) r s)
+  fork   = rwslazy fork
+  forkOn = rwslazy . forkOn
+
+  forkWithUnmask        = rwslazy' forkWithUnmask
+  forkWithUnmaskN   n   = rwslazy' (forkWithUnmaskN   n  )
+  forkOnWithUnmask    i = rwslazy' (forkOnWithUnmask    i)
+  forkOnWithUnmaskN n i = rwslazy' (forkOnWithUnmaskN n i)
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -793,8 +851,18 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   _concForgets       = lift . _concForgets
   _concAllKnown      = lift _concAllKnown
 
-rwslazy :: (Monad m, Monoid w) => (m a -> m b) -> RL.RWST r w s m a -> RL.RWST r w s m b
-rwslazy f ma = RL.RWST $ \r s -> (\b -> (b,s,mempty)) `liftM` f (fst `liftM` RL.evalRWST ma r s)
+rwslazy :: (Monad m, Monoid w)
+        => (m a -> m b)
+        -> RL.RWST r w s m a
+        -> RL.RWST r w s m b
+rwslazy f ma = RL.RWST $ \r s -> (\b -> (b,s,mempty)) <$> f (fst <$> RL.evalRWST ma r s)
+
+rwslazy' :: (Monad m, Monoid w)
+         => (((forall x. m x -> m x) -> m a) -> m b)
+         -> ((forall x. RL.RWST r w s m x -> RL.RWST r w s m x)
+            -> RL.RWST r w s m a)
+         -> RL.RWST r w s m b
+rwslazy' f ma = RL.RWST $ \r s -> (\a -> (a,s,mempty)) <$> f (\g -> fst <$> RL.evalRWST (ma $ rwslazy g) r s)
 
 instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   type STMLike  (RS.RWST r w s m) = STMLike m
@@ -803,12 +871,13 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   type Ticket   (RS.RWST r w s m) = Ticket m
   type ThreadId (RS.RWST r w s m) = ThreadId m
 
-  fork              = rwsstrict fork
-  forkOn i          = rwsstrict (forkOn i)
-  forkWithUnmask ma = RS.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkWithUnmask (\f -> fst `liftM` RS.evalRWST (ma $ rwsstrict f) r s)
-  forkWithUnmaskN n ma = RS.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkWithUnmaskN n (\f -> fst `liftM` RS.evalRWST (ma $ rwsstrict f) r s)
-  forkOnWithUnmask i ma = RS.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkOnWithUnmask i (\f -> fst `liftM` RS.evalRWST (ma $ rwsstrict f) r s)
-  forkOnWithUnmaskN n i ma = RS.RWST $ \r s -> (\a -> (a,s,mempty)) `liftM` forkOnWithUnmaskN n i (\f -> fst `liftM` RS.evalRWST (ma $ rwsstrict f) r s)
+  fork   = rwsstrict fork
+  forkOn = rwsstrict . forkOn
+
+  forkWithUnmask        = rwsstrict' forkWithUnmask
+  forkWithUnmaskN   n   = rwsstrict' (forkWithUnmaskN   n  )
+  forkOnWithUnmask    i = rwsstrict' (forkOnWithUnmask    i)
+  forkOnWithUnmaskN n i = rwsstrict' (forkOnWithUnmaskN n i)
 
   getNumCapabilities = lift getNumCapabilities
   setNumCapabilities = lift . setNumCapabilities
@@ -837,5 +906,15 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   _concForgets       = lift . _concForgets
   _concAllKnown      = lift _concAllKnown
 
-rwsstrict :: (Monad m, Monoid w) => (m a -> m b) -> RS.RWST r w s m a -> RS.RWST r w s m b
-rwsstrict f ma = RS.RWST $ \r s -> (\b -> (b,s,mempty)) `liftM` f (fst `liftM` RS.evalRWST ma r s)
+rwsstrict :: (Monad m, Monoid w)
+          => (m a -> m b)
+          -> RS.RWST r w s m a
+          -> RS.RWST r w s m b
+rwsstrict f ma = RS.RWST $ \r s -> (\b -> (b,s,mempty)) <$> f (fst <$> RS.evalRWST ma r s)
+
+rwsstrict' :: (Monad m, Monoid w)
+           => (((forall x. m x -> m x) -> m a) -> m b)
+           -> ((forall x. RS.RWST r w s m x -> RS.RWST r w s m x)
+              -> RS.RWST r w s m a)
+           -> RS.RWST r w s m b
+rwsstrict' f ma = RS.RWST $ \r s -> (\a -> (a,s,mempty)) <$> f (\g -> fst <$> RS.evalRWST (ma $ rwsstrict g) r s)
