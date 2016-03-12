@@ -84,18 +84,14 @@ class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
   -- | Write the supplied value into the @CTVar@.
   writeCTVar :: CTVar m a -> a -> m ()
 
-  -- | Throw an exception. This aborts the transaction and propagates
-  -- the exception.
-  --
-  -- > throwSTM = Control.Monad.Catch.throwM
-  throwSTM :: Exception e => e -> m a
-  throwSTM = throwM
+-- | Throw an exception. This aborts the transaction and propagates
+-- the exception.
+throwSTM :: (MonadSTM m, Exception e) => e -> m a
+throwSTM = throwM
 
-  -- | Handling exceptions from 'throwSTM'.
-  --
-  -- > catchSTM = Control.Monad.Catch.catch
-  catchSTM :: Exception e => m a -> (e -> m a) -> m a
-  catchSTM = Control.Monad.Catch.catch
+-- | Handling exceptions from 'throwSTM'.
+catchSTM :: (MonadSTM m, Exception e) => m a -> (e -> m a) -> m a
+catchSTM = Control.Monad.Catch.catch
 
 instance MonadSTM STM where
   type CTVar STM = TVar

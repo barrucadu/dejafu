@@ -26,6 +26,12 @@ module Control.Monad.Conc.Class
   , rtsSupportsBoundThreads
   , isCurrentThreadBound
 
+  -- * Exceptions
+  , throw
+  , catch
+  , mask
+  , uninterruptibleMask
+
   -- * Mutable State
   , newCVar
   , newCVarN
@@ -290,57 +296,10 @@ class ( Applicative m, Monad m
   -- | Perform an STM transaction atomically.
   atomically :: STMLike m a -> m a
 
-  -- | Throw an exception. This will \"bubble up\" looking for an
-  -- exception handler capable of dealing with it and, if one is not
-  -- found, the thread is killed.
-  --
-  -- > throw = Control.Monad.Catch.throwM
-  throw :: Exception e => e -> m a
-  throw = Ca.throwM
-
-  -- | Catch an exception. This is only required to be able to catch
-  -- exceptions raised by 'throw', unlike the more general
-  -- Control.Exception.catch function. If you need to be able to catch
-  -- /all/ errors, you will have to use 'IO'.
-  --
-  -- > catch = Control.Monad.Catch.catch
-  catch :: Exception e => m a -> (e -> m a) -> m a
-  catch = Ca.catch
-
   -- | Throw an exception to the target thread. This blocks until the
   -- exception is delivered, and it is just as if the target thread
   -- had raised it with 'throw'. This can interrupt a blocked action.
   throwTo :: Exception e => ThreadId m -> e -> m ()
-
-  -- | Executes a computation with asynchronous exceptions
-  -- /masked/. That is, any thread which attempts to raise an
-  -- exception in the current thread with 'throwTo' will be blocked
-  -- until asynchronous exceptions are unmasked again.
-  --
-  -- The argument passed to mask is a function that takes as its
-  -- argument another function, which can be used to restore the
-  -- prevailing masking state within the context of the masked
-  -- computation. This function should not be used within an
-  -- 'uninterruptibleMask'.
-  --
-  -- > mask = Control.Monad.Catch.mask
-  mask :: ((forall a. m a -> m a) -> m b) -> m b
-  mask = Ca.mask
-
-  -- | Like 'mask', but the masked computation is not
-  -- interruptible. THIS SHOULD BE USED WITH GREAT CARE, because if a
-  -- thread executing in 'uninterruptibleMask' blocks for any reason,
-  -- then the thread (and possibly the program, if this is the main
-  -- thread) will be unresponsive and unkillable. This function should
-  -- only be necessary if you need to mask exceptions around an
-  -- interruptible operation, and you can guarantee that the
-  -- interruptible operation will only block for a short period of
-  -- time. The supplied unmasking function should not be used within a
-  -- 'mask'.
-  --
-  -- > uninterruptibleMask = Control.Monad.Catch.uninterruptibleMask
-  uninterruptibleMask :: ((forall a. m a -> m a) -> m b) -> m b
-  uninterruptibleMask = Ca.uninterruptibleMask
 
   -- | Does nothing.
   --
@@ -461,6 +420,47 @@ rtsSupportsBoundThreads = False
 -- | Provided for compatibility, always returns 'False'.
 isCurrentThreadBound :: MonadConc m => m Bool
 isCurrentThreadBound = pure False
+
+-- Exceptions
+
+-- | Throw an exception. This will \"bubble up\" looking for an
+-- exception handler capable of dealing with it and, if one is not
+-- found, the thread is killed.
+throw :: (MonadConc m, Exception e) => e -> m a
+throw = Ca.throwM
+
+-- | Catch an exception. This is only required to be able to catch
+-- exceptions raised by 'throw', unlike the more general
+-- Control.Exception.catch function. If you need to be able to catch
+-- /all/ errors, you will have to use 'IO'.
+catch :: (MonadConc m, Exception e) => m a -> (e -> m a) -> m a
+catch = Ca.catch
+
+-- | Executes a computation with asynchronous exceptions
+-- /masked/. That is, any thread which attempts to raise an exception
+-- in the current thread with 'throwTo' will be blocked until
+-- asynchronous exceptions are unmasked again.
+--
+-- The argument passed to mask is a function that takes as its
+-- argument another function, which can be used to restore the
+-- prevailing masking state within the context of the masked
+-- computation. This function should not be used within an
+-- 'uninterruptibleMask'.
+mask :: MonadConc m => ((forall a. m a -> m a) -> m b) -> m b
+mask = Ca.mask
+
+-- | Like 'mask', but the masked computation is not
+-- interruptible. THIS SHOULD BE USED WITH GREAT CARE, because if a
+-- thread executing in 'uninterruptibleMask' blocks for any reason,
+-- then the thread (and possibly the program, if this is the main
+-- thread) will be unresponsive and unkillable. This function should
+-- only be necessary if you need to mask exceptions around an
+-- interruptible operation, and you can guarantee that the
+-- interruptible operation will only block for a short period of
+-- time. The supplied unmasking function should not be used within a
+-- 'mask'.
+uninterruptibleMask :: MonadConc m => ((forall a. m a -> m a) -> m b) -> m b
+uninterruptibleMask = Ca.uninterruptibleMask
 
 -- Mutable Variables
 
