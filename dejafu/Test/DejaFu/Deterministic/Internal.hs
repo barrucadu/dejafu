@@ -224,6 +224,7 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
   AKnowsAbout v c  -> stepKnowsAbout  v c
   AForgets    v c  -> stepForgets v c
   AAllKnown   c    -> stepAllKnown c
+  AMessage    m c  -> stepMessage m c
   AStop            -> stepStop
 
   where
@@ -441,6 +442,9 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
 
     -- | Record that all shared variables are known.
     stepAllKnown c = simple (fullknown tid $ goto c tid threads) AllKnown
+
+    -- | Add a message to the trace.
+    stepMessage m c = simple (goto c tid threads) (Message m)
 
     -- | Kill the current thread.
     stepStop = simple (kill tid threads) Stop

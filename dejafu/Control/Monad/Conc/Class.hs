@@ -43,6 +43,7 @@ import Control.Exception (Exception, AsyncException(ThreadKilled), SomeException
 import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import qualified Control.Monad.Catch as Ca
 import Control.Monad.STM.Class (MonadSTM, CTVar)
+import Data.Typeable (Typeable)
 import Language.Haskell.TH (Q, Exp, Loc(..), location)
 
 -- for the 'IO' instance
@@ -348,6 +349,14 @@ class ( Applicative m, Monad m
   _concAllKnown :: m ()
   _concAllKnown = pure ()
 
+  -- | Does nothing.
+  --
+  -- During testing, records a message which shows up in the trace.
+  --
+  -- > _concMessage _ = pure ()
+  _concMessage :: Typeable a => a -> m ()
+  _concMessage _ = pure ()
+
 -------------------------------------------------------------------------------
 -- Utilities
 
@@ -572,9 +581,11 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
-  _concKnowsAbout    = lift . _concKnowsAbout
-  _concForgets       = lift . _concForgets
-  _concAllKnown      = lift _concAllKnown
+
+  _concKnowsAbout = lift . _concKnowsAbout
+  _concForgets    = lift . _concForgets
+  _concAllKnown   = lift _concAllKnown
+  _concMessage    = lift . _concMessage
 
 reader :: Monad m
        => (m a -> m b)
@@ -627,9 +638,11 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
-  _concKnowsAbout    = lift . _concKnowsAbout
-  _concForgets       = lift . _concForgets
-  _concAllKnown      = lift _concAllKnown
+
+  _concKnowsAbout = lift . _concKnowsAbout
+  _concForgets    = lift . _concForgets
+  _concAllKnown   = lift _concAllKnown
+  _concMessage    = lift . _concMessage
 
 writerlazy :: (Monad m, Monoid w)
            => (m a -> m b)
@@ -682,9 +695,11 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
-  _concKnowsAbout    = lift . _concKnowsAbout
-  _concForgets       = lift . _concForgets
-  _concAllKnown      = lift _concAllKnown
+
+  _concKnowsAbout = lift . _concKnowsAbout
+  _concForgets    = lift . _concForgets
+  _concAllKnown   = lift _concAllKnown
+  _concMessage    = lift . _concMessage
 
 writerstrict :: (Monad m, Monoid w)
              => (m a -> m b)
@@ -737,9 +752,11 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
-  _concKnowsAbout    = lift . _concKnowsAbout
-  _concForgets       = lift . _concForgets
-  _concAllKnown      = lift _concAllKnown
+
+  _concKnowsAbout = lift . _concKnowsAbout
+  _concForgets    = lift . _concForgets
+  _concAllKnown   = lift _concAllKnown
+  _concMessage    = lift . _concMessage
 
 statelazy :: Monad m
           => (m a -> m b)
@@ -792,9 +809,11 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
-  _concKnowsAbout    = lift . _concKnowsAbout
-  _concForgets       = lift . _concForgets
-  _concAllKnown      = lift _concAllKnown
+
+  _concKnowsAbout = lift . _concKnowsAbout
+  _concForgets    = lift . _concForgets
+  _concAllKnown   = lift _concAllKnown
+  _concMessage    = lift . _concMessage
 
 statestrict :: Monad m
             => (m a -> m b)
@@ -847,9 +866,11 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
-  _concKnowsAbout    = lift . _concKnowsAbout
-  _concForgets       = lift . _concForgets
-  _concAllKnown      = lift _concAllKnown
+
+  _concKnowsAbout = lift . _concKnowsAbout
+  _concForgets    = lift . _concForgets
+  _concAllKnown   = lift _concAllKnown
+  _concMessage    = lift . _concMessage
 
 rwslazy :: (Monad m, Monoid w)
         => (m a -> m b)
@@ -902,9 +923,11 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
-  _concKnowsAbout    = lift . _concKnowsAbout
-  _concForgets       = lift . _concForgets
-  _concAllKnown      = lift _concAllKnown
+
+  _concKnowsAbout = lift . _concKnowsAbout
+  _concForgets    = lift . _concForgets
+  _concAllKnown   = lift _concAllKnown
+  _concMessage    = lift . _concMessage
 
 rwsstrict :: (Monad m, Monoid w)
           => (m a -> m b)

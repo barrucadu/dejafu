@@ -32,7 +32,7 @@ data BacktrackStep = BacktrackStep
   -- alternatives were added conservatively due to the bound.
   , _crstate :: CRState
   -- ^ The relaxed memory state of the @CRef@s at this point.
-  } deriving (Eq, Show)
+  } deriving Show
 
 instance NFData BacktrackStep where
   rnf b = rnf (_threadid b, _decision b, _runnable b, _backtrack b)
@@ -67,7 +67,11 @@ toDot = toDotFilter (\_ _ -> True)
 toDotSmall :: BPOR -> String
 toDotSmall = toDotFilter (curry check) where
   -- Check that a subtree has at least one non-aborted branch.
-  check (i, b) = (i == initialThread && _baction b == Just Stop) || any check (M.toList $ _bdone b)
+  check (i, b) = (i == initialThread && isStop b) || any check (M.toList $ _bdone b)
+
+  isStop b = case _baction b of
+    Just Stop -> True
+    _ -> False
 
 -- | Render a 'BPOR' value as a graph in GraphViz \"dot\" format, with
 -- a function to determine if a subtree should be included or not.
@@ -288,8 +292,10 @@ activeTid = foldl' tidOf initialThread
 -- | Check if an action is dependent on another.
 dependent :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, ThreadAction) -> Bool
 dependent _ _ (_, Lift) (_, Lift) = True
-dependent _ _ (_, ThrowTo t) (t2, a) = t == t2 && a /= Stop
-dependent _ _ (t2, a) (_, ThrowTo t) = t == t2 && a /= Stop
+dependent _ _ (_, ThrowTo t) (t2, Stop) | t == t2 = False
+dependent _ _ (t2, Stop) (_, ThrowTo t) | t == t2 = False
+dependent _ _ (_, ThrowTo t) (t2, _) = t == t2
+dependent _ _ (t2, _) (_, ThrowTo t) = t == t2
 dependent _ _ (_, STM _ _) (_, STM _ _) = True
 dependent _ _ (_, GetNumCapabilities a) (_, SetNumCapabilities b) = a /= b
 dependent _ _ (_, SetNumCapabilities a) (_, GetNumCapabilities b) = a /= b
@@ -299,8 +305,10 @@ dependent memtype buf (_, d1) (_, d2) = dependentActions memtype buf (simplify d
 -- | Variant of 'dependent' to handle 'ThreadAction''s
 dependent' :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool
 dependent' _ _ (_, Lift) (_, WillLift) = True
-dependent' _ _ (_, ThrowTo t) (t2, a)     = t == t2 && a /= WillStop
-dependent' _ _ (t2, a) (_, WillThrowTo t) = t == t2 && a /= Stop
+dependent' _ _ (_, ThrowTo t) (t2, WillStop) | t == t2 = False
+dependent' _ _ (t2, Stop) (_, WillThrowTo t) | t == t2 = False
+dependent' _ _ (_, ThrowTo t) (t2, _)     = t == t2
+dependent' _ _ (t2, _) (_, WillThrowTo t) = t == t2
 dependent' _ _ (_, STM _ _) (_, WillSTM) = True
 dependent' _ _ (_, GetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
 dependent' _ _ (_, SetNumCapabilities _) (_, WillGetNumCapabilities)   = True

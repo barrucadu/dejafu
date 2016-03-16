@@ -328,7 +328,7 @@ yieldCount tid ts (_, l) = go initialThread ts where
   go _ ((SwitchTo t', _):rest) = go t' rest
   go t ((Continue,    _):rest) = go t  rest
   go t (_:rest) = go t rest
-  go t [] = if l == WillYield && t == tid then 1 else 0
+  go t [] = case l of WillYield | t == tid -> 1; _ -> 0
 
 -- | Get the maximum difference between the yield counts of all
 -- threads in this schedule prefix.
@@ -512,11 +512,16 @@ initialise bf trc prior threads = restrictToBound . yieldsToEnd $ case prior of
     restrictToBound = fst . partition (\t -> bf trc (decision t, action t))
 
     -- Move the threads which will immediately yield to the end of the list
-    yieldsToEnd ts = case partition ((== WillYield) . action) ts of
+    yieldsToEnd ts = case partition yields ts of
       (willYield, noYield) -> noYield ++ willYield
 
     -- Get the decision that will lead to a thread being scheduled.
     decision = decisionOf (fst <$> prior) (S.fromList $ map fst threads')
+
+    -- Check if a thread will yield
+    yields t = case action t of
+      WillYield -> True
+      _ -> False
 
     -- Get the action of a thread
     action t = fromJust $ lookup t threads'

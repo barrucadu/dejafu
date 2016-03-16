@@ -42,6 +42,7 @@ module Test.DejaFu.Deterministic
 
 import Control.Exception (MaskingState(..))
 import Control.Monad.ST (ST, runST)
+import Data.Dynamic (toDyn)
 import Data.IORef (IORef)
 import Data.STRef (STRef)
 import Test.DejaFu.Deterministic.Internal
@@ -150,6 +151,8 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
   _concForgets (Right (CTVar (ctvarid, _))) = toConc (\c -> AForgets (Right ctvarid) (c ()))
 
   _concAllKnown = toConc (\c -> AAllKnown (c ()))
+
+  _concMessage msg = toConc (\c -> AMessage (toDyn msg) (c ()))
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the

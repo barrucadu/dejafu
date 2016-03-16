@@ -370,7 +370,7 @@ data Result a = Result
   -- ^ The failing cases, if any.
   , _failureMsg   :: String
   -- ^ A message to display on failure, if nonempty
-  } deriving (Show, Eq)
+  } deriving Show
 
 -- | A failed result, taking the given list of failures.
 defaultFail :: [(Either Failure a, Trace)] -> Result a

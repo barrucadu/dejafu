@@ -7,6 +7,7 @@ module Test.DejaFu.Deterministic.Internal.Common where
 
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception, MaskingState(..))
+import Data.Dynamic (Dynamic)
 import Data.Map.Strict (Map)
 import Data.Maybe (mapMaybe)
 import Data.List (sort, nub, intercalate)
@@ -127,6 +128,7 @@ data Action n r s =
   | AKnowsAbout (Either CVarId CTVarId) (Action n r s)
   | AForgets    (Either CVarId CTVarId) (Action n r s)
   | AAllKnown   (Action n r s)
+  | AMessage    Dynamic (Action n r s)
 
   | forall a. AAtom (s a) (a -> Action n r s)
   | ALift (n (Action n r s))
@@ -425,9 +427,11 @@ data ThreadAction =
   -- ^ A '_concForgets' annotation was processed.
   | AllKnown
   -- ^ A '_concALlKnown' annotation was processed.
+  | Message Dynamic
+  -- ^ A '_concMessage' annotation was processed.
   | Stop
   -- ^ Cease execution and terminate.
-  deriving (Eq, Show)
+  deriving Show
 
 instance NFData ThreadAction where
   rnf (Fork t) = rnf t
@@ -457,6 +461,7 @@ instance NFData ThreadAction where
   rnf (BlockedThrowTo t) = rnf t
   rnf (SetMasking b m) = b `seq` m `seq` ()
   rnf (ResetMasking b m) = b `seq` m `seq` ()
+  rnf (Message m) = m `seq` ()
   rnf a = a `seq` ()
 
 -- | Check if a @ThreadAction@ immediately blocks.
@@ -583,9 +588,11 @@ data Lookahead =
   -- ^ Will process a '_concForgets' annotation.
   | WillAllKnown
   -- ^ Will process a '_concALlKnown' annotation.
+  | WillMessage Dynamic
+  -- ^ Will process a _concMessage' annotation.
   | WillStop
   -- ^ Will cease execution and terminate.
-  deriving (Eq, Show)
+  deriving Show
 
 instance NFData Lookahead where
   rnf (WillSetNumCapabilities i) = rnf i
@@ -605,6 +612,7 @@ instance NFData Lookahead where
   rnf (WillThrowTo t) = rnf t
   rnf (WillSetMasking b m) = b `seq` m `seq` ()
   rnf (WillResetMasking b m) = b `seq` m `seq` ()
+  rnf (WillMessage m) = m `seq` ()
   rnf l = l `seq` ()
 
 -- | Look as far ahead in the given continuation as possible.
@@ -640,6 +648,7 @@ lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (AKnowsAbout _ k)       = WillKnowsAbout : lookahead' k
   lookahead' (AForgets _ k)          = WillForgets : lookahead' k
   lookahead' (AAllKnown k)           = WillAllKnown : lookahead' k
+  lookahead' (AMessage m k)          = WillMessage m : lookahead' k
   lookahead' (AYield k)              = WillYield : lookahead' k
   lookahead' (AReturn k)             = WillReturn : lookahead' k
   lookahead' AStop                   = [WillStop]
