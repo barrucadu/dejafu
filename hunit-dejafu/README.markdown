@@ -18,6 +18,6 @@ or email (mike@barrucadu.co.uk).
 
 [build-status]: http://ci.barrucadu.co.uk/job/(dejafu)/job/hunit-dejafu/badge/icon?style=plastic
 [build-log]:    http://ci.barrucadu.co.uk/job/(dejafu)/job/hunit-dejafu/
-[docs]:         https://barrucadu.github.io/dejafu/hunit/
+[docs]:         https://docs.barrucadu.co.uk/hunit-dejafu
 [dejafu]:       https://hackage.haskell.org/package/dejafu
 [HUnit]:        https://hackage.haskell.org/package/HUnit

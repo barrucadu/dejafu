@@ -24,6 +24,6 @@ or email (mike@barrucadu.co.uk).
 
 [build-status]: http://ci.barrucadu.co.uk/job/(dejafu)/job/async-dejafu/badge/icon?style=plastic
 [build-log]:    http://ci.barrucadu.co.uk/job/(dejafu)/job/async-dejafu/
-[docs]:         https://barrucadu.github.io/dejafu/async
+[docs]:         https://docs.barrucadu.co.uk/async-dejafu
 [async]:        https://hackage.haskell.org/package/async
 [dejafu]:       https://hackage.haskell.org/package/dejafu

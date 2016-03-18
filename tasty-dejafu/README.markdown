@@ -18,6 +18,6 @@ or email (mike@barrucadu.co.uk).
 
 [build-status]: http://ci.barrucadu.co.uk/job/(dejafu)/job/tasty-dejafu/badge/icon?style=plastic
 [build-log]:    http://ci.barrucadu.co.uk/job/(dejafu)/job/tasty-dejafu/
-[docs]:         https://barrucadu.github.io/dejafu/tasty/
+[docs]:         https://docs.barrucadu.co.uk/tasty-dejafu
 [dejafu]:       https://hackage.haskell.org/package/dejafu
 [tasty]:        https://hackage.haskell.org/package/tasty

@@ -71,6 +71,6 @@ or email (mike@barrucadu.co.uk).
 
 [build-status]: http://ci.barrucadu.co.uk/job/(dejafu)/job/dejafu/badge/icon?style=plastic
 [build-log]:    http://ci.barrucadu.co.uk/job/(dejafu)/job/dejafu/
-[docs]:         https://barrucadu.github.io/dejafu
+[docs]:         https://docs.barrucadu.co.uk/dejafu
 [abstract-par]: https://hackage.haskell.org/package/abstract-par/docs/Control-Monad-Par-Class.html
 [issue]:        https://github.com/commercialhaskell/stack/issues/1122
