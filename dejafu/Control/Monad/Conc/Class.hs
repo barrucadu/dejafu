@@ -185,6 +185,17 @@ class ( Applicative m, Monad m
   -- (if any).
   yield :: m ()
 
+  -- | Yields the current thread, and optionally suspends the current
+  -- thread for a given number of microseconds.
+  --
+  -- If suspended, there is no guarantee that the thread will be
+  -- rescheduled promptly when the delay has expired, but the thread
+  -- will never continue to run earlier than specified.
+  --
+  -- > threadDelay _ = yield
+  threadDelay :: Int -> m ()
+  threadDelay _ = yield
+
   -- | Create a new empty @CVar@.
   --
   -- > newEmptyCVar = newEmptyCVarN ""
@@ -523,6 +534,7 @@ instance MonadConc IO where
   readCVar           = IO.readMVar
   myThreadId         = IO.myThreadId
   yield              = IO.yield
+  threadDelay        = IO.threadDelay
   throwTo            = IO.throwTo
   newEmptyCVar       = IO.newEmptyMVar
   putCVar            = IO.putMVar
@@ -562,6 +574,7 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
+  threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   newEmptyCVarN      = lift . newEmptyCVarN
@@ -619,6 +632,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
+  threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   newEmptyCVarN      = lift . newEmptyCVarN
@@ -676,6 +690,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
+  threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   newEmptyCVarN      = lift . newEmptyCVarN
@@ -733,6 +748,7 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
+  threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   newEmptyCVarN      = lift . newEmptyCVarN
@@ -790,6 +806,7 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
+  threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   newEmptyCVarN      = lift . newEmptyCVarN
@@ -847,6 +864,7 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
+  threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   newEmptyCVarN      = lift . newEmptyCVarN
@@ -904,6 +922,7 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   setNumCapabilities = lift . setNumCapabilities
   myThreadId         = lift myThreadId
   yield              = lift yield
+  threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
   newEmptyCVar       = lift newEmptyCVar
   newEmptyCVarN      = lift . newEmptyCVarN
