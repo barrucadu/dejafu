@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeSynonymInstances       #-}
@@ -51,6 +52,7 @@ import Test.DejaFu.Internal (refST, refIO)
 import Test.DejaFu.STM (STMLike, STMIO, STMST, runTransactionIO, runTransactionST)
 import Test.DejaFu.STM.Internal (CTVar(..))
 
+import qualified Control.Monad.Base as Ba
 import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
 import qualified Control.Monad.IO.Class as IO
@@ -75,6 +77,9 @@ wrap f = C . f . unC
 
 instance IO.MonadIO ConcIO where
   liftIO ma = toConc (\c -> ALift (fmap c ma))
+
+instance Ba.MonadBase IO ConcIO where
+  liftBase = IO.liftIO
 
 instance Ca.MonadCatch (Conc n r s) where
   catch ma h = toConc (ACatching (unC . h) (unC ma))
