@@ -54,12 +54,6 @@ class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
   -- function.
   orElse :: m a -> m a -> m a
 
-  -- | Check whether a condition is true and, if not, call @retry@.
-  --
-  -- > check b = unless b retry
-  check :: Bool -> m ()
-  check b = unless b retry
-
   -- | Create a new @CTVar@ containing the given value.
   --
   -- > newCTVar = newCTVarN ""
@@ -83,6 +77,10 @@ class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
 
   -- | Write the supplied value into the @CTVar@.
   writeCTVar :: CTVar m a -> a -> m ()
+
+-- | Check whether a condition is true and, if not, call @retry@.
+check :: MonadSTM m => Bool -> m ()
+check b = unless b retry
 
 -- | Throw an exception. This aborts the transaction and propagates
 -- the exception.
@@ -110,7 +108,6 @@ instance MonadSTM m => MonadSTM (ReaderT r m) where
 
   retry        = lift retry
   orElse ma mb = ReaderT $ \r -> orElse (runReaderT ma r) (runReaderT mb r)
-  check        = lift . check
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
@@ -121,7 +118,6 @@ instance (MonadSTM m, Monoid w) => MonadSTM (WL.WriterT w m) where
 
   retry        = lift retry
   orElse ma mb = WL.WriterT $ orElse (WL.runWriterT ma) (WL.runWriterT mb)
-  check        = lift . check
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
@@ -132,7 +128,6 @@ instance (MonadSTM m, Monoid w) => MonadSTM (WS.WriterT w m) where
 
   retry        = lift retry
   orElse ma mb = WS.WriterT $ orElse (WS.runWriterT ma) (WS.runWriterT mb)
-  check        = lift . check
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
@@ -143,7 +138,6 @@ instance MonadSTM m => MonadSTM (SL.StateT s m) where
 
   retry        = lift retry
   orElse ma mb = SL.StateT $ \s -> orElse (SL.runStateT ma s) (SL.runStateT mb s)
-  check        = lift . check
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
@@ -154,7 +148,6 @@ instance MonadSTM m => MonadSTM (SS.StateT s m) where
 
   retry        = lift retry
   orElse ma mb = SS.StateT $ \s -> orElse (SS.runStateT ma s) (SS.runStateT mb s)
-  check        = lift . check
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
@@ -165,7 +158,6 @@ instance (MonadSTM m, Monoid w) => MonadSTM (RL.RWST r w s m) where
 
   retry        = lift retry
   orElse ma mb = RL.RWST $ \r s -> orElse (RL.runRWST ma r s) (RL.runRWST mb r s)
-  check        = lift . check
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
@@ -176,7 +168,6 @@ instance (MonadSTM m, Monoid w) => MonadSTM (RS.RWST r w s m) where
 
   retry        = lift retry
   orElse ma mb = RS.RWST $ \r s -> orElse (RS.runRWST ma r s) (RS.runRWST mb r s)
-  check        = lift . check
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
