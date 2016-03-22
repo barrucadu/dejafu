@@ -1,16 +1,29 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies    #-}
 
 -- | This module provides an abstraction over 'STM', which can be used
 -- with 'MonadConc'.
-module Control.Monad.STM.Class where
+module Control.Monad.STM.Class
+  ( MonadSTM(..)
+  , check
+  , throwSTM
+  , catchSTM
+
+  -- * Utilities for instance writers
+  , makeTransSTM
+  , liftedOrElse
+  ) where
 
 import Control.Concurrent.STM (STM)
 import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
 import Control.Exception (Exception)
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, throwM, catch)
-import Control.Monad.Reader (ReaderT(..), runReaderT)
+import Control.Monad.Reader (ReaderT)
 import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
+import Language.Haskell.TH (DecsQ, Info(VarI), Name, Type(..), reify, varE)
 
 import qualified Control.Monad.RWS.Lazy as RL
 import qualified Control.Monad.RWS.Strict as RS
@@ -107,7 +120,7 @@ instance MonadSTM m => MonadSTM (ReaderT r m) where
   type CTVar (ReaderT r m) = CTVar m
 
   retry        = lift retry
-  orElse ma mb = ReaderT $ \r -> orElse (runReaderT ma r) (runReaderT mb r)
+  orElse       = liftedOrElse id
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
@@ -117,7 +130,7 @@ instance (MonadSTM m, Monoid w) => MonadSTM (WL.WriterT w m) where
   type CTVar (WL.WriterT w m) = CTVar m
 
   retry        = lift retry
-  orElse ma mb = WL.WriterT $ orElse (WL.runWriterT ma) (WL.runWriterT mb)
+  orElse       = liftedOrElse fst
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
@@ -127,7 +140,7 @@ instance (MonadSTM m, Monoid w) => MonadSTM (WS.WriterT w m) where
   type CTVar (WS.WriterT w m) = CTVar m
 
   retry        = lift retry
-  orElse ma mb = WS.WriterT $ orElse (WS.runWriterT ma) (WS.runWriterT mb)
+  orElse       = liftedOrElse fst
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
@@ -137,7 +150,7 @@ instance MonadSTM m => MonadSTM (SL.StateT s m) where
   type CTVar (SL.StateT s m) = CTVar m
 
   retry        = lift retry
-  orElse ma mb = SL.StateT $ \s -> orElse (SL.runStateT ma s) (SL.runStateT mb s)
+  orElse       = liftedOrElse fst
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
@@ -147,7 +160,7 @@ instance MonadSTM m => MonadSTM (SS.StateT s m) where
   type CTVar (SS.StateT s m) = CTVar m
 
   retry        = lift retry
-  orElse ma mb = SS.StateT $ \s -> orElse (SS.runStateT ma s) (SS.runStateT mb s)
+  orElse       = liftedOrElse fst
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
@@ -157,7 +170,7 @@ instance (MonadSTM m, Monoid w) => MonadSTM (RL.RWST r w s m) where
   type CTVar (RL.RWST r w s m) = CTVar m
 
   retry        = lift retry
-  orElse ma mb = RL.RWST $ \r s -> orElse (RL.runRWST ma r s) (RL.runRWST mb r s)
+  orElse       = liftedOrElse (\(a,_,_) -> a)
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
@@ -167,8 +180,41 @@ instance (MonadSTM m, Monoid w) => MonadSTM (RS.RWST r w s m) where
   type CTVar (RS.RWST r w s m) = CTVar m
 
   retry        = lift retry
-  orElse ma mb = RS.RWST $ \r s -> orElse (RS.runRWST ma r s) (RS.runRWST mb r s)
+  orElse       = liftedOrElse (\(a,_,_) -> a)
   newCTVar     = lift . newCTVar
   newCTVarN n  = lift . newCTVarN n
   readCTVar    = lift . readCTVar
   writeCTVar v = lift . writeCTVar v
+
+-------------------------------------------------------------------------------
+
+-- | Make an instance @MonadSTM m => MonadSTM (t m)@ for a given
+-- transformer, @t@. The parameter should be the name of a function
+-- @:: forall a. StT t a -> a@.
+makeTransSTM :: Name -> DecsQ
+makeTransSTM unstN = do
+  unstI <- reify unstN
+  case unstI of
+    VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ _ ->
+      [d|
+        instance (MonadSTM m, MonadTransControl $(pure t)) => MonadSTM ($(pure t) m) where
+          type CTVar ($(pure t) m) = CTVar m
+
+          retry        = lift retry
+          orElse       = liftedOrElse $(varE unstN)
+          newCTVar     = lift . newCTVar
+          newCTVarN n  = lift . newCTVarN n
+          readCTVar    = lift . readCTVar
+          writeCTVar v = lift . writeCTVar v
+      |]
+    _ -> fail "Expected a value of type (forall a -> StT t a -> a)"
+
+-- | Given a function to remove the transformer-specific state, lift
+-- an @orElse@ invocation.
+liftedOrElse :: (MonadTransControl t, MonadSTM m)
+  => (forall x. StT t x -> x)
+  -> t m a -> t m a -> t m a
+liftedOrElse unst ma mb = liftWith $ \run ->
+  let ma' = unst <$> run ma
+      mb' = unst <$> run mb
+  in ma' `orElse` mb'

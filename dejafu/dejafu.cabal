@@ -108,6 +108,7 @@ library
                      , containers
                      , deepseq
                      , exceptions >=0.7
+                     , monad-control
                      , monad-loops
                      , mtl
                      , random
