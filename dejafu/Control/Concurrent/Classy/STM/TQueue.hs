@@ -10,7 +10,7 @@
 -- The implementation is based on the traditional purely-functional
 -- queue representation that uses two lists to obtain amortised /O(1)/
 -- enqueue and dequeue operations.
-module Control.Concurrent.STM.Classy.TQueue
+module Control.Concurrent.Classy.STM.TQueue
   ( -- * TQueue
     TQueue
   , newTQueue

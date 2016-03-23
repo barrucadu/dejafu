@@ -1,5 +1,5 @@
 -- | Transactional variables, for use with 'MonadSTM'.
-module Control.Concurrent.STM.Classy.TVar
+module Control.Concurrent.Classy.STM.TVar
   ( -- * @TVar@s
     TVar
   , newTVar

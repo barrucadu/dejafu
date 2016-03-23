@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 
 -- | TArrays: transactional arrays, for use in STM-like monads.
-module Control.Concurrent.STM.Classy.TArray (TArray) where
+module Control.Concurrent.Classy.STM.TArray (TArray) where
 
 import Data.Array (Array, bounds)
 import Data.Array.Base (listArray, arrEleBottom, unsafeAt, MArray(..),
@@ -36,8 +36,8 @@ instance MonadSTM stm => MArray (TArray stm) e stm where
     getNumElements (TArray a) = pure (numElements a)
 
 -- | Like 'replicateM' but uses an accumulator to prevent stack overflows.
--- Unlike 'replicateM' the returned list is in reversed order.
--- This doesn't matter though since this function is only used to create
+-- Unlike 'replicateM' the returned list is in reversed order.  This
+-- doesn't matter though since this function is only used to create
 -- arrays with identical elements.
 rep :: Monad m => Int -> m a -> m [a]
 rep n m = go n [] where

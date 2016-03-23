@@ -1,5 +1,5 @@
 -- | Transactional channels
-module Control.Concurrent.STM.Classy.TChan
+module Control.Concurrent.Classy.STM.TChan
   ( -- * TChans
     TChan
 
