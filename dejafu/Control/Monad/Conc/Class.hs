@@ -47,13 +47,14 @@ module Control.Monad.Conc.Class
 import Control.Exception (Exception, AsyncException(ThreadKilled), SomeException)
 import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import qualified Control.Monad.Catch as Ca
-import Control.Monad.STM.Class (MonadSTM, TVar)
+import Control.Monad.STM.Class (MonadSTM, TVar, readTVar)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
 import Data.Typeable (Typeable)
 import Language.Haskell.TH (Q, DecsQ, Exp, Loc(..), Info(VarI), Name, Type(..), reify, location, varE)
 
 -- for the 'IO' instance
 import qualified Control.Concurrent as IO
+import qualified Control.Concurrent.STM.TVar as IO
 import qualified Control.Monad.STM as IO
 import qualified Data.Atomics as IO
 import qualified Data.IORef as IO
@@ -314,6 +315,13 @@ class ( Applicative m, Monad m
   -- | Perform an STM transaction atomically.
   atomically :: STM m a -> m a
 
+  -- | Read the current value stored in a @TVar@. This may be
+  -- implemented differently for speed.
+  --
+  -- > readTVarConc = atomically . readTVar
+  readTVarConc :: TVar (STM m) a -> m a
+  readTVarConc = atomically . readTVar
+
   -- | Throw an exception to the target thread. This blocks until the
   -- exception is delivered, and it is just as if the target thread
   -- had raised it with 'throw'. This can interrupt a blocked action.
@@ -556,6 +564,7 @@ instance MonadConc IO where
   casCRef            = IO.casIORef
   modifyCRefCAS      = IO.atomicModifyIORefCAS
   atomically         = IO.atomically
+  readTVarConc       = IO.readTVarIO
 
 -------------------------------------------------------------------------------
 -- Transformer instances
@@ -599,6 +608,7 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
+  readTVarConc       = lift . readTVarConc
 
   _concKnowsAbout = lift . _concKnowsAbout
   _concForgets    = lift . _concForgets
@@ -644,6 +654,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
+  readTVarConc       = lift . readTVarConc
 
   _concKnowsAbout = lift . _concKnowsAbout
   _concForgets    = lift . _concForgets
@@ -689,6 +700,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
+  readTVarConc       = lift . readTVarConc
 
   _concKnowsAbout = lift . _concKnowsAbout
   _concForgets    = lift . _concForgets
@@ -734,6 +746,7 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
+  readTVarConc       = lift . readTVarConc
 
   _concKnowsAbout = lift . _concKnowsAbout
   _concForgets    = lift . _concForgets
@@ -779,6 +792,7 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
+  readTVarConc       = lift . readTVarConc
 
   _concKnowsAbout = lift . _concKnowsAbout
   _concForgets    = lift . _concForgets
@@ -824,6 +838,7 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
+  readTVarConc       = lift . readTVarConc
 
   _concKnowsAbout = lift . _concKnowsAbout
   _concForgets    = lift . _concForgets
@@ -869,6 +884,7 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   casCRef r t        = lift . casCRef r t
   modifyCRefCAS r    = lift . modifyCRefCAS r
   atomically         = lift . atomically
+  readTVarConc       = lift . readTVarConc
 
   _concKnowsAbout = lift . _concKnowsAbout
   _concForgets    = lift . _concForgets
@@ -925,6 +941,7 @@ makeTransConc unstN = do
           casCRef r tick     = lift . casCRef r tick
           modifyCRefCAS r    = lift . modifyCRefCAS r
           atomically         = lift . atomically
+          readTVarConc       = lift . readTVarConc
 
           _concKnowsAbout = lift . _concKnowsAbout
           _concForgets    = lift . _concForgets
