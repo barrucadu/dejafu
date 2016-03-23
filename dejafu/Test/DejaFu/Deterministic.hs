@@ -50,7 +50,7 @@ import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Schedule
 import Test.DejaFu.Internal (refST, refIO)
 import Test.DejaFu.STM (STMLike, STMIO, STMST, runTransactionIO, runTransactionST)
-import Test.DejaFu.STM.Internal (CTVar(..))
+import Test.DejaFu.STM.Internal (TVar(..))
 
 import qualified Control.Monad.Base as Ba
 import qualified Control.Monad.Catch as Ca
@@ -149,11 +149,11 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 
   -- ----------
 
-  _concKnowsAbout (Left  (CVar  cvarid  _)) = toConc (\c -> AKnowsAbout (Left  cvarid)  (c ()))
-  _concKnowsAbout (Right (CTVar (ctvarid, _))) = toConc (\c -> AKnowsAbout (Right ctvarid) (c ()))
+  _concKnowsAbout (Left  (CVar cvarid  _)) = toConc (\c -> AKnowsAbout (Left  cvarid)  (c ()))
+  _concKnowsAbout (Right (TVar (ctvarid, _))) = toConc (\c -> AKnowsAbout (Right ctvarid) (c ()))
 
-  _concForgets (Left  (CVar  cvarid  _)) = toConc (\c -> AForgets (Left  cvarid)  (c ()))
-  _concForgets (Right (CTVar (ctvarid, _))) = toConc (\c -> AForgets (Right ctvarid) (c ()))
+  _concForgets (Left  (CVar cvarid  _)) = toConc (\c -> AForgets (Left  cvarid)  (c ()))
+  _concForgets (Right (TVar (ctvarid, _))) = toConc (\c -> AForgets (Right ctvarid) (c ()))
 
   _concAllKnown = toConc (\c -> AAllKnown (c ()))
 

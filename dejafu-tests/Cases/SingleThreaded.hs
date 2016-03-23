@@ -153,16 +153,16 @@ crefCas2 = do
 --------------------------------------------------------------------------------
 -- STM
 
--- | A @CTVar@ can be written to.
+-- | A @TVar@ can be written to.
 stmWrite :: MonadConc m => m Bool
 stmWrite =
-  (6==) <$> atomically (do { v <- newCTVar (5::Int); writeCTVar v 6; readCTVar v })
+  (6==) <$> atomically (do { v <- newTVar (5::Int); writeTVar v 6; readTVar v })
 
--- | A @CTVar@ preserves its value between transactions.
+-- | A @TVar@ preserves its value between transactions.
 stmPreserve :: MonadConc m => m Bool
 stmPreserve = do
-  ctv <- atomically $ newCTVar (5::Int)
-  (5==) <$> atomically (readCTVar ctv)
+  ctv <- atomically $ newTVar (5::Int)
+  (5==) <$> atomically (readTVar ctv)
 
 -- | A transaction can be aborted, which blocks the thread.
 stmRetry :: MonadConc m => m ()
@@ -171,32 +171,32 @@ stmRetry = atomically retry
 -- | An abort can be caught by an @orElse@.
 stmOrElse :: MonadConc m => m Bool
 stmOrElse = do
-  ctv <- atomically $ newCTVar (5::Int)
-  atomically $ orElse retry (writeCTVar ctv 6)
+  ctv <- atomically $ newTVar (5::Int)
+  atomically $ orElse retry (writeTVar ctv 6)
 
-  (6==) <$> atomically (readCTVar ctv)
+  (6==) <$> atomically (readTVar ctv)
 
 -- | An exception can be caught by an appropriate handler.
 stmCatch1 :: MonadConc m => m Bool
 stmCatch1 = do
-  ctv <- atomically $ newCTVar (5::Int)
+  ctv <- atomically $ newTVar (5::Int)
   atomically $ catchArithException
                  (throwSTM Overflow)
-                 (\_ -> writeCTVar ctv 6)
+                 (\_ -> writeTVar ctv 6)
 
-  (6==) <$> atomically (readCTVar ctv)
+  (6==) <$> atomically (readTVar ctv)
 
 -- | Nested exception handlers can catch different types of exception.
 stmCatch2 :: MonadConc m => m Bool 
 stmCatch2 = do
-  ctv <- atomically $ newCTVar (5::Int)
+  ctv <- atomically $ newTVar (5::Int)
   atomically $ catchArithException
                  (catchArrayException
                    (throwSTM Overflow)
-                   (\_ -> writeCTVar ctv 0))
-                 (\_ -> writeCTVar ctv 6)
+                   (\_ -> writeTVar ctv 0))
+                 (\_ -> writeTVar ctv 6)
 
-  (6==) <$> atomically (readCTVar ctv)
+  (6==) <$> atomically (readTVar ctv)
 
 --------------------------------------------------------------------------------
 -- Exceptions

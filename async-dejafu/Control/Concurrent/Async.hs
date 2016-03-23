@@ -83,7 +83,7 @@ import Control.Monad
 import Control.Monad.Catch (finally, try, onException)
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
-import Control.Concurrent.STM.Classy.CTMVar (newEmptyCTMVar, putCTMVar, readCTMVar)
+import Control.Concurrent.STM.Classy.TMVar (newEmptyTMVar, putTMVar, readTMVar)
 
 #if !MIN_VERSION_base(4,8,0)
 import Data.Traversable
@@ -167,19 +167,19 @@ asyncOnWithUnmask i = asyncUnmaskUsing (forkOnWithUnmask i)
 -- | Fork a thread with the given forking function
 asyncUsing :: MonadConc m => (m () -> m (ThreadId m)) -> m a -> m (Async m a)
 asyncUsing doFork action = do
-  var <- atomically newEmptyCTMVar
-  tid <- mask $ \restore -> doFork $ try (restore action) >>= atomically . putCTMVar var
+  var <- atomically newEmptyTMVar
+  tid <- mask $ \restore -> doFork $ try (restore action) >>= atomically . putTMVar var
 
-  return $ Async tid (readCTMVar var)
+  return $ Async tid (readTMVar var)
 
 -- | Fork a thread with the given forking function and give it an
 -- action to unmask exceptions
 asyncUnmaskUsing :: MonadConc m => (((forall b. m b -> m b) -> m ()) -> m (ThreadId m)) -> ((forall b. m b -> m b) -> m a) -> m (Async m a)
 asyncUnmaskUsing doFork action = do
-  var <- atomically newEmptyCTMVar
-  tid <- doFork $ \restore -> try (action restore) >>= atomically . putCTMVar var
+  var <- atomically newEmptyTMVar
+  tid <- doFork $ \restore -> try (action restore) >>= atomically . putTMVar var
 
-  return $ Async tid (readCTMVar var)
+  return $ Async tid (readTMVar var)
 
 -- | Spawn an asynchronous action in a separate thread, and pass its
 -- @Async@ handle to the supplied function. When the function returns
@@ -214,10 +214,10 @@ withAsyncOnWithUnmask i = withAsyncUnmaskUsing (forkOnWithUnmask i)
 -- using the normal async package. Curious.
 withAsyncUsing :: MonadConc m => (m () -> m (ThreadId m)) -> m a -> (Async m a -> m b) -> m b
 withAsyncUsing doFork action inner = do
-  var <- atomically newEmptyCTMVar
-  tid <- mask $ \restore -> doFork $ try (restore action) >>= atomically . putCTMVar var
+  var <- atomically newEmptyTMVar
+  tid <- mask $ \restore -> doFork $ try (restore action) >>= atomically . putTMVar var
 
-  let a = Async tid (readCTMVar var)
+  let a = Async tid (readTMVar var)
 
   res <- inner a `catchAll` (\e -> cancel a >> throw e)
   cancel a
@@ -228,10 +228,10 @@ withAsyncUsing doFork action inner = do
 -- to unmask exceptions, and kill it when the inner action completed.
 withAsyncUnmaskUsing :: MonadConc m => (((forall x. m x -> m x) -> m ()) -> m (ThreadId m)) -> ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
 withAsyncUnmaskUsing doFork action inner = do
-  var <- atomically newEmptyCTMVar
-  tid <- doFork $ \restore -> try (action restore) >>= atomically . putCTMVar var
+  var <- atomically newEmptyTMVar
+  tid <- doFork $ \restore -> try (action restore) >>= atomically . putTMVar var
 
-  let a = Async tid (readCTMVar var)
+  let a = Async tid (readTMVar var)
 
   res <- inner a `catchAll` (\e -> cancel a >> throw e)
   cancel a

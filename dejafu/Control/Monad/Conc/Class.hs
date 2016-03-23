@@ -47,7 +47,7 @@ module Control.Monad.Conc.Class
 import Control.Exception (Exception, AsyncException(ThreadKilled), SomeException)
 import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import qualified Control.Monad.Catch as Ca
-import Control.Monad.STM.Class (MonadSTM, CTVar)
+import Control.Monad.STM.Class (MonadSTM, TVar)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
 import Data.Typeable (Typeable)
 import Language.Haskell.TH (Q, DecsQ, Exp, Loc(..), Info(VarI), Name, Type(..), reify, location, varE)
@@ -322,18 +322,17 @@ class ( Applicative m, Monad m
   -- | Does nothing.
   --
   -- This function is purely for testing purposes, and indicates that
-  -- the thread has a reference to the provided @CVar@ or
-  -- @CTVar@. This function may be called multiple times, to add new
-  -- knowledge to the system. It does not need to be called when
-  -- @CVar@s or @CTVar@s are created, these get recorded
-  -- automatically.
+  -- the thread has a reference to the provided @CVar@ or @TVar@. This
+  -- function may be called multiple times, to add new knowledge to
+  -- the system. It does not need to be called when @CVar@s or @TVar@s
+  -- are created, these get recorded automatically.
   --
   -- Gathering this information allows detection of cases where the
   -- main thread is blocked on a variable no runnable thread has a
   -- reference to, which is a deadlock situation.
   --
   -- > _concKnowsAbout _ = pure ()
-  _concKnowsAbout :: Either (CVar m a) (CTVar (STMLike m) a) -> m ()
+  _concKnowsAbout :: Either (CVar m a) (TVar (STMLike m) a) -> m ()
   _concKnowsAbout _ = pure ()
 
   -- | Does nothing.
@@ -347,7 +346,7 @@ class ( Applicative m, Monad m
   -- refer to the variable again, for instance when leaving its scope.
   --
   -- > _concForgets _ = pure ()
-  _concForgets :: Either (CVar m a) (CTVar (STMLike m) a) -> m ()
+  _concForgets :: Either (CVar m a) (TVar (STMLike m) a) -> m ()
   _concForgets _ = pure ()
 
   -- | Does nothing.
@@ -357,7 +356,7 @@ class ( Applicative m, Monad m
   -- '_concKnowsAbout'. If every thread has called '_concAllKnown',
   -- then detection of nonglobal deadlock is turned on.
   --
-  -- If a thread receives references to @CVar@s or @CTVar@s in the
+  -- If a thread receives references to @CVar@s or @TVar@s in the
   -- future (for instance, if one was sent over a channel), then
   -- '_concKnowsAbout' should be called immediately, otherwise there
   -- is a risk of identifying false positives.

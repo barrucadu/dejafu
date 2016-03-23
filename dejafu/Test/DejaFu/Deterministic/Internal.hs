@@ -141,7 +141,7 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
          ((~=  OnCVarEmpty undefined) <$> M.lookup initialThread threads) == Just True ||
          ((~=  OnMask      undefined) <$> M.lookup initialThread threads) == Just True)
       isSTMLocked = isLocked initialThread threads &&
-        ((~=  OnCTVar []) <$> M.lookup initialThread threads) == Just True
+        ((~=  OnTVar []) <$> M.lookup initialThread threads) == Just True
 
       unblockWaitingOn tid = fmap unblock where
         unblock thrd = case _blocking thrd of
@@ -343,10 +343,10 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
       (res, idSource', trace) <- runstm stm idSource
       case res of
         Success _ written val ->
-          let (threads', woken) = wake (OnCTVar written) threads
+          let (threads', woken) = wake (OnTVar written) threads
           in return $ Right (knows (map Right written) tid $ goto (c val) tid threads', idSource', STM trace woken, wb, caps)
         Retry touched ->
-          let threads' = block (OnCTVar touched) tid threads
+          let threads' = block (OnTVar touched) tid threads
           in return $ Right (threads', idSource', BlockedSTM trace, wb, caps)
         Exception e -> do
           res' <- stepThrow e

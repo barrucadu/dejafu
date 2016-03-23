@@ -15,8 +15,6 @@ module Control.Monad.STM.Class
   , liftedOrElse
   ) where
 
-import Control.Concurrent.STM (STM)
-import Control.Concurrent.STM.TVar (TVar, newTVar, readTVar, writeTVar)
 import Control.Exception (Exception)
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, throwM, catch)
@@ -25,9 +23,9 @@ import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
 import Language.Haskell.TH (DecsQ, Info(VarI), Name, Type(..), reify, varE)
 
+import qualified Control.Concurrent.STM as STM
 import qualified Control.Monad.RWS.Lazy as RL
 import qualified Control.Monad.RWS.Strict as RS
-import qualified Control.Monad.STM as S
 import qualified Control.Monad.State.Lazy as SL
 import qualified Control.Monad.State.Strict as SS
 import qualified Control.Monad.Writer.Lazy as WL
@@ -38,26 +36,23 @@ import qualified Control.Monad.Writer.Strict as WS
 -- This class does not provide any way to run transactions, rather
 -- each 'MonadConc' has an associated @MonadSTM@ from which it can
 -- atomically run a transaction.
---
--- A minimal implementation consists of 'retry', 'orElse', 'newCTVar',
--- 'readCTVar', and 'writeCTVar'.
 class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
   {-# MINIMAL
         retry
       , orElse
-      , (newCTVar | newCTVarN)
-      , readCTVar
-      , writeCTVar
+      , (newTVar | newTVarN)
+      , readTVar
+      , writeTVar
     #-}
 
   -- | The mutable reference type. These behave like 'TVar's, in that
   -- they always contain a value and updates are non-blocking and
   -- synchronised.
-  type CTVar m :: * -> *
+  type TVar m :: * -> *
 
   -- | Retry execution of this transaction because it has seen values
-  -- in @CTVar@s that it shouldn't have. This will result in the
-  -- thread running the transaction being blocked until any @CTVar@s
+  -- in @TVar@s that it shouldn't have. This will result in the
+  -- thread running the transaction being blocked until any @TVar@s
   -- referenced in it have been mutated.
   retry :: m a
 
@@ -67,29 +62,29 @@ class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
   -- function.
   orElse :: m a -> m a -> m a
 
-  -- | Create a new @CTVar@ containing the given value.
+  -- | Create a new @TVar@ containing the given value.
   --
-  -- > newCTVar = newCTVarN ""
-  newCTVar :: a -> m (CTVar m a)
-  newCTVar = newCTVarN ""
+  -- > newTVar = newTVarN ""
+  newTVar :: a -> m (TVar m a)
+  newTVar = newTVarN ""
 
-  -- | Create a new @CTVar@ containing the given value, but it is
+  -- | Create a new @TVar@ containing the given value, but it is
   -- given a name which may be used to present more useful debugging
   -- information.
   --
   -- If an empty name is given, a counter starting from 0 is used. If
-  -- names conflict, successive @CTVar@s with the same name are given
+  -- names conflict, successive @TVar@s with the same name are given
   -- a numeric suffix, counting up from 1.
   --
-  -- > newCTVarN _ = newCTVar
-  newCTVarN :: String -> a -> m (CTVar m a)
-  newCTVarN _ = newCTVar
+  -- > newTVarN _ = newTVar
+  newTVarN :: String -> a -> m (TVar m a)
+  newTVarN _ = newTVar
 
-  -- | Return the current value stored in a @CTVar@.
-  readCTVar :: CTVar m a -> m a
+  -- | Return the current value stored in a @TVar@.
+  readTVar :: TVar m a -> m a
 
-  -- | Write the supplied value into the @CTVar@.
-  writeCTVar :: CTVar m a -> a -> m ()
+  -- | Write the supplied value into the @TVar@.
+  writeTVar :: TVar m a -> a -> m ()
 
 -- | Check whether a condition is true and, if not, call @retry@.
 check :: MonadSTM m => Bool -> m ()
@@ -104,87 +99,87 @@ throwSTM = throwM
 catchSTM :: (MonadSTM m, Exception e) => m a -> (e -> m a) -> m a
 catchSTM = Control.Monad.Catch.catch
 
-instance MonadSTM STM where
-  type CTVar STM = TVar
+instance MonadSTM STM.STM where
+  type TVar STM.STM = STM.TVar
 
-  retry      = S.retry
-  orElse     = S.orElse
-  newCTVar   = newTVar
-  readCTVar  = readTVar
-  writeCTVar = writeTVar
+  retry     = STM.retry
+  orElse    = STM.orElse
+  newTVar   = STM.newTVar
+  readTVar  = STM.readTVar
+  writeTVar = STM.writeTVar
 
 -------------------------------------------------------------------------------
 -- Transformer instances
 
 instance MonadSTM m => MonadSTM (ReaderT r m) where
-  type CTVar (ReaderT r m) = CTVar m
+  type TVar (ReaderT r m) = TVar m
 
-  retry        = lift retry
-  orElse       = liftedOrElse id
-  newCTVar     = lift . newCTVar
-  newCTVarN n  = lift . newCTVarN n
-  readCTVar    = lift . readCTVar
-  writeCTVar v = lift . writeCTVar v
+  retry       = lift retry
+  orElse      = liftedOrElse id
+  newTVar     = lift . newTVar
+  newTVarN n  = lift . newTVarN n
+  readTVar    = lift . readTVar
+  writeTVar v = lift . writeTVar v
 
 instance (MonadSTM m, Monoid w) => MonadSTM (WL.WriterT w m) where
-  type CTVar (WL.WriterT w m) = CTVar m
+  type TVar (WL.WriterT w m) = TVar m
 
-  retry        = lift retry
-  orElse       = liftedOrElse fst
-  newCTVar     = lift . newCTVar
-  newCTVarN n  = lift . newCTVarN n
-  readCTVar    = lift . readCTVar
-  writeCTVar v = lift . writeCTVar v
+  retry       = lift retry
+  orElse      = liftedOrElse fst
+  newTVar     = lift . newTVar
+  newTVarN n  = lift . newTVarN n
+  readTVar    = lift . readTVar
+  writeTVar v = lift . writeTVar v
 
 instance (MonadSTM m, Monoid w) => MonadSTM (WS.WriterT w m) where
-  type CTVar (WS.WriterT w m) = CTVar m
+  type TVar (WS.WriterT w m) = TVar m
 
-  retry        = lift retry
-  orElse       = liftedOrElse fst
-  newCTVar     = lift . newCTVar
-  newCTVarN n  = lift . newCTVarN n
-  readCTVar    = lift . readCTVar
-  writeCTVar v = lift . writeCTVar v
+  retry       = lift retry
+  orElse      = liftedOrElse fst
+  newTVar     = lift . newTVar
+  newTVarN n  = lift . newTVarN n
+  readTVar    = lift . readTVar
+  writeTVar v = lift . writeTVar v
 
 instance MonadSTM m => MonadSTM (SL.StateT s m) where
-  type CTVar (SL.StateT s m) = CTVar m
+  type TVar (SL.StateT s m) = TVar m
 
-  retry        = lift retry
-  orElse       = liftedOrElse fst
-  newCTVar     = lift . newCTVar
-  newCTVarN n  = lift . newCTVarN n
-  readCTVar    = lift . readCTVar
-  writeCTVar v = lift . writeCTVar v
+  retry       = lift retry
+  orElse      = liftedOrElse fst
+  newTVar     = lift . newTVar
+  newTVarN n  = lift . newTVarN n
+  readTVar    = lift . readTVar
+  writeTVar v = lift . writeTVar v
 
 instance MonadSTM m => MonadSTM (SS.StateT s m) where
-  type CTVar (SS.StateT s m) = CTVar m
+  type TVar (SS.StateT s m) = TVar m
 
-  retry        = lift retry
-  orElse       = liftedOrElse fst
-  newCTVar     = lift . newCTVar
-  newCTVarN n  = lift . newCTVarN n
-  readCTVar    = lift . readCTVar
-  writeCTVar v = lift . writeCTVar v
+  retry       = lift retry
+  orElse      = liftedOrElse fst
+  newTVar     = lift . newTVar
+  newTVarN n  = lift . newTVarN n
+  readTVar    = lift . readTVar
+  writeTVar v = lift . writeTVar v
 
 instance (MonadSTM m, Monoid w) => MonadSTM (RL.RWST r w s m) where
-  type CTVar (RL.RWST r w s m) = CTVar m
+  type TVar (RL.RWST r w s m) = TVar m
 
-  retry        = lift retry
-  orElse       = liftedOrElse (\(a,_,_) -> a)
-  newCTVar     = lift . newCTVar
-  newCTVarN n  = lift . newCTVarN n
-  readCTVar    = lift . readCTVar
-  writeCTVar v = lift . writeCTVar v
+  retry       = lift retry
+  orElse      = liftedOrElse (\(a,_,_) -> a)
+  newTVar     = lift . newTVar
+  newTVarN n  = lift . newTVarN n
+  readTVar    = lift . readTVar
+  writeTVar v = lift . writeTVar v
 
 instance (MonadSTM m, Monoid w) => MonadSTM (RS.RWST r w s m) where
-  type CTVar (RS.RWST r w s m) = CTVar m
+  type TVar (RS.RWST r w s m) = TVar m
 
-  retry        = lift retry
-  orElse       = liftedOrElse (\(a,_,_) -> a)
-  newCTVar     = lift . newCTVar
-  newCTVarN n  = lift . newCTVarN n
-  readCTVar    = lift . readCTVar
-  writeCTVar v = lift . writeCTVar v
+  retry       = lift retry
+  orElse      = liftedOrElse (\(a,_,_) -> a)
+  newTVar     = lift . newTVar
+  newTVarN n  = lift . newTVarN n
+  readTVar    = lift . readTVar
+  writeTVar v = lift . writeTVar v
 
 -------------------------------------------------------------------------------
 
@@ -198,14 +193,14 @@ makeTransSTM unstN = do
     VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ _ ->
       [d|
         instance (MonadSTM m, MonadTransControl $(pure t)) => MonadSTM ($(pure t) m) where
-          type CTVar ($(pure t) m) = CTVar m
+          type TVar ($(pure t) m) = TVar m
 
-          retry        = lift retry
-          orElse       = liftedOrElse $(varE unstN)
-          newCTVar     = lift . newCTVar
-          newCTVarN n  = lift . newCTVarN n
-          readCTVar    = lift . readCTVar
-          writeCTVar v = lift . writeCTVar v
+          retry       = lift retry
+          orElse      = liftedOrElse $(varE unstN)
+          newTVar     = lift . newTVar
+          newTVarN n  = lift . newTVarN n
+          readTVar    = lift . readTVar
+          writeTVar v = lift . writeTVar v
       |]
     _ -> fail "Expected a value of type (forall a -> StT t a -> a)"
 

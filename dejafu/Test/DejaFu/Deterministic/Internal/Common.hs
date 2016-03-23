@@ -125,8 +125,8 @@ data Action n r s =
   | forall a. AMasking MaskingState ((forall b. M n r s b -> M n r s b) -> M n r s a) (a -> Action n r s)
   | AResetMask Bool Bool MaskingState (Action n r s)
 
-  | AKnowsAbout (Either CVarId CTVarId) (Action n r s)
-  | AForgets    (Either CVarId CTVarId) (Action n r s)
+  | AKnowsAbout (Either CVarId TVarId) (Action n r s)
+  | AForgets    (Either CVarId TVarId) (Action n r s)
   | AAllKnown   (Action n r s)
   | AMessage    Dynamic (Action n r s)
 
@@ -186,31 +186,31 @@ instance Show CRefId where
 instance NFData CRefId where
   rnf (CRefId n i) = rnf (n, i)
 
--- | Every @CTVar@ has a unique identifier.
-data CTVarId = CTVarId (Maybe String) Int
+-- | Every @TVar@ has a unique identifier.
+data TVarId = TVarId (Maybe String) Int
   deriving Eq
 
-instance Ord CTVarId where
-  compare (CTVarId _ i) (CTVarId _ j) = compare i j
+instance Ord TVarId where
+  compare (TVarId _ i) (TVarId _ j) = compare i j
 
-instance Show CTVarId where
-  show (CTVarId (Just n) _) = n
-  show (CTVarId Nothing  i) = show i
+instance Show TVarId where
+  show (TVarId (Just n) _) = n
+  show (TVarId Nothing  i) = show i
 
-instance NFData CTVarId where
-  rnf (CTVarId n i) = rnf (n, i)
+instance NFData TVarId where
+  rnf (TVarId n i) = rnf (n, i)
 
 -- | The number of ID parameters was getting a bit unwieldy, so this
 -- hides them all away.
 data IdSource = Id
   { _nextCRId  :: Int
   , _nextCVId  :: Int
-  , _nextCTVId :: Int
+  , _nextTVId  :: Int
   , _nextTId   :: Int
-  , _usedCRNames  :: [String]
-  , _usedCVNames  :: [String]
-  , _usedCTVNames :: [String]
-  , _usedTNames   :: [String] }
+  , _usedCRNames :: [String]
+  , _usedCVNames :: [String]
+  , _usedTVNames :: [String]
+  , _usedTNames  :: [String] }
 
 -- | Get the next free 'CRefId'.
 nextCRId :: String -> IdSource -> (IdSource, CRefId)
@@ -238,18 +238,18 @@ nextCVId name idsource = (idsource { _nextCVId = newid, _usedCVNames = newlst },
     | otherwise       = Just name
   occurrences = length . filter (==name) $ _usedCVNames idsource
 
--- | Get the next free 'CTVarId'.
-nextCTVId :: String -> IdSource -> (IdSource, CTVarId)
-nextCTVId name idsource = (idsource { _nextCTVId = newid, _usedCTVNames = newlst }, CTVarId newname newid) where
-  newid  = _nextCTVId idsource + 1
+-- | Get the next free 'TVarId'.
+nextTVId :: String -> IdSource -> (IdSource, TVarId)
+nextTVId name idsource = (idsource { _nextTVId = newid, _usedTVNames = newlst }, TVarId newname newid) where
+  newid  = _nextTVId idsource + 1
   newlst
-    | null name = _usedCTVNames idsource
-    | otherwise = name : _usedCTVNames idsource
+    | null name = _usedTVNames idsource
+    | otherwise = name : _usedTVNames idsource
   newname
     | null name       = Nothing
     | occurrences > 0 = Just (name ++ "-" ++ show occurrences)
     | otherwise       = Just name
-  occurrences = length . filter (==name) $ _usedCTVNames idsource
+  occurrences = length . filter (==name) $ _usedTVNames idsource
 
 -- | Get the next free 'ThreadId'.
 nextTId :: String -> IdSource -> (IdSource, ThreadId)
@@ -480,11 +480,11 @@ type TTrace = [TAction]
 -- | All the actions that an STM transaction can perform.
 data TAction =
     TNew
-  -- ^ Create a new @CTVar@
-  | TRead  CTVarId
-  -- ^ Read from a @CTVar@.
-  | TWrite CTVarId
-  -- ^ Write to a @CTVar@.
+  -- ^ Create a new @TVar@
+  | TRead  TVarId
+  -- ^ Read from a @TVar@.
+  | TWrite TVarId
+  -- ^ Write to a @TVar@.
   | TRetry
   -- ^ Abort and discard effects.
   | TOrElse TTrace (Maybe TTrace)
@@ -799,7 +799,7 @@ data Failure =
   | Deadlock
   -- ^ The computation became blocked indefinitely on @CVar@s.
   | STMDeadlock
-  -- ^ The computation became blocked indefinitely on @CTVar@s.
+  -- ^ The computation became blocked indefinitely on @TVar@s.
   | UncaughtException
   -- ^ An uncaught exception bubbled to the top of the computation.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)

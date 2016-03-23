@@ -127,9 +127,9 @@ crefRace = do
 -- | Transactions are atomic.
 stmAtomic :: MonadConc m => m Int
 stmAtomic = do
-  x <- atomically $ newCTVar (0::Int)
-  void . fork . atomically $ writeCTVar x 1 >> writeCTVar x 2
-  atomically $ readCTVar x
+  x <- atomically $ newTVar (0::Int)
+  void . fork . atomically $ writeTVar x 1 >> writeTVar x 2
+  atomically $ readTVar x
 
 --------------------------------------------------------------------------------
 -- Exceptions
