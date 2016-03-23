@@ -103,7 +103,7 @@ import Data.Traversable
 -- necessarily have one.
 data Async m a = Async
   { asyncThreadId :: !(ThreadId m)
-  , _asyncWait :: STMLike m (Either SomeException a)
+  , _asyncWait :: STM m (Either SomeException a)
   }
 
 instance MonadConc m => Eq (Async m a) where
@@ -253,7 +253,7 @@ wait :: MonadConc m => Async m a -> m a
 wait = atomically . waitSTM
 
 -- | A version of 'wait' that can be used inside a @MonadSTM@ transaction.
-waitSTM :: MonadConc m => Async m a -> STMLike m a
+waitSTM :: MonadConc m => Async m a -> STM m a
 waitSTM a = do
  r <- waitCatchSTM a
  either throwSTM return r
@@ -268,7 +268,7 @@ poll :: MonadConc m => Async m a -> m (Maybe (Either SomeException a))
 poll = atomically . pollSTM
 
 -- | A version of 'poll' that can be used inside a @MonadSTM@ transaction.
-pollSTM :: MonadConc m => Async m a -> STMLike m (Maybe (Either SomeException a))
+pollSTM :: MonadConc m => Async m a -> STM m (Maybe (Either SomeException a))
 pollSTM (Async _ w) = (Just <$> w) `orElse` return Nothing
 
 -- | Wait for an asynchronous action to complete, and return either
@@ -280,7 +280,7 @@ waitCatch = tryAgain . atomically . waitCatchSTM where
   tryAgain f = f `catch` \BlockedIndefinitelyOnSTM -> f
 
 -- | A version of 'waitCatch' that can be used inside a @MonadSTM@ transaction.
-waitCatchSTM :: MonadConc m => Async m a -> STMLike m (Either SomeException a)
+waitCatchSTM :: MonadConc m => Async m a -> STM m (Either SomeException a)
 waitCatchSTM (Async _ w) = w
 
 -- | Cancel an asynchronous action by throwing the @ThreadKilled@
@@ -322,7 +322,7 @@ waitAny = atomically . waitAnySTM
 
 -- | A version of 'waitAny' that can be used inside a @MonadSTM@
 -- transaction.
-waitAnySTM :: MonadConc m => [Async m a] -> STMLike m (Async m a, a)
+waitAnySTM :: MonadConc m => [Async m a] -> STM m (Async m a, a)
 waitAnySTM = foldr (orElse . (\a -> do r <- waitSTM a; return (a, r))) retry
 
 -- | Wait for any of the supplied asynchronous operations to complete.
@@ -336,7 +336,7 @@ waitAnyCatch = atomically . waitAnyCatchSTM
 
 -- | A version of 'waitAnyCatch' that can be used inside a @MonadSTM@
 -- transaction.
-waitAnyCatchSTM :: MonadConc m => [Async m a] -> STMLike m (Async m a, Either SomeException a)
+waitAnyCatchSTM :: MonadConc m => [Async m a] -> STM m (Async m a, Either SomeException a)
 waitAnyCatchSTM = foldr (orElse . (\a -> do r <- waitCatchSTM a; return (a, r))) retry
 
 -- | Like 'waitAny', but also cancels the other asynchronous
@@ -357,7 +357,7 @@ waitEither left right = atomically $ waitEitherSTM left right
 
 -- | A version of 'waitEither' that can be used inside a @MonadSTM@
 -- transaction.
-waitEitherSTM :: MonadConc m => Async m a -> Async m b -> STMLike m (Either a b)
+waitEitherSTM :: MonadConc m => Async m a -> Async m b -> STM m (Either a b)
 waitEitherSTM left right =
   (Left <$> waitSTM left) `orElse` (Right <$> waitSTM right)
 
@@ -369,7 +369,7 @@ waitEitherCatch left right = atomically $ waitEitherCatchSTM left right
 -- | A version of 'waitEitherCatch' that can be used inside a
 -- @MonadSTM@ transaction.
 waitEitherCatchSTM :: MonadConc m => Async m a -> Async m b
-  -> STMLike m (Either (Either SomeException a) (Either SomeException b))
+  -> STM m (Either (Either SomeException a) (Either SomeException b))
 waitEitherCatchSTM left right =
   (Left <$> waitCatchSTM left) `orElse` (Right <$> waitCatchSTM right)
 
@@ -392,7 +392,7 @@ waitEither_ left right = atomically $ waitEitherSTM_ left right
 
 -- | A version of 'waitEither_' that can be used inside a @MonadSTM@
 -- transaction.
-waitEitherSTM_:: MonadConc m => Async m a -> Async m b -> STMLike m ()
+waitEitherSTM_:: MonadConc m => Async m a -> Async m b -> STM m ()
 waitEitherSTM_ left right = void $ waitEitherSTM left right
 
 -- | Waits for both @Async@s to finish, but if either of them throws
@@ -403,7 +403,7 @@ waitBoth left right = atomically $ waitBothSTM left right
 
 -- | A version of 'waitBoth' that can be used inside a @MonadSTM@
 -- transaction.
-waitBothSTM :: MonadConc m => Async m a -> Async m b -> STMLike m (a, b)
+waitBothSTM :: MonadConc m => Async m a -> Async m b -> STM m (a, b)
 waitBothSTM left right = do
   a <- waitSTM left `orElse` (waitSTM right >> retry)
   b <- waitSTM right

@@ -79,7 +79,7 @@ import qualified Control.Monad.Writer.Strict as WS
 -- which can be run atomically.
 class ( Applicative m, Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
-      , MonadSTM (STMLike m)
+      , MonadSTM (STM m)
       , Eq (ThreadId m), Show (ThreadId m)) => MonadConc m  where
 
   {-# MINIMAL
@@ -107,7 +107,7 @@ class ( Applicative m, Monad m
     #-}
 
   -- | The associated 'MonadSTM' for this class.
-  type STMLike m :: * -> *
+  type STM m :: * -> *
 
   -- | The mutable reference type, like 'MVar's. This may contain one
   -- value at a time, attempting to read or take from an \"empty\"
@@ -312,7 +312,7 @@ class ( Applicative m, Monad m
   modifyCRefCAS_ cref f = modifyCRefCAS cref (\a -> (f a, ()))
 
   -- | Perform an STM transaction atomically.
-  atomically :: STMLike m a -> m a
+  atomically :: STM m a -> m a
 
   -- | Throw an exception to the target thread. This blocks until the
   -- exception is delivered, and it is just as if the target thread
@@ -332,7 +332,7 @@ class ( Applicative m, Monad m
   -- reference to, which is a deadlock situation.
   --
   -- > _concKnowsAbout _ = pure ()
-  _concKnowsAbout :: Either (MVar m a) (TVar (STMLike m) a) -> m ()
+  _concKnowsAbout :: Either (MVar m a) (TVar (STM m) a) -> m ()
   _concKnowsAbout _ = pure ()
 
   -- | Does nothing.
@@ -346,7 +346,7 @@ class ( Applicative m, Monad m
   -- refer to the variable again, for instance when leaving its scope.
   --
   -- > _concForgets _ = pure ()
-  _concForgets :: Either (MVar m a) (TVar (STMLike m) a) -> m ()
+  _concForgets :: Either (MVar m a) (TVar (STM m) a) -> m ()
   _concForgets _ = pure ()
 
   -- | Does nothing.
@@ -522,7 +522,7 @@ cas cref a = do
 -- Concrete instances
 
 instance MonadConc IO where
-  type STMLike  IO = IO.STM
+  type STM      IO = IO.STM
   type MVar     IO = IO.MVar
   type CRef     IO = IO.IORef
   type Ticket   IO = IO.Ticket
@@ -561,7 +561,7 @@ instance MonadConc IO where
 -- Transformer instances
 
 instance MonadConc m => MonadConc (ReaderT r m) where
-  type STMLike  (ReaderT r m) = STMLike m
+  type STM      (ReaderT r m) = STM m
   type MVar     (ReaderT r m) = MVar m
   type CRef     (ReaderT r m) = CRef m
   type Ticket   (ReaderT r m) = Ticket m
@@ -606,7 +606,7 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   _concMessage    = lift . _concMessage
 
 instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
-  type STMLike  (WL.WriterT w m) = STMLike m
+  type STM      (WL.WriterT w m) = STM m
   type MVar     (WL.WriterT w m) = MVar m
   type CRef     (WL.WriterT w m) = CRef m
   type Ticket   (WL.WriterT w m) = Ticket m
@@ -651,7 +651,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   _concMessage    = lift . _concMessage
 
 instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
-  type STMLike  (WS.WriterT w m) = STMLike m
+  type STM      (WS.WriterT w m) = STM m
   type MVar     (WS.WriterT w m) = MVar m
   type CRef     (WS.WriterT w m) = CRef m
   type Ticket   (WS.WriterT w m) = Ticket m
@@ -696,7 +696,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   _concMessage    = lift . _concMessage
 
 instance MonadConc m => MonadConc (SL.StateT s m) where
-  type STMLike  (SL.StateT s m) = STMLike m
+  type STM      (SL.StateT s m) = STM m
   type MVar     (SL.StateT s m) = MVar m
   type CRef     (SL.StateT s m) = CRef m
   type Ticket   (SL.StateT s m) = Ticket m
@@ -741,7 +741,7 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   _concMessage    = lift . _concMessage
 
 instance MonadConc m => MonadConc (SS.StateT s m) where
-  type STMLike  (SS.StateT s m) = STMLike m
+  type STM      (SS.StateT s m) = STM m
   type MVar     (SS.StateT s m) = MVar m
   type CRef     (SS.StateT s m) = CRef m
   type Ticket   (SS.StateT s m) = Ticket m
@@ -786,7 +786,7 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   _concMessage    = lift . _concMessage
 
 instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
-  type STMLike  (RL.RWST r w s m) = STMLike m
+  type STM      (RL.RWST r w s m) = STM m
   type MVar     (RL.RWST r w s m) = MVar m
   type CRef     (RL.RWST r w s m) = CRef m
   type Ticket   (RL.RWST r w s m) = Ticket m
@@ -831,7 +831,7 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   _concMessage    = lift . _concMessage
 
 instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
-  type STMLike  (RS.RWST r w s m) = STMLike m
+  type STM      (RS.RWST r w s m) = STM m
   type MVar     (RS.RWST r w s m) = MVar m
   type CRef     (RS.RWST r w s m) = CRef m
   type Ticket   (RS.RWST r w s m) = Ticket m
@@ -887,7 +887,7 @@ makeTransConc unstN = do
     VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ _ ->
       [d|
         instance (MonadConc m) => MonadConc ($(pure t) m) where
-          type STMLike  ($(pure t) m) = STMLike m
+          type STM      ($(pure t) m) = STM m
           type MVar     ($(pure t) m) = MVar m
           type CRef     ($(pure t) m) = CRef m
           type Ticket   ($(pure t) m) = Ticket m

@@ -95,7 +95,7 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
   type MVar     (Conc n r (STMLike n r)) = MVar r
   type CRef     (Conc n r (STMLike n r)) = CRef r
   type Ticket   (Conc n r (STMLike n r)) = Ticket
-  type STMLike  (Conc n r (STMLike n r)) = STMLike n r
+  type STM      (Conc n r (STMLike n r)) = STMLike n r
   type ThreadId (Conc n r (STMLike n r)) = ThreadId
 
   -- ----------
