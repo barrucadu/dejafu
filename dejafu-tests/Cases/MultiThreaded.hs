@@ -10,8 +10,7 @@ import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
 import Test.HUnit.DejaFu (testDejafu)
 
-import Control.Concurrent.CVar
-import Control.Monad.Conc.Class
+import Control.Concurrent.Classy
 import Control.Monad.STM.Class
 
 #if __GLASGOW_HASKELL__ < 710

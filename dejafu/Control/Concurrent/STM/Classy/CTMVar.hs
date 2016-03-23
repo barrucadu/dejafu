@@ -1,5 +1,5 @@
 -- | Transactional @CVar@s, for use with 'MonadSTM'.
-module Control.Concurrent.STM.CTMVar
+module Control.Concurrent.STM.Classy.CTMVar
   ( -- * @CTMVar@s
     CTMVar
   , newCTMVar

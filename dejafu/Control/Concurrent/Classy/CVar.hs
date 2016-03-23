@@ -1,6 +1,6 @@
 -- | Combinators using @CVar@s. These provide many of the helpful
 -- functions found in Control.Concurrent.MVar, but for @CVar@s.
-module Control.Concurrent.CVar
+module Control.Concurrent.Classy.CVar
  ( -- *@CVar@s
   CVar
  , newEmptyCVar

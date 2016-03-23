@@ -81,10 +81,13 @@ library
   exposed-modules:     Control.Monad.Conc.Class
                      , Control.Monad.STM.Class
 
-                     , Control.Concurrent.CVar
-                     , Control.Concurrent.CVar.Strict
-                     , Control.Concurrent.STM.CTVar
-                     , Control.Concurrent.STM.CTMVar
+                     , Control.Concurrent.Classy
+                     , Control.Concurrent.Classy.CVar
+                     , Control.Concurrent.Classy.CVar.Strict
+
+                     , Control.Concurrent.STM.Classy
+                     , Control.Concurrent.STM.Classy.CTVar
+                     , Control.Concurrent.STM.Classy.CTMVar
 
                      , Test.DejaFu
                      , Test.DejaFu.Deterministic

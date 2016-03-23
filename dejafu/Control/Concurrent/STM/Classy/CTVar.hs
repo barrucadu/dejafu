@@ -1,5 +1,5 @@
 -- | Transactional variables, for use with 'MonadSTM'.
-module Control.Concurrent.STM.CTVar
+module Control.Concurrent.STM.Classy.CTVar
   ( -- * @CTVar@s
     CTVar
   , newCTVar

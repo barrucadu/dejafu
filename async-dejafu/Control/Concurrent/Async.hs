@@ -83,7 +83,7 @@ import Control.Monad
 import Control.Monad.Catch (finally, try, onException)
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
-import Control.Concurrent.STM.CTMVar (newEmptyCTMVar, putCTMVar, readCTMVar)
+import Control.Concurrent.STM.Classy.CTMVar (newEmptyCTMVar, putCTMVar, readCTMVar)
 
 #if !MIN_VERSION_base(4,8,0)
 import Data.Traversable

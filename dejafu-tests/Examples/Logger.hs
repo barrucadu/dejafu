@@ -2,8 +2,7 @@
 -- Concurrent Programming in Haskell, chapter 7.
 module Examples.Logger (tests) where
 
-import Control.Concurrent.CVar
-import Control.Monad.Conc.Class
+import Control.Concurrent.Classy
 import Data.Functor (void)
 import Test.DejaFu hiding (MemType(..))
 import Test.Framework (Test)

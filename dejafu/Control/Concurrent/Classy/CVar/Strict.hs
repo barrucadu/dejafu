@@ -1,7 +1,7 @@
 -- | Strict alternatives to the functions in
 -- Control.Monad.Conc.CVar. Specifically, values are evaluated to
 -- normal form before being put into a @CVar@.
-module Control.Concurrent.CVar.Strict
+module Control.Concurrent.Classy.CVar.Strict
  ( -- *@CVar@s
   CVar
  , newEmptyCVar
@@ -30,12 +30,12 @@ module Control.Concurrent.CVar.Strict
  , unlock
  ) where
 
-import Control.Concurrent.CVar (isEmptyCVar, withCVar, withCVarMasked, lock, unlock)
+import Control.Concurrent.Classy.CVar (isEmptyCVar, withCVar, withCVarMasked, lock, unlock)
 import Control.DeepSeq (NFData, force)
 import Control.Monad.Catch (mask_, onException)
 import Control.Monad.Conc.Class hiding (newEmptyCVar, newEmptyCVarN, newCVar, newCVarN, putCVar, tryPutCVar)
 
-import qualified Control.Concurrent.CVar  as V
+import qualified Control.Concurrent.Classy.CVar as V
 import qualified Control.Monad.Conc.Class as C
 
 -- | Create a new empty @CVar@.

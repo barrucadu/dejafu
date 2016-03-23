@@ -4,7 +4,7 @@ module Examples.Philosophers (tests) where
 
 import Control.Monad (replicateM, forever)
 import Control.Monad.Conc.Class
-import Control.Concurrent.CVar (lock, unlock)
+import Control.Concurrent.Classy.CVar (lock, unlock)
 import Data.Functor (void)
 import Test.DejaFu
 import Test.Framework (Test)
