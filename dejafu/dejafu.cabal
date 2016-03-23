@@ -91,6 +91,7 @@ library
                      , Control.Concurrent.STM.Classy.TChan
                      , Control.Concurrent.STM.Classy.TQueue
                      , Control.Concurrent.STM.Classy.TBQueue
+                     , Control.Concurrent.STM.Classy.TArray
 
                      , Test.DejaFu
                      , Test.DejaFu.Deterministic
@@ -110,6 +111,7 @@ library
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.5 && <5
+                     , array
                      , atomic-primops
                      , containers
                      , deepseq
