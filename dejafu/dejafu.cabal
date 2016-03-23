@@ -90,6 +90,7 @@ library
                      , Control.Concurrent.STM.Classy.TMVar
                      , Control.Concurrent.STM.Classy.TChan
                      , Control.Concurrent.STM.Classy.TQueue
+                     , Control.Concurrent.STM.Classy.TBQueue
 
                      , Test.DejaFu
                      , Test.DejaFu.Deterministic
