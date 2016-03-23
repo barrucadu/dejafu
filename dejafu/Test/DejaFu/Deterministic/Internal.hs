@@ -10,7 +10,7 @@ module Test.DejaFu.Deterministic.Internal
 
  -- * The @Conc@ Monad
  , M(..)
- , CVar(..)
+ , MVar(..)
  , CRef(..)
  , Ticket(..)
  , Fixed
@@ -22,7 +22,7 @@ module Test.DejaFu.Deterministic.Internal
 
  -- * Identifiers
  , ThreadId(..)
- , CVarId(..)
+ , MVarId(..)
  , CRefId(..)
  , initialThread
 
@@ -137,8 +137,8 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
       isNonexistant = isNothing thread
       isTerminated  = initialThread `notElem` M.keys threads
       isDeadlocked  = isLocked initialThread threads &&
-        (((~=  OnCVarFull  undefined) <$> M.lookup initialThread threads) == Just True ||
-         ((~=  OnCVarEmpty undefined) <$> M.lookup initialThread threads) == Just True ||
+        (((~=  OnMVarFull  undefined) <$> M.lookup initialThread threads) == Just True ||
+         ((~=  OnMVarEmpty undefined) <$> M.lookup initialThread threads) == Just True ||
          ((~=  OnMask      undefined) <$> M.lookup initialThread threads) == Just True)
       isSTMLocked = isLocked initialThread threads &&
         ((~=  OnTVar []) <$> M.lookup initialThread threads) == Just True
@@ -245,32 +245,32 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
     -- | Yield the current thread
     stepYield c = simple (goto c tid threads) Yield
 
-    -- | Put a value into a @CVar@, blocking the thread until it's
+    -- | Put a value into a @MVar@, blocking the thread until it's
     -- empty.
-    stepPutVar cvar@(CVar cvid _) a c = synchronised $ do
-      (success, threads', woken) <- putIntoCVar cvar a c fixed tid threads
+    stepPutVar cvar@(MVar cvid _) a c = synchronised $ do
+      (success, threads', woken) <- putIntoMVar cvar a c fixed tid threads
       simple threads' $ if success then PutVar cvid woken else BlockedPutVar cvid
 
-    -- | Try to put a value into a @CVar@, without blocking.
-    stepTryPutVar cvar@(CVar cvid _) a c = synchronised $ do
-      (success, threads', woken) <- tryPutIntoCVar cvar a c fixed tid threads
+    -- | Try to put a value into a @MVar@, without blocking.
+    stepTryPutVar cvar@(MVar cvid _) a c = synchronised $ do
+      (success, threads', woken) <- tryPutIntoMVar cvar a c fixed tid threads
       simple threads' $ TryPutVar cvid success woken
 
-    -- | Get the value from a @CVar@, without emptying, blocking the
+    -- | Get the value from a @MVar@, without emptying, blocking the
     -- thread until it's full.
-    stepReadVar cvar@(CVar cvid _) c = synchronised $ do
-      (success, threads', _) <- readFromCVar cvar c fixed tid threads
+    stepReadVar cvar@(MVar cvid _) c = synchronised $ do
+      (success, threads', _) <- readFromMVar cvar c fixed tid threads
       simple threads' $ if success then ReadVar cvid else BlockedReadVar cvid
 
-    -- | Take the value from a @CVar@, blocking the thread until it's
+    -- | Take the value from a @MVar@, blocking the thread until it's
     -- full.
-    stepTakeVar cvar@(CVar cvid _) c = synchronised $ do
-      (success, threads', woken) <- takeFromCVar cvar c fixed tid threads
+    stepTakeVar cvar@(MVar cvid _) c = synchronised $ do
+      (success, threads', woken) <- takeFromMVar cvar c fixed tid threads
       simple threads' $ if success then TakeVar cvid woken else BlockedTakeVar cvid
 
-    -- | Try to take the value from a @CVar@, without blocking.
-    stepTryTakeVar cvar@(CVar cvid _) c = synchronised $ do
-      (success, threads', woken) <- tryTakeFromCVar cvar c fixed tid threads
+    -- | Try to take the value from a @MVar@, without blocking.
+    stepTryTakeVar cvar@(MVar cvid _) c = synchronised $ do
+      (success, threads', woken) <- tryTakeFromMVar cvar c fixed tid threads
       simple threads' $ TryTakeVar cvid success woken
 
     -- | Read from a @CRef@.
@@ -411,11 +411,11 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
       act      = (if b1 then SetMasking else ResetMasking) b2 m
       threads' = goto c tid (mask m tid threads)
 
-    -- | Create a new @CVar@, using the next 'CVarId'.
+    -- | Create a new @MVar@, using the next 'MVarId'.
     stepNewVar n c = do
       let (idSource', newcvid) = nextCVId n idSource
       ref <- newRef fixed Nothing
-      let cvar = CVar newcvid ref
+      let cvar = MVar newcvid ref
       return $ Right (knows [Left newcvid] tid $ goto (c cvar) tid threads, idSource', NewVar newcvid, wb, caps)
 
     -- | Create a new @CRef@, using the next 'CRefId'.

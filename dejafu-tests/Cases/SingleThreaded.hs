@@ -20,12 +20,12 @@ import Control.Applicative ((<$>), (<*>))
 
 tests :: [Test]
 tests =
-  [ testGroup "CVar" . hUnitTestToTests $ test
-    [ testDejafu emptyCVarTake "empty take" $ gives' [True]
-    , testDejafu emptyCVarPut  "empty put"  $ gives' [()]
-    , testDejafu fullCVarPut   "full put"   $ gives' [True]
-    , testDejafu fullCVarTake  "full take"  $ gives' [True]
-    , testDejafu fullCVarRead  "full read"  $ gives' [True]
+  [ testGroup "MVar" . hUnitTestToTests $ test
+    [ testDejafu emptyMVarTake "empty take" $ gives' [True]
+    , testDejafu emptyMVarPut  "empty put"  $ gives' [()]
+    , testDejafu fullMVarPut   "full put"   $ gives' [True]
+    , testDejafu fullMVarTake  "full take"  $ gives' [True]
+    , testDejafu fullMVarRead  "full read"  $ gives' [True]
     ]
 
   , testGroup "CRef" . hUnitTestToTests $ test
@@ -61,39 +61,39 @@ tests =
   ]
 
 --------------------------------------------------------------------------------
--- @CVar@s
+-- @MVar@s
 
--- | An empty @CVar@ cannot be taken from.
-emptyCVarTake :: MonadConc m => m Bool
-emptyCVarTake = do
-  var <- newEmptyCVar
-  res <- tryTakeCVar var
+-- | An empty @MVar@ cannot be taken from.
+emptyMVarTake :: MonadConc m => m Bool
+emptyMVarTake = do
+  var <- newEmptyMVar
+  res <- tryTakeMVar var
 
   return $ (res :: Maybe ()) == Nothing
 
--- | An empty @CVar@ can be put into.
-emptyCVarPut :: MonadConc m => m ()
-emptyCVarPut = do
-  var <- newEmptyCVar
-  putCVar var ()
+-- | An empty @MVar@ can be put into.
+emptyMVarPut :: MonadConc m => m ()
+emptyMVarPut = do
+  var <- newEmptyMVar
+  putMVar var ()
 
--- | A full @CVar@ cannot be put into.
-fullCVarPut :: MonadConc m => m Bool
-fullCVarPut = do
-  var <- newCVar ()
-  not <$> tryPutCVar var ()
+-- | A full @MVar@ cannot be put into.
+fullMVarPut :: MonadConc m => m Bool
+fullMVarPut = do
+  var <- newMVar ()
+  not <$> tryPutMVar var ()
 
--- | A full @CVar@ can be taken from.
-fullCVarTake :: MonadConc m => m Bool
-fullCVarTake = do
-  var <- newCVar ()
-  (() ==) <$> takeCVar var
+-- | A full @MVar@ can be taken from.
+fullMVarTake :: MonadConc m => m Bool
+fullMVarTake = do
+  var <- newMVar ()
+  (() ==) <$> takeMVar var
 
--- | A full @CVar@ can be read from.
-fullCVarRead :: MonadConc m => m Bool
-fullCVarRead = do
-  var <- newCVar ()
-  (() ==) <$> readCVar var
+-- | A full @MVar@ can be read from.
+fullMVarRead :: MonadConc m => m Bool
+fullMVarRead = do
+  var <- newMVar ()
+  (() ==) <$> readMVar var
 
 --------------------------------------------------------------------------------
 -- @CRef@s

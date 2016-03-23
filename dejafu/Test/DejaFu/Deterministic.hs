@@ -30,7 +30,7 @@ module Test.DejaFu.Deterministic
   , Decision(..)
   , ThreadAction(..)
   , Lookahead(..)
-  , CVarId
+  , MVarId
   , CRefId
   , MaskingState(..)
   , toTrace
@@ -92,7 +92,7 @@ instance Ca.MonadMask (Conc n r s) where
   uninterruptibleMask mb = toConc (AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f))
 
 instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
-  type CVar     (Conc n r (STMLike n r)) = CVar r
+  type MVar     (Conc n r (STMLike n r)) = MVar r
   type CRef     (Conc n r (STMLike n r)) = CRef r
   type Ticket   (Conc n r (STMLike n r)) = Ticket
   type STMLike  (Conc n r (STMLike n r)) = STMLike n r
@@ -130,14 +130,14 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 
   -- ----------
 
-  newEmptyCVarN n = toConc (\c -> ANewVar n c)
+  newEmptyMVarN n = toConc (\c -> ANewVar n c)
 
-  putCVar  var a = toConc (\c -> APutVar var a (c ()))
-  readCVar var   = toConc (AReadVar var)
-  takeCVar var   = toConc (ATakeVar var)
+  putMVar  var a = toConc (\c -> APutVar var a (c ()))
+  readMVar var   = toConc (AReadVar var)
+  takeMVar var   = toConc (ATakeVar var)
 
-  tryPutCVar  var a = toConc (ATryPutVar  var a)
-  tryTakeCVar var   = toConc (ATryTakeVar var)
+  tryPutMVar  var a = toConc (ATryPutVar  var a)
+  tryTakeMVar var   = toConc (ATryTakeVar var)
 
   -- ----------
 
@@ -149,10 +149,10 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 
   -- ----------
 
-  _concKnowsAbout (Left  (CVar cvarid  _)) = toConc (\c -> AKnowsAbout (Left  cvarid)  (c ()))
+  _concKnowsAbout (Left  (MVar cvarid  _)) = toConc (\c -> AKnowsAbout (Left  cvarid)  (c ()))
   _concKnowsAbout (Right (TVar (ctvarid, _))) = toConc (\c -> AKnowsAbout (Right ctvarid) (c ()))
 
-  _concForgets (Left  (CVar cvarid  _)) = toConc (\c -> AForgets (Left  cvarid)  (c ()))
+  _concForgets (Left  (MVar cvarid  _)) = toConc (\c -> AForgets (Left  cvarid)  (c ()))
   _concForgets (Right (TVar (ctvarid, _))) = toConc (\c -> AForgets (Right ctvarid) (c ()))
 
   _concAllKnown = toConc (\c -> AAllKnown (c ()))
@@ -166,7 +166,7 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 -- Note how the @t@ in 'Conc' is universally quantified, what this
 -- means in practice is that you can't do something like this:
 --
--- > runConc roundRobinSched SequentialConsistency () newEmptyCVar
+-- > runConc roundRobinSched SequentialConsistency () newEmptyMVar
 --
 -- So mutable references cannot leak out of the 'Conc' computation. If
 -- this is making your head hurt, check out the \"How @runST@ works\"

@@ -82,8 +82,8 @@ library
                      , Control.Monad.STM.Class
 
                      , Control.Concurrent.Classy
-                     , Control.Concurrent.Classy.CVar
-                     , Control.Concurrent.Classy.CVar.Strict
+                     , Control.Concurrent.Classy.MVar
+                     , Control.Concurrent.Classy.MVar.Strict
 
                      , Control.Concurrent.STM.Classy
                      , Control.Concurrent.STM.Classy.TVar

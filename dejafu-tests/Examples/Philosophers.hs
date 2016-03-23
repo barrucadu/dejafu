@@ -4,7 +4,7 @@ module Examples.Philosophers (tests) where
 
 import Control.Monad (replicateM, forever)
 import Control.Monad.Conc.Class
-import Control.Concurrent.Classy.CVar (lock, unlock)
+import Control.Concurrent.Classy.MVar (lock, unlock)
 import Data.Functor (void)
 import Test.DejaFu
 import Test.Framework (Test)
@@ -28,10 +28,10 @@ bound = defaultBounds { lengthBound = Just 30 }
 -- about deadlocks.
 philosophers :: MonadConc m => Int -> m ()
 philosophers n = do
-  forks <- replicateM n newEmptyCVar
+  forks <- replicateM n newEmptyMVar
   let phils = map (\(i,p) -> p i forks) $ zip [0..] $ replicate n philosopher
   cvars <- mapM spawn phils
-  mapM_ takeCVar cvars
+  mapM_ takeMVar cvars
 
   where
     philosopher ident forks = forever $ do

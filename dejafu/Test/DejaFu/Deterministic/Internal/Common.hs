@@ -43,12 +43,12 @@ instance Monad (M n r s) where
 
 -- | The concurrent variable type used with the 'Conc' monad. One
 -- notable difference between these and 'MVar's is that 'MVar's are
--- single-wakeup, and wake up in a FIFO order. Writing to a @CVar@
+-- single-wakeup, and wake up in a FIFO order. Writing to a @MVar@
 -- wakes up all threads blocked on reading it, and it is up to the
--- scheduler which one runs next. Taking from a @CVar@ behaves
+-- scheduler which one runs next. Taking from a @MVar@ behaves
 -- analogously.
-data CVar r a = CVar
-  { _cvarId   :: CVarId
+data MVar r a = MVar
+  { _cvarId   :: MVarId
   , _cvarVal  :: r (Maybe a)
   }
 
@@ -94,7 +94,7 @@ runCont = runM
 -- | Scheduling is done in terms of a trace of 'Action's. Blocking can
 -- only occur as a result of an action, and they cover (most of) the
 -- primitives of the concurrency. 'spawn' is absent as it is
--- implemented in terms of 'newEmptyCVar', 'fork', and 'putCVar'.
+-- implemented in terms of 'newEmptyMVar', 'fork', and 'putMVar'.
 data Action n r s =
     AFork  String ((forall b. M n r s b -> M n r s b) -> Action n r s) (ThreadId -> Action n r s)
   | AMyTId (ThreadId -> Action n r s)
@@ -102,12 +102,12 @@ data Action n r s =
   | AGetNumCapabilities (Int -> Action n r s)
   | ASetNumCapabilities Int (Action n r s)
 
-  | forall a. ANewVar String (CVar r a -> Action n r s)
-  | forall a. APutVar     (CVar r a) a (Action n r s)
-  | forall a. ATryPutVar  (CVar r a) a (Bool -> Action n r s)
-  | forall a. AReadVar    (CVar r a) (a -> Action n r s)
-  | forall a. ATakeVar    (CVar r a) (a -> Action n r s)
-  | forall a. ATryTakeVar (CVar r a) (Maybe a -> Action n r s)
+  | forall a. ANewVar String (MVar r a -> Action n r s)
+  | forall a. APutVar     (MVar r a) a (Action n r s)
+  | forall a. ATryPutVar  (MVar r a) a (Bool -> Action n r s)
+  | forall a. AReadVar    (MVar r a) (a -> Action n r s)
+  | forall a. ATakeVar    (MVar r a) (a -> Action n r s)
+  | forall a. ATryTakeVar (MVar r a) (Maybe a -> Action n r s)
 
   | forall a.   ANewRef String a (CRef r a -> Action n r s)
   | forall a.   AReadRef    (CRef r a) (a -> Action n r s)
@@ -125,8 +125,8 @@ data Action n r s =
   | forall a. AMasking MaskingState ((forall b. M n r s b -> M n r s b) -> M n r s a) (a -> Action n r s)
   | AResetMask Bool Bool MaskingState (Action n r s)
 
-  | AKnowsAbout (Either CVarId TVarId) (Action n r s)
-  | AForgets    (Either CVarId TVarId) (Action n r s)
+  | AKnowsAbout (Either MVarId TVarId) (Action n r s)
+  | AForgets    (Either MVarId TVarId) (Action n r s)
   | AAllKnown   (Action n r s)
   | AMessage    Dynamic (Action n r s)
 
@@ -158,19 +158,19 @@ instance NFData ThreadId where
 initialThread :: ThreadId
 initialThread = ThreadId (Just "main") 0
 
--- | Every @CVar@ has a unique identifier.
-data CVarId = CVarId (Maybe String) Int
+-- | Every @MVar@ has a unique identifier.
+data MVarId = MVarId (Maybe String) Int
   deriving Eq
 
-instance Ord CVarId where
-  compare (CVarId _ i) (CVarId _ j) = compare i j
+instance Ord MVarId where
+  compare (MVarId _ i) (MVarId _ j) = compare i j
 
-instance Show CVarId where
-  show (CVarId (Just n) _) = n
-  show (CVarId Nothing  i) = show i
+instance Show MVarId where
+  show (MVarId (Just n) _) = n
+  show (MVarId Nothing  i) = show i
 
-instance NFData CVarId where
-  rnf (CVarId n i) = rnf (n, i)
+instance NFData MVarId where
+  rnf (MVarId n i) = rnf (n, i)
 
 -- | Every @CRef@ has a unique identifier.
 data CRefId = CRefId (Maybe String) Int
@@ -225,9 +225,9 @@ nextCRId name idsource = (idsource { _nextCRId = newid, _usedCRNames = newlst },
     | otherwise       = Just name
   occurrences = length . filter (==name) $ _usedCRNames idsource
 
--- | Get the next free 'CVarId'.
-nextCVId :: String -> IdSource -> (IdSource, CVarId)
-nextCVId name idsource = (idsource { _nextCVId = newid, _usedCVNames = newlst }, CVarId newname newid) where
+-- | Get the next free 'MVarId'.
+nextCVId :: String -> IdSource -> (IdSource, MVarId)
+nextCVId name idsource = (idsource { _nextCVId = newid, _usedCVNames = newlst }, MVarId newname newid) where
   newid  = _nextCVId idsource + 1
   newlst
     | null name = _usedCVNames idsource
@@ -352,24 +352,24 @@ data ThreadAction =
   -- ^ Set the number of Haskell threads that can run simultaneously.
   | Yield
   -- ^ Yield the current thread.
-  | NewVar CVarId
-  -- ^ Create a new 'CVar'.
-  | PutVar CVarId [ThreadId]
-  -- ^ Put into a 'CVar', possibly waking up some threads.
-  | BlockedPutVar CVarId
+  | NewVar MVarId
+  -- ^ Create a new 'MVar'.
+  | PutVar MVarId [ThreadId]
+  -- ^ Put into a 'MVar', possibly waking up some threads.
+  | BlockedPutVar MVarId
   -- ^ Get blocked on a put.
-  | TryPutVar CVarId Bool [ThreadId]
-  -- ^ Try to put into a 'CVar', possibly waking up some threads.
-  | ReadVar CVarId
-  -- ^ Read from a 'CVar'.
-  | BlockedReadVar CVarId
+  | TryPutVar MVarId Bool [ThreadId]
+  -- ^ Try to put into a 'MVar', possibly waking up some threads.
+  | ReadVar MVarId
+  -- ^ Read from a 'MVar'.
+  | BlockedReadVar MVarId
   -- ^ Get blocked on a read.
-  | TakeVar CVarId [ThreadId]
-  -- ^ Take from a 'CVar', possibly waking up some threads.
-  | BlockedTakeVar CVarId
+  | TakeVar MVarId [ThreadId]
+  -- ^ Take from a 'MVar', possibly waking up some threads.
+  | BlockedTakeVar MVarId
   -- ^ Get blocked on a take.
-  | TryTakeVar CVarId Bool [ThreadId]
-  -- ^ Try to take from a 'CVar', possibly waking up some threads.
+  | TryTakeVar MVarId Bool [ThreadId]
+  -- ^ Try to take from a 'MVar', possibly waking up some threads.
   | NewRef CRefId
   -- ^ Create a new 'CRef'.
   | ReadRef CRefId
@@ -527,17 +527,17 @@ data Lookahead =
   | WillYield
   -- ^ Will yield the current thread.
   | WillNewVar
-  -- ^ Will create a new 'CVar'.
-  | WillPutVar CVarId
-  -- ^ Will put into a 'CVar', possibly waking up some threads.
-  | WillTryPutVar CVarId
-  -- ^ Will try to put into a 'CVar', possibly waking up some threads.
-  | WillReadVar CVarId
-  -- ^ Will read from a 'CVar'.
-  | WillTakeVar CVarId
-  -- ^ Will take from a 'CVar', possibly waking up some threads.
-  | WillTryTakeVar CVarId
-  -- ^ Will try to take from a 'CVar', possibly waking up some threads.
+  -- ^ Will create a new 'MVar'.
+  | WillPutVar MVarId
+  -- ^ Will put into a 'MVar', possibly waking up some threads.
+  | WillTryPutVar MVarId
+  -- ^ Will try to put into a 'MVar', possibly waking up some threads.
+  | WillReadVar MVarId
+  -- ^ Will read from a 'MVar'.
+  | WillTakeVar MVarId
+  -- ^ Will take from a 'MVar', possibly waking up some threads.
+  | WillTryTakeVar MVarId
+  -- ^ Will try to take from a 'MVar', possibly waking up some threads.
   | WillNewRef
   -- ^ Will create a new 'CRef'.
   | WillReadRef CRefId
@@ -623,11 +623,11 @@ lookahead = unsafeToNonEmpty . lookahead' where
   lookahead' (AGetNumCapabilities _) = [WillGetNumCapabilities]
   lookahead' (ASetNumCapabilities i k) = WillSetNumCapabilities i : lookahead' k
   lookahead' (ANewVar _ _)           = [WillNewVar]
-  lookahead' (APutVar (CVar c _) _ k)    = WillPutVar c : lookahead' k
-  lookahead' (ATryPutVar (CVar c _) _ _) = [WillTryPutVar c]
-  lookahead' (AReadVar (CVar c _) _)     = [WillReadVar c]
-  lookahead' (ATakeVar (CVar c _) _)     = [WillTakeVar c]
-  lookahead' (ATryTakeVar (CVar c _) _)  = [WillTryTakeVar c]
+  lookahead' (APutVar (MVar c _) _ k)    = WillPutVar c : lookahead' k
+  lookahead' (ATryPutVar (MVar c _) _ _) = [WillTryPutVar c]
+  lookahead' (AReadVar (MVar c _) _)     = [WillReadVar c]
+  lookahead' (ATakeVar (MVar c _) _)     = [WillTakeVar c]
+  lookahead' (ATryTakeVar (MVar c _) _)  = [WillTryTakeVar c]
   lookahead' (ANewRef _ _ _)         = [WillNewRef]
   lookahead' (AReadRef (CRef r _) _)     = [WillReadRef r]
   lookahead' (AReadRefCas (CRef r _) _)  = [WillReadRefCas r]
@@ -686,10 +686,10 @@ data ActionType =
   -- ^ A 'modifyCRefCAS'
   | SynchronisedModify  CRefId
   -- ^ An 'atomicModifyCRef'.
-  | SynchronisedRead    CVarId
-  -- ^ A 'readCVar' or 'takeCVar' (or @try@/@blocked@ variants).
-  | SynchronisedWrite   CVarId
-  -- ^ A 'putCVar' (or @try@/@blocked@ variant).
+  | SynchronisedRead    MVarId
+  -- ^ A 'readMVar' or 'takeMVar' (or @try@/@blocked@ variants).
+  | SynchronisedWrite   MVarId
+  -- ^ A 'putMVar' (or @try@/@blocked@ variant).
   | SynchronisedOther
   -- ^ Some other action which does require cross-thread
   -- communication.
@@ -731,8 +731,8 @@ crefOf (PartiallySynchronisedWrite  r) = Just r
 crefOf (PartiallySynchronisedModify r) = Just r
 crefOf _ = Nothing
 
--- | Get the 'CVar' affected.
-cvarOf :: ActionType -> Maybe CVarId
+-- | Get the 'MVar' affected.
+cvarOf :: ActionType -> Maybe MVarId
 cvarOf (SynchronisedRead  c) = Just c
 cvarOf (SynchronisedWrite c) = Just c
 cvarOf _ = Nothing
@@ -797,7 +797,7 @@ data Failure =
   -- bounds (there have been too many pre-emptions, the computation
   -- has executed for too long, or there have been too many yields).
   | Deadlock
-  -- ^ The computation became blocked indefinitely on @CVar@s.
+  -- ^ The computation became blocked indefinitely on @MVar@s.
   | STMDeadlock
   -- ^ The computation became blocked indefinitely on @TVar@s.
   | UncaughtException

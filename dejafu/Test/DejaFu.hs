@@ -9,18 +9,18 @@
 --
 -- > example1 :: MonadConc m => m Int
 -- > example1 = do
--- >   a <- newEmptyCVar
--- >   b <- newEmptyCVar
+-- >   a <- newEmptyMVar
+-- >   b <- newEmptyMVar
 -- >
--- >   c <- newCVar 0
+-- >   c <- newMVar 0
 -- >
--- >   j1 <- spawn $ lock a >> lock b >> modifyCVar_ c (return . succ) >> unlock b >> unlock a
--- >   j2 <- spawn $ lock b >> lock a >> modifyCVar_ c (return . pred) >> unlock a >> unlock b
+-- >   j1 <- spawn $ lock a >> lock b >> modifyMVar_ c (return . succ) >> unlock b >> unlock a
+-- >   j2 <- spawn $ lock b >> lock a >> modifyMVar_ c (return . pred) >> unlock a >> unlock b
 -- >
--- >   takeCVar j1
--- >   takeCVar j2
+-- >   takeMVar j1
+-- >   takeMVar j2
 -- >
--- >   takeCVar c
+-- >   takeMVar c
 --
 -- The correct result is 0, as it starts out as 0 and is incremented
 -- and decremented by threads 1 and 2, respectively. However, note the
@@ -108,7 +108,7 @@ module Test.DejaFu
   -- >   x <- spawn $ writeCRef r1 True >> readCRef r2
   -- >   y <- spawn $ writeCRef r2 True >> readCRef r1
   -- >
-  -- >   (,) <$> readCVar x <*> readCVar y
+  -- >   (,) <$> readMVar x <*> readMVar y
   --
   -- Under a sequentially consistent memory model the possible results
   -- are @(True, True)@, @(True, False)@, and @(False, True)@. Under

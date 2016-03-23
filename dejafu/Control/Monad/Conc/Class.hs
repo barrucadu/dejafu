@@ -33,8 +33,8 @@ module Control.Monad.Conc.Class
   , uninterruptibleMask
 
   -- * Mutable State
-  , newCVar
-  , newCVarN
+  , newMVar
+  , newMVarN
   , cas
 
   -- * Utilities for instance writers
@@ -89,12 +89,12 @@ class ( Applicative m, Monad m
       , setNumCapabilities
       , myThreadId
       , yield
-      , (newEmptyCVar | newEmptyCVarN)
-      , putCVar
-      , tryPutCVar
-      , readCVar
-      , takeCVar
-      , tryTakeCVar
+      , (newEmptyMVar | newEmptyMVarN)
+      , putMVar
+      , tryPutMVar
+      , readMVar
+      , takeMVar
+      , tryTakeMVar
       , (newCRef | newCRefN)
       , modifyCRef
       , writeCRef
@@ -111,9 +111,9 @@ class ( Applicative m, Monad m
 
   -- | The mutable reference type, like 'MVar's. This may contain one
   -- value at a time, attempting to read or take from an \"empty\"
-  -- @CVar@ will block until it is full, and attempting to put to a
-  -- \"full\" @CVar@ will block until it is empty.
-  type CVar m :: * -> *
+  -- @MVar@ will block until it is full, and attempting to put to a
+  -- \"full\" @MVar@ will block until it is empty.
+  type MVar m :: * -> *
 
   -- | The mutable non-blocking reference type. These may suffer from
   -- relaxed memory effects if functions outside the set @newCRef@,
@@ -129,7 +129,7 @@ class ( Applicative m, Monad m
   type ThreadId m :: *
 
   -- | Fork a computation to happen concurrently. Communication may
-  -- happen over @CVar@s.
+  -- happen over @MVar@s.
   --
   -- > fork ma = forkWithUnmask (\_ -> ma)
   fork :: m () -> m (ThreadId m)
@@ -202,47 +202,47 @@ class ( Applicative m, Monad m
   threadDelay :: Int -> m ()
   threadDelay _ = yield
 
-  -- | Create a new empty @CVar@.
+  -- | Create a new empty @MVar@.
   --
-  -- > newEmptyCVar = newEmptyCVarN ""
-  newEmptyCVar :: m (CVar m a)
-  newEmptyCVar = newEmptyCVarN ""
+  -- > newEmptyMVar = newEmptyMVarN ""
+  newEmptyMVar :: m (MVar m a)
+  newEmptyMVar = newEmptyMVarN ""
 
-  -- | Create a new empty @CVar@, but it is given a name which may be
+  -- | Create a new empty @MVar@, but it is given a name which may be
   -- used to present more useful debugging information.
   --
   -- If an empty name is given, a counter starting from 0 is used. If
-  -- names conflict, successive @CVar@s with the same name are given a
+  -- names conflict, successive @MVar@s with the same name are given a
   -- numeric suffix, counting up from 1.
   --
-  -- > newEmptyCVarN _ = newEmptyCVar
-  newEmptyCVarN :: String -> m (CVar m a)
-  newEmptyCVarN _ = newEmptyCVar
+  -- > newEmptyMVarN _ = newEmptyMVar
+  newEmptyMVarN :: String -> m (MVar m a)
+  newEmptyMVarN _ = newEmptyMVar
 
-  -- | Put a value into a @CVar@. If there is already a value there,
+  -- | Put a value into a @MVar@. If there is already a value there,
   -- this will block until that value has been taken, at which point
   -- the value will be stored.
-  putCVar :: CVar m a -> a -> m ()
+  putMVar :: MVar m a -> a -> m ()
 
-  -- | Attempt to put a value in a @CVar@ non-blockingly, returning
-  -- 'True' (and filling the @CVar@) if there was nothing there,
+  -- | Attempt to put a value in a @MVar@ non-blockingly, returning
+  -- 'True' (and filling the @MVar@) if there was nothing there,
   -- otherwise returning 'False'.
-  tryPutCVar :: CVar m a -> a -> m Bool
+  tryPutMVar :: MVar m a -> a -> m Bool
 
-  -- | Block until a value is present in the @CVar@, and then return
+  -- | Block until a value is present in the @MVar@, and then return
   -- it. As with 'readMVar', this does not \"remove\" the value,
   -- multiple reads are possible.
-  readCVar :: CVar m a -> m a
+  readMVar :: MVar m a -> m a
 
-  -- | Take a value from a @CVar@. This \"empties\" the @CVar@,
+  -- | Take a value from a @MVar@. This \"empties\" the @MVar@,
   -- allowing a new value to be put in. This will block if there is no
-  -- value in the @CVar@ already, until one has been put.
-  takeCVar :: CVar m a -> m a
+  -- value in the @MVar@ already, until one has been put.
+  takeMVar :: MVar m a -> m a
 
-  -- | Attempt to take a value from a @CVar@ non-blockingly, returning
-  -- a 'Just' (and emptying the @CVar@) if there was something there,
+  -- | Attempt to take a value from a @MVar@ non-blockingly, returning
+  -- a 'Just' (and emptying the @MVar@) if there was something there,
   -- otherwise returning 'Nothing'.
-  tryTakeCVar :: CVar m a -> m (Maybe a)
+  tryTakeMVar :: MVar m a -> m (Maybe a)
 
   -- | Create a new reference.
   --
@@ -322,9 +322,9 @@ class ( Applicative m, Monad m
   -- | Does nothing.
   --
   -- This function is purely for testing purposes, and indicates that
-  -- the thread has a reference to the provided @CVar@ or @TVar@. This
+  -- the thread has a reference to the provided @MVar@ or @TVar@. This
   -- function may be called multiple times, to add new knowledge to
-  -- the system. It does not need to be called when @CVar@s or @TVar@s
+  -- the system. It does not need to be called when @MVar@s or @TVar@s
   -- are created, these get recorded automatically.
   --
   -- Gathering this information allows detection of cases where the
@@ -332,7 +332,7 @@ class ( Applicative m, Monad m
   -- reference to, which is a deadlock situation.
   --
   -- > _concKnowsAbout _ = pure ()
-  _concKnowsAbout :: Either (CVar m a) (TVar (STMLike m) a) -> m ()
+  _concKnowsAbout :: Either (MVar m a) (TVar (STMLike m) a) -> m ()
   _concKnowsAbout _ = pure ()
 
   -- | Does nothing.
@@ -346,7 +346,7 @@ class ( Applicative m, Monad m
   -- refer to the variable again, for instance when leaving its scope.
   --
   -- > _concForgets _ = pure ()
-  _concForgets :: Either (CVar m a) (TVar (STMLike m) a) -> m ()
+  _concForgets :: Either (MVar m a) (TVar (STMLike m) a) -> m ()
   _concForgets _ = pure ()
 
   -- | Does nothing.
@@ -356,7 +356,7 @@ class ( Applicative m, Monad m
   -- '_concKnowsAbout'. If every thread has called '_concAllKnown',
   -- then detection of nonglobal deadlock is turned on.
   --
-  -- If a thread receives references to @CVar@s or @TVar@s in the
+  -- If a thread receives references to @MVar@s or @TVar@s in the
   -- future (for instance, if one was sent over a channel), then
   -- '_concKnowsAbout' should be called immediately, otherwise there
   -- is a risk of identifying false positives.
@@ -377,7 +377,7 @@ class ( Applicative m, Monad m
 -- Utilities
 
 -- | Get the current line number as a String. Useful for automatically
--- naming threads, @CVar@s, and @CRef@s.
+-- naming threads, @MVar@s, and @CRef@s.
 --
 -- Example usage:
 --
@@ -394,11 +394,11 @@ lineNum = do
 -- Threads
 
 -- | Create a concurrent computation for the provided action, and
--- return a @CVar@ which can be used to query the result.
-spawn :: MonadConc m => m a -> m (CVar m a)
+-- return a @MVar@ which can be used to query the result.
+spawn :: MonadConc m => m a -> m (MVar m a)
 spawn ma = do
-  cvar <- newEmptyCVar
-  _ <- fork $ _concKnowsAbout (Left cvar) >> ma >>= putCVar cvar
+  cvar <- newEmptyMVar
+  _ <- fork $ _concKnowsAbout (Left cvar) >> ma >>= putMVar cvar
   pure cvar
 
 -- | Fork a thread and call the supplied function when the thread is
@@ -489,23 +489,23 @@ uninterruptibleMask = Ca.uninterruptibleMask
 
 -- Mutable Variables
 
--- | Create a new @CVar@ containing a value.
-newCVar :: MonadConc m => a -> m (CVar m a)
-newCVar a = do
-  cvar <- newEmptyCVar
-  putCVar cvar a
+-- | Create a new @MVar@ containing a value.
+newMVar :: MonadConc m => a -> m (MVar m a)
+newMVar a = do
+  cvar <- newEmptyMVar
+  putMVar cvar a
   pure cvar
 
--- | Create a new @CVar@ containing a value, but it is given a name
+-- | Create a new @MVar@ containing a value, but it is given a name
 -- which may be used to present more useful debugging information.
 --
 -- If no name is given, a counter starting from 0 is used. If names
--- conflict, successive @CVar@s with the same name are given a numeric
+-- conflict, successive @MVar@s with the same name are given a numeric
 -- suffix, counting up from 1.
-newCVarN :: MonadConc m => String -> a -> m (CVar m a)
-newCVarN n a = do
-  cvar <- newEmptyCVarN n
-  putCVar cvar a
+newMVarN :: MonadConc m => String -> a -> m (MVar m a)
+newMVarN n a = do
+  cvar <- newEmptyMVarN n
+  putMVar cvar a
   pure cvar
 
 -- | Compare-and-swap a value in a @CRef@, returning an indication of
@@ -523,7 +523,7 @@ cas cref a = do
 
 instance MonadConc IO where
   type STMLike  IO = IO.STM
-  type CVar     IO = IO.MVar
+  type MVar     IO = IO.MVar
   type CRef     IO = IO.IORef
   type Ticket   IO = IO.Ticket
   type ThreadId IO = IO.ThreadId
@@ -536,16 +536,16 @@ instance MonadConc IO where
 
   getNumCapabilities = IO.getNumCapabilities
   setNumCapabilities = IO.setNumCapabilities
-  readCVar           = IO.readMVar
+  readMVar           = IO.readMVar
   myThreadId         = IO.myThreadId
   yield              = IO.yield
   threadDelay        = IO.threadDelay
   throwTo            = IO.throwTo
-  newEmptyCVar       = IO.newEmptyMVar
-  putCVar            = IO.putMVar
-  tryPutCVar         = IO.tryPutMVar
-  takeCVar           = IO.takeMVar
-  tryTakeCVar        = IO.tryTakeMVar
+  newEmptyMVar       = IO.newEmptyMVar
+  putMVar            = IO.putMVar
+  tryPutMVar         = IO.tryPutMVar
+  takeMVar           = IO.takeMVar
+  tryTakeMVar        = IO.tryTakeMVar
   newCRef            = IO.newIORef
   readCRef           = IO.readIORef
   modifyCRef         = IO.atomicModifyIORef
@@ -562,7 +562,7 @@ instance MonadConc IO where
 
 instance MonadConc m => MonadConc (ReaderT r m) where
   type STMLike  (ReaderT r m) = STMLike m
-  type CVar     (ReaderT r m) = CVar m
+  type MVar     (ReaderT r m) = MVar m
   type CRef     (ReaderT r m) = CRef m
   type Ticket   (ReaderT r m) = Ticket m
   type ThreadId (ReaderT r m) = ThreadId m
@@ -581,13 +581,13 @@ instance MonadConc m => MonadConc (ReaderT r m) where
   yield              = lift yield
   threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
-  newEmptyCVar       = lift newEmptyCVar
-  newEmptyCVarN      = lift . newEmptyCVarN
-  readCVar           = lift . readCVar
-  putCVar v          = lift . putCVar v
-  tryPutCVar v       = lift . tryPutCVar v
-  takeCVar           = lift . takeCVar
-  tryTakeCVar        = lift . tryTakeCVar
+  newEmptyMVar       = lift newEmptyMVar
+  newEmptyMVarN      = lift . newEmptyMVarN
+  readMVar           = lift . readMVar
+  putMVar v          = lift . putMVar v
+  tryPutMVar v       = lift . tryPutMVar v
+  takeMVar           = lift . takeMVar
+  tryTakeMVar        = lift . tryTakeMVar
   newCRef            = lift . newCRef
   newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
@@ -607,7 +607,7 @@ instance MonadConc m => MonadConc (ReaderT r m) where
 
 instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   type STMLike  (WL.WriterT w m) = STMLike m
-  type CVar     (WL.WriterT w m) = CVar m
+  type MVar     (WL.WriterT w m) = MVar m
   type CRef     (WL.WriterT w m) = CRef m
   type Ticket   (WL.WriterT w m) = Ticket m
   type ThreadId (WL.WriterT w m) = ThreadId m
@@ -626,13 +626,13 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
   yield              = lift yield
   threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
-  newEmptyCVar       = lift newEmptyCVar
-  newEmptyCVarN      = lift . newEmptyCVarN
-  readCVar           = lift . readCVar
-  putCVar v          = lift . putCVar v
-  tryPutCVar v       = lift . tryPutCVar v
-  takeCVar           = lift . takeCVar
-  tryTakeCVar        = lift . tryTakeCVar
+  newEmptyMVar       = lift newEmptyMVar
+  newEmptyMVarN      = lift . newEmptyMVarN
+  readMVar           = lift . readMVar
+  putMVar v          = lift . putMVar v
+  tryPutMVar v       = lift . tryPutMVar v
+  takeMVar           = lift . takeMVar
+  tryTakeMVar        = lift . tryTakeMVar
   newCRef            = lift . newCRef
   newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
@@ -652,7 +652,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
 
 instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   type STMLike  (WS.WriterT w m) = STMLike m
-  type CVar     (WS.WriterT w m) = CVar m
+  type MVar     (WS.WriterT w m) = MVar m
   type CRef     (WS.WriterT w m) = CRef m
   type Ticket   (WS.WriterT w m) = Ticket m
   type ThreadId (WS.WriterT w m) = ThreadId m
@@ -671,13 +671,13 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
   yield              = lift yield
   threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
-  newEmptyCVar       = lift newEmptyCVar
-  newEmptyCVarN      = lift . newEmptyCVarN
-  readCVar           = lift . readCVar
-  putCVar v          = lift . putCVar v
-  tryPutCVar v       = lift . tryPutCVar v
-  takeCVar           = lift . takeCVar
-  tryTakeCVar        = lift . tryTakeCVar
+  newEmptyMVar       = lift newEmptyMVar
+  newEmptyMVarN      = lift . newEmptyMVarN
+  readMVar           = lift . readMVar
+  putMVar v          = lift . putMVar v
+  tryPutMVar v       = lift . tryPutMVar v
+  takeMVar           = lift . takeMVar
+  tryTakeMVar        = lift . tryTakeMVar
   newCRef            = lift . newCRef
   newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
@@ -697,7 +697,7 @@ instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
 
 instance MonadConc m => MonadConc (SL.StateT s m) where
   type STMLike  (SL.StateT s m) = STMLike m
-  type CVar     (SL.StateT s m) = CVar m
+  type MVar     (SL.StateT s m) = MVar m
   type CRef     (SL.StateT s m) = CRef m
   type Ticket   (SL.StateT s m) = Ticket m
   type ThreadId (SL.StateT s m) = ThreadId m
@@ -716,13 +716,13 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
   yield              = lift yield
   threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
-  newEmptyCVar       = lift newEmptyCVar
-  newEmptyCVarN      = lift . newEmptyCVarN
-  readCVar           = lift . readCVar
-  putCVar v          = lift . putCVar v
-  tryPutCVar v       = lift . tryPutCVar v
-  takeCVar           = lift . takeCVar
-  tryTakeCVar        = lift . tryTakeCVar
+  newEmptyMVar       = lift newEmptyMVar
+  newEmptyMVarN      = lift . newEmptyMVarN
+  readMVar           = lift . readMVar
+  putMVar v          = lift . putMVar v
+  tryPutMVar v       = lift . tryPutMVar v
+  takeMVar           = lift . takeMVar
+  tryTakeMVar        = lift . tryTakeMVar
   newCRef            = lift . newCRef
   newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
@@ -742,7 +742,7 @@ instance MonadConc m => MonadConc (SL.StateT s m) where
 
 instance MonadConc m => MonadConc (SS.StateT s m) where
   type STMLike  (SS.StateT s m) = STMLike m
-  type CVar     (SS.StateT s m) = CVar m
+  type MVar     (SS.StateT s m) = MVar m
   type CRef     (SS.StateT s m) = CRef m
   type Ticket   (SS.StateT s m) = Ticket m
   type ThreadId (SS.StateT s m) = ThreadId m
@@ -761,13 +761,13 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
   yield              = lift yield
   threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
-  newEmptyCVar       = lift newEmptyCVar
-  newEmptyCVarN      = lift . newEmptyCVarN
-  readCVar           = lift . readCVar
-  putCVar v          = lift . putCVar v
-  tryPutCVar v       = lift . tryPutCVar v
-  takeCVar           = lift . takeCVar
-  tryTakeCVar        = lift . tryTakeCVar
+  newEmptyMVar       = lift newEmptyMVar
+  newEmptyMVarN      = lift . newEmptyMVarN
+  readMVar           = lift . readMVar
+  putMVar v          = lift . putMVar v
+  tryPutMVar v       = lift . tryPutMVar v
+  takeMVar           = lift . takeMVar
+  tryTakeMVar        = lift . tryTakeMVar
   newCRef            = lift . newCRef
   newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
@@ -787,7 +787,7 @@ instance MonadConc m => MonadConc (SS.StateT s m) where
 
 instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   type STMLike  (RL.RWST r w s m) = STMLike m
-  type CVar     (RL.RWST r w s m) = CVar m
+  type MVar     (RL.RWST r w s m) = MVar m
   type CRef     (RL.RWST r w s m) = CRef m
   type Ticket   (RL.RWST r w s m) = Ticket m
   type ThreadId (RL.RWST r w s m) = ThreadId m
@@ -806,13 +806,13 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
   yield              = lift yield
   threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
-  newEmptyCVar       = lift newEmptyCVar
-  newEmptyCVarN      = lift . newEmptyCVarN
-  readCVar           = lift . readCVar
-  putCVar v          = lift . putCVar v
-  tryPutCVar v       = lift . tryPutCVar v
-  takeCVar           = lift . takeCVar
-  tryTakeCVar        = lift . tryTakeCVar
+  newEmptyMVar       = lift newEmptyMVar
+  newEmptyMVarN      = lift . newEmptyMVarN
+  readMVar           = lift . readMVar
+  putMVar v          = lift . putMVar v
+  tryPutMVar v       = lift . tryPutMVar v
+  takeMVar           = lift . takeMVar
+  tryTakeMVar        = lift . tryTakeMVar
   newCRef            = lift . newCRef
   newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
@@ -832,7 +832,7 @@ instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
 
 instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   type STMLike  (RS.RWST r w s m) = STMLike m
-  type CVar     (RS.RWST r w s m) = CVar m
+  type MVar     (RS.RWST r w s m) = MVar m
   type CRef     (RS.RWST r w s m) = CRef m
   type Ticket   (RS.RWST r w s m) = Ticket m
   type ThreadId (RS.RWST r w s m) = ThreadId m
@@ -851,13 +851,13 @@ instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
   yield              = lift yield
   threadDelay        = lift . threadDelay
   throwTo t          = lift . throwTo t
-  newEmptyCVar       = lift newEmptyCVar
-  newEmptyCVarN      = lift . newEmptyCVarN
-  readCVar           = lift . readCVar
-  putCVar v          = lift . putCVar v
-  tryPutCVar v       = lift . tryPutCVar v
-  takeCVar           = lift . takeCVar
-  tryTakeCVar        = lift . tryTakeCVar
+  newEmptyMVar       = lift newEmptyMVar
+  newEmptyMVarN      = lift . newEmptyMVarN
+  readMVar           = lift . readMVar
+  putMVar v          = lift . putMVar v
+  tryPutMVar v       = lift . tryPutMVar v
+  takeMVar           = lift . takeMVar
+  tryTakeMVar        = lift . tryTakeMVar
   newCRef            = lift . newCRef
   newCRefN n         = lift . newCRefN n
   readCRef           = lift . readCRef
@@ -888,7 +888,7 @@ makeTransConc unstN = do
       [d|
         instance (MonadConc m) => MonadConc ($(pure t) m) where
           type STMLike  ($(pure t) m) = STMLike m
-          type CVar     ($(pure t) m) = CVar m
+          type MVar     ($(pure t) m) = MVar m
           type CRef     ($(pure t) m) = CRef m
           type Ticket   ($(pure t) m) = Ticket m
           type ThreadId ($(pure t) m) = ThreadId m
@@ -907,13 +907,13 @@ makeTransConc unstN = do
           yield              = lift yield
           threadDelay        = lift . threadDelay
           throwTo tid        = lift . throwTo tid
-          newEmptyCVar       = lift newEmptyCVar
-          newEmptyCVarN      = lift . newEmptyCVarN
-          readCVar           = lift . readCVar
-          putCVar v          = lift . putCVar v
-          tryPutCVar v       = lift . tryPutCVar v
-          takeCVar           = lift . takeCVar
-          tryTakeCVar        = lift . tryTakeCVar
+          newEmptyMVar       = lift newEmptyMVar
+          newEmptyMVarN      = lift . newEmptyMVarN
+          readMVar           = lift . readMVar
+          putMVar v          = lift . putMVar v
+          tryPutMVar v       = lift . tryPutMVar v
+          takeMVar           = lift . takeMVar
+          tryTakeMVar        = lift . tryTakeMVar
           newCRef            = lift . newCRef
           newCRefN n         = lift . newCRefN n
           readCRef           = lift . readCRef

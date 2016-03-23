@@ -25,7 +25,7 @@ tests =
     , testDejafu threadNoWait "no wait" $ gives' [Nothing, Just ()]
     ]
 
-  , testGroup "CVar" . hUnitTestToTests $ test
+  , testGroup "MVar" . hUnitTestToTests $ test
     [ testDejafu cvarLock "deadlock" $ gives [Left Deadlock, Right 0]
     , testDejafu cvarRace "race"     $ gives' [0,1]
     ]
@@ -51,18 +51,18 @@ tests =
 -- | Fork reports the good @ThreadId@.
 threadId1 :: MonadConc m => m Bool
 threadId1 = do
-  var <- newEmptyCVar
+  var <- newEmptyMVar
 
-  tid <- fork $ myThreadId >>= putCVar var
+  tid <- fork $ myThreadId >>= putMVar var
 
-  (tid ==) <$> readCVar var
+  (tid ==) <$> readMVar var
 
 -- | A child and parent thread have different @ThreadId@s.
 threadId2 :: MonadConc m => m Bool
 threadId2 = do
   tid <- spawn myThreadId
 
-  (/=) <$> myThreadId <*> readCVar tid
+  (/=) <$> myThreadId <*> readMVar tid
 
 -- | A parent thread doesn't wait for child threads before
 -- terminating.
@@ -75,33 +75,33 @@ threadNoWait = do
   readCRef x
 
 --------------------------------------------------------------------------------
--- @CVar@s
+-- @MVar@s
 
 -- | Deadlocks sometimes due to order of acquision of locks.
 cvarLock :: MonadConc m => m Int
 cvarLock = do
-  a <- newEmptyCVar
-  b <- newEmptyCVar
+  a <- newEmptyMVar
+  b <- newEmptyMVar
 
-  c <- newCVar 0
+  c <- newMVar 0
 
-  j1 <- spawn $ lock a >> lock b >> modifyCVar_ c (return . succ) >> unlock b >> unlock a
-  j2 <- spawn $ lock b >> lock a >> modifyCVar_ c (return . pred) >> unlock a >> unlock b
+  j1 <- spawn $ lock a >> lock b >> modifyMVar_ c (return . succ) >> unlock b >> unlock a
+  j2 <- spawn $ lock b >> lock a >> modifyMVar_ c (return . pred) >> unlock a >> unlock b
 
-  takeCVar j1
-  takeCVar j2
+  takeMVar j1
+  takeMVar j2
 
-  takeCVar c
+  takeMVar c
 
--- | When racing two @putCVar@s, one of them will win.
+-- | When racing two @putMVar@s, one of them will win.
 cvarRace :: MonadConc m => m Int
 cvarRace = do
-  x <- newEmptyCVar
+  x <- newEmptyMVar
 
-  void . fork $ putCVar x 0
-  void . fork $ putCVar x 1
+  void . fork $ putMVar x 0
+  void . fork $ putMVar x 1
 
-  readCVar x
+  readMVar x
 
 --------------------------------------------------------------------------------
 -- @CRef@s
@@ -116,8 +116,8 @@ crefRace = do
   j1 <- spawn $ writeCRef x 0
   j2 <- spawn $ writeCRef x 1
 
-  takeCVar j1
-  takeCVar j2
+  takeMVar j1
+  takeMVar j2
 
   readCRef x
 
@@ -137,27 +137,27 @@ stmAtomic = do
 -- | Cause a deadlock sometimes by killing a thread.
 threadKill :: MonadConc m => m ()
 threadKill = do
-  x <- newEmptyCVar
-  tid <- fork $ putCVar x ()
+  x <- newEmptyMVar
+  tid <- fork $ putMVar x ()
   killThread tid
-  readCVar x
+  readMVar x
 
 -- | Never deadlock by masking a thread.
 threadKillMask :: MonadConc m => m ()
 threadKillMask = do
-  x <- newEmptyCVar
-  y <- newEmptyCVar
-  tid <- fork . mask . const $ putCVar x () >> putCVar y ()
-  readCVar x
+  x <- newEmptyMVar
+  y <- newEmptyMVar
+  tid <- fork . mask . const $ putMVar x () >> putMVar y ()
+  readMVar x
   killThread tid
-  readCVar y
+  readMVar y
 
 -- | Sometimes deadlock by killing a thread.
 threadKillUmask :: MonadConc m => m ()
 threadKillUmask = do
-  x <- newEmptyCVar
-  y <- newEmptyCVar
-  tid <- fork . mask $ \umask -> putCVar x () >> umask (putCVar y ())
-  readCVar x
+  x <- newEmptyMVar
+  y <- newEmptyMVar
+  tid <- fork . mask $ \umask -> putMVar x () >> umask (putMVar y ())
+  readMVar x
   killThread tid
-  readCVar y
+  readMVar y

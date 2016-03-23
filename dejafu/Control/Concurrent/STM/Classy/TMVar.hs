@@ -1,4 +1,4 @@
--- | Transactional @CVar@s, for use with 'MonadSTM'.
+-- | Transactional @MVar@s, for use with 'MonadSTM'.
 module Control.Concurrent.STM.Classy.TMVar
   ( -- * @TMVar@s
     TMVar
@@ -20,9 +20,9 @@ import Control.Monad (liftM, when, unless)
 import Control.Monad.STM.Class
 import Data.Maybe (isJust, isNothing)
 
--- | A @TMVar@ is like an @MVar@ or a @CVar@, but using transactional
+-- | A @TMVar@ is like an @MVar@ or a @mVar@, but using transactional
 -- memory. As transactions are atomic, this makes dealing with
--- multiple @TMVar@s easier than wrangling multiple @CVar@s.
+-- multiple @TMVar@s easier than wrangling multiple @mVar@s.
 newtype TMVar m a = TMVar (TVar m (Maybe a))
 
 -- | Create a 'TMVar' containing the given value.
