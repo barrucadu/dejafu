@@ -20,19 +20,19 @@ import Data.Functor (void)
 -- * @TVar@s
 
 -- | Mutate the contents of a 'TVar'. This is non-strict.
-modifyTVar :: MonadSTM m => TVar m a -> (a -> a) -> m ()
+modifyTVar :: MonadSTM stm => TVar stm a -> (a -> a) -> stm ()
 modifyTVar ctvar f = do
   a <- readTVar ctvar
   writeTVar ctvar $ f a
 
 -- | Mutate the contents of a 'TVar' strictly.
-modifyTVar' :: MonadSTM m => TVar m a -> (a -> a) -> m ()
+modifyTVar' :: MonadSTM stm => TVar stm a -> (a -> a) -> stm ()
 modifyTVar' ctvar f = do
   a <- readTVar ctvar
   writeTVar ctvar $! f a
 
 -- | Swap the contents of a 'TVar', returning the old value.
-swapTVar :: MonadSTM m => TVar m a -> a -> m a
+swapTVar :: MonadSTM stm => TVar stm a -> a -> stm a
 swapTVar ctvar a = do
   old <- readTVar ctvar
   writeTVar ctvar a

@@ -17,13 +17,13 @@ module Control.Monad.STM.Class
 
 import Control.Exception (Exception)
 import Control.Monad (unless)
-import Control.Monad.Catch (MonadCatch, MonadThrow, throwM, catch)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
 import Language.Haskell.TH (DecsQ, Info(VarI), Name, Type(..), reify, varE)
 
 import qualified Control.Concurrent.STM as STM
+import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.RWS.Lazy as RL
 import qualified Control.Monad.RWS.Strict as RS
 import qualified Control.Monad.State.Lazy as SL
@@ -36,7 +36,7 @@ import qualified Control.Monad.Writer.Strict as WS
 -- This class does not provide any way to run transactions, rather
 -- each 'MonadConc' has an associated @MonadSTM@ from which it can
 -- atomically run a transaction.
-class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
+class Ca.MonadCatch stm => MonadSTM stm where
   {-# MINIMAL
         retry
       , orElse
@@ -48,24 +48,24 @@ class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
   -- | The mutable reference type. These behave like 'TVar's, in that
   -- they always contain a value and updates are non-blocking and
   -- synchronised.
-  type TVar m :: * -> *
+  type TVar stm :: * -> *
 
   -- | Retry execution of this transaction because it has seen values
   -- in @TVar@s that it shouldn't have. This will result in the
   -- thread running the transaction being blocked until any @TVar@s
   -- referenced in it have been mutated.
-  retry :: m a
+  retry :: stm a
 
   -- | Run the first transaction and, if it @retry@s, run the second
   -- instead. If the monad is an instance of
   -- 'Alternative'/'MonadPlus', 'orElse' should be the '(<|>)'/'mplus'
   -- function.
-  orElse :: m a -> m a -> m a
+  orElse :: stm a -> stm a -> stm a
 
   -- | Create a new @TVar@ containing the given value.
   --
   -- > newTVar = newTVarN ""
-  newTVar :: a -> m (TVar m a)
+  newTVar :: a -> stm (TVar stm a)
   newTVar = newTVarN ""
 
   -- | Create a new @TVar@ containing the given value, but it is
@@ -77,27 +77,27 @@ class (Applicative m, Monad m, MonadCatch m, MonadThrow m) => MonadSTM m where
   -- a numeric suffix, counting up from 1.
   --
   -- > newTVarN _ = newTVar
-  newTVarN :: String -> a -> m (TVar m a)
+  newTVarN :: String -> a -> stm (TVar stm a)
   newTVarN _ = newTVar
 
   -- | Return the current value stored in a @TVar@.
-  readTVar :: TVar m a -> m a
+  readTVar :: TVar stm a -> stm a
 
   -- | Write the supplied value into the @TVar@.
-  writeTVar :: TVar m a -> a -> m ()
+  writeTVar :: TVar stm a -> a -> stm ()
 
 -- | Check whether a condition is true and, if not, call @retry@.
-check :: MonadSTM m => Bool -> m ()
+check :: MonadSTM stm => Bool -> stm ()
 check b = unless b retry
 
 -- | Throw an exception. This aborts the transaction and propagates
 -- the exception.
-throwSTM :: (MonadSTM m, Exception e) => e -> m a
-throwSTM = throwM
+throwSTM :: (MonadSTM stm, Exception e) => e -> stm a
+throwSTM = Ca.throwM
 
 -- | Handling exceptions from 'throwSTM'.
-catchSTM :: (MonadSTM m, Exception e) => m a -> (e -> m a) -> m a
-catchSTM = Control.Monad.Catch.catch
+catchSTM :: (MonadSTM stm, Exception e) => stm a -> (e -> stm a) -> stm a
+catchSTM = Ca.catch
 
 instance MonadSTM STM.STM where
   type TVar STM.STM = STM.TVar
@@ -111,8 +111,8 @@ instance MonadSTM STM.STM where
 -------------------------------------------------------------------------------
 -- Transformer instances
 
-instance MonadSTM m => MonadSTM (ReaderT r m) where
-  type TVar (ReaderT r m) = TVar m
+instance MonadSTM stm => MonadSTM (ReaderT r stm) where
+  type TVar (ReaderT r stm) = TVar stm
 
   retry       = lift retry
   orElse      = liftedOrElse id
@@ -121,8 +121,8 @@ instance MonadSTM m => MonadSTM (ReaderT r m) where
   readTVar    = lift . readTVar
   writeTVar v = lift . writeTVar v
 
-instance (MonadSTM m, Monoid w) => MonadSTM (WL.WriterT w m) where
-  type TVar (WL.WriterT w m) = TVar m
+instance (MonadSTM stm, Monoid w) => MonadSTM (WL.WriterT w stm) where
+  type TVar (WL.WriterT w stm) = TVar stm
 
   retry       = lift retry
   orElse      = liftedOrElse fst
@@ -131,8 +131,8 @@ instance (MonadSTM m, Monoid w) => MonadSTM (WL.WriterT w m) where
   readTVar    = lift . readTVar
   writeTVar v = lift . writeTVar v
 
-instance (MonadSTM m, Monoid w) => MonadSTM (WS.WriterT w m) where
-  type TVar (WS.WriterT w m) = TVar m
+instance (MonadSTM stm, Monoid w) => MonadSTM (WS.WriterT w stm) where
+  type TVar (WS.WriterT w stm) = TVar stm
 
   retry       = lift retry
   orElse      = liftedOrElse fst
@@ -141,8 +141,8 @@ instance (MonadSTM m, Monoid w) => MonadSTM (WS.WriterT w m) where
   readTVar    = lift . readTVar
   writeTVar v = lift . writeTVar v
 
-instance MonadSTM m => MonadSTM (SL.StateT s m) where
-  type TVar (SL.StateT s m) = TVar m
+instance MonadSTM stm => MonadSTM (SL.StateT s stm) where
+  type TVar (SL.StateT s stm) = TVar stm
 
   retry       = lift retry
   orElse      = liftedOrElse fst
@@ -151,8 +151,8 @@ instance MonadSTM m => MonadSTM (SL.StateT s m) where
   readTVar    = lift . readTVar
   writeTVar v = lift . writeTVar v
 
-instance MonadSTM m => MonadSTM (SS.StateT s m) where
-  type TVar (SS.StateT s m) = TVar m
+instance MonadSTM stm => MonadSTM (SS.StateT s stm) where
+  type TVar (SS.StateT s stm) = TVar stm
 
   retry       = lift retry
   orElse      = liftedOrElse fst
@@ -161,8 +161,8 @@ instance MonadSTM m => MonadSTM (SS.StateT s m) where
   readTVar    = lift . readTVar
   writeTVar v = lift . writeTVar v
 
-instance (MonadSTM m, Monoid w) => MonadSTM (RL.RWST r w s m) where
-  type TVar (RL.RWST r w s m) = TVar m
+instance (MonadSTM stm, Monoid w) => MonadSTM (RL.RWST r w s stm) where
+  type TVar (RL.RWST r w s stm) = TVar stm
 
   retry       = lift retry
   orElse      = liftedOrElse (\(a,_,_) -> a)
@@ -171,8 +171,8 @@ instance (MonadSTM m, Monoid w) => MonadSTM (RL.RWST r w s m) where
   readTVar    = lift . readTVar
   writeTVar v = lift . writeTVar v
 
-instance (MonadSTM m, Monoid w) => MonadSTM (RS.RWST r w s m) where
-  type TVar (RS.RWST r w s m) = TVar m
+instance (MonadSTM stm, Monoid w) => MonadSTM (RS.RWST r w s stm) where
+  type TVar (RS.RWST r w s stm) = TVar stm
 
   retry       = lift retry
   orElse      = liftedOrElse (\(a,_,_) -> a)
@@ -192,8 +192,8 @@ makeTransSTM unstN = do
   case unstI of
     VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ _ ->
       [d|
-        instance (MonadSTM m, MonadTransControl $(pure t)) => MonadSTM ($(pure t) m) where
-          type TVar ($(pure t) m) = TVar m
+        instance (MonadSTM stm, MonadTransControl $(pure t)) => MonadSTM ($(pure t) stm) where
+          type TVar ($(pure t) stm) = TVar stm
 
           retry       = lift retry
           orElse      = liftedOrElse $(varE unstN)
@@ -206,9 +206,9 @@ makeTransSTM unstN = do
 
 -- | Given a function to remove the transformer-specific state, lift
 -- an @orElse@ invocation.
-liftedOrElse :: (MonadTransControl t, MonadSTM m)
+liftedOrElse :: (MonadTransControl t, MonadSTM stm)
   => (forall x. StT t x -> x)
-  -> t m a -> t m a -> t m a
+  -> t stm a -> t stm a -> t stm a
 liftedOrElse unst ma mb = liftWith $ \run ->
   let ma' = unst <$> run ma
       mb' = unst <$> run mb
