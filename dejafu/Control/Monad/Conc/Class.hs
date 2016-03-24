@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP              #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes       #-}
 {-# LANGUAGE TemplateHaskell  #-}
@@ -60,8 +61,9 @@ import qualified Data.Atomics as IO
 import qualified Data.IORef as IO
 
 -- for the transformer instances
-import Control.Monad.Trans (lift)
 import Control.Monad.Reader (ReaderT)
+import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Identity (IdentityT)
 import qualified Control.Monad.RWS.Lazy as RL
 import qualified Control.Monad.RWS.Strict as RS
 import qualified Control.Monad.State.Lazy as SL
@@ -569,327 +571,67 @@ instance MonadConc IO where
 -------------------------------------------------------------------------------
 -- Transformer instances
 
-instance MonadConc m => MonadConc (ReaderT r m) where
-  type STM      (ReaderT r m) = STM m
-  type MVar     (ReaderT r m) = MVar m
-  type CRef     (ReaderT r m) = CRef m
-  type Ticket   (ReaderT r m) = Ticket m
-  type ThreadId (ReaderT r m) = ThreadId m
+#define INSTANCE(T,C,F)                                          \
+instance C => MonadConc (T m) where                             { \
+  type STM      (T m) = STM m                                  ; \
+  type MVar     (T m) = MVar m                                 ; \
+  type CRef     (T m) = CRef m                                 ; \
+  type Ticket   (T m) = Ticket m                               ; \
+  type ThreadId (T m) = ThreadId m                             ; \
+                                                                 \
+  fork   = liftedF F fork                                      ; \
+  forkOn = liftedF F . forkOn                                  ; \
+                                                                 \
+  forkWithUnmask        = liftedFork F forkWithUnmask          ; \
+  forkWithUnmaskN   n   = liftedFork F (forkWithUnmaskN   n  ) ; \
+  forkOnWithUnmask    i = liftedFork F (forkOnWithUnmask    i) ; \
+  forkOnWithUnmaskN n i = liftedFork F (forkOnWithUnmaskN n i) ; \
+                                                                 \
+  getNumCapabilities = lift getNumCapabilities                 ; \
+  setNumCapabilities = lift . setNumCapabilities               ; \
+  myThreadId         = lift myThreadId                         ; \
+  yield              = lift yield                              ; \
+  threadDelay        = lift . threadDelay                      ; \
+  throwTo t          = lift . throwTo t                        ; \
+  newEmptyMVar       = lift newEmptyMVar                       ; \
+  newEmptyMVarN      = lift . newEmptyMVarN                    ; \
+  readMVar           = lift . readMVar                         ; \
+  putMVar v          = lift . putMVar v                        ; \
+  tryPutMVar v       = lift . tryPutMVar v                     ; \
+  takeMVar           = lift . takeMVar                         ; \
+  tryTakeMVar        = lift . tryTakeMVar                      ; \
+  newCRef            = lift . newCRef                          ; \
+  newCRefN n         = lift . newCRefN n                       ; \
+  readCRef           = lift . readCRef                         ; \
+  modifyCRef r       = lift . modifyCRef r                     ; \
+  writeCRef r        = lift . writeCRef r                      ; \
+  atomicWriteCRef r  = lift . atomicWriteCRef r                ; \
+  readForCAS         = lift . readForCAS                       ; \
+  peekTicket         = lift . peekTicket                       ; \
+  casCRef r t        = lift . casCRef r t                      ; \
+  modifyCRefCAS r    = lift . modifyCRefCAS r                  ; \
+  atomically         = lift . atomically                       ; \
+  readTVarConc       = lift . readTVarConc                     ; \
+                                                                 \
+  _concKnowsAbout = lift . _concKnowsAbout                     ; \
+  _concForgets    = lift . _concForgets                        ; \
+  _concAllKnown   = lift _concAllKnown                         ; \
+  _concMessage    = lift . _concMessage                        }
 
-  fork   = liftedF id fork
-  forkOn = liftedF id . forkOn
+INSTANCE(ReaderT r, MonadConc m, id)
 
-  forkWithUnmask        = liftedFork id forkWithUnmask
-  forkWithUnmaskN   n   = liftedFork id (forkWithUnmaskN   n  )
-  forkOnWithUnmask    i = liftedFork id (forkOnWithUnmask    i)
-  forkOnWithUnmaskN n i = liftedFork id (forkOnWithUnmaskN n i)
+INSTANCE(IdentityT, MonadConc m, id)
 
-  getNumCapabilities = lift getNumCapabilities
-  setNumCapabilities = lift . setNumCapabilities
-  myThreadId         = lift myThreadId
-  yield              = lift yield
-  threadDelay        = lift . threadDelay
-  throwTo t          = lift . throwTo t
-  newEmptyMVar       = lift newEmptyMVar
-  newEmptyMVarN      = lift . newEmptyMVarN
-  readMVar           = lift . readMVar
-  putMVar v          = lift . putMVar v
-  tryPutMVar v       = lift . tryPutMVar v
-  takeMVar           = lift . takeMVar
-  tryTakeMVar        = lift . tryTakeMVar
-  newCRef            = lift . newCRef
-  newCRefN n         = lift . newCRefN n
-  readCRef           = lift . readCRef
-  modifyCRef r       = lift . modifyCRef r
-  writeCRef r        = lift . writeCRef r
-  atomicWriteCRef r  = lift . atomicWriteCRef r
-  readForCAS         = lift . readForCAS
-  peekTicket         = lift . peekTicket
-  casCRef r t        = lift . casCRef r t
-  modifyCRefCAS r    = lift . modifyCRefCAS r
-  atomically         = lift . atomically
-  readTVarConc       = lift . readTVarConc
+INSTANCE(WL.WriterT w, (MonadConc m, Monoid w), fst)
+INSTANCE(WS.WriterT w, (MonadConc m, Monoid w), fst)
 
-  _concKnowsAbout = lift . _concKnowsAbout
-  _concForgets    = lift . _concForgets
-  _concAllKnown   = lift _concAllKnown
-  _concMessage    = lift . _concMessage
+INSTANCE(SL.StateT s, MonadConc m, fst)
+INSTANCE(SS.StateT s, MonadConc m, fst)
 
-instance (MonadConc m, Monoid w) => MonadConc (WL.WriterT w m) where
-  type STM      (WL.WriterT w m) = STM m
-  type MVar     (WL.WriterT w m) = MVar m
-  type CRef     (WL.WriterT w m) = CRef m
-  type Ticket   (WL.WriterT w m) = Ticket m
-  type ThreadId (WL.WriterT w m) = ThreadId m
+INSTANCE(RL.RWST r w s, (MonadConc m, Monoid w), (\(a,_,_) -> a))
+INSTANCE(RS.RWST r w s, (MonadConc m, Monoid w), (\(a,_,_) -> a))
 
-  fork   = liftedF fst fork
-  forkOn = liftedF fst . forkOn
-
-  forkWithUnmask        = liftedFork fst forkWithUnmask
-  forkWithUnmaskN   n   = liftedFork fst (forkWithUnmaskN   n  )
-  forkOnWithUnmask    i = liftedFork fst (forkOnWithUnmask    i)
-  forkOnWithUnmaskN n i = liftedFork fst (forkOnWithUnmaskN n i)
-
-  getNumCapabilities = lift getNumCapabilities
-  setNumCapabilities = lift . setNumCapabilities
-  myThreadId         = lift myThreadId
-  yield              = lift yield
-  threadDelay        = lift . threadDelay
-  throwTo t          = lift . throwTo t
-  newEmptyMVar       = lift newEmptyMVar
-  newEmptyMVarN      = lift . newEmptyMVarN
-  readMVar           = lift . readMVar
-  putMVar v          = lift . putMVar v
-  tryPutMVar v       = lift . tryPutMVar v
-  takeMVar           = lift . takeMVar
-  tryTakeMVar        = lift . tryTakeMVar
-  newCRef            = lift . newCRef
-  newCRefN n         = lift . newCRefN n
-  readCRef           = lift . readCRef
-  modifyCRef r       = lift . modifyCRef r
-  writeCRef r        = lift . writeCRef r
-  atomicWriteCRef r  = lift . atomicWriteCRef r
-  readForCAS         = lift . readForCAS
-  peekTicket         = lift . peekTicket
-  casCRef r t        = lift . casCRef r t
-  modifyCRefCAS r    = lift . modifyCRefCAS r
-  atomically         = lift . atomically
-  readTVarConc       = lift . readTVarConc
-
-  _concKnowsAbout = lift . _concKnowsAbout
-  _concForgets    = lift . _concForgets
-  _concAllKnown   = lift _concAllKnown
-  _concMessage    = lift . _concMessage
-
-instance (MonadConc m, Monoid w) => MonadConc (WS.WriterT w m) where
-  type STM      (WS.WriterT w m) = STM m
-  type MVar     (WS.WriterT w m) = MVar m
-  type CRef     (WS.WriterT w m) = CRef m
-  type Ticket   (WS.WriterT w m) = Ticket m
-  type ThreadId (WS.WriterT w m) = ThreadId m
-
-  fork   = liftedF fst fork
-  forkOn = liftedF fst . forkOn
-
-  forkWithUnmask        = liftedFork fst forkWithUnmask
-  forkWithUnmaskN   n   = liftedFork fst (forkWithUnmaskN   n  )
-  forkOnWithUnmask    i = liftedFork fst (forkOnWithUnmask    i)
-  forkOnWithUnmaskN n i = liftedFork fst (forkOnWithUnmaskN n i)
-
-  getNumCapabilities = lift getNumCapabilities
-  setNumCapabilities = lift . setNumCapabilities
-  myThreadId         = lift myThreadId
-  yield              = lift yield
-  threadDelay        = lift . threadDelay
-  throwTo t          = lift . throwTo t
-  newEmptyMVar       = lift newEmptyMVar
-  newEmptyMVarN      = lift . newEmptyMVarN
-  readMVar           = lift . readMVar
-  putMVar v          = lift . putMVar v
-  tryPutMVar v       = lift . tryPutMVar v
-  takeMVar           = lift . takeMVar
-  tryTakeMVar        = lift . tryTakeMVar
-  newCRef            = lift . newCRef
-  newCRefN n         = lift . newCRefN n
-  readCRef           = lift . readCRef
-  modifyCRef r       = lift . modifyCRef r
-  writeCRef r        = lift . writeCRef r
-  atomicWriteCRef r  = lift . atomicWriteCRef r
-  readForCAS         = lift . readForCAS
-  peekTicket         = lift . peekTicket
-  casCRef r t        = lift . casCRef r t
-  modifyCRefCAS r    = lift . modifyCRefCAS r
-  atomically         = lift . atomically
-  readTVarConc       = lift . readTVarConc
-
-  _concKnowsAbout = lift . _concKnowsAbout
-  _concForgets    = lift . _concForgets
-  _concAllKnown   = lift _concAllKnown
-  _concMessage    = lift . _concMessage
-
-instance MonadConc m => MonadConc (SL.StateT s m) where
-  type STM      (SL.StateT s m) = STM m
-  type MVar     (SL.StateT s m) = MVar m
-  type CRef     (SL.StateT s m) = CRef m
-  type Ticket   (SL.StateT s m) = Ticket m
-  type ThreadId (SL.StateT s m) = ThreadId m
-
-  fork   = liftedF fst fork
-  forkOn = liftedF fst . forkOn
-
-  forkWithUnmask        = liftedFork fst forkWithUnmask
-  forkWithUnmaskN   n   = liftedFork fst (forkWithUnmaskN   n  )
-  forkOnWithUnmask    i = liftedFork fst (forkOnWithUnmask    i)
-  forkOnWithUnmaskN n i = liftedFork fst (forkOnWithUnmaskN n i)
-
-  getNumCapabilities = lift getNumCapabilities
-  setNumCapabilities = lift . setNumCapabilities
-  myThreadId         = lift myThreadId
-  yield              = lift yield
-  threadDelay        = lift . threadDelay
-  throwTo t          = lift . throwTo t
-  newEmptyMVar       = lift newEmptyMVar
-  newEmptyMVarN      = lift . newEmptyMVarN
-  readMVar           = lift . readMVar
-  putMVar v          = lift . putMVar v
-  tryPutMVar v       = lift . tryPutMVar v
-  takeMVar           = lift . takeMVar
-  tryTakeMVar        = lift . tryTakeMVar
-  newCRef            = lift . newCRef
-  newCRefN n         = lift . newCRefN n
-  readCRef           = lift . readCRef
-  modifyCRef r       = lift . modifyCRef r
-  writeCRef r        = lift . writeCRef r
-  atomicWriteCRef r  = lift . atomicWriteCRef r
-  readForCAS         = lift . readForCAS
-  peekTicket         = lift . peekTicket
-  casCRef r t        = lift . casCRef r t
-  modifyCRefCAS r    = lift . modifyCRefCAS r
-  atomically         = lift . atomically
-  readTVarConc       = lift . readTVarConc
-
-  _concKnowsAbout = lift . _concKnowsAbout
-  _concForgets    = lift . _concForgets
-  _concAllKnown   = lift _concAllKnown
-  _concMessage    = lift . _concMessage
-
-instance MonadConc m => MonadConc (SS.StateT s m) where
-  type STM      (SS.StateT s m) = STM m
-  type MVar     (SS.StateT s m) = MVar m
-  type CRef     (SS.StateT s m) = CRef m
-  type Ticket   (SS.StateT s m) = Ticket m
-  type ThreadId (SS.StateT s m) = ThreadId m
-
-  fork   = liftedF fst fork
-  forkOn = liftedF fst . forkOn
-
-  forkWithUnmask        = liftedFork fst forkWithUnmask
-  forkWithUnmaskN   n   = liftedFork fst (forkWithUnmaskN   n  )
-  forkOnWithUnmask    i = liftedFork fst (forkOnWithUnmask    i)
-  forkOnWithUnmaskN n i = liftedFork fst (forkOnWithUnmaskN n i)
-
-  getNumCapabilities = lift getNumCapabilities
-  setNumCapabilities = lift . setNumCapabilities
-  myThreadId         = lift myThreadId
-  yield              = lift yield
-  threadDelay        = lift . threadDelay
-  throwTo t          = lift . throwTo t
-  newEmptyMVar       = lift newEmptyMVar
-  newEmptyMVarN      = lift . newEmptyMVarN
-  readMVar           = lift . readMVar
-  putMVar v          = lift . putMVar v
-  tryPutMVar v       = lift . tryPutMVar v
-  takeMVar           = lift . takeMVar
-  tryTakeMVar        = lift . tryTakeMVar
-  newCRef            = lift . newCRef
-  newCRefN n         = lift . newCRefN n
-  readCRef           = lift . readCRef
-  modifyCRef r       = lift . modifyCRef r
-  writeCRef r        = lift . writeCRef r
-  atomicWriteCRef r  = lift . atomicWriteCRef r
-  readForCAS         = lift . readForCAS
-  peekTicket         = lift . peekTicket
-  casCRef r t        = lift . casCRef r t
-  modifyCRefCAS r    = lift . modifyCRefCAS r
-  atomically         = lift . atomically
-  readTVarConc       = lift . readTVarConc
-
-  _concKnowsAbout = lift . _concKnowsAbout
-  _concForgets    = lift . _concForgets
-  _concAllKnown   = lift _concAllKnown
-  _concMessage    = lift . _concMessage
-
-instance (MonadConc m, Monoid w) => MonadConc (RL.RWST r w s m) where
-  type STM      (RL.RWST r w s m) = STM m
-  type MVar     (RL.RWST r w s m) = MVar m
-  type CRef     (RL.RWST r w s m) = CRef m
-  type Ticket   (RL.RWST r w s m) = Ticket m
-  type ThreadId (RL.RWST r w s m) = ThreadId m
-
-  fork   = liftedF (\(a,_,_) -> a) fork
-  forkOn = liftedF (\(a,_,_) -> a) . forkOn
-
-  forkWithUnmask        = liftedFork (\(a,_,_) -> a) forkWithUnmask
-  forkWithUnmaskN   n   = liftedFork (\(a,_,_) -> a) (forkWithUnmaskN   n  )
-  forkOnWithUnmask    i = liftedFork (\(a,_,_) -> a) (forkOnWithUnmask    i)
-  forkOnWithUnmaskN n i = liftedFork (\(a,_,_) -> a) (forkOnWithUnmaskN n i)
-
-  getNumCapabilities = lift getNumCapabilities
-  setNumCapabilities = lift . setNumCapabilities
-  myThreadId         = lift myThreadId
-  yield              = lift yield
-  threadDelay        = lift . threadDelay
-  throwTo t          = lift . throwTo t
-  newEmptyMVar       = lift newEmptyMVar
-  newEmptyMVarN      = lift . newEmptyMVarN
-  readMVar           = lift . readMVar
-  putMVar v          = lift . putMVar v
-  tryPutMVar v       = lift . tryPutMVar v
-  takeMVar           = lift . takeMVar
-  tryTakeMVar        = lift . tryTakeMVar
-  newCRef            = lift . newCRef
-  newCRefN n         = lift . newCRefN n
-  readCRef           = lift . readCRef
-  modifyCRef r       = lift . modifyCRef r
-  writeCRef r        = lift . writeCRef r
-  atomicWriteCRef r  = lift . atomicWriteCRef r
-  readForCAS         = lift . readForCAS
-  peekTicket         = lift . peekTicket
-  casCRef r t        = lift . casCRef r t
-  modifyCRefCAS r    = lift . modifyCRefCAS r
-  atomically         = lift . atomically
-  readTVarConc       = lift . readTVarConc
-
-  _concKnowsAbout = lift . _concKnowsAbout
-  _concForgets    = lift . _concForgets
-  _concAllKnown   = lift _concAllKnown
-  _concMessage    = lift . _concMessage
-
-instance (MonadConc m, Monoid w) => MonadConc (RS.RWST r w s m) where
-  type STM      (RS.RWST r w s m) = STM m
-  type MVar     (RS.RWST r w s m) = MVar m
-  type CRef     (RS.RWST r w s m) = CRef m
-  type Ticket   (RS.RWST r w s m) = Ticket m
-  type ThreadId (RS.RWST r w s m) = ThreadId m
-
-  fork   = liftedF (\(a,_,_) -> a) fork
-  forkOn = liftedF (\(a,_,_) -> a) . forkOn
-
-  forkWithUnmask        = liftedFork (\(a,_,_) -> a) forkWithUnmask
-  forkWithUnmaskN   n   = liftedFork (\(a,_,_) -> a) (forkWithUnmaskN   n  )
-  forkOnWithUnmask    i = liftedFork (\(a,_,_) -> a) (forkOnWithUnmask    i)
-  forkOnWithUnmaskN n i = liftedFork (\(a,_,_) -> a) (forkOnWithUnmaskN n i)
-
-  getNumCapabilities = lift getNumCapabilities
-  setNumCapabilities = lift . setNumCapabilities
-  myThreadId         = lift myThreadId
-  yield              = lift yield
-  threadDelay        = lift . threadDelay
-  throwTo t          = lift . throwTo t
-  newEmptyMVar       = lift newEmptyMVar
-  newEmptyMVarN      = lift . newEmptyMVarN
-  readMVar           = lift . readMVar
-  putMVar v          = lift . putMVar v
-  tryPutMVar v       = lift . tryPutMVar v
-  takeMVar           = lift . takeMVar
-  tryTakeMVar        = lift . tryTakeMVar
-  newCRef            = lift . newCRef
-  newCRefN n         = lift . newCRefN n
-  readCRef           = lift . readCRef
-  modifyCRef r       = lift . modifyCRef r
-  writeCRef r        = lift . writeCRef r
-  atomicWriteCRef r  = lift . atomicWriteCRef r
-  readForCAS         = lift . readForCAS
-  peekTicket         = lift . peekTicket
-  casCRef r t        = lift . casCRef r t
-  modifyCRefCAS r    = lift . modifyCRefCAS r
-  atomically         = lift . atomically
-  readTVarConc       = lift . readTVarConc
-
-  _concKnowsAbout = lift . _concKnowsAbout
-  _concForgets    = lift . _concForgets
-  _concAllKnown   = lift _concAllKnown
-  _concMessage    = lift . _concMessage
+#undef INSTANC
 
 -------------------------------------------------------------------------------
 

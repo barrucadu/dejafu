@@ -1,4 +1,5 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP             #-}
+{-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies    #-}
 
@@ -20,6 +21,7 @@ import Control.Monad (unless)
 import Control.Monad.Reader (ReaderT)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
+import Control.Monad.Trans.Identity (IdentityT)
 import Language.Haskell.TH (DecsQ, Info(VarI), Name, Type(..), reify, varE)
 
 import qualified Control.Concurrent.STM as STM
@@ -111,75 +113,31 @@ instance MonadSTM STM.STM where
 -------------------------------------------------------------------------------
 -- Transformer instances
 
-instance MonadSTM stm => MonadSTM (ReaderT r stm) where
-  type TVar (ReaderT r stm) = TVar stm
+#define INSTANCE(T,C,F)                                  \
+instance C => MonadSTM (T stm) where { \
+  type TVar (T stm) = TVar stm      ; \
+                                      \
+  retry       = lift retry          ; \
+  orElse      = liftedOrElse F      ; \
+  newTVar     = lift . newTVar      ; \
+  newTVarN n  = lift . newTVarN n   ; \
+  readTVar    = lift . readTVar     ; \
+  writeTVar v = lift . writeTVar v  }
 
-  retry       = lift retry
-  orElse      = liftedOrElse id
-  newTVar     = lift . newTVar
-  newTVarN n  = lift . newTVarN n
-  readTVar    = lift . readTVar
-  writeTVar v = lift . writeTVar v
+INSTANCE(ReaderT r, MonadSTM stm, id)
 
-instance (MonadSTM stm, Monoid w) => MonadSTM (WL.WriterT w stm) where
-  type TVar (WL.WriterT w stm) = TVar stm
+INSTANCE(IdentityT, MonadSTM stm, id)
 
-  retry       = lift retry
-  orElse      = liftedOrElse fst
-  newTVar     = lift . newTVar
-  newTVarN n  = lift . newTVarN n
-  readTVar    = lift . readTVar
-  writeTVar v = lift . writeTVar v
+INSTANCE(WL.WriterT w, (MonadSTM stm, Monoid w), fst)
+INSTANCE(WS.WriterT w, (MonadSTM stm, Monoid w), fst)
 
-instance (MonadSTM stm, Monoid w) => MonadSTM (WS.WriterT w stm) where
-  type TVar (WS.WriterT w stm) = TVar stm
+INSTANCE(SL.StateT s, MonadSTM stm, fst)
+INSTANCE(SS.StateT s, MonadSTM stm, fst)
 
-  retry       = lift retry
-  orElse      = liftedOrElse fst
-  newTVar     = lift . newTVar
-  newTVarN n  = lift . newTVarN n
-  readTVar    = lift . readTVar
-  writeTVar v = lift . writeTVar v
+INSTANCE(RL.RWST r w s, (MonadSTM stm, Monoid w), (\(a,_,_) -> a))
+INSTANCE(RS.RWST r w s, (MonadSTM stm, Monoid w), (\(a,_,_) -> a))
 
-instance MonadSTM stm => MonadSTM (SL.StateT s stm) where
-  type TVar (SL.StateT s stm) = TVar stm
-
-  retry       = lift retry
-  orElse      = liftedOrElse fst
-  newTVar     = lift . newTVar
-  newTVarN n  = lift . newTVarN n
-  readTVar    = lift . readTVar
-  writeTVar v = lift . writeTVar v
-
-instance MonadSTM stm => MonadSTM (SS.StateT s stm) where
-  type TVar (SS.StateT s stm) = TVar stm
-
-  retry       = lift retry
-  orElse      = liftedOrElse fst
-  newTVar     = lift . newTVar
-  newTVarN n  = lift . newTVarN n
-  readTVar    = lift . readTVar
-  writeTVar v = lift . writeTVar v
-
-instance (MonadSTM stm, Monoid w) => MonadSTM (RL.RWST r w s stm) where
-  type TVar (RL.RWST r w s stm) = TVar stm
-
-  retry       = lift retry
-  orElse      = liftedOrElse (\(a,_,_) -> a)
-  newTVar     = lift . newTVar
-  newTVarN n  = lift . newTVarN n
-  readTVar    = lift . readTVar
-  writeTVar v = lift . writeTVar v
-
-instance (MonadSTM stm, Monoid w) => MonadSTM (RS.RWST r w s stm) where
-  type TVar (RS.RWST r w s stm) = TVar stm
-
-  retry       = lift retry
-  orElse      = liftedOrElse (\(a,_,_) -> a)
-  newTVar     = lift . newTVar
-  newTVarN n  = lift . newTVarN n
-  readTVar    = lift . readTVar
-  writeTVar v = lift . writeTVar v
+#undef INSTANC
 
 -------------------------------------------------------------------------------
 
