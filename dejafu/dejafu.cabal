@@ -83,10 +83,8 @@ library
 
                      , Control.Concurrent.Classy
                      , Control.Concurrent.Classy.Chan
-                     , Control.Concurrent.Classy.Chan.Strict
                      , Control.Concurrent.Classy.CRef
                      , Control.Concurrent.Classy.MVar
-                     , Control.Concurrent.Classy.MVar.Strict
                      , Control.Concurrent.Classy.QSem
                      , Control.Concurrent.Classy.QSemN
                      , Control.Concurrent.Classy.STM
