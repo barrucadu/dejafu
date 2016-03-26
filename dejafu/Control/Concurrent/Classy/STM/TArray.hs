@@ -19,21 +19,18 @@ import Control.Monad.STM.Class
 newtype TArray stm i e = TArray (Array i (TVar stm e))
 
 instance MonadSTM stm => MArray (TArray stm) e stm where
-    getBounds (TArray a) = pure (bounds a)
+  getBounds (TArray a) = pure (bounds a)
 
-    newArray b e = do
-        a <- rep (rangeSize b) (newTVar e)
-        pure $ TArray (listArray b a)
+  newArray b e = do
+    a <- rep (rangeSize b) (newTVar e)
+    pure $ TArray (listArray b a)
 
-    newArray_ b = do
-        a <- rep (rangeSize b) (newTVar arrEleBottom)
-        pure $ TArray (listArray b a)
+  newArray_ b = newArray b arrEleBottom
 
-    unsafeRead (TArray a) i = readTVar $ unsafeAt a i
+  unsafeRead  (TArray a) = readTVar  . unsafeAt a
+  unsafeWrite (TArray a) = writeTVar . unsafeAt a
 
-    unsafeWrite (TArray a) i e = writeTVar (unsafeAt a i) e
-
-    getNumElements (TArray a) = pure (numElements a)
+  getNumElements (TArray a) = pure (numElements a)
 
 -- | Like 'replicateM' but uses an accumulator to prevent stack overflows.
 -- Unlike 'replicateM' the returned list is in reversed order.  This
