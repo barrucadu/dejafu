@@ -115,7 +115,7 @@ crefWrite = do
 crefModify :: MonadConc m => m Bool
 crefModify = do
   ref <- newCRef (5::Int)
-  modifyCRef ref (\i -> (i+1, ()))
+  atomicModifyCRef ref (\i -> (i+1, ()))
   (6==) <$> readCRef ref
 
 -- | A @Ticket@ contains the value as of when it was created.

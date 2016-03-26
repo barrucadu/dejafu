@@ -146,8 +146,8 @@ module Test.DejaFu
   -- writes to @CRef@s are /committed/, which makes a write visible to
   -- all threads rather than just the one which performed the
   -- write. Only 'writeCRef' is broken up into separate write and
-  -- commit steps, 'modifyCRef' is still atomic and imposes a memory
-  -- barrier.
+  -- commit steps, 'atomicModifyCRef' is still atomic and imposes a
+  -- memory barrier.
 
   , MemType(..)
   , defaultMemType

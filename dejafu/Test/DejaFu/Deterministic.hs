@@ -125,8 +125,8 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
   writeCRef ref      a = toConc (\c -> AWriteRef ref a (c ()))
   casCRef   ref tick a = toConc (ACasRef ref tick a)
 
-  modifyCRef    ref f = toConc (AModRef    ref f)
-  modifyCRefCAS ref f = toConc (AModRefCas ref f)
+  atomicModifyCRef ref f = toConc (AModRef    ref f)
+  modifyCRefCAS    ref f = toConc (AModRefCas ref f)
 
   -- ----------
 

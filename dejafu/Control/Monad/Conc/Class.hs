@@ -99,7 +99,7 @@ class ( Applicative m, Monad m
       , takeMVar
       , tryTakeMVar
       , (newCRef | newCRefN)
-      , modifyCRef
+      , atomicModifyCRef
       , writeCRef
       , readForCAS
       , peekTicket
@@ -120,7 +120,7 @@ class ( Applicative m, Monad m
 
   -- | The mutable non-blocking reference type. These may suffer from
   -- relaxed memory effects if functions outside the set @newCRef@,
-  -- @readCRef@, @modifyCRef@, and @atomicWriteCRef@ are used.
+  -- @readCRef@, @atomicModifyCRef@, and @atomicWriteCRef@ are used.
   type CRef m :: * -> *
 
   -- | When performing compare-and-swap operations on @CRef@s, a
@@ -272,18 +272,18 @@ class ( Applicative m, Monad m
 
   -- | Atomically modify the value stored in a reference. This imposes
   -- a full memory barrier.
-  modifyCRef :: CRef m a -> (a -> (a, b)) -> m b
+  atomicModifyCRef :: CRef m a -> (a -> (a, b)) -> m b
 
   -- | Write a new value into an @CRef@, without imposing a memory
   -- barrier. This means that relaxed memory effects can be observed.
   writeCRef :: CRef m a -> a -> m ()
 
   -- | Replace the value stored in a reference, with the
-  -- barrier-to-reordering property that 'modifyCRef' has.
+  -- barrier-to-reordering property that 'atomicModifyCRef' has.
   --
-  -- > atomicWriteCRef r a = modifyCRef r $ const (a, ())
+  -- > atomicWriteCRef r a = atomicModifyCRef r $ const (a, ())
   atomicWriteCRef :: CRef m a -> a -> m ()
-  atomicWriteCRef r a = modifyCRef r $ const (a, ())
+  atomicWriteCRef r a = atomicModifyCRef r $ const (a, ())
 
   -- | Read the current value stored in a reference, returning a
   -- @Ticket@, for use in future compare-and-swap operations.
@@ -303,7 +303,7 @@ class ( Applicative m, Monad m
   -- This is strict in the \"new\" value argument.
   casCRef :: CRef m a -> Ticket m a -> a -> m (Bool, Ticket m a)
 
-  -- | A replacement for 'modifyCRef' using a compare-and-swap.
+  -- | A replacement for 'atomicModifyCRef' using a compare-and-swap.
   --
   -- This is strict in the \"new\" value argument.
   modifyCRefCAS :: CRef m a -> (a -> (a, b)) -> m b
@@ -558,7 +558,7 @@ instance MonadConc IO where
   tryTakeMVar        = IO.tryTakeMVar
   newCRef            = IO.newIORef
   readCRef           = IO.readIORef
-  modifyCRef         = IO.atomicModifyIORef
+  atomicModifyCRef   = IO.atomicModifyIORef
   writeCRef          = IO.writeIORef
   atomicWriteCRef    = IO.atomicWriteIORef
   readForCAS         = IO.readForCAS
@@ -603,7 +603,7 @@ instance C => MonadConc (T m) where                             { \
   newCRef            = lift . newCRef                          ; \
   newCRefN n         = lift . newCRefN n                       ; \
   readCRef           = lift . readCRef                         ; \
-  modifyCRef r       = lift . modifyCRef r                     ; \
+  atomicModifyCRef r = lift . atomicModifyCRef r               ; \
   writeCRef r        = lift . writeCRef r                      ; \
   atomicWriteCRef r  = lift . atomicWriteCRef r                ; \
   readForCAS         = lift . readForCAS                       ; \
@@ -675,7 +675,7 @@ makeTransConc unstN = do
           newCRef            = lift . newCRef
           newCRefN n         = lift . newCRefN n
           readCRef           = lift . readCRef
-          modifyCRef r       = lift . modifyCRef r
+          atomicModifyCRef r = lift . atomicModifyCRef r
           writeCRef r        = lift . writeCRef r
           atomicWriteCRef r  = lift . atomicWriteCRef r
           readForCAS         = lift . readForCAS
