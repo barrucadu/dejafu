@@ -341,7 +341,7 @@ dependentActions memtype buf a1 a2 = case (a1, a2) of
   (_, _)
     -- Two actions on the same CRef where at least one is synchronised
     | same crefOf && (synchronises a1 (fromJust $ crefOf a1) || synchronises a2 (fromJust $ crefOf a2)) -> True
-    -- Two actions on the same CVar
+    -- Two actions on the same MVar
     | same cvarOf -> True
 
   _ -> False
@@ -349,15 +349,15 @@ dependentActions memtype buf a1 a2 = case (a1, a2) of
   where
     same f = isJust (f a1) && f a1 == f a2
 
--- * Keeping track of 'CVar' full/empty states
+-- * Keeping track of 'MVar' full/empty states
 
-type CVState = Map CVarId Bool
+type CVState = Map MVarId Bool
 
--- | Initial global 'CVar' state
+-- | Initial global 'MVar' state
 initialCVState :: CVState
 initialCVState = M.empty
 
--- | Update the 'CVar' state with the action that has just happened.
+-- | Update the 'MVar' state with the action that has just happened.
 updateCVState :: CVState -> ThreadAction -> CVState
 updateCVState cvstate (PutVar  c _) = M.insert c True  cvstate
 updateCVState cvstate (TakeVar c _) = M.insert c False cvstate

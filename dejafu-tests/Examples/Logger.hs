@@ -2,8 +2,7 @@
 -- Concurrent Programming in Haskell, chapter 7.
 module Examples.Logger (tests) where
 
-import Control.Concurrent.CVar
-import Control.Monad.Conc.Class
+import Control.Concurrent.Classy
 import Data.Functor (void)
 import Test.DejaFu hiding (MemType(..))
 import Test.Framework (Test)
@@ -20,15 +19,15 @@ tests = hUnitTestToTests $ test
 
 --------------------------------------------------------------------------------
 
-data Logger m = Logger (CVar m LogCommand) (CVar m [String])
+data Logger m = Logger (MVar m LogCommand) (MVar m [String])
 
 data LogCommand = Message String | Stop
 
 -- | Create a new logger with no internal log.
 initLogger :: MonadConc m => m (Logger m)
 initLogger = do
-  cmd <- newEmptyCVar
-  logg <- newCVar []
+  cmd <- newEmptyMVar
+  logg <- newMVar []
   let l = Logger cmd logg
   void . fork $ logger l
   return l
@@ -36,23 +35,23 @@ initLogger = do
 logger :: MonadConc m => Logger m -> m ()
 logger (Logger cmd logg) = loop where
   loop = do
-    command <- takeCVar cmd
+    command <- takeMVar cmd
     case command of
       Message str -> do
-        strs <- takeCVar logg
-        putCVar logg (strs ++ [str])
+        strs <- takeMVar logg
+        putMVar logg (strs ++ [str])
         loop
       Stop -> return ()
 
 -- | Add a string to the log.
 logMessage :: MonadConc m => Logger m -> String -> m ()
-logMessage (Logger cmd _) str = putCVar cmd $ Message str
+logMessage (Logger cmd _) str = putMVar cmd $ Message str
 
 -- | Stop the logger and return the contents of the log.
 logStop :: MonadConc m => Logger m -> m [String]
 logStop (Logger cmd logg) = do
-  putCVar cmd Stop
-  readCVar logg
+  putMVar cmd Stop
+  readMVar logg
 
 -- | Race condition! Can you see where?
 raceyLogger :: MonadConc m => m [String]

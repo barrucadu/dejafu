@@ -1,7 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GADTs        #-}
 
--- | Operations over @CRef@s and @CVar@s
+-- | Operations over @CRef@s and @MVar@s
 module Test.DejaFu.Deterministic.Internal.Memory where
 
 import Control.Monad (when)
@@ -115,44 +115,44 @@ delCommitThreads :: Threads n r s -> Threads n r s
 delCommitThreads = M.filterWithKey $ \k _ -> k >= initialThread
 
 --------------------------------------------------------------------------------
--- * Manipulating @CVar@s
+-- * Manipulating @MVar@s
 
--- | Put into a @CVar@, blocking if full.
-putIntoCVar :: Monad n => CVar r a -> a -> Action n r s
+-- | Put into a @MVar@, blocking if full.
+putIntoMVar :: Monad n => MVar r a -> a -> Action n r s
              -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-putIntoCVar cvar a c = mutCVar True cvar a (const c)
+putIntoMVar cvar a c = mutMVar True cvar a (const c)
 
--- | Try to put into a @CVar@, not blocking if full.
-tryPutIntoCVar :: Monad n => CVar r a -> a -> (Bool -> Action n r s)
+-- | Try to put into a @MVar@, not blocking if full.
+tryPutIntoMVar :: Monad n => MVar r a -> a -> (Bool -> Action n r s)
                  -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-tryPutIntoCVar = mutCVar False
+tryPutIntoMVar = mutMVar False
 
--- | Read from a @CVar@, blocking if empty.
-readFromCVar :: Monad n => CVar r a -> (a -> Action n r s)
+-- | Read from a @MVar@, blocking if empty.
+readFromMVar :: Monad n => MVar r a -> (a -> Action n r s)
               -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-readFromCVar cvar c = seeCVar False True cvar (c . fromJust)
+readFromMVar cvar c = seeMVar False True cvar (c . fromJust)
 
--- | Take from a @CVar@, blocking if empty.
-takeFromCVar :: Monad n => CVar r a -> (a -> Action n r s)
+-- | Take from a @MVar@, blocking if empty.
+takeFromMVar :: Monad n => MVar r a -> (a -> Action n r s)
               -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-takeFromCVar cvar c = seeCVar True True cvar (c . fromJust)
+takeFromMVar cvar c = seeMVar True True cvar (c . fromJust)
 
--- | Try to take from a @CVar@, not blocking if empty.
-tryTakeFromCVar :: Monad n => CVar r a -> (Maybe a -> Action n r s)
+-- | Try to take from a @MVar@, not blocking if empty.
+tryTakeFromMVar :: Monad n => MVar r a -> (Maybe a -> Action n r s)
                   -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-tryTakeFromCVar = seeCVar True False
+tryTakeFromMVar = seeMVar True False
 
--- | Mutate a @CVar@, in either a blocking or nonblocking way.
-mutCVar :: Monad n
-         => Bool -> CVar r a -> a -> (Bool -> Action n r s)
+-- | Mutate a @MVar@, in either a blocking or nonblocking way.
+mutMVar :: Monad n
+         => Bool -> MVar r a -> a -> (Bool -> Action n r s)
          -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-mutCVar blocking (CVar cvid ref) a c fixed threadid threads = do
+mutMVar blocking (MVar cvid ref) a c fixed threadid threads = do
   val <- readRef fixed ref
 
   case val of
     Just _
       | blocking ->
-        let threads' = block (OnCVarEmpty cvid) threadid threads
+        let threads' = block (OnMVarEmpty cvid) threadid threads
         in return (False, threads', [])
 
       | otherwise ->
@@ -160,26 +160,26 @@ mutCVar blocking (CVar cvid ref) a c fixed threadid threads = do
 
     Nothing -> do
       writeRef fixed ref $ Just a
-      let (threads', woken) = wake (OnCVarFull cvid) threads
+      let (threads', woken) = wake (OnMVarFull cvid) threads
       return (True, goto (c True) threadid threads', woken)
 
--- | Read a @CVar@, in either a blocking or nonblocking
+-- | Read a @MVar@, in either a blocking or nonblocking
 -- way.
-seeCVar :: Monad n
-         => Bool -> Bool -> CVar r a -> (Maybe a -> Action n r s)
+seeMVar :: Monad n
+         => Bool -> Bool -> MVar r a -> (Maybe a -> Action n r s)
          -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-seeCVar emptying blocking (CVar cvid ref) c fixed threadid threads = do
+seeMVar emptying blocking (MVar cvid ref) c fixed threadid threads = do
   val <- readRef fixed ref
 
   case val of
     Just _ -> do
       when emptying $ writeRef fixed ref Nothing
-      let (threads', woken) = wake (OnCVarEmpty cvid) threads
+      let (threads', woken) = wake (OnMVarEmpty cvid) threads
       return (True, goto (c val) threadid threads', woken)
 
     Nothing
       | blocking ->
-        let threads' = block (OnCVarFull cvid) threadid threads
+        let threads' = block (OnMVarFull cvid) threadid threads
         in return (False, threads', [])
 
       | otherwise ->

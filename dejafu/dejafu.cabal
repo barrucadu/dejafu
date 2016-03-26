@@ -81,10 +81,19 @@ library
   exposed-modules:     Control.Monad.Conc.Class
                      , Control.Monad.STM.Class
 
-                     , Control.Concurrent.CVar
-                     , Control.Concurrent.CVar.Strict
-                     , Control.Concurrent.STM.CTVar
-                     , Control.Concurrent.STM.CTMVar
+                     , Control.Concurrent.Classy
+                     , Control.Concurrent.Classy.Chan
+                     , Control.Concurrent.Classy.CRef
+                     , Control.Concurrent.Classy.MVar
+                     , Control.Concurrent.Classy.QSem
+                     , Control.Concurrent.Classy.QSemN
+                     , Control.Concurrent.Classy.STM
+                     , Control.Concurrent.Classy.STM.TVar
+                     , Control.Concurrent.Classy.STM.TMVar
+                     , Control.Concurrent.Classy.STM.TChan
+                     , Control.Concurrent.Classy.STM.TQueue
+                     , Control.Concurrent.Classy.STM.TBQueue
+                     , Control.Concurrent.Classy.STM.TArray
 
                      , Test.DejaFu
                      , Test.DejaFu.Deterministic
@@ -104,6 +113,7 @@ library
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.5 && <5
+                     , array
                      , atomic-primops
                      , containers
                      , deepseq

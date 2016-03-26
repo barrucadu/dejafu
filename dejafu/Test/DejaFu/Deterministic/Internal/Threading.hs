@@ -28,7 +28,7 @@ data Thread n r s = Thread
   -- ^ Stack of exception handlers
   , _masking      :: MaskingState
   -- ^ The exception masking state.
-  , _known        :: [Either CVarId CTVarId]
+  , _known        :: [Either MVarId TVarId]
   -- ^ Shared variables the thread knows about.
   , _fullknown    :: Bool
   -- ^ Whether the referenced variables of the thread are completely
@@ -45,14 +45,14 @@ mkthread c = Thread c Nothing [] Unmasked [] False
 
 -- | A @BlockedOn@ is used to determine what sort of variable a thread
 -- is blocked on.
-data BlockedOn = OnCVarFull CVarId | OnCVarEmpty CVarId | OnCTVar [CTVarId] | OnMask ThreadId deriving Eq
+data BlockedOn = OnMVarFull MVarId | OnMVarEmpty MVarId | OnTVar [TVarId] | OnMask ThreadId deriving Eq
 
 -- | Determine if a thread is blocked in a certain way.
 (~=) :: Thread n r s -> BlockedOn -> Bool
 thread ~= theblock = case (_blocking thread, theblock) of
-  (Just (OnCVarFull  _), OnCVarFull  _) -> True
-  (Just (OnCVarEmpty _), OnCVarEmpty _) -> True
-  (Just (OnCTVar     _), OnCTVar     _) -> True
+  (Just (OnMVarFull  _), OnMVarFull  _) -> True
+  (Just (OnMVarEmpty _), OnMVarEmpty _) -> True
+  (Just (OnTVar      _), OnTVar      _) -> True
   (Just (OnMask      _), OnMask      _) -> True
   _ -> False
 
@@ -72,18 +72,18 @@ isLocked tid ts
 
     -- | Check if no other runnable thread has a reference to anything
     -- the block references.
-    noRefs (Just (OnCVarFull  cvarid)) = null $ findCVar   cvarid
-    noRefs (Just (OnCVarEmpty cvarid)) = null $ findCVar   cvarid
-    noRefs (Just (OnCTVar     ctvids)) = null $ findCTVars ctvids
+    noRefs (Just (OnMVarFull  cvarid)) = null $ findMVar  cvarid
+    noRefs (Just (OnMVarEmpty cvarid)) = null $ findMVar  cvarid
+    noRefs (Just (OnTVar      tvids))  = null $ findTVars tvids
     noRefs _ = True
 
     -- | Get IDs of all threads (other than the one under
-    -- consideration) which reference a 'CVar'.
-    findCVar cvarid = M.keys $ M.filterWithKey (check [Left cvarid]) ts
+    -- consideration) which reference a 'MVar'.
+    findMVar cvarid = M.keys $ M.filterWithKey (check [Left cvarid]) ts
 
     -- | Get IDs of all runnable threads (other than the one under
-    -- consideration) which reference some 'CTVar's.
-    findCTVars ctvids = M.keys $ M.filterWithKey (check (map Right ctvids)) ts
+    -- consideration) which reference some 'TVar's.
+    findTVars tvids = M.keys $ M.filterWithKey (check (map Right tvids)) ts
 
     -- | Check if a thread references a variable, and if it's not the
     -- thread under consideration.
@@ -159,9 +159,9 @@ block blockedOn = M.alter doBlock where
   doBlock (Just thread) = Just $ thread { _blocking = Just blockedOn }
   doBlock _ = error "Invariant failure in 'block': thread does NOT exist!"
 
--- | Unblock all threads waiting on the appropriate block. For 'CTVar'
+-- | Unblock all threads waiting on the appropriate block. For 'TVar'
 -- blocks, this will wake all threads waiting on at least one of the
--- given 'CTVar's.
+-- given 'TVar's.
 wake :: BlockedOn -> Threads n r s -> (Threads n r s, [ThreadId])
 wake blockedOn threads = (unblock <$> threads, M.keys $ M.filter isBlocked threads) where
   unblock thread
@@ -169,17 +169,17 @@ wake blockedOn threads = (unblock <$> threads, M.keys $ M.filter isBlocked threa
     | otherwise = thread
 
   isBlocked thread = case (_blocking thread, blockedOn) of
-    (Just (OnCTVar ctvids), OnCTVar blockedOn') -> ctvids `intersect` blockedOn' /= []
+    (Just (OnTVar tvids), OnTVar blockedOn') -> tvids `intersect` blockedOn' /= []
     (theblock, _) -> theblock == Just blockedOn
 
 -- | Record that a thread knows about a shared variable.
-knows :: [Either CVarId CTVarId] -> ThreadId -> Threads n r s -> Threads n r s
+knows :: [Either MVarId TVarId] -> ThreadId -> Threads n r s -> Threads n r s
 knows theids = M.alter go where
   go (Just thread) = Just $ thread { _known = nub $ theids ++ _known thread }
   go _ = error "Invariant failure in 'knows': thread does NOT exist!"
 
 -- | Forget about a shared variable.
-forgets :: [Either CVarId CTVarId] -> ThreadId -> Threads n r s -> Threads n r s
+forgets :: [Either MVarId TVarId] -> ThreadId -> Threads n r s -> Threads n r s
 forgets theids = M.alter go where
   go (Just thread) = Just $ thread { _known = filter (`notElem` theids) $ _known thread }
   go _ = error "Invariant failure in 'forgets': thread does NOT exist!"

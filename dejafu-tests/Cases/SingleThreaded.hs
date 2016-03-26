@@ -9,8 +9,7 @@ import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
 import Test.HUnit.DejaFu (testDejafu)
 
-import Control.Concurrent.CVar
-import Control.Monad.Conc.Class
+import Control.Concurrent.Classy
 import Control.Monad.STM.Class
 
 import Utils
@@ -21,12 +20,12 @@ import Control.Applicative ((<$>), (<*>))
 
 tests :: [Test]
 tests =
-  [ testGroup "CVar" . hUnitTestToTests $ test
-    [ testDejafu emptyCVarTake "empty take" $ gives' [True]
-    , testDejafu emptyCVarPut  "empty put"  $ gives' [()]
-    , testDejafu fullCVarPut   "full put"   $ gives' [True]
-    , testDejafu fullCVarTake  "full take"  $ gives' [True]
-    , testDejafu fullCVarRead  "full read"  $ gives' [True]
+  [ testGroup "MVar" . hUnitTestToTests $ test
+    [ testDejafu emptyMVarTake "empty take" $ gives' [True]
+    , testDejafu emptyMVarPut  "empty put"  $ gives' [()]
+    , testDejafu fullMVarPut   "full put"   $ gives' [True]
+    , testDejafu fullMVarTake  "full take"  $ gives' [True]
+    , testDejafu fullMVarRead  "full read"  $ gives' [True]
     ]
 
   , testGroup "CRef" . hUnitTestToTests $ test
@@ -62,39 +61,39 @@ tests =
   ]
 
 --------------------------------------------------------------------------------
--- @CVar@s
+-- @MVar@s
 
--- | An empty @CVar@ cannot be taken from.
-emptyCVarTake :: MonadConc m => m Bool
-emptyCVarTake = do
-  var <- newEmptyCVar
-  res <- tryTakeCVar var
+-- | An empty @MVar@ cannot be taken from.
+emptyMVarTake :: MonadConc m => m Bool
+emptyMVarTake = do
+  var <- newEmptyMVar
+  res <- tryTakeMVar var
 
   return $ (res :: Maybe ()) == Nothing
 
--- | An empty @CVar@ can be put into.
-emptyCVarPut :: MonadConc m => m ()
-emptyCVarPut = do
-  var <- newEmptyCVar
-  putCVar var ()
+-- | An empty @MVar@ can be put into.
+emptyMVarPut :: MonadConc m => m ()
+emptyMVarPut = do
+  var <- newEmptyMVar
+  putMVar var ()
 
--- | A full @CVar@ cannot be put into.
-fullCVarPut :: MonadConc m => m Bool
-fullCVarPut = do
-  var <- newCVar ()
-  not <$> tryPutCVar var ()
+-- | A full @MVar@ cannot be put into.
+fullMVarPut :: MonadConc m => m Bool
+fullMVarPut = do
+  var <- newMVar ()
+  not <$> tryPutMVar var ()
 
--- | A full @CVar@ can be taken from.
-fullCVarTake :: MonadConc m => m Bool
-fullCVarTake = do
-  var <- newCVar ()
-  (() ==) <$> takeCVar var
+-- | A full @MVar@ can be taken from.
+fullMVarTake :: MonadConc m => m Bool
+fullMVarTake = do
+  var <- newMVar ()
+  (() ==) <$> takeMVar var
 
--- | A full @CVar@ can be read from.
-fullCVarRead :: MonadConc m => m Bool
-fullCVarRead = do
-  var <- newCVar ()
-  (() ==) <$> readCVar var
+-- | A full @MVar@ can be read from.
+fullMVarRead :: MonadConc m => m Bool
+fullMVarRead = do
+  var <- newMVar ()
+  (() ==) <$> readMVar var
 
 --------------------------------------------------------------------------------
 -- @CRef@s
@@ -116,7 +115,7 @@ crefWrite = do
 crefModify :: MonadConc m => m Bool
 crefModify = do
   ref <- newCRef (5::Int)
-  modifyCRef ref (\i -> (i+1, ()))
+  atomicModifyCRef ref (\i -> (i+1, ()))
   (6==) <$> readCRef ref
 
 -- | A @Ticket@ contains the value as of when it was created.
@@ -154,16 +153,16 @@ crefCas2 = do
 --------------------------------------------------------------------------------
 -- STM
 
--- | A @CTVar@ can be written to.
+-- | A @TVar@ can be written to.
 stmWrite :: MonadConc m => m Bool
 stmWrite =
-  (6==) <$> atomically (do { v <- newCTVar (5::Int); writeCTVar v 6; readCTVar v })
+  (6==) <$> atomically (do { v <- newTVar (5::Int); writeTVar v 6; readTVar v })
 
--- | A @CTVar@ preserves its value between transactions.
+-- | A @TVar@ preserves its value between transactions.
 stmPreserve :: MonadConc m => m Bool
 stmPreserve = do
-  ctv <- atomically $ newCTVar (5::Int)
-  (5==) <$> atomically (readCTVar ctv)
+  ctv <- atomically $ newTVar (5::Int)
+  (5==) <$> atomically (readTVar ctv)
 
 -- | A transaction can be aborted, which blocks the thread.
 stmRetry :: MonadConc m => m ()
@@ -172,32 +171,32 @@ stmRetry = atomically retry
 -- | An abort can be caught by an @orElse@.
 stmOrElse :: MonadConc m => m Bool
 stmOrElse = do
-  ctv <- atomically $ newCTVar (5::Int)
-  atomically $ orElse retry (writeCTVar ctv 6)
+  ctv <- atomically $ newTVar (5::Int)
+  atomically $ orElse retry (writeTVar ctv 6)
 
-  (6==) <$> atomically (readCTVar ctv)
+  (6==) <$> atomically (readTVar ctv)
 
 -- | An exception can be caught by an appropriate handler.
 stmCatch1 :: MonadConc m => m Bool
 stmCatch1 = do
-  ctv <- atomically $ newCTVar (5::Int)
+  ctv <- atomically $ newTVar (5::Int)
   atomically $ catchArithException
                  (throwSTM Overflow)
-                 (\_ -> writeCTVar ctv 6)
+                 (\_ -> writeTVar ctv 6)
 
-  (6==) <$> atomically (readCTVar ctv)
+  (6==) <$> atomically (readTVar ctv)
 
 -- | Nested exception handlers can catch different types of exception.
 stmCatch2 :: MonadConc m => m Bool 
 stmCatch2 = do
-  ctv <- atomically $ newCTVar (5::Int)
+  ctv <- atomically $ newTVar (5::Int)
   atomically $ catchArithException
                  (catchArrayException
                    (throwSTM Overflow)
-                   (\_ -> writeCTVar ctv 0))
-                 (\_ -> writeCTVar ctv 6)
+                   (\_ -> writeTVar ctv 0))
+                 (\_ -> writeTVar ctv 6)
 
-  (6==) <$> atomically (readCTVar ctv)
+  (6==) <$> atomically (readTVar ctv)
 
 --------------------------------------------------------------------------------
 -- Exceptions

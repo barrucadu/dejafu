@@ -8,7 +8,7 @@ module Test.DejaFu.STM.Internal where
 import Control.Exception (Exception, SomeException, fromException, toException)
 import Control.Monad.Cont (Cont, runCont)
 import Data.List (nub)
-import Test.DejaFu.Deterministic.Internal.Common (CTVarId, IdSource, TAction(..), TTrace, nextCTVId)
+import Test.DejaFu.Deterministic.Internal.Common (TVarId, IdSource, TAction(..), TTrace, nextTVId)
 import Test.DejaFu.Internal
 
 --------------------------------------------------------------------------------
@@ -28,36 +28,36 @@ type Fixed n r = Ref n r (Cont (STMAction n r))
 -- actions.
 data STMAction n r
   = forall a e. Exception e => SCatch (e -> M n r a) (M n r a) (a -> STMAction n r)
-  | forall a. SRead  (CTVar r a) (a -> STMAction n r)
-  | forall a. SWrite (CTVar r a) a (STMAction n r)
+  | forall a. SRead  (TVar r a) (a -> STMAction n r)
+  | forall a. SWrite (TVar r a) a (STMAction n r)
   | forall a. SOrElse (M n r a) (M n r a) (a -> STMAction n r)
-  | forall a. SNew String a (CTVar r a -> STMAction n r)
+  | forall a. SNew String a (TVar r a -> STMAction n r)
   | SLift (n (STMAction n r))
   | forall e. Exception e => SThrow e
   | SRetry
   | SStop
 
 --------------------------------------------------------------------------------
--- * @CTVar@s
+-- * @TVar@s
 
--- | A 'CTVar' is a tuple of a unique ID and the value contained. The
--- ID is so that blocked transactions can be re-run when a 'CTVar'
--- they depend on has changed.
-newtype CTVar r a = CTVar (CTVarId, r a)
+-- | A 'TVar' is a tuple of a unique ID and the value contained. The
+-- ID is so that blocked transactions can be re-run when a 'TVar' they
+-- depend on has changed.
+newtype TVar r a = TVar (TVarId, r a)
 
 --------------------------------------------------------------------------------
 -- * Output
 
--- | The result of an STM transaction, along with which 'CTVar's it
+-- | The result of an STM transaction, along with which 'TVar's it
 -- touched whilst executing.
 data Result a =
-    Success [CTVarId] [CTVarId] a
+    Success [TVarId] [TVarId] a
   -- ^ The transaction completed successfully, reading the first list
-  -- 'CTVar's and writing to the second.
-  | Retry   [CTVarId]
+  -- 'TVar's and writing to the second.
+  | Retry [TVarId]
   -- ^ The transaction aborted by calling 'retry', and read the
-  -- returned 'CTVar's. It should be retried when at least one of the
-  -- 'CTVar's has been mutated.
+  -- returned 'TVar's. It should be retried when at least one of the
+  -- 'TVar's has been mutated.
   | Exception SomeException
   -- ^ The transaction aborted by throwing an exception.
   deriving Show
@@ -111,7 +111,7 @@ doTransaction fixed ma idsource = do
         _ -> go ref newAct newUndo newIDSource newReaden newWritten newSofar
 
 -- | Run a transaction for one step.
-stepTrans :: Monad n => Fixed n r -> STMAction n r -> IdSource -> n (STMAction n r, n (), IdSource, [CTVarId], [CTVarId], TAction)
+stepTrans :: Monad n => Fixed n r -> STMAction n r -> IdSource -> n (STMAction n r, n (), IdSource, [TVarId], [TVarId], TAction)
 stepTrans fixed act idsource = case act of
   SCatch  h stm c -> stepCatch h stm c
   SRead   ref c   -> stepRead ref c
@@ -133,20 +133,20 @@ stepTrans fixed act idsource = case act of
         Just exc' -> transaction (TCatch trace . Just) (h exc') c
         Nothing   -> return (SThrow exc, nothing, idsource, [], [], TCatch trace Nothing))
 
-    stepRead (CTVar (ctvid, ref)) c = do
+    stepRead (TVar (tvid, ref)) c = do
       val <- readRef fixed ref
-      return (c val, nothing, idsource, [ctvid], [], TRead ctvid)
+      return (c val, nothing, idsource, [tvid], [], TRead tvid)
 
-    stepWrite (CTVar (ctvid, ref)) a c = do
+    stepWrite (TVar (tvid, ref)) a c = do
       old <- readRef fixed ref
       writeRef fixed ref a
-      return (c, writeRef fixed ref old, idsource, [], [ctvid], TWrite ctvid)
+      return (c, writeRef fixed ref old, idsource, [], [tvid], TWrite tvid)
 
     stepNew n a c = do
-      let (idsource', ctvid) = nextCTVId n idsource
+      let (idsource', tvid) = nextTVId n idsource
       ref <- newRef fixed a
-      let ctvar = CTVar (ctvid, ref)
-      return (c ctvar, nothing, idsource', [], [ctvid], TNew)
+      let tvar = TVar (tvid, ref)
+      return (c tvar, nothing, idsource', [], [tvid], TNew)
 
     stepOrElse a b c = cases TOrElse a c
       (\trace _   -> transaction (TOrElse trace . Just) b c)

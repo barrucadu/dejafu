@@ -125,9 +125,9 @@ prop_monad_ap' :: forall a b. Ord b => Fun a b -> Fun a b -> a -> Bool
 prop_monad_ap' (apply -> f) (apply -> g) a = go (<*>) `eq'` go ap where
   go :: (CST t (a -> b) -> CST t a -> CST t b) -> ConcST t b
   go combine = do
-    var <- newEmptyCVar
-    let cf = do { res <- tryTakeCVar var; pure $ if isJust res then f else g }
-    let ca = do { putCVar var (); pure a }
+    var <- newEmptyMVar
+    let cf = do { res <- tryTakeMVar var; pure $ if isJust res then f else g }
+    let ca = do { putMVar var (); pure a }
     runConcurrently $ Concurrently cf `combine` Concurrently ca
 
 --------------------------------------------------------------------------------
@@ -186,22 +186,22 @@ concurrently left right = concurrently' left right (collect []) where
   collect [Left a, Right b] _ = return (a, b)
   collect [Right b, Left a] _ = return (a, b)
   collect xs m = do
-    e <- takeCVar m
+    e <- takeMVar m
     case e of
       Left ex -> throw ex
       Right r -> collect (r:xs) m
 
 concurrently' :: MonadConc m => m a -> m b
-  -> (CVar m (Either SomeException (Either a b)) -> m r)
+  -> (MVar m (Either SomeException (Either a b)) -> m r)
   -> m r
 concurrently' left right collect = do
-  done <- newEmptyCVar
+  done <- newEmptyMVar
   mask $ \restore -> do
-    lid <- fork $ restore (left >>= putCVar done . Right . Left)
-          `catch` (putCVar done . Left)
+    lid <- fork $ restore (left >>= putMVar done . Right . Left)
+          `catch` (putMVar done . Left)
 
-    rid <- fork $ restore (right >>= putCVar done . Right . Right)
-          `catch` (putCVar done . Left)
+    rid <- fork $ restore (right >>= putMVar done . Right . Right)
+          `catch` (putMVar done . Left)
 
     -- See: https://github.com/simonmar/async/issues/27
     let stop = killThread rid >> killThread lid
@@ -215,7 +215,7 @@ concurrently' left right collect = do
 race :: MonadConc m => m a -> m b -> m (Either a b)
 race left right = concurrently' left right collect where
   collect m = do
-    e <- takeCVar m
+    e <- takeMVar m
     case e of
       Left ex -> throw ex
       Right r -> return r
