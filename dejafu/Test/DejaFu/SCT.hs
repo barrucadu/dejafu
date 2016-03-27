@@ -100,10 +100,6 @@ module Test.DejaFu.SCT
   , yieldCount
   , maxYieldCountDiff
   , initialise
-  , initialCVState
-  , updateCVState
-  , willBlock
-  , willBlockSafely
   ) where
 
 import Control.DeepSeq (NFData, force)

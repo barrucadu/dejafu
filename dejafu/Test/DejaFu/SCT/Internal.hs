@@ -349,44 +349,6 @@ dependentActions memtype buf a1 a2 = case (a1, a2) of
   where
     same f = isJust (f a1) && f a1 == f a2
 
--- * Keeping track of 'MVar' full/empty states
-
-type CVState = Map MVarId Bool
-
--- | Initial global 'MVar' state
-initialCVState :: CVState
-initialCVState = M.empty
-
--- | Update the 'MVar' state with the action that has just happened.
-updateCVState :: CVState -> ThreadAction -> CVState
-updateCVState cvstate (PutVar  c _) = M.insert c True  cvstate
-updateCVState cvstate (TakeVar c _) = M.insert c False cvstate
-updateCVState cvstate (TryPutVar  c True _) = M.insert c True  cvstate
-updateCVState cvstate (TryTakeVar c True _) = M.insert c False cvstate
-updateCVState cvstate _ = cvstate
-
--- | Check if an action will block.
-willBlock :: CVState -> Lookahead -> Bool
-willBlock cvstate (WillPutVar  c) = M.lookup c cvstate == Just True
-willBlock cvstate (WillTakeVar c) = M.lookup c cvstate == Just False
-willBlock cvstate (WillReadVar c) = M.lookup c cvstate == Just False
-willBlock _ _ = False
-
--- | Check if a list of actions will block safely (without modifying
--- any global state). This allows further lookahead at, say, the
--- 'spawn' of a thread (which always starts with 'KnowsAbout').
-willBlockSafely :: CVState -> [Lookahead] -> Bool
-willBlockSafely cvstate (WillMyThreadId:as) = willBlockSafely cvstate as
-willBlockSafely cvstate (WillNewVar:as)     = willBlockSafely cvstate as
-willBlockSafely cvstate (WillNewRef:as)     = willBlockSafely cvstate as
-willBlockSafely cvstate (WillReturn:as)     = willBlockSafely cvstate as
-willBlockSafely cvstate (WillKnowsAbout:as) = willBlockSafely cvstate as
-willBlockSafely cvstate (WillForgets:as)    = willBlockSafely cvstate as
-willBlockSafely cvstate (WillAllKnown:as)   = willBlockSafely cvstate as
-willBlockSafely cvstate (WillPutVar  c:_) = willBlock cvstate (WillPutVar  c)
-willBlockSafely cvstate (WillTakeVar c:_) = willBlock cvstate (WillTakeVar c)
-willBlockSafely _ _ = False
-
 -- * Keeping track of 'CRef' buffer state
 
 data CRState = Known (Map CRefId Bool) | Unknown
