@@ -4,38 +4,13 @@ module Test.DejaFu.SCT.Internal where
 import Data.Map.Strict (Map)
 import Data.Maybe (isJust, fromJust)
 import Test.DejaFu.Deterministic.Internal hiding (Decision(..))
-import Test.DejaFu.DPOR (BacktrackStep(..), Decision(..), DPOR(..), decisionOf, tidOf)
+import Test.DejaFu.DPOR (DPOR(..))
 
 import qualified Data.Map.Strict as M
-import qualified Data.Set as S
 
 -- * BPOR state
 
 type BPOR = DPOR ThreadId ThreadAction
-
--- | Add new backtracking points, if they have not already been
--- visited, fit into the bound, and aren't in the sleep set.
-todo :: ([(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Bool) -> [BacktrackStep ThreadId ThreadAction Lookahead state] -> BPOR -> BPOR
-todo bv = go Nothing [] where
-  go priorTid pref (b:bs) bpor =
-    let bpor' = doBacktrack priorTid pref b bpor
-        tid   = bcktThreadid b
-        pref' = pref ++ [bcktDecision b]
-        child = go (Just tid) pref' bs . fromJust $ M.lookup tid (dporDone bpor)
-    in bpor' { dporDone = M.insert tid child $ dporDone bpor' }
-
-  go _ _ [] bpor = bpor
-
-  doBacktrack priorTid pref b bpor =
-    let todo' = [ x
-                | x@(t,c) <- M.toList $ bcktBacktracks b
-                , let decision  = decisionOf priorTid (dporRunnable bpor) t
-                , let lahead = fromJust . M.lookup t $ bcktRunnable b
-                , bv pref (decision, lahead)
-                , t `notElem` M.keys (dporDone bpor)
-                , c || M.notMember t (dporSleep bpor)
-                ]
-    in bpor { dporTodo = dporTodo bpor `M.union` M.fromList todo' }
 
 -- | Remove commits from the todo sets where every other action will
 -- result in a write barrier (and so a commit) occurring.

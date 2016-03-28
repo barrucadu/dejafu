@@ -107,7 +107,7 @@ import Data.Map (Map)
 import Data.Maybe (isNothing, isJust, fromJust)
 import Test.DejaFu.Deterministic hiding (Decision(..))
 import Test.DejaFu.Deterministic.Internal (initialThread, willRelease)
-import Test.DejaFu.DPOR (BacktrackStep(..), Decision(..), decisionOf, findBacktrackSteps, findSchedulePrefix, incorporateTrace, initialState)
+import Test.DejaFu.DPOR (BacktrackStep(..), Decision(..), decisionOf, findBacktrackSteps, findSchedulePrefix, incorporateBacktrackSteps, incorporateTrace, initialState)
 import Test.DejaFu.SCT.Internal
 
 import qualified Data.Map.Strict as M
@@ -430,7 +430,7 @@ sctBoundedM memtype bf backtrack run = go (initialState initialThread) where
 
       if _signore s
       then go newBPOR
-      else ((res, toTrace trace):) <$> go (pruneCommits $ todo bf bpoints newBPOR)
+      else ((res, toTrace trace):) <$> go (pruneCommits $ incorporateBacktrackSteps bf bpoints newBPOR)
 
     Nothing -> return []
 

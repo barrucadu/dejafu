@@ -13,6 +13,7 @@ module Test.DejaFu.DPOR
   , findSchedulePrefix
   , incorporateTrace
   , findBacktrackSteps
+  , incorporateBacktrackSteps
 
   -- * Utilities
   , initialDPORThread
@@ -344,6 +345,37 @@ findBacktrackSteps stinit ststep dependency backtrack bcktrck = go stinit S.empt
 
           isDependent b = dependency (bcktState b) (bcktThreadid b, snd $ bcktDecision b) (u, n)
     in foldl' (\b (i, u) -> backtrack b i u) bs idxs
+
+-- | Add new backtracking points, if they have not already been
+-- visited, fit into the bound, and aren't in the sleep set.
+incorporateBacktrackSteps :: Ord thread_id
+  => ([(Decision thread_id, thread_action)] -> (Decision thread_id, lookahead) -> Bool)
+  -- ^ Bound function: returns true if that schedule prefix terminated
+  -- with the lookahead decision fits within the bound.
+  -> [BacktrackStep thread_id thread_action lookahead state]
+  -- ^ Backtracking steps identified by 'findBacktrackSteps'.
+  -> DPOR thread_id thread_action
+  -> DPOR thread_id thread_action
+incorporateBacktrackSteps bv = go Nothing [] where
+  go priorTid pref (b:bs) bpor =
+    let bpor' = doBacktrack priorTid pref b bpor
+        tid   = bcktThreadid b
+        pref' = pref ++ [bcktDecision b]
+        child = go (Just tid) pref' bs . fromJust $ M.lookup tid (dporDone bpor)
+    in bpor' { dporDone = M.insert tid child $ dporDone bpor' }
+
+  go _ _ [] bpor = bpor
+
+  doBacktrack priorTid pref b bpor =
+    let todo' = [ x
+                | x@(t,c) <- M.toList $ bcktBacktracks b
+                , let decision  = decisionOf priorTid (dporRunnable bpor) t
+                , let lahead = fromJust . M.lookup t $ bcktRunnable b
+                , bv pref (decision, lahead)
+                , t `notElem` M.keys (dporDone bpor)
+                , c || M.notMember t (dporSleep bpor)
+                ]
+    in bpor { dporTodo = dporTodo bpor `M.union` M.fromList todo' }
 
 -------------------------------------------------------------------------------
 -- Utilities
