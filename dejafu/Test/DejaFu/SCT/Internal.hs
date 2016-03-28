@@ -2,10 +2,9 @@
 module Test.DejaFu.SCT.Internal where
 
 import Control.DeepSeq (NFData(..))
-import Data.List (foldl', partition, sortBy)
+import Data.List (foldl')
 import Data.Map.Strict (Map)
-import Data.Maybe (mapMaybe, isJust, fromJust, listToMaybe)
-import Data.Ord (Down(..), comparing)
+import Data.Maybe (mapMaybe, isJust, fromJust)
 import Data.Sequence (Seq, ViewL(..))
 import Test.DejaFu.Deterministic.Internal hiding (Decision(..))
 import Test.DejaFu.Deterministic.Schedule
@@ -38,40 +37,6 @@ data BacktrackStep = BacktrackStep
 
 instance NFData BacktrackStep where
   rnf b = rnf (_threadid b, _decision b, _runnable b, _backtrack b)
-
--- | Produce a new schedule from a BPOR tree. If there are no new
--- schedules remaining, return 'Nothing'. Also returns whether the
--- decision was added conservatively, and the sleep set at the point
--- where divergence happens.
---
--- This returns the longest prefix, on the assumption that this will
--- lead to lots of backtracking points being identified before
--- higher-up decisions are reconsidered, so enlarging the sleep sets.
-next :: BPOR -> Maybe ([ThreadId], Bool, Map ThreadId ThreadAction)
-next = go initialThread where
-  go tid bpor =
-        -- All the possible prefix traces from this point, with
-        -- updated BPOR subtrees if taken from the done list.
-    let prefixes = mapMaybe go' (M.toList $ dporDone bpor) ++ [([t], c, sleeps bpor) | (t, c) <- M.toList $ dporTodo bpor]
-        -- Sort by number of preemptions, in descending order.
-        cmp = preEmps tid bpor . (\(a,_,_) -> a)
-
-    in if null prefixes
-       then Nothing
-       else case partition (\(t:_,_,_) -> t < initialThread) $ sortBy (comparing $ Down . cmp) prefixes of
-              (commits, others)
-                | not $ null others  -> listToMaybe others
-                | not $ null commits -> listToMaybe commits
-                | otherwise -> error "Invariant failure in 'next': empty prefix list!"
-
-  go' (tid, bpor) = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> go tid bpor
-
-  sleeps bpor = dporSleep bpor `M.union` dporTaken bpor
-
-  preEmps tid bpor (t:ts) =
-    let rest = preEmps t (fromJust . M.lookup t $ dporDone bpor) ts
-    in  if t > initialThread && tid /= t && tid `S.member` dporRunnable bpor then 1 + rest else rest
-  preEmps _ _ [] = 0::Int
 
 -- | Produce a list of new backtracking points from an execution
 -- trace.

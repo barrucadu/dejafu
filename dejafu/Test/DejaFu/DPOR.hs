@@ -6,17 +6,22 @@ module Test.DejaFu.DPOR
   , decisionOf
   , activeTid
 
-  -- * DPOR state
+  -- * Dynamic partial-order reduction
   , DPOR(..)
   , initialState
+  , findSchedulePrefix
+
+  -- * Utilities
   , toDot
   , toDotFiltered
   ) where
 
 import Control.DeepSeq (NFData(..))
 import Data.Char (ord)
-import Data.List (foldl', intercalate)
+import Data.List (foldl', intercalate, partition, sortBy)
+import Data.Ord (Down(..), comparing)
 import Data.Map.Strict (Map)
+import Data.Maybe (fromJust, mapMaybe)
 import Data.Set (Set)
 
 import qualified Data.Map.Strict as M
@@ -82,7 +87,7 @@ activeTid (Start tid:ds) = foldl' tidOf tid ds
 activeTid _ = error "activeTid: first decision MUST be a 'Start'."
 
 -------------------------------------------------------------------------------
--- DPOR state
+-- Dynamic partial-order reduction
 
 -- | DPOR execution is represented as a tree of states, characterised
 -- by the decisions that lead to that state.
@@ -128,6 +133,61 @@ initialState initialThread = DPOR
   , dporTaken    = M.empty
   , dporAction   = Nothing
   }
+
+-- | Produce a new schedule prefix from a DPOR tree. If there are no new
+-- prefixes remaining, return 'Nothing'. Also returns whether the
+-- decision was added conservatively, and the sleep set at the point
+-- where divergence happens.
+--
+-- A schedule prefix is a possibly empty sequence of decisions that
+-- have already been made, terminated by a single decision from the
+-- to-do set. The intent is to put the system into a new state when
+-- executed with this initial sequence of scheduling decisions.
+--
+-- This returns the longest prefix, on the assumption that this will
+-- lead to lots of backtracking points being identified before
+-- higher-up decisions are reconsidered, so enlarging the sleep sets.
+findSchedulePrefix :: Ord thread_id
+  => (thread_id -> Bool)
+  -- ^ Some partitioning function, applied to the to-do decisions. If
+  -- there is an identifier which passes the test, it will be used,
+  -- rather than any which fail it. This allows a very basic way of
+  -- domain-specific prioritisation between otherwise equal choices,
+  -- which may be useful in some cases.
+  -> DPOR thread_id thread_action
+  -> Maybe ([thread_id], Bool, Map thread_id thread_action)
+findSchedulePrefix predicate dporRoot = go (initialThread dporRoot) dporRoot where
+  go tid dpor =
+        -- All the possible prefix traces from this point, with
+        -- updated DPOR subtrees if taken from the done list.
+    let prefixes = mapMaybe go' (M.toList $ dporDone dpor) ++ [([t], c, sleeps dpor) | (t, c) <- M.toList $ dporTodo dpor]
+        -- Sort by number of preemptions, in descending order.
+        cmp = Down . preEmps tid dpor . (\(a,_,_) -> a)
+
+    in if null prefixes
+       then Nothing
+       else case partition (\(t:_,_,_) -> predicate t) $ sortBy (comparing cmp) prefixes of
+              (choice:_, _)  -> Just choice
+              ([], choice:_) -> Just choice
+              ([], []) -> error "findSchedulePrefix: (internal error) empty prefix list!" 
+
+  go' (tid, dpor) = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> go tid dpor
+
+  -- The new sleep set is the union of the sleep set of the node we're
+  -- branching from, plus all the decisions we've already explored.
+  sleeps dpor = dporSleep dpor `M.union` dporTaken dpor
+
+  -- The initial thread of a DPOR tree.
+  initialThread = S.elemAt 0 . dporRunnable
+
+  -- The number of pre-emptive context switches
+  preEmps tid dpor (t:ts) =
+    let rest = preEmps t (fromJust . M.lookup t $ dporDone dpor) ts
+    in  if tid `S.member` dporRunnable dpor then 1 + rest else rest
+  preEmps _ _ [] = 0::Int
+
+-------------------------------------------------------------------------------
+-- Utilities
 
 -- | Render a 'DPOR' value as a graph in GraphViz \"dot\" format.
 toDot
