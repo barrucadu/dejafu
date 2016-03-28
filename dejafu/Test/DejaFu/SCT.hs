@@ -107,7 +107,7 @@ import Data.Map (Map)
 import Data.Maybe (isNothing, isJust, fromJust)
 import Test.DejaFu.Deterministic hiding (Decision(..))
 import Test.DejaFu.Deterministic.Internal (initialThread, willRelease)
-import Test.DejaFu.DPOR (Decision(..), decisionOf)
+import Test.DejaFu.DPOR (Decision(..), decisionOf, initialState)
 import Test.DejaFu.SCT.Internal
 
 import qualified Data.Map.Strict as M
@@ -416,7 +416,7 @@ sctBoundedM :: (Functor m, Monad m)
   -> (MemType -> Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
   -- ^ Monadic runner, with computation fixed.
   -> m [(Either Failure a, Trace)]
-sctBoundedM memtype bf backtrack run = go initialState where
+sctBoundedM memtype bf backtrack run = go (initialState initialThread) where
   go bpor = case next bpor of
     Just (sched, conservative, sleep) -> do
       (res, s, trace) <- run memtype (bporSched memtype $ initialise bf) (initialSchedState sleep sched)

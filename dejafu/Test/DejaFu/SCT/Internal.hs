@@ -2,21 +2,22 @@
 module Test.DejaFu.SCT.Internal where
 
 import Control.DeepSeq (NFData(..))
-import Data.List (foldl', partition, sortBy, intercalate)
+import Data.List (foldl', partition, sortBy)
 import Data.Map.Strict (Map)
 import Data.Maybe (mapMaybe, isJust, fromJust, listToMaybe)
 import Data.Ord (Down(..), comparing)
 import Data.Sequence (Seq, ViewL(..))
-import Data.Set (Set)
 import Test.DejaFu.Deterministic.Internal hiding (Decision(..))
 import Test.DejaFu.Deterministic.Schedule
-import Test.DejaFu.DPOR (Decision(..), decisionOf, tidOf)
+import Test.DejaFu.DPOR (Decision(..), DPOR(..), decisionOf, tidOf)
 
 import qualified Data.Map.Strict as M
 import qualified Data.Sequence as Sq
 import qualified Data.Set as S
 
 -- * BPOR state
+
+type BPOR = DPOR ThreadId ThreadAction
 
 -- | One step of the execution, including information for backtracking
 -- purposes. This backtracking information is used to generate new
@@ -38,78 +39,6 @@ data BacktrackStep = BacktrackStep
 instance NFData BacktrackStep where
   rnf b = rnf (_threadid b, _decision b, _runnable b, _backtrack b)
 
--- | BPOR execution is represented as a tree of states, characterised
--- by the decisions that lead to that state.
-data BPOR = BPOR
-  { _brunnable :: Set ThreadId
-  -- ^ What threads are runnable at this step.
-  , _btodo     :: Map ThreadId Bool
-  -- ^ Follow-on decisions still to make, and whether that decision
-  -- was added conservatively due to the bound.
-  , _bdone     :: Map ThreadId BPOR
-  -- ^ Follow-on decisions that have been made.
-  , _bsleep    :: Map ThreadId ThreadAction
-  -- ^ Transitions to ignore (in this node and children) until a
-  -- dependent transition happens.
-  , _btaken    :: Map ThreadId ThreadAction
-  -- ^ Transitions which have been taken, excluding
-  -- conservatively-added ones. This is used in implementing sleep
-  -- sets.
-  , _baction    :: Maybe ThreadAction
-  -- ^ What happened at this step. This will be 'Nothing' at the root,
-  -- 'Just' everywhere else.
-  }
-
--- | Render a 'BPOR' value as a graph in GraphViz \"dot\" format.
-toDot :: BPOR -> String
-toDot = toDotFilter (\_ _ -> True)
-
--- | Variant of 'toDot' which doesn't include aborted subtrees.
-toDotSmall :: BPOR -> String
-toDotSmall = toDotFilter (curry check) where
-  -- Check that a subtree has at least one non-aborted branch.
-  check (i, b) = (i == initialThread && isStop b) || any check (M.toList $ _bdone b)
-
-  isStop b = case _baction b of
-    Just Stop -> True
-    _ -> False
-
--- | Render a 'BPOR' value as a graph in GraphViz \"dot\" format, with
--- a function to determine if a subtree should be included or not.
-toDotFilter :: (ThreadId -> BPOR -> Bool) -> BPOR -> String
-toDotFilter check bpor = "digraph {\n" ++ go "L" bpor ++ "\n}" where
-  go l b = unlines $ node l b : [edge l l' i ++ go l' b' | (i, b') <- M.toList (_bdone b), check i b', let l' = l ++ show' i]
-
-  -- Display a labelled node.
-  node n b = n ++ " [label=\"" ++ label b ++ "\"]"
-
-  -- A node label, summary of the BPOR state at that node.
-  label b = intercalate ","
-    [ show $ _baction b
-    , "Run:" ++ show (S.toList $ _brunnable b)
-    , "Tod:" ++ show (M.keys   $ _btodo     b)
-    , "Slp:" ++ show (M.toList $ _bsleep    b)
-    ]
-
-  -- Display a labelled edge
-  --
-  -- TODO: Incorporate the thread name.
-  edge n1 n2 l = n1 ++ "-> " ++ n2 ++ " [label=\"" ++ show l ++ "\"]\n"
-
-  -- Show a 'ThreadId', replacing a minus sign for \"N\".
-  show' (ThreadId _ i) = map (\c -> if c == '-' then 'N' else c) $ show i
-
--- | Initial BPOR state.
-initialState :: BPOR
-initialState = BPOR
-  { _brunnable = S.singleton initialThread
-  , _btodo     = M.singleton initialThread False
-  , _bdone     = M.empty
-  , _bsleep    = M.empty
-  , _btaken    = M.empty
-  , _baction   = Nothing
-  }
-
 -- | Produce a new schedule from a BPOR tree. If there are no new
 -- schedules remaining, return 'Nothing'. Also returns whether the
 -- decision was added conservatively, and the sleep set at the point
@@ -123,7 +52,7 @@ next = go initialThread where
   go tid bpor =
         -- All the possible prefix traces from this point, with
         -- updated BPOR subtrees if taken from the done list.
-    let prefixes = mapMaybe go' (M.toList $ _bdone bpor) ++ [([t], c, sleeps bpor) | (t, c) <- M.toList $ _btodo bpor]
+    let prefixes = mapMaybe go' (M.toList $ dporDone bpor) ++ [([t], c, sleeps bpor) | (t, c) <- M.toList $ dporTodo bpor]
         -- Sort by number of preemptions, in descending order.
         cmp = preEmps tid bpor . (\(a,_,_) -> a)
 
@@ -137,11 +66,11 @@ next = go initialThread where
 
   go' (tid, bpor) = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> go tid bpor
 
-  sleeps bpor = _bsleep bpor `M.union` _btaken bpor
+  sleeps bpor = dporSleep bpor `M.union` dporTaken bpor
 
   preEmps tid bpor (t:ts) =
-    let rest = preEmps t (fromJust . M.lookup t $ _bdone bpor) ts
-    in  if t > initialThread && tid /= t && tid `S.member` _brunnable bpor then 1 + rest else rest
+    let rest = preEmps t (fromJust . M.lookup t $ dporDone bpor) ts
+    in  if t > initialThread && tid /= t && tid `S.member` dporRunnable bpor then 1 + rest else rest
   preEmps _ _ [] = 0::Int
 
 -- | Produce a list of new backtracking points from an execution
@@ -199,29 +128,29 @@ grow dependency conservative = grow' initialCRState initialThread where
   grow' crstate tid trc@((d, _, a):rest) bpor =
     let tid'     = tidOf tid d
         crstate' = updateCRState crstate a
-    in  case M.lookup tid' $ _bdone bpor of
-          Just bpor' -> bpor { _bdone  = M.insert tid' (grow' crstate' tid' rest bpor') $ _bdone bpor }
-          Nothing    -> bpor { _btaken = if conservative then _btaken bpor else M.insert tid' a $ _btaken bpor
-                            , _btodo  = M.delete tid' $ _btodo bpor
-                            , _bdone  = M.insert tid' (subtree crstate' tid' (_bsleep bpor `M.union` _btaken bpor) trc) $ _bdone bpor }
+    in  case M.lookup tid' $ dporDone bpor of
+          Just bpor' -> bpor { dporDone  = M.insert tid' (grow' crstate' tid' rest bpor') $ dporDone bpor }
+          Nothing    -> bpor { dporTaken = if conservative then dporTaken bpor else M.insert tid' a $ dporTaken bpor
+                            , dporTodo  = M.delete tid' $ dporTodo bpor
+                            , dporDone  = M.insert tid' (subtree crstate' tid' (dporSleep bpor `M.union` dporTaken bpor) trc) $ dporDone bpor }
   grow' _ _ [] bpor = bpor
 
   subtree crstate tid sleep ((d, ts, a):rest) =
     let crstate' = updateCRState crstate a
         sleep'   = M.filterWithKey (\t a' -> not $ dependency crstate' (tid, a) (t,a')) sleep
-    in BPOR
-        { _brunnable = S.fromList $ tids tid d a ts
-        , _btodo     = M.empty
-        , _bdone     = M.fromList $ case rest of
+    in DPOR
+        { dporRunnable = S.fromList $ tids tid d a ts
+        , dporTodo     = M.empty
+        , dporDone     = M.fromList $ case rest of
           ((d', _, _):_) ->
             let tid' = tidOf tid d'
             in  [(tid', subtree crstate' tid' sleep' rest)]
           [] -> []
-        , _bsleep = sleep'
-        , _btaken = case rest of
+        , dporSleep = sleep'
+        , dporTaken = case rest of
           ((d', _, a'):_) -> M.singleton (tidOf tid d') a'
           [] -> M.empty
-        , _baction = Just a
+        , dporAction = Just a
         }
   subtree _ _ _ [] = error "Invariant failure in 'subtree': suffix empty!"
 
@@ -242,21 +171,21 @@ todo bv = go Nothing [] where
     let bpor' = backtrack priorTid pref b bpor
         tid   = _threadid b
         pref' = pref ++ [_decision b]
-        child = go (Just tid) pref' bs . fromJust $ M.lookup tid (_bdone bpor)
-    in bpor' { _bdone = M.insert tid child $ _bdone bpor' }
+        child = go (Just tid) pref' bs . fromJust $ M.lookup tid (dporDone bpor)
+    in bpor' { dporDone = M.insert tid child $ dporDone bpor' }
 
   go _ _ [] bpor = bpor
 
   backtrack priorTid pref b bpor =
     let todo' = [ x
                 | x@(t,c) <- M.toList $ _backtrack b
-                , let decision  = decisionOf priorTid (_brunnable bpor) t
+                , let decision  = decisionOf priorTid (dporRunnable bpor) t
                 , let lahead = fromJust . M.lookup t $ _runnable b
                 , bv pref (decision, lahead)
-                , t `notElem` M.keys (_bdone bpor)
-                , c || M.notMember t (_bsleep bpor)
+                , t `notElem` M.keys (dporDone bpor)
+                , c || M.notMember t (dporSleep bpor)
                 ]
-    in bpor { _btodo = _btodo bpor `M.union` M.fromList todo' }
+    in bpor { dporTodo = dporTodo bpor `M.union` M.fromList todo' }
 
 -- | Remove commits from the todo sets where every other action will
 -- result in a write barrier (and so a commit) occurring.
@@ -266,15 +195,15 @@ todo bv = go Nothing [] where
 pruneCommits :: BPOR -> BPOR
 pruneCommits bpor
   | not onlycommits || not alldonesync = go bpor
-  | otherwise = go bpor { _btodo = M.empty }
+  | otherwise = go bpor { dporTodo = M.empty }
 
   where
-    go b = b { _bdone = pruneCommits <$> _bdone bpor }
+    go b = b { dporDone = pruneCommits <$> dporDone bpor }
 
-    onlycommits = all (<initialThread) . M.keys $ _btodo bpor
-    alldonesync = all barrier . M.elems $ _bdone bpor
+    onlycommits = all (<initialThread) . M.keys $ dporTodo bpor
+    alldonesync = all barrier . M.elems $ dporDone bpor
 
-    barrier = isBarrier . simplify . fromJust . _baction
+    barrier = isBarrier . simplify . fromJust . dporAction
 
 -- * Utilities
 
