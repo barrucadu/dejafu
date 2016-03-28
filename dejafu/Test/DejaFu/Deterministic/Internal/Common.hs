@@ -297,21 +297,19 @@ type Trace' = [(Decision, [(Decision, NonEmpty Lookahead)], ThreadAction)]
 -- | Throw away information from a 'Trace'' to get just a 'Trace'.
 toTrace :: Trace' -> Trace
 toTrace = map go where
-  go (_, alters, CommitRef t c) = (Commit, goA alters, CommitRef t c)
   go (dec, alters, act) = (dec, goA alters, act)
 
   goA = map $ \x -> case x of
-    (_, WillCommitRef t c:|_) -> (Commit, WillCommitRef t c)
     (d, a:|_) -> (d, a)
 
 -- | Pretty-print a trace, including a key of the thread IDs. Each
 -- line of the key is indented by two spaces.
 showTrace :: Trace -> String
 showTrace trc = intercalate "\n" $ trace "" 0 trc : (map ("  "++) . sort . nub $ mapMaybe toKey trc) where
+  trace prefix num ((_,_,CommitRef _ _):ds) = thread prefix num ++ trace "C" 1 ds
   trace prefix num ((Start    (ThreadId _ i),_,_):ds) = thread prefix num ++ trace ("S" ++ show i) 1 ds
   trace prefix num ((SwitchTo (ThreadId _ i),_,_):ds) = thread prefix num ++ trace ("P" ++ show i) 1 ds
   trace prefix num ((Continue,_,_):ds) = trace prefix (num + 1) ds
-  trace prefix num ((Commit,_,_):ds)   = thread prefix num ++ trace "C" 1 ds
   trace prefix num [] = thread prefix num
 
   thread prefix num = prefix ++ replicate num '-'
@@ -330,9 +328,6 @@ data Decision =
   -- ^ Continue running the last thread for another step.
   | SwitchTo ThreadId
   -- ^ Pre-empt the running thread, and switch to another.
-  | Commit
-  -- ^ Commit a 'CRef' write action so that every thread can see the
-  -- result.
   deriving (Eq, Show)
 
 instance NFData Decision where
