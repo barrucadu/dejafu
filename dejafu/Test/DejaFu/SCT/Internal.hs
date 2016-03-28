@@ -145,12 +145,14 @@ next = go initialThread where
 
 -- | Produce a list of new backtracking points from an execution
 -- trace.
-findBacktrack :: MemType
+findBacktrack
+  :: (CRState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool)
+  -- ^ Dependency function
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -> Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
   -> Trace'
   -> [BacktrackStep]
-findBacktrack memtype backtrack = go initialCRState S.empty initialThread [] . Sq.viewl where
+findBacktrack dependency backtrack = go initialCRState S.empty initialThread [] . Sq.viewl where
   go crstate allThreads tid bs ((e,i):<is) ((d,_,a):ts) =
     let tid' = tidOf tid d
         crstate' = updateCRState crstate a
@@ -181,12 +183,18 @@ findBacktrack memtype backtrack = go initialCRState S.empty initialThread [] . S
             | _threadid b == v && (killsEarly || isDependent b) = Just i
             | otherwise = Nothing
 
-          isDependent b = dependent' memtype (_crstate b) (_threadid b, snd $ _decision b) (u, n)
+          isDependent b = dependency (_crstate b) (_threadid b, snd $ _decision b) (u, n)
     in foldl' (\b (i, u) -> backtrack b i u) bs idxs
 
 -- | Add a new trace to the tree, creating a new subtree.
-grow :: MemType -> Bool -> Trace' -> BPOR -> BPOR
-grow memtype conservative = grow' initialCRState initialThread where
+grow
+  :: (CRState -> (ThreadId, ThreadAction) -> (ThreadId, ThreadAction) -> Bool)
+  -- ^ Dependency function
+  -> Bool
+  -> Trace'
+  -> BPOR
+  -> BPOR
+grow dependency conservative = grow' initialCRState initialThread where
   grow' crstate tid trc@((d, _, a):rest) bpor =
     let tid'     = tidOf tid d
         crstate' = updateCRState crstate a
@@ -199,7 +207,7 @@ grow memtype conservative = grow' initialCRState initialThread where
 
   subtree crstate tid sleep ((d, ts, a):rest) =
     let crstate' = updateCRState crstate a
-        sleep'   = M.filterWithKey (\t a' -> not $ dependent memtype crstate' (tid, a) (t,a')) sleep
+        sleep'   = M.filterWithKey (\t a' -> not $ dependency crstate' (tid, a) (t,a')) sleep
     in BPOR
         { _brunnable = S.fromList $ tids tid d a ts
         , _btodo     = M.empty

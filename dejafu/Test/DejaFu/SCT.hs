@@ -424,8 +424,8 @@ sctBoundedM memtype bf backtrack run = go initialState where
     Just (sched, conservative, sleep) -> do
       (res, s, trace) <- run memtype (bporSched memtype $ initialise bf) (initialSchedState sleep sched)
 
-      let bpoints = findBacktrack memtype backtrack (_sbpoints s) trace
-      let newBPOR = grow memtype conservative trace bpor
+      let bpoints = findBacktrack (dependent' memtype) backtrack (_sbpoints s) trace
+      let newBPOR = grow (dependent memtype) conservative trace bpor
 
       if _signore s
       then go newBPOR
