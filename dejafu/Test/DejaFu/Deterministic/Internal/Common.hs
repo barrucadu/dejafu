@@ -286,14 +286,12 @@ initialIdSource = Id 0 0 0 0 [] [] [] []
 type Scheduler s = s -> [(Decision ThreadId, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, NonEmpty Lookahead) -> (Maybe ThreadId, s)
 
 -- | One of the outputs of the runner is a @Trace@, which is a log of
--- decisions made, alternative decisions (including what action would
--- have been performed had that decision been taken), and the action a
--- thread took in its step.
-type Trace = [(Decision ThreadId, [(Decision ThreadId, Lookahead)], ThreadAction)]
+-- decisions made, all the runnable threads with lookahead (including
+-- the chosen thread), and the action a thread took in its step.
+type Trace = [(Decision ThreadId, [(ThreadId, Lookahead)], ThreadAction)]
 
--- | Like a 'Trace', but gives more lookahead (where possible) for
--- alternative decisions.
-type Trace' = [(Decision ThreadId, [(Decision ThreadId, NonEmpty Lookahead)], ThreadAction)]
+-- | Like a 'Trace', but gives more lookahead (where possible).
+type Trace' = [(Decision ThreadId, [(ThreadId, NonEmpty Lookahead)], ThreadAction)]
 
 -- | Throw away information from a 'Trace'' to get just a 'Trace'.
 toTrace :: Trace' -> Trace

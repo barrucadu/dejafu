@@ -107,7 +107,7 @@ import Data.Map (Map)
 import Data.Maybe (isNothing, isJust, fromJust)
 import Test.DejaFu.Deterministic hiding (Decision(..))
 import Test.DejaFu.Deterministic.Internal (initialThread, willRelease)
-import Test.DejaFu.DPOR (BacktrackStep(..), Decision(..), decisionOf, findBacktrackSteps, findSchedulePrefix, initialState)
+import Test.DejaFu.DPOR (BacktrackStep(..), Decision(..), decisionOf, findBacktrackSteps, findSchedulePrefix, incorporateTrace, initialState)
 import Test.DejaFu.SCT.Internal
 
 import qualified Data.Map.Strict as M
@@ -422,9 +422,11 @@ sctBoundedM memtype bf backtrack run = go (initialState initialThread) where
     Just (sched, conservative, sleep) -> do
       (res, s, trace) <- run memtype (bporSched memtype $ initialise bf) (initialSchedState sleep sched)
 
-      let trace'  = map (\(d,_,a) -> (d,a)) trace
-      let bpoints = findBacktrackSteps initialCRState updateCRState (dependent' memtype) backtrack (_sbpoints s) trace'
-      let newBPOR = grow initialCRState updateCRState (dependent memtype) conservative trace bpor
+      let trace1  = map (\(d,_,a) -> (d,a)) trace
+      let trace2  = map (\(d,ts,a) -> (d,map fst ts,a)) trace
+
+      let bpoints = findBacktrackSteps initialCRState updateCRState (dependent' memtype) backtrack (_sbpoints s) trace1
+      let newBPOR = incorporateTrace initialCRState updateCRState (dependent memtype) conservative trace2 bpor
 
       if _signore s
       then go newBPOR

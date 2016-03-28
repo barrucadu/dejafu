@@ -155,18 +155,13 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
         | prior `notElem` map (Just . fst) runnable' = Start chosen
         | otherwise = SwitchTo chosen
 
-      alternatives
-        | Just chosen == prior = [(SwitchTo t, na) | (t, na) <- runnable', Just t /= prior]
-        | prior `notElem` map (Just . fst) runnable' = [(Start t, na) | (t, na) <- runnable', t /= chosen]
-        | otherwise = [(if Just t == prior then Continue else SwitchTo t, na) | (t, na) <- runnable', t /= chosen]
-
       nextActions t = lookahead . _continuation . fromJust $ M.lookup t threadsc
 
       stop outg = return (outg, idSource, sofar)
       die  outg reason = writeRef fixed ref (Just $ Left reason) >> stop outg
 
       loop threads' idSource' act wb' =
-        let sofar' = ((decision, alternatives, act) : sofar)
+        let sofar' = ((decision, runnable', act) : sofar)
             threads'' = if (interruptible <$> M.lookup chosen threads') /= Just False then unblockWaitingOn chosen threads' else threads'
         in go idSource' sofar' (Just chosen) g' (delCommitThreads threads'') wb'
 

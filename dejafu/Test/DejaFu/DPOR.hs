@@ -11,9 +11,11 @@ module Test.DejaFu.DPOR
   , BacktrackStep(..)
   , initialState
   , findSchedulePrefix
+  , incorporateTrace
   , findBacktrackSteps
 
   -- * Utilities
+  , initialDPORThread
   , toDot
   , toDotFiltered
   ) where
@@ -190,7 +192,7 @@ findSchedulePrefix :: Ord thread_id
   -- which may be useful in some cases.
   -> DPOR thread_id thread_action
   -> Maybe ([thread_id], Bool, Map thread_id thread_action)
-findSchedulePrefix predicate dporRoot = go (initialThread dporRoot) dporRoot where
+findSchedulePrefix predicate dporRoot = go (initialDPORThread dporRoot) dporRoot where
   go tid dpor =
         -- All the possible prefix traces from this point, with
         -- updated DPOR subtrees if taken from the done list.
@@ -211,15 +213,61 @@ findSchedulePrefix predicate dporRoot = go (initialThread dporRoot) dporRoot whe
   -- branching from, plus all the decisions we've already explored.
   sleeps dpor = dporSleep dpor `M.union` dporTaken dpor
 
-  -- The initial thread of a DPOR tree.
-  initialThread = S.elemAt 0 . dporRunnable
-
   -- The number of pre-emptive context switches
   preEmps tid dpor (t:ts) =
     let rest = preEmps t (fromJust . M.lookup t $ dporDone dpor) ts
     in  if tid `S.member` dporRunnable dpor then 1 + rest else rest
   preEmps _ _ [] = 0::Int
 
+-- | Add a new trace to the tree, creating a new subtree branching off
+-- at the point where the \"to-do\" decision was made.
+incorporateTrace :: Ord thread_id
+  => state
+  -- ^ Initial state
+  -> (state -> thread_action -> state)
+  -- ^ State step function
+  -> (state -> (thread_id, thread_action) -> (thread_id, thread_action) -> Bool)
+  -- ^ Dependency function
+  -> Bool
+  -- ^ Whether the \"to-do\" point which was used to create this new
+  -- execution was conservative or not.
+  -> [(Decision thread_id, [thread_id], thread_action)]
+  -- ^ The execution trace: the decision made, the runnable threads,
+  -- and the action performed.
+  -> DPOR thread_id thread_action
+  -> DPOR thread_id thread_action
+incorporateTrace stinit ststep dependency conservative trace dporRoot = grow stinit (initialDPORThread dporRoot) trace dporRoot where
+  grow state tid trc@((d, _, a):rest) dpor =
+    let tid'   = tidOf tid d
+        state' = ststep state a
+    in  case M.lookup tid' $ dporDone dpor of
+          Just dpor' -> dpor { dporDone  = M.insert tid' (grow state' tid' rest dpor') $ dporDone dpor }
+          Nothing    -> dpor { dporTaken = if conservative then dporTaken dpor else M.insert tid' a $ dporTaken dpor
+                            , dporTodo  = M.delete tid' $ dporTodo dpor
+                            , dporDone  = M.insert tid' (subtree state' tid' (dporSleep dpor `M.union` dporTaken dpor) trc) $ dporDone dpor }
+  grow _ _ [] dpor = dpor
+
+  -- Construct a new subtree corresponding to a trace suffix.
+  subtree state tid sleep ((_, _, a):rest) =
+    let state' = ststep state a
+        sleep' = M.filterWithKey (\t a' -> not $ dependency state' (tid, a) (t,a')) sleep
+    in DPOR
+        { dporRunnable = S.fromList $ case rest of
+            ((_, runnable, _):_) -> runnable
+            [] -> []
+        , dporTodo     = M.empty
+        , dporDone     = M.fromList $ case rest of
+          ((d', _, _):_) ->
+            let tid' = tidOf tid d'
+            in  [(tid', subtree state' tid' sleep' rest)]
+          [] -> []
+        , dporSleep = sleep'
+        , dporTaken = case rest of
+          ((d', _, a'):_) -> M.singleton (tidOf tid d') a'
+          [] -> M.empty
+        , dporAction = Just a
+        }
+  subtree _ _ _ [] = error "incorporateTrace: (internal error) subtree suffix empty!"
 
 -- | Produce a list of new backtracking points from an execution
 -- trace. These are then used to inform new \"to-do\" points in the
@@ -299,6 +347,10 @@ findBacktrackSteps stinit ststep dependency backtrack bcktrck = go stinit S.empt
 
 -------------------------------------------------------------------------------
 -- Utilities
+
+-- The initial thread of a DPOR tree.
+initialDPORThread :: DPOR thread_id thread_action -> thread_id
+initialDPORThread = S.elemAt 0 . dporRunnable
 
 -- | Render a 'DPOR' value as a graph in GraphViz \"dot\" format.
 toDot
