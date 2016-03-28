@@ -8,8 +8,10 @@ module Test.DejaFu.DPOR
 
   -- * Dynamic partial-order reduction
   , DPOR(..)
+  , BacktrackStep(..)
   , initialState
   , findSchedulePrefix
+  , findBacktrackSteps
 
   -- * Utilities
   , toDot
@@ -19,13 +21,16 @@ module Test.DejaFu.DPOR
 import Control.DeepSeq (NFData(..))
 import Data.Char (ord)
 import Data.List (foldl', intercalate, partition, sortBy)
+import Data.List.Extra (NonEmpty(..), toList)
 import Data.Ord (Down(..), comparing)
 import Data.Map.Strict (Map)
 import Data.Maybe (fromJust, mapMaybe)
 import Data.Set (Set)
+import Data.Sequence (Seq, ViewL(..))
 
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
+import qualified Data.Sequence as Sq
 
 -------------------------------------------------------------------------------
 -- Scheduling decisions
@@ -122,6 +127,35 @@ instance ( NFData thread_id
                  , dporAction   dpor
                  )
 
+-- | One step of the execution, including information for backtracking
+-- purposes. This backtracking information is used to generate new
+-- schedules.
+data BacktrackStep thread_id thread_action lookahead state = BacktrackStep
+  { bcktThreadid   :: thread_id
+  -- ^ The thread running at this step
+  , bcktDecision   :: (Decision thread_id, thread_action)
+  -- ^ What happened at this step.
+  , bcktRunnable   :: Map thread_id lookahead
+  -- ^ The threads runnable at this step
+  , bcktBacktracks :: Map thread_id Bool
+  -- ^ The list of alternative threads to run, and whether those
+  -- alternatives were added conservatively due to the bound.
+  , bcktState      :: state
+  -- ^ Some domain-specific state at this point.
+  } deriving Show
+
+instance ( NFData thread_id
+         , NFData thread_action
+         , NFData lookahead
+         , NFData state
+         ) => NFData (BacktrackStep thread_id thread_action lookahead state) where
+  rnf b = rnf ( bcktThreadid   b
+              , bcktDecision   b
+              , bcktRunnable   b
+              , bcktBacktracks b
+              , bcktState      b
+              )
+
 -- | Initial DPOR state, given an initial thread ID. This initial
 -- thread should exist and be runnable at the start of execution.
 initialState :: Ord thread_id => thread_id -> DPOR thread_id thread_action
@@ -134,7 +168,7 @@ initialState initialThread = DPOR
   , dporAction   = Nothing
   }
 
--- | Produce a new schedule prefix from a DPOR tree. If there are no new
+-- | Produce a new schedule prefix from a @DPOR@ tree. If there are no new
 -- prefixes remaining, return 'Nothing'. Also returns whether the
 -- decision was added conservatively, and the sleep set at the point
 -- where divergence happens.
@@ -185,6 +219,83 @@ findSchedulePrefix predicate dporRoot = go (initialThread dporRoot) dporRoot whe
     let rest = preEmps t (fromJust . M.lookup t $ dporDone dpor) ts
     in  if tid `S.member` dporRunnable dpor then 1 + rest else rest
   preEmps _ _ [] = 0::Int
+
+
+-- | Produce a list of new backtracking points from an execution
+-- trace. These are then used to inform new \"to-do\" points in the
+-- @DPOR@ tree.
+--
+-- Two traces are passed in to this function: the first is generated
+-- from the special DPOR scheduler, the other from the execution of
+-- the concurrent program.
+--
+-- If the trace ends with any threads other than the initial one still
+-- runnable, a dependency is imposed between this final action and
+-- everything else.
+findBacktrackSteps :: Ord thread_id
+  => state
+  -- ^ Initial state.
+  -> (state -> thread_action -> state)
+  -- ^ State step function.
+  -> (state -> (thread_id, thread_action) -> (thread_id, lookahead) -> Bool)
+  -- ^ Dependency function.
+  -> ([BacktrackStep thread_id thread_action lookahead state] -> Int -> thread_id -> [BacktrackStep thread_id thread_action lookahead state])
+  -- ^ Backtracking function. Given a list of backtracking points, and
+  -- a thread to backtrack to at a specific point in that list, add
+  -- the new backtracking points. There will be at least one: this
+  -- chosen one, but the function may add others.
+  -> Seq (NonEmpty (thread_id, lookahead), [thread_id])
+  -- ^ A sequence of threads at each step: the nonempty list of
+  -- runnable threads (with lookahead values), and the list of threads
+  -- still to try. The reason for the two separate lists is because
+  -- the threads chosen to try will be dependent on the specific
+  -- domain.
+  -> [(Decision thread_id, thread_action)]
+  -- ^ The execution trace.
+  -> [BacktrackStep thread_id thread_action lookahead state]
+findBacktrackSteps stinit ststep dependency backtrack bcktrck = go stinit S.empty initialThread [] (Sq.viewl bcktrck) where
+  -- Get the initial thread ID
+  initialThread = case Sq.viewl bcktrck of
+    (((tid, _):|_, _):<_) -> tid
+    _ -> error "findBacktrack: empty backtracking sequence."
+
+  -- Walk through the traces one step at a time, building up a list of
+  -- new backtracking points.
+  go state allThreads tid bs ((e,i):<is) ((d,a):ts) =
+    let tid' = tidOf tid d
+        state' = ststep state a
+        this = BacktrackStep
+          { bcktThreadid   = tid'
+          , bcktDecision   = (d, a)
+          , bcktRunnable   = M.fromList . toList $ e
+          , bcktBacktracks = M.fromList $ map (\i' -> (i', False)) i
+          , bcktState      = state'
+          }
+        bs' = doBacktrack killsEarly allThreads' (toList e) (bs++[this])
+        runnable = S.fromList (M.keys $ bcktRunnable this)
+        allThreads' = allThreads `S.union` runnable
+        killsEarly = null ts && any (/=initialThread) runnable
+    in go state' allThreads' tid' bs' (Sq.viewl is) ts
+  go _ _ _ bs _ _ = bs
+
+  -- Find the prior actions dependent with this one and add
+  -- backtracking points.
+  doBacktrack killsEarly allThreads enabledThreads bs =
+    let tagged = reverse $ zip [0..] bs
+        idxs   = [ (head is, u)
+                 | (u, n) <- enabledThreads
+                 , v <- S.toList allThreads
+                 , u /= v
+                 , let is = idxs' u n v tagged
+                 , not $ null is]
+
+        idxs' u n v = mapMaybe go' where
+          go' (i, b)
+            | bcktThreadid b == v && (killsEarly || isDependent b) = Just i
+            | otherwise = Nothing
+
+          isDependent b = dependency (bcktState b) (bcktThreadid b, snd $ bcktDecision b) (u, n)
+    in foldl' (\b (i, u) -> backtrack b i u) bs idxs
 
 -------------------------------------------------------------------------------
 -- Utilities

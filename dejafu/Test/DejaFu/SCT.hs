@@ -107,7 +107,7 @@ import Data.Map (Map)
 import Data.Maybe (isNothing, isJust, fromJust)
 import Test.DejaFu.Deterministic hiding (Decision(..))
 import Test.DejaFu.Deterministic.Internal (initialThread, willRelease)
-import Test.DejaFu.DPOR (Decision(..), decisionOf, findSchedulePrefix, initialState)
+import Test.DejaFu.DPOR (BacktrackStep(..), Decision(..), decisionOf, findBacktrackSteps, findSchedulePrefix, initialState)
 import Test.DejaFu.SCT.Internal
 
 import qualified Data.Map.Strict as M
@@ -176,7 +176,7 @@ cBound (Bounds pb fb lb) = maybe trueBound pbBound pb &+& maybe trueBound fBound
 -- corresponding to enabled bound functions.
 --
 -- If no bounds are enabled, just backtrack to the given point.
-cBacktrack :: Bounds -> [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
+cBacktrack :: Ord tid => Bounds -> [BacktrackStep tid ThreadAction Lookahead st] -> Int -> tid -> [BacktrackStep tid ThreadAction Lookahead st]
 cBacktrack (Bounds Nothing Nothing Nothing) bs i t = backtrackAt (const False) False bs i t
 cBacktrack (Bounds pb fb lb) bs i t = lBack . fBack $ pBack bs where
   pBack backs = if isJust pb then pbBacktrack backs i t else backs
@@ -188,34 +188,35 @@ cBacktrack (Bounds pb fb lb) bs i t = lBack . fBack $ pBack bs where
 --
 -- If the backtracking point is already present, don't re-add it
 -- UNLESS this is a conservative backtracking point.
-backtrackAt :: (BacktrackStep -> Bool)
+backtrackAt :: Ord tid
+  => (BacktrackStep tid ta lh st -> Bool)
   -- ^ If this returns @True@, backtrack to all runnable threads,
   -- rather than just the given thread.
   -> Bool
   -- ^ Is this backtracking point conservative? Conservative points
   -- are always explored, whereas non-conservative ones might be
   -- skipped based on future information.
-  -> [BacktrackStep]
+  -> [BacktrackStep tid ta lh st]
   -- ^ Original list of backtracking steps.
   -> Int
   -- ^ Index in the list to add the step. MUST be in the list.
-  -> ThreadId
+  -> tid
   -- ^ The thread to backtrack to. If not runnable at that step, all
   -- runnable threads will be backtracked to instead.
-  -> [BacktrackStep]
+  -> [BacktrackStep tid ta lh st]
 backtrackAt toAll conservative bs i tid = go bs i where
   go bx@(b:rest) 0
     -- If the backtracking point is already present, don't re-add it,
     -- UNLESS this would force it to backtrack (it's conservative)
     -- where before it might not.
-    | not (toAll b) && tid `M.member` _runnable b =
-      let val = M.lookup tid $ _backtrack b
+    | not (toAll b) && tid `M.member` bcktRunnable b =
+      let val = M.lookup tid $ bcktBacktracks b
       in  if isNothing val || (val == Just False && conservative)
-          then b { _backtrack = M.insert tid conservative $ _backtrack b } : rest
+          then b { bcktBacktracks = M.insert tid conservative $ bcktBacktracks b } : rest
           else bx
 
     -- Otherwise just backtrack to everything runnable.
-    | otherwise = b { _backtrack = M.fromList [ (t',conservative) | t' <- M.keys $ _runnable b ] } : rest
+    | otherwise = b { bcktBacktracks = M.fromList [ (t',conservative) | t' <- M.keys $ bcktRunnable b ] } : rest
 
   go (b:rest) n = b : go rest (n-1)
   go [] _ = error "Ran out of schedule whilst backtracking!"
@@ -266,19 +267,19 @@ preEmpCount' trc = preEmpCount (map (\(d,_,a) -> (d, a)) trc) (Continue, WillSto
 -- the most recent transition before that point. This may result in
 -- the same state being reached multiple times, but is needed because
 -- of the artificial dependency imposed by the bound.
-pbBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
+pbBacktrack :: Ord tid => [BacktrackStep tid ThreadAction lh st] -> Int -> tid -> [BacktrackStep tid ThreadAction lh st]
 pbBacktrack bs i tid = maybe id (\j' b -> backtrack True b j' tid) j $ backtrack False bs i tid where
   -- Index of the conservative point
   j = goJ . reverse . pairs $ zip [0..i-1] bs where
     goJ (((_,b1), (j',b2)):rest)
-      | _threadid b1 /= _threadid b2 && not (commit b1) && not (commit b2) = Just j'
+      | bcktThreadid b1 /= bcktThreadid b2 && not (commit b1) && not (commit b2) = Just j'
       | otherwise = goJ rest
     goJ [] = Nothing
 
   {-# INLINE pairs #-}
   pairs = zip <*> tail
 
-  commit b = case _decision b of
+  commit b = case bcktDecision b of
     (_, CommitRef _ _) -> True
     _ -> False
 
@@ -336,10 +337,10 @@ maxYieldCountDiff ts dl = maximum yieldCountDiffs where
 
 -- | Add a backtrack point. If the thread isn't runnable, or performs
 -- a release operation, add all runnable threads.
-fBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
+fBacktrack :: Ord tid => [BacktrackStep tid ThreadAction Lookahead st] -> Int -> tid -> [BacktrackStep tid ThreadAction Lookahead st]
 fBacktrack bs i t = backtrackAt check False bs i t where
   -- True if a release operation is performed.
-  check b = Just True == (willRelease <$> M.lookup t (_runnable b))
+  check b = Just True == (willRelease <$> M.lookup t (bcktRunnable b))
 
 -- * Length Bounding
 
@@ -371,7 +372,7 @@ lBound (LengthBound lb) ts _ = length ts < lb
 
 -- | Add a backtrack point. If the thread isn't runnable, add all
 -- runnable threads.
-lBacktrack :: [BacktrackStep] -> Int -> ThreadId -> [BacktrackStep]
+lBacktrack :: Ord tid => [BacktrackStep tid ta lh st] -> Int -> tid -> [BacktrackStep tid ta lh st]
 lBacktrack = backtrackAt (const False) False
 
 -- * BPOR
@@ -392,7 +393,7 @@ sctBounded :: MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> BoundFunc
   -- ^ Check if a prefix trace is within the bound
-  -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
+  -> ([BacktrackStep ThreadId ThreadAction Lookahead CRState] -> Int -> ThreadId -> [BacktrackStep ThreadId ThreadAction Lookahead CRState])
   -- ^ Add a new backtrack point, this takes the history of the
   -- execution so far, the index to insert the backtracking point, and
   -- the thread to backtrack to. This may insert more than one
@@ -403,7 +404,7 @@ sctBounded memtype bf backtrack c = runIdentity $ sctBoundedM memtype bf backtra
 
 -- | Variant of 'sctBounded' for computations which do 'IO'.
 sctBoundedIO :: MemType -> BoundFunc
-  -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
+  -> ([BacktrackStep ThreadId ThreadAction Lookahead CRState] -> Int -> ThreadId -> [BacktrackStep ThreadId ThreadAction Lookahead CRState])
   -> ConcIO a -> IO [(Either Failure a, Trace)]
 sctBoundedIO memtype bf backtrack c = sctBoundedM memtype bf backtrack run where
   run memty sched s = runConcIO' sched memty s c
@@ -412,7 +413,7 @@ sctBoundedIO memtype bf backtrack c = sctBoundedM memtype bf backtrack run where
 sctBoundedM :: (Functor m, Monad m)
   => MemType
   -> ([(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Bool)
-  -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
+  -> ([BacktrackStep ThreadId ThreadAction Lookahead CRState] -> Int -> ThreadId -> [BacktrackStep ThreadId ThreadAction Lookahead CRState])
   -> (MemType -> Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
   -- ^ Monadic runner, with computation fixed.
   -> m [(Either Failure a, Trace)]
@@ -421,8 +422,9 @@ sctBoundedM memtype bf backtrack run = go (initialState initialThread) where
     Just (sched, conservative, sleep) -> do
       (res, s, trace) <- run memtype (bporSched memtype $ initialise bf) (initialSchedState sleep sched)
 
-      let bpoints = findBacktrack (dependent' memtype) backtrack (_sbpoints s) trace
-      let newBPOR = grow (dependent memtype) conservative trace bpor
+      let trace'  = map (\(d,_,a) -> (d,a)) trace
+      let bpoints = findBacktrackSteps initialCRState updateCRState (dependent' memtype) backtrack (_sbpoints s) trace'
+      let newBPOR = grow initialCRState updateCRState (dependent memtype) conservative trace bpor
 
       if _signore s
       then go newBPOR

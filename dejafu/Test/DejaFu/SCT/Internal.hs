@@ -1,115 +1,51 @@
 -- | Internal utilities and types for BPOR.
 module Test.DejaFu.SCT.Internal where
 
-import Control.DeepSeq (NFData(..))
-import Data.List (foldl')
 import Data.Map.Strict (Map)
-import Data.Maybe (mapMaybe, isJust, fromJust)
-import Data.Sequence (Seq, ViewL(..))
+import Data.Maybe (isJust, fromJust)
 import Test.DejaFu.Deterministic.Internal hiding (Decision(..))
-import Test.DejaFu.Deterministic.Schedule
-import Test.DejaFu.DPOR (Decision(..), DPOR(..), decisionOf, tidOf)
+import Test.DejaFu.DPOR (BacktrackStep(..), Decision(..), DPOR(..), decisionOf, tidOf)
 
 import qualified Data.Map.Strict as M
-import qualified Data.Sequence as Sq
 import qualified Data.Set as S
 
 -- * BPOR state
 
 type BPOR = DPOR ThreadId ThreadAction
 
--- | One step of the execution, including information for backtracking
--- purposes. This backtracking information is used to generate new
--- schedules.
-data BacktrackStep = BacktrackStep
-  { _threadid  :: ThreadId
-  -- ^ The thread running at this step
-  , _decision  :: (Decision ThreadId, ThreadAction)
-  -- ^ What happened at this step.
-  , _runnable  :: Map ThreadId Lookahead
-  -- ^ The threads runnable at this step
-  , _backtrack :: Map ThreadId Bool
-  -- ^ The list of alternative threads to run, and whether those
-  -- alternatives were added conservatively due to the bound.
-  , _crstate :: CRState
-  -- ^ The relaxed memory state of the @CRef@s at this point.
-  } deriving Show
-
-instance NFData BacktrackStep where
-  rnf b = rnf (_threadid b, _decision b, _runnable b, _backtrack b)
-
--- | Produce a list of new backtracking points from an execution
--- trace.
-findBacktrack
-  :: (CRState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool)
-  -- ^ Dependency function
-  -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
-  -> Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
-  -> Trace'
-  -> [BacktrackStep]
-findBacktrack dependency backtrack = go initialCRState S.empty initialThread [] . Sq.viewl where
-  go crstate allThreads tid bs ((e,i):<is) ((d,_,a):ts) =
-    let tid' = tidOf tid d
-        crstate' = updateCRState crstate a
-        this = BacktrackStep
-          { _threadid  = tid'
-          , _decision  = (d, a)
-          , _runnable  = M.fromList . toList $ e
-          , _backtrack = M.fromList $ map (\i' -> (i', False)) i
-          , _crstate   = crstate'
-          }
-        bs' = doBacktrack killsEarly allThreads' (toList e) (bs++[this])
-        allThreads' = allThreads `S.union` S.fromList (M.keys $ _runnable this)
-        killsEarly = null ts && any (/=initialThread) (M.keys $ _runnable this)
-    in go crstate' allThreads' tid' bs' (Sq.viewl is) ts
-  go _ _ _ bs _ _ = bs
-
-  doBacktrack killsEarly allThreads enabledThreads bs =
-    let tagged = reverse $ zip [0..] bs
-        idxs   = [ (head is, u)
-                 | (u, n) <- enabledThreads
-                 , v <- S.toList allThreads
-                 , u /= v
-                 , let is = idxs' u n v tagged
-                 , not $ null is]
-
-        idxs' u n v = mapMaybe go' where
-          go' (i, b)
-            | _threadid b == v && (killsEarly || isDependent b) = Just i
-            | otherwise = Nothing
-
-          isDependent b = dependency (_crstate b) (_threadid b, snd $ _decision b) (u, n)
-    in foldl' (\b (i, u) -> backtrack b i u) bs idxs
-
 -- | Add a new trace to the tree, creating a new subtree.
 grow
-  :: (CRState -> (ThreadId, ThreadAction) -> (ThreadId, ThreadAction) -> Bool)
+  :: state
+  -- ^ Initial state
+  -> (state -> ThreadAction -> state)
+  -- ^ State step function
+  -> (state -> (ThreadId, ThreadAction) -> (ThreadId, ThreadAction) -> Bool)
   -- ^ Dependency function
   -> Bool
   -> Trace'
   -> BPOR
   -> BPOR
-grow dependency conservative = grow' initialCRState initialThread where
-  grow' crstate tid trc@((d, _, a):rest) bpor =
-    let tid'     = tidOf tid d
-        crstate' = updateCRState crstate a
+grow stinit ststep dependency conservative = grow' stinit initialThread where
+  grow' state tid trc@((d, _, a):rest) bpor =
+    let tid'   = tidOf tid d
+        state' = ststep state a
     in  case M.lookup tid' $ dporDone bpor of
-          Just bpor' -> bpor { dporDone  = M.insert tid' (grow' crstate' tid' rest bpor') $ dporDone bpor }
+          Just bpor' -> bpor { dporDone  = M.insert tid' (grow' state' tid' rest bpor') $ dporDone bpor }
           Nothing    -> bpor { dporTaken = if conservative then dporTaken bpor else M.insert tid' a $ dporTaken bpor
                             , dporTodo  = M.delete tid' $ dporTodo bpor
-                            , dporDone  = M.insert tid' (subtree crstate' tid' (dporSleep bpor `M.union` dporTaken bpor) trc) $ dporDone bpor }
+                            , dporDone  = M.insert tid' (subtree state' tid' (dporSleep bpor `M.union` dporTaken bpor) trc) $ dporDone bpor }
   grow' _ _ [] bpor = bpor
 
-  subtree crstate tid sleep ((d, ts, a):rest) =
-    let crstate' = updateCRState crstate a
-        sleep'   = M.filterWithKey (\t a' -> not $ dependency crstate' (tid, a) (t,a')) sleep
+  subtree state tid sleep ((d, ts, a):rest) =
+    let state' = ststep state a
+        sleep' = M.filterWithKey (\t a' -> not $ dependency state' (tid, a) (t,a')) sleep
     in DPOR
         { dporRunnable = S.fromList $ tids tid d a ts
         , dporTodo     = M.empty
         , dporDone     = M.fromList $ case rest of
           ((d', _, _):_) ->
             let tid' = tidOf tid d'
-            in  [(tid', subtree crstate' tid' sleep' rest)]
+            in  [(tid', subtree state' tid' sleep' rest)]
           [] -> []
         , dporSleep = sleep'
         , dporTaken = case rest of
@@ -130,22 +66,22 @@ grow dependency conservative = grow' initialCRState initialThread where
 
 -- | Add new backtracking points, if they have not already been
 -- visited, fit into the bound, and aren't in the sleep set.
-todo :: ([(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Bool) -> [BacktrackStep] -> BPOR -> BPOR
+todo :: ([(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Bool) -> [BacktrackStep ThreadId ThreadAction Lookahead state] -> BPOR -> BPOR
 todo bv = go Nothing [] where
   go priorTid pref (b:bs) bpor =
-    let bpor' = backtrack priorTid pref b bpor
-        tid   = _threadid b
-        pref' = pref ++ [_decision b]
+    let bpor' = doBacktrack priorTid pref b bpor
+        tid   = bcktThreadid b
+        pref' = pref ++ [bcktDecision b]
         child = go (Just tid) pref' bs . fromJust $ M.lookup tid (dporDone bpor)
     in bpor' { dporDone = M.insert tid child $ dporDone bpor' }
 
   go _ _ [] bpor = bpor
 
-  backtrack priorTid pref b bpor =
+  doBacktrack priorTid pref b bpor =
     let todo' = [ x
-                | x@(t,c) <- M.toList $ _backtrack b
+                | x@(t,c) <- M.toList $ bcktBacktracks b
                 , let decision  = decisionOf priorTid (dporRunnable bpor) t
-                , let lahead = fromJust . M.lookup t $ _runnable b
+                , let lahead = fromJust . M.lookup t $ bcktRunnable b
                 , bv pref (decision, lahead)
                 , t `notElem` M.keys (dporDone bpor)
                 , c || M.notMember t (dporSleep bpor)
