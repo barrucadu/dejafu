@@ -236,20 +236,20 @@ grow dependency conservative = grow' initialCRState initialThread where
 -- | Add new backtracking points, if they have not already been
 -- visited, fit into the bound, and aren't in the sleep set.
 todo :: ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool) -> [BacktrackStep] -> BPOR -> BPOR
-todo bv = go initialThread [] where
-  go tid pref (b:bs) bpor =
-    let bpor' = backtrack pref b bpor
-        tid'  = tidOf tid . fst $ _decision b
+todo bv = go Nothing [] where
+  go priorTid pref (b:bs) bpor =
+    let bpor' = backtrack priorTid pref b bpor
+        tid   = _threadid b
         pref' = pref ++ [_decision b]
-        child = go tid' pref' bs . fromJust $ M.lookup tid' (_bdone bpor)
-    in bpor' { _bdone = M.insert tid' child $ _bdone bpor' }
+        child = go (Just tid) pref' bs . fromJust $ M.lookup tid (_bdone bpor)
+    in bpor' { _bdone = M.insert tid child $ _bdone bpor' }
 
   go _ _ [] bpor = bpor
 
-  backtrack pref b bpor =
+  backtrack priorTid pref b bpor =
     let todo' = [ x
                 | x@(t,c) <- M.toList $ _backtrack b
-                , let decision  = decisionOf (Just . activeTid $ map fst pref) (_brunnable bpor) t
+                , let decision  = decisionOf priorTid (_brunnable bpor) t
                 , let lahead = fromJust . M.lookup t $ _runnable b
                 , bv pref (decision, lahead)
                 , t `notElem` M.keys (_bdone bpor)
