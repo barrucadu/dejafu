@@ -8,8 +8,9 @@ import Data.Maybe (mapMaybe, isJust, fromJust, listToMaybe)
 import Data.Ord (Down(..), comparing)
 import Data.Sequence (Seq, ViewL(..))
 import Data.Set (Set)
-import Test.DejaFu.Deterministic.Internal
+import Test.DejaFu.Deterministic.Internal hiding (Decision(..))
 import Test.DejaFu.Deterministic.Schedule
+import Test.DejaFu.DPOR (Decision(..), decisionOf, tidOf)
 
 import qualified Data.Map.Strict as M
 import qualified Data.Sequence as Sq
@@ -23,7 +24,7 @@ import qualified Data.Set as S
 data BacktrackStep = BacktrackStep
   { _threadid  :: ThreadId
   -- ^ The thread running at this step
-  , _decision  :: (Decision, ThreadAction)
+  , _decision  :: (Decision ThreadId, ThreadAction)
   -- ^ What happened at this step.
   , _runnable  :: Map ThreadId Lookahead
   -- ^ The threads runnable at this step
@@ -235,7 +236,7 @@ grow dependency conservative = grow' initialCRState initialThread where
 
 -- | Add new backtracking points, if they have not already been
 -- visited, fit into the bound, and aren't in the sleep set.
-todo :: ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool) -> [BacktrackStep] -> BPOR -> BPOR
+todo :: ([(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Bool) -> [BacktrackStep] -> BPOR -> BPOR
 todo bv = go Nothing [] where
   go priorTid pref (b:bs) bpor =
     let bpor' = backtrack priorTid pref b bpor
@@ -276,26 +277,6 @@ pruneCommits bpor
     barrier = isBarrier . simplify . fromJust . _baction
 
 -- * Utilities
-
--- | Get the resultant 'ThreadId' of a 'Decision', with a default case
--- for 'Continue'.
-tidOf :: ThreadId -> Decision -> ThreadId
-tidOf _ (Start t)    = t
-tidOf _ (SwitchTo t) = t
-tidOf tid _          = tid
-
--- | Get the 'Decision' that would have resulted in this 'ThreadId',
--- given a prior 'ThreadId' (if any) and list of runnable threads.
-decisionOf :: Maybe ThreadId -> Set ThreadId -> ThreadId -> Decision
-decisionOf prior runnable chosen
-  | prior == Just chosen = Continue
-  | prior `S.member` S.map Just runnable = SwitchTo chosen
-  | otherwise = Start chosen
-
--- | Get the tid of the currently active thread after executing a
--- series of decisions. The list MUST begin with a 'Start'.
-activeTid :: [Decision] -> ThreadId
-activeTid = foldl' tidOf initialThread
 
 -- | Check if an action is dependent on another.
 dependent :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, ThreadAction) -> Bool

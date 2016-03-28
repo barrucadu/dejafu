@@ -62,6 +62,7 @@ import Data.Functor (void)
 import Data.List (sort)
 import Data.List.Extra
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
+import Test.DejaFu.DPOR (Decision(..))
 import Test.DejaFu.STM (Result(..))
 import Test.DejaFu.Internal
 import Test.DejaFu.Deterministic.Internal.Common

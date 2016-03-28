@@ -98,6 +98,7 @@ library
                      , Test.DejaFu
                      , Test.DejaFu.Deterministic
                      , Test.DejaFu.Deterministic.Schedule
+                     , Test.DejaFu.DPOR
                      , Test.DejaFu.SCT
                      , Test.DejaFu.STM
 

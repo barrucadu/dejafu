@@ -12,6 +12,7 @@ import Data.Map.Strict (Map)
 import Data.Maybe (mapMaybe)
 import Data.List (sort, nub, intercalate)
 import Data.List.Extra
+import Test.DejaFu.DPOR (Decision(..))
 import Test.DejaFu.Internal
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
@@ -282,17 +283,17 @@ initialIdSource = Id 0 0 0 0 [] [] [] []
 -- attempts to (a) schedule a blocked thread, or (b) schedule a
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
-type Scheduler s = s -> [(Decision, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, NonEmpty Lookahead) -> (Maybe ThreadId, s)
+type Scheduler s = s -> [(Decision ThreadId, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, NonEmpty Lookahead) -> (Maybe ThreadId, s)
 
 -- | One of the outputs of the runner is a @Trace@, which is a log of
 -- decisions made, alternative decisions (including what action would
 -- have been performed had that decision been taken), and the action a
 -- thread took in its step.
-type Trace = [(Decision, [(Decision, Lookahead)], ThreadAction)]
+type Trace = [(Decision ThreadId, [(Decision ThreadId, Lookahead)], ThreadAction)]
 
 -- | Like a 'Trace', but gives more lookahead (where possible) for
 -- alternative decisions.
-type Trace' = [(Decision, [(Decision, NonEmpty Lookahead)], ThreadAction)]
+type Trace' = [(Decision ThreadId, [(Decision ThreadId, NonEmpty Lookahead)], ThreadAction)]
 
 -- | Throw away information from a 'Trace'' to get just a 'Trace'.
 toTrace :: Trace' -> Trace
@@ -316,24 +317,6 @@ showTrace trc = intercalate "\n" $ trace "" 0 trc : (map ("  "++) . sort . nub $
 
   toKey (Start (ThreadId (Just name) i), _, _) = Just $ show i ++ ": " ++ name
   toKey _ = Nothing
-
--- | Scheduling decisions are based on the state of the running
--- program, and so we can capture some of that state in recording what
--- specific decision we made.
-data Decision =
-    Start ThreadId
-  -- ^ Start a new thread, because the last was blocked (or it's the
-  -- start of computation).
-  | Continue
-  -- ^ Continue running the last thread for another step.
-  | SwitchTo ThreadId
-  -- ^ Pre-empt the running thread, and switch to another.
-  deriving (Eq, Show)
-
-instance NFData Decision where
-  rnf (Start    tid) = rnf tid
-  rnf (SwitchTo tid) = rnf tid
-  rnf d = d `seq` ()
 
 -- | All the actions that a thread can perform.
 data ThreadAction =

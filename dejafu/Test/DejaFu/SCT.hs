@@ -92,9 +92,6 @@ module Test.DejaFu.SCT
   , (&+&)
   , trueBound
   , backtrackAt
-  , tidOf
-  , decisionOf
-  , activeTid
   , preEmpCount
   , preEmpCount'
   , yieldCount
@@ -108,8 +105,9 @@ import Data.List (nub, partition)
 import Data.Sequence (Seq, (|>))
 import Data.Map (Map)
 import Data.Maybe (isNothing, isJust, fromJust)
-import Test.DejaFu.Deterministic
+import Test.DejaFu.Deterministic hiding (Decision(..))
 import Test.DejaFu.Deterministic.Internal (initialThread, willRelease)
+import Test.DejaFu.DPOR (Decision(..), decisionOf)
 import Test.DejaFu.SCT.Internal
 
 import qualified Data.Map.Strict as M
@@ -119,7 +117,7 @@ import qualified Data.Set as S
 -- | A bounding function takes the scheduling decisions so far and a
 -- decision chosen to come next, and returns if that decision is
 -- within the bound.
-type BoundFunc = [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
+type BoundFunc = [(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Bool
 
 -- | Combine two bounds into a larger bound, where both must be
 -- satisfied.
@@ -251,7 +249,7 @@ pbBound :: PreemptionBound -> BoundFunc
 pbBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb
 
 -- | Count the number of pre-emptions in a schedule prefix.
-preEmpCount :: [(Decision, ThreadAction)] -> (Decision, a) -> Int
+preEmpCount :: [(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, a) -> Int
 preEmpCount ts (d, _) = go Nothing ts where
   go p ((d', a):rest) = preEmpC p d' + go (Just a) rest
   go p [] = preEmpC p d
@@ -315,7 +313,7 @@ fBound :: FairBound -> BoundFunc
 fBound (FairBound fb) ts dl = maxYieldCountDiff ts dl <= fb
 
 -- | Count the number of yields by a thread in a schedule prefix.
-yieldCount :: ThreadId -> [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Int
+yieldCount :: ThreadId -> [(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Int
 yieldCount tid ts (_, l) = go initialThread ts where
   go t ((Start    t', Yield):rest) = (if t == tid then 1 else 0) + go t' rest
   go t ((SwitchTo t', Yield):rest) = (if t == tid then 1 else 0) + go t' rest
@@ -323,12 +321,11 @@ yieldCount tid ts (_, l) = go initialThread ts where
   go _ ((Start    t', _):rest) = go t' rest
   go _ ((SwitchTo t', _):rest) = go t' rest
   go t ((Continue,    _):rest) = go t  rest
-  go t (_:rest) = go t rest
   go t [] = case l of WillYield | t == tid -> 1; _ -> 0
 
 -- | Get the maximum difference between the yield counts of all
 -- threads in this schedule prefix.
-maxYieldCountDiff :: [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Int
+maxYieldCountDiff :: [(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Int
 maxYieldCountDiff ts dl = maximum yieldCountDiffs where
   yieldCounts = [yieldCount tid ts dl | tid <- nub $ allTids ts]
   yieldCountDiffs = [y1 - y2 | y1 <- yieldCounts, y2 <- yieldCounts]
@@ -414,7 +411,7 @@ sctBoundedIO memtype bf backtrack c = sctBoundedM memtype bf backtrack run where
 -- | Generic SCT runner.
 sctBoundedM :: (Functor m, Monad m)
   => MemType
-  -> ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
+  -> ([(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Bool)
   -> ([BacktrackStep] -> Int -> ThreadId -> [BacktrackStep])
   -> (MemType -> Scheduler SchedState -> SchedState -> m (Either Failure a, SchedState, Trace'))
   -- ^ Monadic runner, with computation fixed.
@@ -465,7 +462,7 @@ initialSchedState sleep prefix = SchedState
 -- including the runnable threads, and the alternative choices allowed
 -- by the bound-specific initialise function.
 bporSched :: MemType
-  -> ([(Decision, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> [ThreadId])
+  -> ([(Decision ThreadId, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, Lookahead) -> [ThreadId])
   -> Scheduler SchedState
 bporSched memtype initials = force $ \s trc prior threads -> case _sprefix s of
   -- If there is a decision available, make it
@@ -493,7 +490,7 @@ bporSched memtype initials = force $ \s trc prior threads -> case _sprefix s of
 -- the current thread if available and it hasn't just yielded,
 -- otherwise add all runnable threads.
 initialise :: BoundFunc
-  -> [(Decision, ThreadAction)]
+  -> [(Decision ThreadId, ThreadAction)]
   -> Maybe (ThreadId, ThreadAction)
   -> NonEmpty (ThreadId, Lookahead)
   -> [ThreadId]
