@@ -232,6 +232,7 @@ import Data.List (intercalate, intersperse, minimumBy)
 import Data.List.Extra
 import Data.Ord (comparing)
 import Test.DejaFu.Deterministic
+import Test.DejaFu.Deterministic.Internal (preEmpCount)
 import Test.DejaFu.SCT
 
 -- | The default memory model: @TotalStoreOrder@
@@ -366,14 +367,14 @@ data Result a = Result
   -- ^ Whether the test passed or not.
   , _casesChecked :: Int
   -- ^ The number of cases checked.
-  , _failures     :: [(Either Failure a, Trace)]
+  , _failures     :: [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
   -- ^ The failing cases, if any.
   , _failureMsg   :: String
   -- ^ A message to display on failure, if nonempty
   } deriving Show
 
 -- | A failed result, taking the given list of failures.
-defaultFail :: [(Either Failure a, Trace)] -> Result a
+defaultFail :: [(Either Failure a, Trace ThreadId ThreadAction Lookahead)] -> Result a
 defaultFail failures = Result False 0 failures ""
 
 -- | A passed result.
@@ -425,7 +426,7 @@ runTestIO' memtype cb predicate conc = predicate <$> sctBoundIO memtype cb conc
 
 -- | A @Predicate@ is a function which collapses a list of results
 -- into a 'Result'.
-type Predicate a = [(Either Failure a, Trace)] -> Result a
+type Predicate a = [(Either Failure a, Trace ThreadId ThreadAction Lookahead)] -> Result a
 
 -- | Reduce the list of failures in a @Predicate@ to one
 -- representative trace for each unique result.
@@ -437,7 +438,9 @@ representative :: Eq a => Predicate a -> Predicate a
 representative p xs = result { _failures = choose . collect $ _failures result } where
   result  = p xs
   collect = groupBy' [] ((==) `on` fst)
-  choose  = map $ minimumBy (comparing $ \(_, trc) -> (preEmpCount' trc, length trc))
+  choose  = map $ minimumBy (comparing $ \(_, trc) -> (preEmps trc, length trc))
+
+  preEmps trc = preEmpCount (map (\(d,_,a) -> (d, a)) trc) (Continue, WillStop)
 
   groupBy' res _ [] = res
   groupBy' res eq (y:ys) = groupBy' (insert' eq y res) eq ys

@@ -20,7 +20,7 @@ tests = hUnitTestToTests $ test
 
 -- | Shorter execution length bound
 bound :: Bounds
-bound = defaultBounds { lengthBound = Just 30 }
+bound = defaultBounds { boundLength = Just 30 }
 
 --------------------------------------------------------------------------------
 

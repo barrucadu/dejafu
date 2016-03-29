@@ -1,436 +1,376 @@
--- | Dynamic partial-order reduction.
-module Test.DejaFu.DPOR
-  ( -- * Scheduling decisions
-    Decision(..)
-  , tidOf
-  , decisionOf
-  , activeTid
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-  -- * Dynamic partial-order reduction
+-- | Systematic testing of concurrent computations through dynamic
+-- partial-order reduction and schedule bounding.
+module Test.DejaFu.DPOR
+  ( -- * Bounded dynamic partial-order reduction
+
+  -- | We can characterise the state of a concurrent computation by
+  -- considering the ordering of dependent events. This is a partial
+  -- order: independent events can be performed in any order without
+  -- affecting the result, and so are /not/ ordered.
+  --
+  -- Partial-order reduction is a technique for computing these
+  -- partial orders, and only testing one total order for each partial
+  -- order. This cuts down the amount of work to be done
+  -- significantly. /Bounded/ partial-order reduction is a further
+  -- optimisation, which only considers schedules within some bound.
+  --
+  -- This module provides a generic function for DPOR, parameterised
+  -- by the actual (domain-specific) dependency function to use.
+  --
+  -- See /Bounded partial-order reduction/, K. Coons, M. Musuvathi,
+  -- K. McKinley for more details.
+
+    dpor
   , DPOR(..)
   , BacktrackStep(..)
-  , initialState
-  , findSchedulePrefix
-  , incorporateTrace
-  , findBacktrackSteps
-  , incorporateBacktrackSteps
+  , backtrackAt
+  , Scheduler
+  , DPORScheduler
+  , SchedState
 
-  -- * Utilities
-  , initialDPORThread
-  , toDot
-  , toDotFiltered
+  -- * Bounds
+
+  , BoundFunc
+  , (&+&)
+  , trueBound
+
+  -- ** Pre-emption bounding
+
+  -- | DPOR with pre-emption bounding. This adds conservative
+  -- backtracking points at the prior context switch whenever a
+  -- non-conervative backtracking point is added, as alternative
+  -- decisions can influence the reachability of different states.
+  --
+  -- See the BPOR paper for more details.
+
+  , PreemptionBound(..)
+  , defaultPreemptionBound
+  , preempBound
+  , preempBacktrack
+  , preempCount
+
+  -- ** Fair bounding
+
+  -- | DPOR using fair bounding. This bounds the maximum difference
+  -- between the number of yield operations different threads have
+  -- performed.
+  --
+  -- See the DPOR paper for more details.
+
+  , FairBound(..)
+  , defaultFairBound
+  , fairBound
+  , fairBacktrack
+  , yieldCount
+  , maxYieldCountDiff
+
+  -- ** Length Bounding
+
+  -- | BPOR using length bounding. This bounds the maximum length (in
+  -- terms of primitive actions) of an execution.
+
+  , LengthBound(..)
+  , defaultLengthBound
+  , lenBound
+  , lenBacktrack
+
+  -- * Execution traces
+
+  -- | The partial-order reduction is driven by incorporating
+  -- information gained from trial executions of the concurrent
+  -- program.
+
+  , Decision(..)
+  , Trace
   ) where
 
-import Control.DeepSeq (NFData(..))
-import Data.Char (ord)
-import Data.List (foldl', intercalate, partition, sortBy)
-import Data.List.Extra (NonEmpty(..), toList)
-import Data.Ord (Down(..), comparing)
-import Data.Map.Strict (Map)
-import Data.Maybe (fromJust, mapMaybe)
-import Data.Set (Set)
-import Data.Sequence (Seq, ViewL(..))
+import Control.DeepSeq (NFData)
+import Data.List (nub)
+import Data.Maybe (isNothing)
+import Test.DejaFu.DPOR.Internal
 
 import qualified Data.Map.Strict as M
-import qualified Data.Set as S
-import qualified Data.Sequence as Sq
 
 -------------------------------------------------------------------------------
--- Scheduling decisions
+-- Bounded dynamic partial-order reduction
 
--- | Scheduling decisions are based on the state of the running
--- program, and so we can capture some of that state in recording what
--- specific decision we made.
-data Decision thread_id =
-    Start thread_id
-  -- ^ Start a new thread, because the last was blocked (or it's the
-  -- start of computation).
-  | Continue
-  -- ^ Continue running the last thread for another step.
-  | SwitchTo thread_id
-  -- ^ Pre-empt the running thread, and switch to another.
-  deriving (Eq, Show)
+-- | Dynamic partial-order reduction.
+dpor :: (Ord tid, NFData tid, NFData action, NFData lookahead, Monad m)
+  => (action -> Bool)
+  -> (lookahead -> Bool)
+  -> BoundFunc tid action lookahead
+  -> s
+  -> (s -> action -> s)
+  -> (s -> (tid, action) -> (tid, action)    -> Bool)
+  -> (s -> (tid, action) -> (tid, lookahead) -> Bool)
+  -> (    (tid, action) -> (tid, action)    -> Bool)
+  -> ([BacktrackStep tid action lookahead s] -> Int -> tid -> [BacktrackStep tid action lookahead s])
+  -> (DPOR tid action -> DPOR tid action)
+  -> (DPORScheduler tid action lookahead -> SchedState tid action lookahead -> m (a, SchedState tid action lookahead, Trace tid action lookahead))
+  -> (tid -> Bool)
+  -> tid
+  -> m [(a, Trace tid action lookahead)]
+dpor didYield willYield inBound stinit ststep dependency1 dependency2 dependency3 backtrack transform run predicate = go . initialState where
+  go dp = case nextPrefix dp of
+    Just (prefix, conservative, sleep) -> do
+      (res, s, trace) <- run scheduler (initialSchedState sleep prefix)
 
-instance NFData thread_id => NFData (Decision thread_id) where
-  rnf (Start    tid) = rnf tid
-  rnf (SwitchTo tid) = rnf tid
-  rnf d = d `seq` ()
+      let bpoints = findBacktracks s trace
+      let newDPOR = addTrace conservative trace dp
 
--- | Get the resultant thread identifier of a 'Decision', with a default case
--- for 'Continue'.
-tidOf
-  :: t
-  -- ^ The @Continue@ case.
-  -> Decision t
-  -- ^ The decision.
-  -> t
-tidOf _ (Start t)    = t
-tidOf _ (SwitchTo t) = t
-tidOf tid _          = tid
+      if schedIgnore s
+      then go newDPOR
+      else ((res, trace):) <$> go (transform $ addBacktracks bpoints newDPOR)
 
--- | Get the 'Decision' that would have resulted in this thread identifier,
--- given a prior thread (if any) and list of runnable threads.
-decisionOf :: (Eq thread_id, Foldable f)
-  => Maybe thread_id
-  -- ^ The prior thread.
-  -> f thread_id
-  -- ^ The runnable threads.
-  -> thread_id
-  -- ^ The current thread.
-  -> Decision thread_id
-decisionOf Nothing _ chosen = Start chosen
-decisionOf (Just prior) runnable chosen
-  | prior == chosen = Continue
-  | prior `elem` runnable = SwitchTo chosen
-  | otherwise = Start chosen
+    Nothing -> pure []
 
--- | Get the tid of the currently active thread after executing a
--- series of decisions. The list MUST begin with a 'Start', if it
--- doesn't an error will be thrown.
-activeTid ::
-    [Decision thread_id]
-  -- ^ The sequence of decisions that have been made.
-  -> thread_id
-activeTid (Start tid:ds) = foldl' tidOf tid ds
-activeTid _ = error "activeTid: first decision MUST be a 'Start'."
+  -- Find the next schedule prefix.
+  nextPrefix = findSchedulePrefix predicate
 
--------------------------------------------------------------------------------
--- Dynamic partial-order reduction
+  -- The DPOR scheduler.
+  scheduler = dporSched didYield willYield dependency3 inBound
 
--- | DPOR execution is represented as a tree of states, characterised
--- by the decisions that lead to that state.
-data DPOR thread_id thread_action = DPOR
-  { dporRunnable :: Set thread_id
-  -- ^ What threads are runnable at this step.
-  , dporTodo     :: Map thread_id Bool
-  -- ^ Follow-on decisions still to make, and whether that decision
-  -- was added conservatively due to the bound.
-  , dporDone     :: Map thread_id (DPOR thread_id thread_action)
-  -- ^ Follow-on decisions that have been made.
-  , dporSleep    :: Map thread_id thread_action
-  -- ^ Transitions to ignore (in this node and children) until a
-  -- dependent transition happens.
-  , dporTaken    :: Map thread_id thread_action
-  -- ^ Transitions which have been taken, excluding
-  -- conservatively-added ones. This is used in implementing sleep
-  -- sets.
-  , dporAction   :: Maybe thread_action
-  -- ^ What happened at this step. This will be 'Nothing' at the root,
-  -- 'Just' everywhere else.
-  }
+  -- Find the new backtracking steps.
+  findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack . schedBPoints
 
-instance ( NFData thread_id
-         , NFData thread_action
-         ) => NFData (DPOR thread_id thread_action) where
-  rnf dpor = rnf ( dporRunnable dpor
-                 , dporTodo     dpor
-                 , dporDone     dpor
-                 , dporSleep    dpor
-                 , dporTaken    dpor
-                 , dporAction   dpor
-                 )
+  -- Incorporate a trace into the DPOR tree.
+  addTrace = incorporateTrace stinit ststep dependency1
 
--- | One step of the execution, including information for backtracking
--- purposes. This backtracking information is used to generate new
--- schedules.
-data BacktrackStep thread_id thread_action lookahead state = BacktrackStep
-  { bcktThreadid   :: thread_id
-  -- ^ The thread running at this step
-  , bcktDecision   :: (Decision thread_id, thread_action)
-  -- ^ What happened at this step.
-  , bcktRunnable   :: Map thread_id lookahead
-  -- ^ The threads runnable at this step
-  , bcktBacktracks :: Map thread_id Bool
-  -- ^ The list of alternative threads to run, and whether those
-  -- alternatives were added conservatively due to the bound.
-  , bcktState      :: state
-  -- ^ Some domain-specific state at this point.
-  } deriving Show
+  -- Incorporate the new backtracking steps into the DPOR tree.
+  addBacktracks = incorporateBacktrackSteps inBound
 
-instance ( NFData thread_id
-         , NFData thread_action
-         , NFData lookahead
-         , NFData state
-         ) => NFData (BacktrackStep thread_id thread_action lookahead state) where
-  rnf b = rnf ( bcktThreadid   b
-              , bcktDecision   b
-              , bcktRunnable   b
-              , bcktBacktracks b
-              , bcktState      b
-              )
-
--- | Initial DPOR state, given an initial thread ID. This initial
--- thread should exist and be runnable at the start of execution.
-initialState :: Ord thread_id => thread_id -> DPOR thread_id thread_action
-initialState initialThread = DPOR
-  { dporRunnable = S.singleton initialThread
-  , dporTodo     = M.singleton initialThread False
-  , dporDone     = M.empty
-  , dporSleep    = M.empty
-  , dporTaken    = M.empty
-  , dporAction   = Nothing
-  }
-
--- | Produce a new schedule prefix from a @DPOR@ tree. If there are no new
--- prefixes remaining, return 'Nothing'. Also returns whether the
--- decision was added conservatively, and the sleep set at the point
--- where divergence happens.
+-- | Add a backtracking point. If the thread isn't runnable, add all
+-- runnable threads.
 --
--- A schedule prefix is a possibly empty sequence of decisions that
--- have already been made, terminated by a single decision from the
--- to-do set. The intent is to put the system into a new state when
--- executed with this initial sequence of scheduling decisions.
---
--- This returns the longest prefix, on the assumption that this will
--- lead to lots of backtracking points being identified before
--- higher-up decisions are reconsidered, so enlarging the sleep sets.
-findSchedulePrefix :: Ord thread_id
-  => (thread_id -> Bool)
-  -- ^ Some partitioning function, applied to the to-do decisions. If
-  -- there is an identifier which passes the test, it will be used,
-  -- rather than any which fail it. This allows a very basic way of
-  -- domain-specific prioritisation between otherwise equal choices,
-  -- which may be useful in some cases.
-  -> DPOR thread_id thread_action
-  -> Maybe ([thread_id], Bool, Map thread_id thread_action)
-findSchedulePrefix predicate dporRoot = go (initialDPORThread dporRoot) dporRoot where
-  go tid dpor =
-        -- All the possible prefix traces from this point, with
-        -- updated DPOR subtrees if taken from the done list.
-    let prefixes = mapMaybe go' (M.toList $ dporDone dpor) ++ [([t], c, sleeps dpor) | (t, c) <- M.toList $ dporTodo dpor]
-        -- Sort by number of preemptions, in descending order.
-        cmp = Down . preEmps tid dpor . (\(a,_,_) -> a)
-
-    in if null prefixes
-       then Nothing
-       else case partition (\(t:_,_,_) -> predicate t) $ sortBy (comparing cmp) prefixes of
-              (choice:_, _)  -> Just choice
-              ([], choice:_) -> Just choice
-              ([], []) -> error "findSchedulePrefix: (internal error) empty prefix list!" 
-
-  go' (tid, dpor) = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> go tid dpor
-
-  -- The new sleep set is the union of the sleep set of the node we're
-  -- branching from, plus all the decisions we've already explored.
-  sleeps dpor = dporSleep dpor `M.union` dporTaken dpor
-
-  -- The number of pre-emptive context switches
-  preEmps tid dpor (t:ts) =
-    let rest = preEmps t (fromJust . M.lookup t $ dporDone dpor) ts
-    in  if tid `S.member` dporRunnable dpor then 1 + rest else rest
-  preEmps _ _ [] = 0::Int
-
--- | Add a new trace to the tree, creating a new subtree branching off
--- at the point where the \"to-do\" decision was made.
-incorporateTrace :: Ord thread_id
-  => state
-  -- ^ Initial state
-  -> (state -> thread_action -> state)
-  -- ^ State step function
-  -> (state -> (thread_id, thread_action) -> (thread_id, thread_action) -> Bool)
-  -- ^ Dependency function
+-- If the backtracking point is already present, don't re-add it
+-- UNLESS this is a conservative backtracking point.
+backtrackAt :: Ord tid
+  => (BacktrackStep tid action lookahead s -> Bool)
+  -- ^ If this returns @True@, backtrack to all runnable threads,
+  -- rather than just the given thread.
   -> Bool
-  -- ^ Whether the \"to-do\" point which was used to create this new
-  -- execution was conservative or not.
-  -> [(Decision thread_id, [thread_id], thread_action)]
-  -- ^ The execution trace: the decision made, the runnable threads,
-  -- and the action performed.
-  -> DPOR thread_id thread_action
-  -> DPOR thread_id thread_action
-incorporateTrace stinit ststep dependency conservative trace dporRoot = grow stinit (initialDPORThread dporRoot) trace dporRoot where
-  grow state tid trc@((d, _, a):rest) dpor =
-    let tid'   = tidOf tid d
-        state' = ststep state a
-    in  case M.lookup tid' $ dporDone dpor of
-          Just dpor' -> dpor { dporDone  = M.insert tid' (grow state' tid' rest dpor') $ dporDone dpor }
-          Nothing    -> dpor { dporTaken = if conservative then dporTaken dpor else M.insert tid' a $ dporTaken dpor
-                            , dporTodo  = M.delete tid' $ dporTodo dpor
-                            , dporDone  = M.insert tid' (subtree state' tid' (dporSleep dpor `M.union` dporTaken dpor) trc) $ dporDone dpor }
-  grow _ _ [] dpor = dpor
+  -- ^ Is this backtracking point conservative? Conservative points
+  -- are always explored, whereas non-conservative ones might be
+  -- skipped based on future information.
+  -> [BacktrackStep tid action lookahead s]
+  -- ^ Original list of backtracking steps.
+  -> Int
+  -- ^ Index in the list to add the step. MUST be in the list.
+  -> tid
+  -- ^ The thread to backtrack to. If not runnable at that step, all
+  -- runnable threads will be backtracked to instead.
+  -> [BacktrackStep tid action lookahead s]
+backtrackAt toAll conservative bs i tid = go bs i where
+  go bx@(b:rest) 0
+    -- If the backtracking point is already present, don't re-add it,
+    -- UNLESS this would force it to backtrack (it's conservative)
+    -- where before it might not.
+    | not (toAll b) && tid `M.member` bcktRunnable b =
+      let val = M.lookup tid $ bcktBacktracks b
+      in  if isNothing val || (val == Just False && conservative)
+          then b { bcktBacktracks = M.insert tid conservative $ bcktBacktracks b } : rest
+          else bx
 
-  -- Construct a new subtree corresponding to a trace suffix.
-  subtree state tid sleep ((_, _, a):rest) =
-    let state' = ststep state a
-        sleep' = M.filterWithKey (\t a' -> not $ dependency state' (tid, a) (t,a')) sleep
-    in DPOR
-        { dporRunnable = S.fromList $ case rest of
-            ((_, runnable, _):_) -> runnable
-            [] -> []
-        , dporTodo     = M.empty
-        , dporDone     = M.fromList $ case rest of
-          ((d', _, _):_) ->
-            let tid' = tidOf tid d'
-            in  [(tid', subtree state' tid' sleep' rest)]
-          [] -> []
-        , dporSleep = sleep'
-        , dporTaken = case rest of
-          ((d', _, a'):_) -> M.singleton (tidOf tid d') a'
-          [] -> M.empty
-        , dporAction = Just a
-        }
-  subtree _ _ _ [] = error "incorporateTrace: (internal error) subtree suffix empty!"
+    -- Otherwise just backtrack to everything runnable.
+    | otherwise = b { bcktBacktracks = M.fromList [ (t',conservative) | t' <- M.keys $ bcktRunnable b ] } : rest
 
--- | Produce a list of new backtracking points from an execution
--- trace. These are then used to inform new \"to-do\" points in the
--- @DPOR@ tree.
---
--- Two traces are passed in to this function: the first is generated
--- from the special DPOR scheduler, the other from the execution of
--- the concurrent program.
---
--- If the trace ends with any threads other than the initial one still
--- runnable, a dependency is imposed between this final action and
--- everything else.
-findBacktrackSteps :: Ord thread_id
-  => state
-  -- ^ Initial state.
-  -> (state -> thread_action -> state)
-  -- ^ State step function.
-  -> (state -> (thread_id, thread_action) -> (thread_id, lookahead) -> Bool)
-  -- ^ Dependency function.
-  -> ([BacktrackStep thread_id thread_action lookahead state] -> Int -> thread_id -> [BacktrackStep thread_id thread_action lookahead state])
-  -- ^ Backtracking function. Given a list of backtracking points, and
-  -- a thread to backtrack to at a specific point in that list, add
-  -- the new backtracking points. There will be at least one: this
-  -- chosen one, but the function may add others.
-  -> Seq (NonEmpty (thread_id, lookahead), [thread_id])
-  -- ^ A sequence of threads at each step: the nonempty list of
-  -- runnable threads (with lookahead values), and the list of threads
-  -- still to try. The reason for the two separate lists is because
-  -- the threads chosen to try will be dependent on the specific
-  -- domain.
-  -> [(Decision thread_id, thread_action)]
-  -- ^ The execution trace.
-  -> [BacktrackStep thread_id thread_action lookahead state]
-findBacktrackSteps stinit ststep dependency backtrack bcktrck = go stinit S.empty initialThread [] (Sq.viewl bcktrck) where
-  -- Get the initial thread ID
-  initialThread = case Sq.viewl bcktrck of
-    (((tid, _):|_, _):<_) -> tid
-    _ -> error "findBacktrack: empty backtracking sequence."
-
-  -- Walk through the traces one step at a time, building up a list of
-  -- new backtracking points.
-  go state allThreads tid bs ((e,i):<is) ((d,a):ts) =
-    let tid' = tidOf tid d
-        state' = ststep state a
-        this = BacktrackStep
-          { bcktThreadid   = tid'
-          , bcktDecision   = (d, a)
-          , bcktRunnable   = M.fromList . toList $ e
-          , bcktBacktracks = M.fromList $ map (\i' -> (i', False)) i
-          , bcktState      = state'
-          }
-        bs' = doBacktrack killsEarly allThreads' (toList e) (bs++[this])
-        runnable = S.fromList (M.keys $ bcktRunnable this)
-        allThreads' = allThreads `S.union` runnable
-        killsEarly = null ts && any (/=initialThread) runnable
-    in go state' allThreads' tid' bs' (Sq.viewl is) ts
-  go _ _ _ bs _ _ = bs
-
-  -- Find the prior actions dependent with this one and add
-  -- backtracking points.
-  doBacktrack killsEarly allThreads enabledThreads bs =
-    let tagged = reverse $ zip [0..] bs
-        idxs   = [ (head is, u)
-                 | (u, n) <- enabledThreads
-                 , v <- S.toList allThreads
-                 , u /= v
-                 , let is = idxs' u n v tagged
-                 , not $ null is]
-
-        idxs' u n v = mapMaybe go' where
-          go' (i, b)
-            | bcktThreadid b == v && (killsEarly || isDependent b) = Just i
-            | otherwise = Nothing
-
-          isDependent b = dependency (bcktState b) (bcktThreadid b, snd $ bcktDecision b) (u, n)
-    in foldl' (\b (i, u) -> backtrack b i u) bs idxs
-
--- | Add new backtracking points, if they have not already been
--- visited, fit into the bound, and aren't in the sleep set.
-incorporateBacktrackSteps :: Ord thread_id
-  => ([(Decision thread_id, thread_action)] -> (Decision thread_id, lookahead) -> Bool)
-  -- ^ Bound function: returns true if that schedule prefix terminated
-  -- with the lookahead decision fits within the bound.
-  -> [BacktrackStep thread_id thread_action lookahead state]
-  -- ^ Backtracking steps identified by 'findBacktrackSteps'.
-  -> DPOR thread_id thread_action
-  -> DPOR thread_id thread_action
-incorporateBacktrackSteps bv = go Nothing [] where
-  go priorTid pref (b:bs) bpor =
-    let bpor' = doBacktrack priorTid pref b bpor
-        tid   = bcktThreadid b
-        pref' = pref ++ [bcktDecision b]
-        child = go (Just tid) pref' bs . fromJust $ M.lookup tid (dporDone bpor)
-    in bpor' { dporDone = M.insert tid child $ dporDone bpor' }
-
-  go _ _ [] bpor = bpor
-
-  doBacktrack priorTid pref b bpor =
-    let todo' = [ x
-                | x@(t,c) <- M.toList $ bcktBacktracks b
-                , let decision  = decisionOf priorTid (dporRunnable bpor) t
-                , let lahead = fromJust . M.lookup t $ bcktRunnable b
-                , bv pref (decision, lahead)
-                , t `notElem` M.keys (dporDone bpor)
-                , c || M.notMember t (dporSleep bpor)
-                ]
-    in bpor { dporTodo = dporTodo bpor `M.union` M.fromList todo' }
+  go (b:rest) n = b : go rest (n-1)
+  go [] _ = error "backtrackAt: Ran out of schedule whilst backtracking!"
 
 -------------------------------------------------------------------------------
--- Utilities
+-- Bounds
 
--- The initial thread of a DPOR tree.
-initialDPORThread :: DPOR thread_id thread_action -> thread_id
-initialDPORThread = S.elemAt 0 . dporRunnable
+-- | Combine two bounds into a larger bound, where both must be
+-- satisfied.
+(&+&) :: BoundFunc tid action lookahead -> BoundFunc tid action lookahead -> BoundFunc tid action lookahead
+(&+&) b1 b2 ts dl = b1 ts dl && b2 ts dl
 
--- | Render a 'DPOR' value as a graph in GraphViz \"dot\" format.
-toDot
-  :: (thread_id -> String)
-  -- ^ Show a @thread_id@ - this should produce a string suitable for
-  -- use as a node identifier.
-  -> (thread_action -> String)
-  -- ^ Show a @thread_action@.
-  -> DPOR thread_id thread_action
-  -> String
-toDot = toDotFiltered (\_ _ -> True)
+-- | The \"true\" bound, which allows everything.
+trueBound :: BoundFunc tid action lookahead
+trueBound _ _ = True
 
--- | Render a 'DPOR' value as a graph in GraphViz \"dot\" format, with
--- a function to determine if a subtree should be included or not.
-toDotFiltered
-  :: (thread_id -> DPOR thread_id thread_action -> Bool)
-  -- ^ Subtree predicate.
-  -> (thread_id     -> String)
-  -> (thread_action -> String)
-  -> DPOR thread_id thread_action
-  -> String
-toDotFiltered check showTid showAct dpor = "digraph {\n" ++ go "L" dpor ++ "\n}" where
-  go l b = unlines $ node l b : edges l b
+-------------------------------------------------------------------------------
+-- Pre-emption bounding
 
-  -- Display a labelled node.
-  node n b = n ++ " [label=\"" ++ label b ++ "\"]"
+newtype PreemptionBound = PreemptionBound Int
+  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
-  -- Display the edges.
-  edges l b = [ edge l l' i ++ go l' b'
-              | (i, b') <- M.toList (dporDone b)
-              , check i b'
-              , let l' = l ++ tidId i
-              ]
+-- | A sensible default pre-emption bound: 2.
+--
+-- See /Concurrency Testing Using Schedule Bounding: an Empirical
+-- Study/, P. Thomson, A. F. Donaldson, A. Betts for justification.
+defaultPreemptionBound :: PreemptionBound
+defaultPreemptionBound = 2
 
-  -- A node label, summary of the DPOR state at that node.
-  label b = showLst id
-    [ maybe "Nothing" (("Just " ++) . showAct) $ dporAction b
-    , "Run:" ++ showLst showTid (S.toList $ dporRunnable b)
-    , "Tod:" ++ showLst showTid (M.keys   $ dporTodo     b)
-    , "Slp:" ++ showLst (\(t,a) -> "(" ++ showTid t ++ ", " ++ showAct a ++ ")")
-        (M.toList $ dporSleep b)
-    ]
+-- | Pre-emption bound function
+preempBound :: (action -> Bool)
+  -- ^ Determine if a thread yielded.
+  -> PreemptionBound
+  -> BoundFunc tid action lookahead
+preempBound didYield (PreemptionBound pb) ts dl = preempCount didYield ts dl <= pb
 
-  -- Display a labelled edge
-  edge n1 n2 l = n1 ++ "-> " ++ n2 ++ " [label=\"" ++ showTid l ++ "\"]\n"
+-- | Add a backtrack point, and also conservatively add one prior to
+-- the most recent transition before that point. This may result in
+-- the same state being reached multiple times, but is needed because
+-- of the artificial dependency imposed by the bound.
+preempBacktrack :: Ord tid
+  => (action -> Bool)
+  -- ^ If this is true of the action at a pre-emptive context switch,
+  -- do NOT use that point for the conservative point, try earlier.
+  -> [BacktrackStep tid action lookahead s]
+  -- ^ The current backtracking points.
+  -> Int
+  -- ^ The point to backtrack to.
+  -> tid
+  -- ^ The thread to backtrack to.
+  -> [BacktrackStep tid action lookahead s]
+preempBacktrack ignore bs i tid = maybe id (\j' b -> backtrack True b j' tid) j $ backtrack False bs i tid where
+  -- Index of the conservative point
+  j = goJ . reverse . pairs $ zip [0..i-1] bs where
+    goJ (((_,b1), (j',b2)):rest)
+      | bcktThreadid b1 /= bcktThreadid b2
+        && not (ignore . snd $ bcktDecision b1)
+        && not (ignore . snd $ bcktDecision b2) = Just j'
+      | otherwise = goJ rest
+    goJ [] = Nothing
 
-  -- Show a list of values
-  showLst showf xs = "[" ++ intercalate ", " (map showf xs) ++ "]"
+  {-# INLINE pairs #-}
+  pairs = zip <*> tail
 
-  -- Generate a graphviz-friendly identifier from a thread_id.
-  tidId = concatMap (show . ord) . showTid
+  backtrack = backtrackAt $ const False
+
+-- Count the number of pre-emptions in a schedule prefix.
+preempCount :: (action -> Bool)
+  -- ^ Determine if a thread yielded.
+  -> [(Decision tid, action)]
+  -- ^ The schedule prefix.
+  -> (Decision tid, lookahead)
+  -- ^ The to-do point.
+  -> Int
+preempCount didYield ts (d, _) = go Nothing ts where
+  go p ((d', a):rest) = preempC p d' + go (Just a) rest
+  go p [] = preempC p d
+
+  preempC (Just act) (SwitchTo _) | didYield act = 0
+  preempC _ (SwitchTo _) = 1
+  preempC _ _ = 0
+
+-------------------------------------------------------------------------------
+-- Fair bounding
+
+newtype FairBound = FairBound Int
+  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | A sensible default fair bound: 5.
+--
+-- This comes from playing around myself, but there is probably a
+-- better default.
+defaultFairBound :: FairBound
+defaultFairBound = 5
+
+-- | Fair bound function
+fairBound :: Eq tid
+  => (action -> Bool)
+  -- ^ Determine if a thread yielded.
+  -> (lookahead -> Bool)
+  -- ^ Determine if a thread will yield.
+  -> (action -> [tid])
+  -- ^ The new threads an action causes to come into existence.
+  -> FairBound -> BoundFunc tid action lookahead
+fairBound didYield willYield forkTids (FairBound fb) ts dl = maxYieldCountDiff didYield willYield forkTids ts dl <= fb
+
+-- | Add a backtrack point. If the thread isn't runnable, or performs
+-- a release operation, add all runnable threads.
+fairBacktrack :: Ord tid
+  => (lookahead -> Bool)
+  -- ^ Determine if an action is a release operation: if it could
+  -- cause other threads to become runnable.
+  -> [BacktrackStep tid action lookahead s]
+  -- ^ The current backtracking points.
+  -> Int
+  -- ^ The point to backtrack to.
+  -> tid
+  -- ^ The thread to backtrack to.
+  -> [BacktrackStep tid action lookahead s]
+fairBacktrack willRelease bs i t = backtrackAt check False bs i t where
+  -- True if a release operation is performed.
+  check b = Just True == (willRelease <$> M.lookup t (bcktRunnable b))
+
+-- | Count the number of yields by a thread in a schedule prefix.
+yieldCount :: Eq tid
+  => (action -> Bool)
+  -- ^ Determine if a thread yielded.
+  -> (lookahead -> Bool)
+  -- ^ Determine if a thread will yield.
+  -> tid
+  -- ^ The thread to count yields for.
+  -> [(Decision tid, action)] -> (Decision tid, lookahead) -> Int
+yieldCount didYield willYield tid ts (ld, l) = go initialThread ts where
+  go t ((Start t', act):rest)
+    | t == tid && didYield act = 1 + go t' rest
+    | otherwise = go t' rest
+  go t ((SwitchTo t', act):rest)
+    | t == tid && didYield act = 1 + go t' rest
+    | otherwise = go t' rest
+  go t ((Continue, act):rest)
+    | t == tid && didYield act = 1 + go t rest
+    | otherwise = go t rest
+  go t []
+    | t == tid && willYield l = 1
+    | otherwise = 0
+
+  -- The initial thread ID
+  initialThread = case (ts, ld) of
+    ((Start t, _):_, _) -> t
+    ([], Start t)  -> t
+    _ -> error "yieldCount: unknown initial thread."
+
+-- | Get the maximum difference between the yield counts of all
+-- threads in this schedule prefix.
+maxYieldCountDiff :: Eq tid
+  => (action -> Bool)
+  -- ^ Determine if a thread yielded.
+  -> (lookahead -> Bool)
+  -- ^ Determine if a thread will yield.
+  -> (action -> [tid])
+  -- ^ The new threads an action causes to come into existence.
+  -> [(Decision tid, action)] -> (Decision tid, lookahead) -> Int
+maxYieldCountDiff didYield willYield forkTids ts dl = maximum yieldCountDiffs where
+  yieldCounts = [yieldCount didYield willYield tid ts dl | tid <- nub $ allTids ts]
+  yieldCountDiffs = [y1 - y2 | y1 <- yieldCounts, y2 <- yieldCounts]
+
+  -- All the threads created during the lifetime of the system.
+  allTids ((_, act):rest) =
+    let tids' = forkTids act
+    in if null tids' then allTids rest else tids' ++ allTids rest
+  allTids [] = [initialThread]
+
+  -- The initial thread ID
+  initialThread = case (ts, dl) of
+    ((Start t, _):_, _) -> t
+    ([], (Start t, _))  -> t
+    _ -> error "maxYieldCountDiff: unknown initial thread."
+
+-------------------------------------------------------------------------------
+-- Length bounding
+
+newtype LengthBound = LengthBound Int
+  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | A sensible default length bound: 250.
+--
+-- Based on the assumption that anything which executes for much
+-- longer (or even this long) will take ages to test.
+defaultLengthBound :: LengthBound
+defaultLengthBound = 250
+
+-- | Length bound function
+lenBound :: LengthBound -> BoundFunc tid action lookahead
+lenBound (LengthBound lb) ts _ = length ts < lb
+
+-- | Add a backtrack point. If the thread isn't runnable, add all
+-- runnable threads.
+lenBacktrack :: Ord tid => [BacktrackStep tid ta lh st] -> Int -> tid -> [BacktrackStep tid ta lh st]
+lenBacktrack = backtrackAt (const False) False

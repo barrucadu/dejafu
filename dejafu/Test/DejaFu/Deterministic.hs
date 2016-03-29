@@ -21,19 +21,15 @@ module Test.DejaFu.Deterministic
   , MemType(..)
   , runConcST
   , runConcIO
-  , runConcST'
-  , runConcIO'
 
   -- * Execution traces
   , Trace
-  , Trace'
   , Decision(..)
   , ThreadAction(..)
   , Lookahead(..)
   , MVarId
   , CRefId
   , MaskingState(..)
-  , toTrace
   , showTrace
   , showFail
 
@@ -172,14 +168,14 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 -- this is making your head hurt, check out the \"How @runST@ works\"
 -- section of
 -- <https://ocharles.org.uk/blog/guest-posts/2014-12-18-rank-n-types.html>
-runConcST :: Scheduler s -> MemType -> s -> (forall t. ConcST t a) -> (Either Failure a, s, Trace)
-runConcST sched memtype s ma =
-  let (r, s', t') = runConcST' sched memtype s ma
-  in  (r, s', toTrace t')
-
--- | Variant of 'runConcST' which produces a 'Trace''.
-runConcST' :: Scheduler s -> MemType -> s -> (forall t. ConcST t a) -> (Either Failure a, s, Trace')
-runConcST' sched memtype s ma = runST $ runFixed fixed runTransactionST sched memtype s $ unC ma where
+--
+-- __Note:__ In order to prevent computation from hanging, the runtime
+-- will assume that a deadlock situation has arisen if the scheduler
+-- attempts to (a) schedule a blocked thread, or (b) schedule a
+-- nonexistent thread. In either of those cases, the computation will
+-- be halted.
+runConcST :: Scheduler ThreadId ThreadAction Lookahead s -> MemType -> s -> (forall t. ConcST t a) -> (Either Failure a, s, Trace ThreadId ThreadAction Lookahead)
+runConcST sched memtype s ma = runST $ runFixed fixed runTransactionST sched memtype s $ unC ma where
   fixed = refST $ \mb -> cont (\c -> ALift $ c <$> mb)
 
 -- | Run a concurrent computation in the @IO@ monad with a given
@@ -193,12 +189,12 @@ runConcST' sched memtype s ma = runST $ runFixed fixed runTransactionST sched me
 -- You should therefore keep @IO@ blocks small, and only perform
 -- blocking operations with the supplied primitives, insofar as
 -- possible.
-runConcIO :: Scheduler s -> MemType -> s -> ConcIO a -> IO (Either Failure a, s, Trace)
-runConcIO sched memtype s ma = do
-  (r, s', t') <- runConcIO' sched memtype s ma
-  return (r, s', toTrace t')
-
--- | Variant of 'runConcIO' which produces a 'Trace''.
-runConcIO' :: Scheduler s -> MemType -> s -> ConcIO a -> IO (Either Failure a, s, Trace')
-runConcIO' sched memtype s ma = runFixed fixed runTransactionIO sched memtype s $ unC ma where
+--
+-- __Note:__ In order to prevent computation from hanging, the runtime
+-- will assume that a deadlock situation has arisen if the scheduler
+-- attempts to (a) schedule a blocked thread, or (b) schedule a
+-- nonexistent thread. In either of those cases, the computation will
+-- be halted.
+runConcIO :: Scheduler ThreadId ThreadAction Lookahead s -> MemType -> s -> ConcIO a -> IO (Either Failure a, s, Trace ThreadId ThreadAction Lookahead)
+runConcIO sched memtype s ma = runFixed fixed runTransactionIO sched memtype s $ unC ma where
   fixed = refIO $ \mb -> cont (\c -> ALift $ c <$> mb)

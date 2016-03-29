@@ -35,11 +35,10 @@ module Test.DejaFu.Deterministic.Internal
  , Decision(..)
  , ThreadAction(..)
  , Lookahead(..)
- , Trace'
  , isBlock
  , lookahead
  , willRelease
- , toTrace
+ , preEmpCount
  , showTrace
  , showFail
 
@@ -62,7 +61,7 @@ import Data.Functor (void)
 import Data.List (sort)
 import Data.List.Extra
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
-import Test.DejaFu.DPOR (Decision(..))
+import Test.DejaFu.DPOR (Decision(..), Scheduler, Trace)
 import Test.DejaFu.STM (Result(..))
 import Test.DejaFu.Internal
 import Test.DejaFu.Deterministic.Internal.Common
@@ -82,13 +81,13 @@ import qualified Data.Map.Strict as M
 -- deadlock is detected. Also returned is the final state of the
 -- scheduler, and an execution trace.
 runFixed :: (Functor n, Monad n) => Fixed n r s -> (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
-         -> Scheduler g -> MemType -> g -> M n r s a -> n (Either Failure a, g, Trace')
+         -> Scheduler ThreadId ThreadAction Lookahead g -> MemType -> g -> M n r s a -> n (Either Failure a, g, Trace ThreadId ThreadAction Lookahead)
 runFixed fixed runstm sched memtype s ma = (\(e,g,_,t) -> (e,g,t)) <$> runFixed' fixed runstm sched memtype s initialIdSource ma
 
 -- | Same as 'runFixed', be parametrised by an 'IdSource'.
 runFixed' :: forall n r s g a. (Functor n, Monad n)
   => Fixed n r s -> (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
-  -> Scheduler g -> MemType -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace')
+  -> Scheduler ThreadId ThreadAction Lookahead g -> MemType -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace ThreadId ThreadAction Lookahead)
 runFixed' fixed runstm sched memtype s idSource ma = do
   ref <- newRef fixed Nothing
 
@@ -107,7 +106,7 @@ runFixed' fixed runstm sched memtype s idSource ma = do
 -- exposed to users of the library, this is just an internal gotcha to
 -- watch out for.
 runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
-           -> Scheduler g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace')
+           -> Scheduler ThreadId ThreadAction Lookahead g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace ThreadId ThreadAction Lookahead)
 runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer 2 where
   go idSource sofar prior g threads wb caps
     | isTerminated  = stop g
@@ -128,7 +127,7 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
         Left failure -> die g' failure
 
     where
-      (choice, g')  = sched g (map (\(d,_,a) -> (d,a)) $ reverse sofar) ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) $ unsafeToNonEmpty runnable'
+      (choice, g')  = sched (map (\(d,_,a) -> (d,a)) $ reverse sofar) ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) (unsafeToNonEmpty $ map (\(t,l:|_) -> (t,l)) runnable') g
       chosen        = fromJust choice
       runnable'     = [(t, nextActions t) | t <- sort $ M.keys runnable]
       runnable      = M.filter (isNothing . _blocking) threadsc

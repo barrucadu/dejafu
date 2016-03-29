@@ -16,6 +16,7 @@ import Data.Maybe (isJust)
 import Data.Set (Set, fromList)
 import Test.DejaFu (Failure(..), defaultMemType)
 import Test.DejaFu.Deterministic (ConcST, Trace)
+import qualified Test.DejaFu.Deterministic as D
 import Test.DejaFu.SCT (sctBound, defaultBounds)
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
@@ -172,7 +173,7 @@ eq' left right = results left == results right
 
 results :: forall t a. Ord a => ConcST t a -> Set (Either Failure a)
 results cst = fromList . map fst $ sctBound' cst where
-  sctBound' :: ConcST t a -> [(Either Failure a, Trace)]
+  sctBound' :: ConcST t a -> [(Either Failure a, Trace D.ThreadId D.ThreadAction D.Lookahead)]
   sctBound' = unsafeCoerce $ sctBound defaultMemType defaultBounds
 
 eqf :: Ord b => (a -> CST t b) -> (a -> CST t b) -> a -> Bool
