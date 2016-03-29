@@ -102,27 +102,17 @@ dependentActions memtype buf a1 a2 = case (a1, a2) of
 
 -- * Keeping track of 'CRef' buffer state
 
-data CRState = Known (Map CRefId Bool) | Unknown
-  deriving (Eq, Show)
-
-instance NFData CRState where
-  rnf (Known m) = rnf m
-  rnf Unknown = ()
+type CRState = Map CRefId Bool
 
 -- | Initial global 'CRef buffer state.
 initialCRState :: CRState
-initialCRState = Known M.empty
-
--- | 'CRef' buffer state with nothing known.
-unknownCRState :: CRState
-unknownCRState = Unknown
+initialCRState = M.empty
 
 -- | Update the 'CRef' buffer state with the action that has just
 -- happened.
 updateCRState :: CRState -> ThreadAction -> CRState
-updateCRState Unknown _ = Unknown
-updateCRState (Known crstate) (CommitRef _ r) = Known $ M.delete r crstate
-updateCRState (Known crstate) (WriteRef r) = Known $ M.insert r True crstate
+updateCRState crstate (CommitRef _ r) = M.delete r crstate
+updateCRState crstate (WriteRef r) = M.insert r True crstate
 updateCRState crstate ta
   | isBarrier $ simplify ta = initialCRState
   | otherwise = crstate
@@ -131,5 +121,4 @@ updateCRState crstate ta
 --
 -- If the state is @Unknown@, this assumes @True@.
 isBuffered :: CRState -> CRefId -> Bool
-isBuffered Unknown _ = True
-isBuffered (Known crstate) r = M.findWithDefault False r crstate
+isBuffered crstate r = M.findWithDefault False r crstate
