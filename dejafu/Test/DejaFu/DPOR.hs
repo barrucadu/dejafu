@@ -108,12 +108,11 @@ import qualified Data.Map.Strict as M
 --
 -- The three dependency functions must be consistent: if we can
 -- convert between @action@ and @lookahead@, and supply some sensible
--- default state, then (1) == true implies that (2) and (3) are. In
--- practice, (1) is the most specific, (2) will be more pessimistic
--- (due to, typically, less information being available when merely
--- looking ahead), and (3) will be the most pessimistic (due to not
--- having any additional state to inform its operation).
-dpor :: (Ord tid, NFData tid, NFData action, NFData lookahead, Monad m)
+-- default state, then (1) == true implies that (2) is. In practice,
+-- (1) is the most specific and (2) will be more pessimistic (due to,
+-- typically, less information being available when merely looking
+-- ahead).
+dpor :: (Ord tid, NFData tid, NFData action, NFData lookahead, NFData s, Monad m)
   => (action    -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
@@ -126,8 +125,6 @@ dpor :: (Ord tid, NFData tid, NFData action, NFData lookahead, Monad m)
   -- ^ The dependency (1) function.
   -> (s -> (tid, action) -> (tid, lookahead) -> Bool)
   -- ^ The dependency (2) function.
-  -> (    (tid, action) -> (tid, action)    -> Bool)
-  -- ^ The dependency (3) function.
   -> tid
   -- ^ The initial thread.
   -> (tid -> Bool)
@@ -141,7 +138,7 @@ dpor :: (Ord tid, NFData tid, NFData action, NFData lookahead, Monad m)
   -- points.
   -> (DPOR tid action -> DPOR tid action)
   -- ^ Some post-processing to do after adding the new to-do points.
-  -> (DPORScheduler tid action lookahead -> SchedState tid action lookahead -> m (a, SchedState tid action lookahead, Trace tid action lookahead))
+  -> (DPORScheduler tid action lookahead s -> SchedState tid action lookahead s  -> m (a, SchedState tid action lookahead s, Trace tid action lookahead))
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
   -> m [(a, Trace tid action lookahead)]
@@ -151,7 +148,6 @@ dpor didYield
      ststep
      dependency1
      dependency2
-     dependency3
      initialTid
      predicate
      inBound
@@ -166,7 +162,7 @@ dpor didYield
     -- try.
     go dp = case nextPrefix dp of
       Just (prefix, conservative, sleep) -> do
-        (res, s, trace) <- run scheduler (initialSchedState sleep prefix)
+        (res, s, trace) <- run scheduler (initialSchedState stinit sleep prefix)
 
         let bpoints = findBacktracks s trace
         let newDPOR = addTrace conservative trace dp
@@ -181,7 +177,7 @@ dpor didYield
     nextPrefix = findSchedulePrefix predicate
 
     -- The DPOR scheduler.
-    scheduler = dporSched didYield willYield dependency3 inBound
+    scheduler = dporSched didYield willYield dependency1 ststep inBound
 
     -- Find the new backtracking steps.
     findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack . schedBPoints

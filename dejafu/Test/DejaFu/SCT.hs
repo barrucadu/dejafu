@@ -313,9 +313,8 @@ sctBoundedM memtype bf backtrack run =
        willYield
        initialCRState
        updateCRState
-       (dependent memtype)
+       (dependent  memtype)
        (dependent' memtype)
-       (dependent memtype unknownCRState)
        initialThread
        (>=initialThread)
        bf

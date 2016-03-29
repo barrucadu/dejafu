@@ -1,6 +1,7 @@
 -- | Internal utilities and types for BPOR.
 module Test.DejaFu.SCT.Internal where
 
+import Control.DeepSeq (NFData(..))
 import Data.Map.Strict (Map)
 import Data.Maybe (isJust, fromJust)
 import Test.DejaFu.Deterministic.Internal hiding (Decision(..))
@@ -103,6 +104,10 @@ dependentActions memtype buf a1 a2 = case (a1, a2) of
 
 data CRState = Known (Map CRefId Bool) | Unknown
   deriving (Eq, Show)
+
+instance NFData CRState where
+  rnf (Known m) = rnf m
+  rnf Unknown = ()
 
 -- | Initial global 'CRef buffer state.
 initialCRState :: CRState

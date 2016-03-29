@@ -383,10 +383,10 @@ type Scheduler tid action lookahead state
   -> state
   -> (Maybe tid, state)
 
-type DPORScheduler tid action lookahead = Scheduler tid action lookahead (SchedState tid action lookahead)
+type DPORScheduler tid action lookahead s = Scheduler tid action lookahead (SchedState tid action lookahead s)
 
 -- | The scheduler state
-data SchedState tid action lookahead = SchedState
+data SchedState tid action lookahead s = SchedState
   { schedSleep   :: Map tid action
   -- ^ The sleep set: decisions not to make until something dependent
   -- with them happens.
@@ -400,29 +400,37 @@ data SchedState tid action lookahead = SchedState
   -- execution is aborted due to all possible decisions being in the
   -- sleep set, as then everything in this execution is covered by
   -- another.
+  , schedDepState :: s
+  -- ^ State used by the dependency function to determine when to
+  -- remove decisions from the sleep set.
   } deriving Show
 
 instance ( NFData tid
          , NFData action
          , NFData lookahead
-         ) => NFData (SchedState tid action lookahead) where
-  rnf s = rnf ( schedSleep   s
-              , schedPrefix  s
-              , schedBPoints s
-              , schedIgnore  s
+         , NFData s
+         ) => NFData (SchedState tid action lookahead s) where
+  rnf s = rnf ( schedSleep    s
+              , schedPrefix   s
+              , schedBPoints  s
+              , schedIgnore   s
+              , schedDepState s
               )
 
 -- | Initial scheduler state for a given prefix
-initialSchedState :: Map tid action
+initialSchedState :: s
+  -- ^ The initial dependency function state.
+  -> Map tid action
   -- ^ The initial sleep set.
   -> [tid]
   -- ^ The schedule prefix.
-  -> SchedState tid action lookahead
-initialSchedState sleep prefix = SchedState
-  { schedSleep   = sleep
-  , schedPrefix  = prefix
-  , schedBPoints = Sq.empty
-  , schedIgnore  = False
+  -> SchedState tid action lookahead s
+initialSchedState s sleep prefix = SchedState
+  { schedSleep    = sleep
+  , schedPrefix   = prefix
+  , schedBPoints  = Sq.empty
+  , schedIgnore   = False
+  , schedDepState = s
   }
 
 -- | A bounding function takes the scheduling decisions so far and a
@@ -441,22 +449,24 @@ type BoundFunc tid action lookahead = [(Decision tid, action)] -> (Decision tid,
 --
 -- This forces full evaluation of the result every step, to avoid any
 -- possible space leaks.
-dporSched :: (Ord tid, NFData tid, NFData action, NFData lookahead)
+dporSched :: (Ord tid, NFData tid, NFData action, NFData lookahead, NFData s)
   => (action -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
   -- ^ Determine if a thread will yield.
-  -> ((tid, action) -> (tid, action) -> Bool)
+  -> (s -> (tid, action) -> (tid, action) -> Bool)
   -- ^ Dependency function.
+  -> (s -> action -> s)
+  -- ^ Dependency function's state step function.
   -> BoundFunc tid action lookahead
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
-  -> DPORScheduler tid action lookahead
-dporSched didYield willYield dependency inBound trc prior threads s = force schedule where
+  -> DPORScheduler tid action lookahead s
+dporSched didYield willYield dependency ststep inBound trc prior threads s = force schedule where
   -- Pick a thread to run.
   schedule = case schedPrefix s of
     -- If there is a decision available, make it
-    (d:ds) -> (Just d, s { schedPrefix = ds, schedBPoints = schedBPoints s |> (threads, []) })
+    (d:ds) -> (Just d, (nextState []) { schedPrefix = ds })
 
     -- Otherwise query the initialise function for a list of possible
     -- choices, filter out anything in the sleep set, and make one of
@@ -464,14 +474,22 @@ dporSched didYield willYield dependency inBound trc prior threads s = force sche
     [] ->
       let choices  = initialise
           checkDep t a = case prior of
-            Just (tid, act) -> dependency (tid, act) (t, a)
+            Just (tid, act) -> dependency (schedDepState s) (tid, act) (t, a)
             Nothing -> False
           ssleep'  = M.filterWithKey (\t a -> not $ checkDep t a) $ schedSleep s
           choices' = filter (`notElem` M.keys ssleep') choices
           signore' = not (null choices) && all (`elem` M.keys ssleep') choices
       in case choices' of
-            (nextTid:rest) -> (Just nextTid, s { schedBPoints = schedBPoints s |> (threads, rest), schedSleep = ssleep' })
-            [] -> (Nothing, s { schedBPoints = schedBPoints s |> (threads, []), schedIgnore = signore' })
+            (nextTid:rest) -> (Just nextTid, (nextState rest) { schedSleep = ssleep' })
+            [] -> (Nothing, (nextState []) { schedIgnore = signore' })
+
+  -- The next scheduler state
+  nextState rest = s
+    { schedBPoints  = schedBPoints s |> (threads, rest)
+    , schedDepState = case prior of
+        Just (_, act) -> ststep (schedDepState s) act
+        Nothing -> schedDepState s
+    }
 
   -- Pick a new thread to run, which does not exceed the bound. Choose
   -- the current thread if available and it hasn't just yielded,
