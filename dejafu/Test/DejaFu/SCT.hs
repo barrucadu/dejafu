@@ -1,5 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
@@ -205,7 +204,7 @@ pBacktrack = preempBacktrack isCommit
 -- that it does not count pre-emptive context switches to a commit
 -- thread.
 pBound :: PreemptionBound -> BoundFunc ThreadId ThreadAction Lookahead
-pBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb where
+pBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb
 
 -------------------------------------------------------------------------------
 -- Fair bounding
