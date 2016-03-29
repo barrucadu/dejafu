@@ -97,49 +97,100 @@ import qualified Data.Map.Strict as M
 -- Bounded dynamic partial-order reduction
 
 -- | Dynamic partial-order reduction.
+--
+-- This takes a lot of functional parameters because it's so generic,
+-- but most are fairly simple.
+--
+-- Some state may be maintained when determining backtracking points,
+-- which can then inform the dependency functions. This state is not
+-- preserved between different schedules, and built up from scratch
+-- each time.
+--
+-- The three dependency functions must be consistent: if we can
+-- convert between @action@ and @lookahead@, and supply some sensible
+-- default state, then (1) == true implies that (2) and (3) are. In
+-- practice, (1) is the most specific, (2) will be more pessimistic
+-- (due to, typically, less information being available when merely
+-- looking ahead), and (3) will be the most pessimistic (due to not
+-- having any additional state to inform its operation).
 dpor :: (Ord tid, NFData tid, NFData action, NFData lookahead, Monad m)
-  => (action -> Bool)
+  => (action    -> Bool)
+  -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
-  -> BoundFunc tid action lookahead
+  -- ^ Determine if a thread will yield.
   -> s
+  -- ^ The initial state for backtracking.
   -> (s -> action -> s)
+  -- ^ The backtracking state step function.
   -> (s -> (tid, action) -> (tid, action)    -> Bool)
+  -- ^ The dependency (1) function.
   -> (s -> (tid, action) -> (tid, lookahead) -> Bool)
+  -- ^ The dependency (2) function.
   -> (    (tid, action) -> (tid, action)    -> Bool)
-  -> ([BacktrackStep tid action lookahead s] -> Int -> tid -> [BacktrackStep tid action lookahead s])
-  -> (DPOR tid action -> DPOR tid action)
-  -> (DPORScheduler tid action lookahead -> SchedState tid action lookahead -> m (a, SchedState tid action lookahead, Trace tid action lookahead))
-  -> (tid -> Bool)
+  -- ^ The dependency (3) function.
   -> tid
+  -- ^ The initial thread.
+  -> (tid -> Bool)
+  -- ^ The thread partitioning function: when choosing what to
+  -- execute, prefer threads which return true.
+  -> BoundFunc tid action lookahead
+  -- ^ The bounding function.
+  -> ([BacktrackStep tid action lookahead s] -> Int -> tid -> [BacktrackStep tid action lookahead s])
+  -- ^ The backtracking function. Note that, for some bounding
+  -- functions, this will need to add conservative backtracking
+  -- points.
+  -> (DPOR tid action -> DPOR tid action)
+  -- ^ Some post-processing to do after adding the new to-do points.
+  -> (DPORScheduler tid action lookahead -> SchedState tid action lookahead -> m (a, SchedState tid action lookahead, Trace tid action lookahead))
+  -- ^ The runner: given the scheduler and state, execute the
+  -- computation under that scheduler.
   -> m [(a, Trace tid action lookahead)]
-dpor didYield willYield inBound stinit ststep dependency1 dependency2 dependency3 backtrack transform run predicate = go . initialState where
-  go dp = case nextPrefix dp of
-    Just (prefix, conservative, sleep) -> do
-      (res, s, trace) <- run scheduler (initialSchedState sleep prefix)
+dpor didYield
+     willYield
+     stinit
+     ststep
+     dependency1
+     dependency2
+     dependency3
+     initialTid
+     predicate
+     inBound
+     backtrack
+     transform
+     run
+  = go (initialState initialTid)
 
-      let bpoints = findBacktracks s trace
-      let newDPOR = addTrace conservative trace dp
+  where
+    -- Repeatedly run the computation gathering all the results and
+    -- traces into a list until there are no schedules remaining to
+    -- try.
+    go dp = case nextPrefix dp of
+      Just (prefix, conservative, sleep) -> do
+        (res, s, trace) <- run scheduler (initialSchedState sleep prefix)
 
-      if schedIgnore s
-      then go newDPOR
-      else ((res, trace):) <$> go (transform $ addBacktracks bpoints newDPOR)
+        let bpoints = findBacktracks s trace
+        let newDPOR = addTrace conservative trace dp
 
-    Nothing -> pure []
+        if schedIgnore s
+        then go newDPOR
+        else ((res, trace):) <$> go (transform $ addBacktracks bpoints newDPOR)
 
-  -- Find the next schedule prefix.
-  nextPrefix = findSchedulePrefix predicate
+      Nothing -> pure []
 
-  -- The DPOR scheduler.
-  scheduler = dporSched didYield willYield dependency3 inBound
+    -- Find the next schedule prefix.
+    nextPrefix = findSchedulePrefix predicate
 
-  -- Find the new backtracking steps.
-  findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack . schedBPoints
+    -- The DPOR scheduler.
+    scheduler = dporSched didYield willYield dependency3 inBound
 
-  -- Incorporate a trace into the DPOR tree.
-  addTrace = incorporateTrace stinit ststep dependency1
+    -- Find the new backtracking steps.
+    findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack . schedBPoints
 
-  -- Incorporate the new backtracking steps into the DPOR tree.
-  addBacktracks = incorporateBacktrackSteps inBound
+    -- Incorporate a trace into the DPOR tree.
+    addTrace = incorporateTrace stinit ststep dependency1
+
+    -- Incorporate the new backtracking steps into the DPOR tree.
+    addBacktracks = incorporateBacktrackSteps inBound
 
 -- | Add a backtracking point. If the thread isn't runnable, add all
 -- runnable threads.

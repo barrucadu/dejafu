@@ -311,17 +311,17 @@ sctBoundedM :: Monad m
 sctBoundedM memtype bf backtrack run =
   dpor didYield
        willYield
-       bf
        initialCRState
        updateCRState
        (dependent memtype)
        (dependent' memtype)
        (dependent memtype unknownCRState)
+       initialThread
+       (>=initialThread)
+       bf
        backtrack
        pruneCommits
        (run memtype)
-       (>=initialThread)
-       initialThread
 
 -------------------------------------------------------------------------------
 -- Utilities
