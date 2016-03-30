@@ -23,6 +23,7 @@ module Test.DPOR
   -- K. McKinley for more details.
 
     dpor
+  , simpleDPOR
   , DPOR(..)
 
   -- ** Backtracking
@@ -202,6 +203,55 @@ dpor didYield
 
     -- Incorporate the new backtracking steps into the DPOR tree.
     addBacktracks = incorporateBacktrackSteps inBound
+
+-- | A much simplified DPOR function: no state, no preference between
+-- threads, and no post-processing between iterations.
+simpleDPOR :: ( Ord    tid
+             , NFData tid
+             , NFData action
+             , NFData lookahead
+             , Monad  m
+             )
+  => (action    -> Bool)
+  -- ^ Determine if a thread yielded.
+  -> (lookahead -> Bool)
+  -- ^ Determine if a thread will yield.
+  -> ((tid, action) -> (tid, action)    -> Bool)
+  -- ^ The dependency (1) function.
+  -> ((tid, action) -> (tid, lookahead) -> Bool)
+  -- ^ The dependency (2) function.
+  -> tid
+  -- ^ The initial thread.
+  -> BoundFunc tid action lookahead
+  -- ^ The bounding function.
+  -> BacktrackFunc tid action lookahead ()
+  -- ^ The backtracking function. Note that, for some bounding
+  -- functions, this will need to add conservative backtracking
+  -- points.
+  -> (DPORScheduler tid action lookahead ()
+    -> SchedState tid action lookahead ()
+    -> m (a, SchedState tid action lookahead (), Trace tid action lookahead))
+  -- ^ The runner: given the scheduler and state, execute the
+  -- computation under that scheduler.
+  -> m [(a, Trace tid action lookahead)]
+simpleDPOR didYield
+           willYield
+           dependency1
+           dependency2
+           initialTid
+           inBound
+           backtrack
+  = dpor didYield
+         willYield
+         ()
+         (\_ _ -> ())
+         (const dependency1)
+         (const dependency2)
+         initialTid
+         (const True)
+         inBound
+         backtrack
+         id
 
 -- | Add a backtracking point. If the thread isn't runnable, add all
 -- runnable threads. If the backtracking point is already present,
