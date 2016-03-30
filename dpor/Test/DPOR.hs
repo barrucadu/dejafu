@@ -24,12 +24,12 @@ module Test.DPOR
 
     dpor
   , DPOR(..)
+
+  -- ** Backtracking
+
   , BacktrackFunc
   , BacktrackStep(..)
   , backtrackAt
-  , Scheduler
-  , DPORScheduler
-  , SchedState
 
   -- * Bounds
 
@@ -77,15 +77,18 @@ module Test.DPOR
   , lenBound
   , lenBacktrack
 
-  -- * Execution traces
+  -- * Scheduling & execution traces
 
   -- | The partial-order reduction is driven by incorporating
   -- information gained from trial executions of the concurrent
   -- program.
 
+  , DPORScheduler
   , Decision(..)
-  , Trace
   , NonEmpty(..)
+  , SchedState
+  , Scheduler
+  , Trace
   ) where
 
 import Control.DeepSeq (NFData)
