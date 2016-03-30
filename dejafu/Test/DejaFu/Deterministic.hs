@@ -25,6 +25,7 @@ module Test.DejaFu.Deterministic
   -- * Execution traces
   , Trace
   , Decision(..)
+  , ThreadId(..)
   , ThreadAction(..)
   , Lookahead(..)
   , MVarId
@@ -34,7 +35,7 @@ module Test.DejaFu.Deterministic
   , showFail
 
   -- * Scheduling
-  , module Test.DejaFu.Deterministic.Schedule
+  , module Test.DPOR.Schedule
   ) where
 
 import Control.Exception (MaskingState(..))
@@ -43,10 +44,10 @@ import Data.Dynamic (toDyn)
 import Data.IORef (IORef)
 import Data.STRef (STRef)
 import Test.DejaFu.Deterministic.Internal
-import Test.DejaFu.Deterministic.Schedule
 import Test.DejaFu.Internal (refST, refIO)
 import Test.DejaFu.STM (STMLike, STMIO, STMST, runTransactionIO, runTransactionST)
 import Test.DejaFu.STM.Internal (TVar(..))
+import Test.DPOR.Schedule
 
 import qualified Control.Monad.Base as Ba
 import qualified Control.Monad.Catch as Ca

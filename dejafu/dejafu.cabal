@@ -97,7 +97,6 @@ library
 
                      , Test.DejaFu
                      , Test.DejaFu.Deterministic
-                     , Test.DejaFu.Deterministic.Schedule
                      , Test.DejaFu.SCT
                      , Test.DejaFu.STM
 
@@ -120,7 +119,6 @@ library
                      , monad-control
                      , monad-loops
                      , mtl
-                     , random
                      , semigroups
                      , stm
                      , template-haskell

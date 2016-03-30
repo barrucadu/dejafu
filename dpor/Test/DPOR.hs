@@ -84,20 +84,19 @@ module Test.DPOR
   -- program.
 
   , DPORScheduler
-  , Decision(..)
-  , NonEmpty(..)
   , SchedState
-  , Scheduler
   , Trace
+
+  , module Test.DPOR.Schedule
   ) where
 
 import Control.DeepSeq (NFData)
 import Data.List (nub)
-import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (isNothing)
 import qualified Data.Map.Strict as M
 
 import Test.DPOR.Internal
+import Test.DPOR.Schedule
 
 -------------------------------------------------------------------------------
 -- Bounded dynamic partial-order reduction
