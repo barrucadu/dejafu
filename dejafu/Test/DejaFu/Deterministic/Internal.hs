@@ -59,14 +59,14 @@ module Test.DejaFu.Deterministic.Internal
 import Control.Exception (MaskingState(..), toException)
 import Data.Functor (void)
 import Data.List (sort)
-import Data.List.Extra
+import Data.List.NonEmpty (NonEmpty(..), fromList)
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
-import Test.DejaFu.DPOR (Decision(..), Scheduler, Trace)
 import Test.DejaFu.STM (Result(..))
 import Test.DejaFu.Internal
 import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.Deterministic.Internal.Memory
 import Test.DejaFu.Deterministic.Internal.Threading
+import Test.DPOR (Decision(..), Scheduler, Trace)
 
 import qualified Data.Map.Strict as M
 
@@ -127,7 +127,7 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
         Left failure -> die g' failure
 
     where
-      (choice, g')  = sched (map (\(d,_,a) -> (d,a)) $ reverse sofar) ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) (unsafeToNonEmpty $ map (\(t,l:|_) -> (t,l)) runnable') g
+      (choice, g')  = sched (map (\(d,_,a) -> (d,a)) $ reverse sofar) ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) (fromList $ map (\(t,l:|_) -> (t,l)) runnable') g
       chosen        = fromJust choice
       runnable'     = [(t, nextActions t) | t <- sort $ M.keys runnable]
       runnable      = M.filter (isNothing . _blocking) threadsc

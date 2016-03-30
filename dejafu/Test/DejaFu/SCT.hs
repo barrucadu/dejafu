@@ -94,14 +94,14 @@ import Data.Functor.Identity (Identity(..), runIdentity)
 import Data.Maybe (isJust)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.Internal (initialThread, preEmpCount, willRelease)
-import Test.DejaFu.DPOR ( BacktrackStep(..), backtrackAt
-                        , BoundFunc, (&+&), trueBound
-                        , PreemptionBound(..), defaultPreemptionBound, preempBacktrack
-                        , FairBound(..), defaultFairBound, fairBound, fairBacktrack
-                        , LengthBound(..), defaultLengthBound, lenBound, lenBacktrack
-                        , dpor
-                        )
 import Test.DejaFu.SCT.Internal
+import Test.DPOR ( BacktrackStep(..), backtrackAt
+                 , BoundFunc, (&+&), trueBound
+                 , PreemptionBound(..), defaultPreemptionBound, preempBacktrack
+                 , FairBound(..), defaultFairBound, fairBound, fairBacktrack
+                 , LengthBound(..), defaultLengthBound, lenBound, lenBacktrack
+                 , dpor
+                 )
 
 -------------------------------------------------------------------------------
 -- Combined Bounds

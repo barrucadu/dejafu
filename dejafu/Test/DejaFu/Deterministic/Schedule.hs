@@ -14,7 +14,7 @@ module Test.DejaFu.Deterministic.Schedule
   , toList
   ) where
 
-import Data.List.Extra
+import Data.List.NonEmpty (NonEmpty(..), toList)
 import System.Random (RandomGen, randomR)
 import Test.DejaFu.Deterministic.Internal
 

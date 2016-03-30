@@ -1,10 +1,10 @@
 -- | Internal types and functions for dynamic partial-order reduction.
-module Test.DejaFu.DPOR.Internal where
+module Test.DPOR.Internal where
 
 import Control.DeepSeq (NFData(..), force)
 import Data.Char (ord)
 import Data.List (foldl', intercalate, partition, sortBy)
-import Data.List.Extra (NonEmpty(..), toList)
+import Data.List.NonEmpty (NonEmpty(..), toList)
 import Data.Ord (Down(..), comparing)
 import Data.Map.Strict (Map)
 import Data.Maybe (fromJust, mapMaybe)

@@ -11,9 +11,9 @@ import Data.Dynamic (Dynamic)
 import Data.Map.Strict (Map)
 import Data.Maybe (mapMaybe)
 import Data.List (sort, nub, intercalate)
-import Data.List.Extra
-import Test.DejaFu.DPOR (Decision(..), Trace)
+import Data.List.NonEmpty (NonEmpty, fromList)
 import Test.DejaFu.Internal
+import Test.DPOR (Decision(..), Trace)
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 
@@ -564,7 +564,7 @@ instance NFData Lookahead where
 
 -- | Look as far ahead in the given continuation as possible.
 lookahead :: Action n r s -> NonEmpty Lookahead
-lookahead = unsafeToNonEmpty . lookahead' where
+lookahead = fromList . lookahead' where
   lookahead' (AFork _ _ _)           = [WillFork]
   lookahead' (AMyTId _)              = [WillMyThreadId]
   lookahead' (AGetNumCapabilities _) = [WillGetNumCapabilities]

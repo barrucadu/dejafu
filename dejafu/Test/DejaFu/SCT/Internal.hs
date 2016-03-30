@@ -5,7 +5,7 @@ import Control.DeepSeq (NFData(..))
 import Data.Map.Strict (Map)
 import Data.Maybe (isJust, fromJust)
 import Test.DejaFu.Deterministic.Internal hiding (Decision(..))
-import Test.DejaFu.DPOR (DPOR(..))
+import Test.DPOR (DPOR(..))
 
 import qualified Data.Map.Strict as M
 

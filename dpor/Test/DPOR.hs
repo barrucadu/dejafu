@@ -2,7 +2,7 @@
 
 -- | Systematic testing of concurrent computations through dynamic
 -- partial-order reduction and schedule bounding.
-module Test.DejaFu.DPOR
+module Test.DPOR
   ( -- * Bounded dynamic partial-order reduction
 
   -- | We can characterise the state of a concurrent computation by
@@ -84,14 +84,16 @@ module Test.DejaFu.DPOR
 
   , Decision(..)
   , Trace
+  , NonEmpty(..)
   ) where
 
 import Control.DeepSeq (NFData)
 import Data.List (nub)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (isNothing)
-import Test.DejaFu.DPOR.Internal
-
 import qualified Data.Map.Strict as M
+
+import Test.DPOR.Internal
 
 -------------------------------------------------------------------------------
 -- Bounded dynamic partial-order reduction

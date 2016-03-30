@@ -229,7 +229,7 @@ import Control.DeepSeq (NFData(..))
 import Control.Monad (when, unless)
 import Data.Function (on)
 import Data.List (intercalate, intersperse, minimumBy)
-import Data.List.Extra
+--import Data.List.NonEmpty
 import Data.Ord (comparing)
 import Test.DejaFu.Deterministic
 import Test.DejaFu.Deterministic.Internal (preEmpCount)
@@ -598,10 +598,17 @@ doTest name result = do
     let failures = _failures result
     let output = map (\(r, t) -> putStrLn . indent $ either showFail show r ++ " " ++ showTrace t) $ take 5 failures
     sequence_ $ intersperse (putStrLn "") output
-    when (moreThan failures 5) $
+    when (moreThan 5 failures) $
       putStrLn (indent "...")
 
   return $ _pass result
+
+-- | Check if a list is longer than some value, without needing to
+-- compute the entire length.
+moreThan :: Int -> [a] -> Bool
+moreThan n [] = n < 0
+moreThan 0 _ = True
+moreThan n (_:rest) = moreThan (n-1) rest
 
 -- | Increment the cases
 incCC :: Result a -> Result a

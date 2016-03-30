@@ -6,6 +6,7 @@ packages:
 - tasty-dejafu
 - dejafu
 - dejafu-tests
+- dpor
 
 extra-deps: []
 
