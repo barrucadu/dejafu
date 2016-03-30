@@ -438,6 +438,16 @@ initialSchedState s sleep prefix = SchedState
 -- within the bound.
 type BoundFunc tid action lookahead = [(Decision tid, action)] -> (Decision tid, lookahead) -> Bool
 
+-- | A backtracking step is a point in the execution where another
+-- decision needs to be made, in order to explore interesting new
+-- schedules. A backtracking /function/ takes the steps identified so
+-- far and a point and a thread to backtrack to, and inserts at least
+-- that backtracking point. More may be added to compensate for the
+-- effects of the bounding function. For example, under pre-emption
+-- bounding a conservative backtracking point is added at the prior
+-- context switch.
+type BacktrackFunc tid action lookahead s = [BacktrackStep tid action lookahead s] -> Int -> tid -> [BacktrackStep tid action lookahead s]
+
 -- | DPOR scheduler: takes a list of decisions, and maintains a trace
 -- including the runnable threads, and the alternative choices allowed
 -- by the bound-specific initialise function.
