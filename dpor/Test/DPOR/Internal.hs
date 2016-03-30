@@ -369,6 +369,10 @@ type BoundFunc tid action lookahead = [(Decision tid, action)] -> (Decision tid,
 -- effects of the bounding function. For example, under pre-emption
 -- bounding a conservative backtracking point is added at the prior
 -- context switch.
+--
+-- In general, a backtracking function should identify one or more
+-- backtracking points, and then use @backtrackAt@ to do the actual
+-- work.
 type BacktrackFunc tid action lookahead s = [BacktrackStep tid action lookahead s] -> Int -> tid -> [BacktrackStep tid action lookahead s]
 
 -- | DPOR scheduler: takes a list of decisions, and maintains a trace

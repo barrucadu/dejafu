@@ -38,8 +38,7 @@ import System.Random (RandomGen, randomR)
 -- 4. The state.
 --
 -- It returns a thread to execute, or @Nothing@ if execution should
--- abort here, and also a new state. Execution may be aborted if all
--- of the runnable threads are in the sleep set.
+-- abort here, and also a new state.
 type Scheduler tid action lookahead s
   = [(Decision tid, action)]
   -> Maybe (tid, action)

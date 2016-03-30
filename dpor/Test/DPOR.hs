@@ -31,15 +31,15 @@ module Test.DPOR
   , BacktrackStep(..)
   , backtrackAt
 
-  -- * Bounds
+  -- ** Bounding
 
   , BoundFunc
   , (&+&)
   , trueBound
 
-  -- ** Pre-emption bounding
+  -- *** Preemption
 
-  -- | DPOR with pre-emption bounding. This adds conservative
+  -- | DPOR with preemption bounding. This adds conservative
   -- backtracking points at the prior context switch whenever a
   -- non-conervative backtracking point is added, as alternative
   -- decisions can influence the reachability of different states.
@@ -52,7 +52,7 @@ module Test.DPOR
   , preempBacktrack
   , preempCount
 
-  -- ** Fair bounding
+  -- *** Fair
 
   -- | DPOR using fair bounding. This bounds the maximum difference
   -- between the number of yield operations different threads have
@@ -67,7 +67,7 @@ module Test.DPOR
   , yieldCount
   , maxYieldCountDiff
 
-  -- ** Length Bounding
+  -- *** Length
 
   -- | BPOR using length bounding. This bounds the maximum length (in
   -- terms of primitive actions) of an execution.
@@ -111,10 +111,10 @@ import Test.DPOR.Schedule
 -- preserved between different schedules, and built up from scratch
 -- each time.
 --
--- The three dependency functions must be consistent: if we can
--- convert between @action@ and @lookahead@, and supply some sensible
--- default state, then (1) == true implies that (2) is. In practice,
--- (1) is the most specific and (2) will be more pessimistic (due to,
+-- The dependency functions must be consistent: if we can convert
+-- between @action@ and @lookahead@, and supply some sensible default
+-- state, then (1) == true implies that (2) is. In practice, (1) is
+-- the most specific and (2) will be more pessimistic (due to,
 -- typically, less information being available when merely looking
 -- ahead).
 dpor :: ( Ord    tid
@@ -204,10 +204,8 @@ dpor didYield
     addBacktracks = incorporateBacktrackSteps inBound
 
 -- | Add a backtracking point. If the thread isn't runnable, add all
--- runnable threads.
---
--- If the backtracking point is already present, don't re-add it
--- UNLESS this is a conservative backtracking point.
+-- runnable threads. If the backtracking point is already present,
+-- don't re-add it UNLESS this would make it conservative.
 backtrackAt :: Ord tid
   => (BacktrackStep tid action lookahead s -> Bool)
   -- ^ If this returns @True@, backtrack to all runnable threads,
@@ -255,19 +253,19 @@ trueBound :: BoundFunc tid action lookahead
 trueBound _ _ = True
 
 -------------------------------------------------------------------------------
--- Pre-emption bounding
+-- Preemption bounding
 
 newtype PreemptionBound = PreemptionBound Int
   deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
--- | A sensible default pre-emption bound: 2.
+-- | A sensible default preemption bound: 2.
 --
--- See /Concurrency Testing Using Schedule Bounding: an Empirical
--- Study/, P. Thomson, A. F. Donaldson, A. Betts for justification.
+-- See /Concurrency Testing Using Schedule Bounding: an Empirical Study/,
+-- P. Thomson, A. F. Donaldson, A. Betts for justification.
 defaultPreemptionBound :: PreemptionBound
 defaultPreemptionBound = 2
 
--- | Pre-emption bound function
+-- | Preemption bound function
 preempBound :: (action -> Bool)
   -- ^ Determine if a thread yielded.
   -> PreemptionBound
@@ -281,7 +279,7 @@ preempBound didYield (PreemptionBound pb) ts dl =
 -- of the artificial dependency imposed by the bound.
 preempBacktrack :: Ord tid
   => (action -> Bool)
-  -- ^ If this is true of the action at a pre-emptive context switch,
+  -- ^ If this is true of the action at a preemptive context switch,
   -- do NOT use that point for the conservative point, try earlier.
   -> BacktrackFunc tid action lookahead s
 preempBacktrack ignore bs i tid =
@@ -304,7 +302,7 @@ preempBacktrack ignore bs i tid =
     -- Add a backtracking point.
     backtrack = backtrackAt $ const False
 
--- Count the number of pre-emptions in a schedule prefix.
+-- | Count the number of preemptions in a schedule prefix.
 preempCount :: (action -> Bool)
   -- ^ Determine if a thread yielded.
   -> [(Decision tid, action)]
