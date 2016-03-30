@@ -106,7 +106,6 @@ library
                      , Test.DejaFu.Deterministic.Internal.Memory
                      , Test.DejaFu.Deterministic.Internal.Threading
                      , Test.DejaFu.Internal
-                     , Test.DejaFu.SCT.Internal
                      , Test.DejaFu.STM.Internal
 
   -- other-modules:       
