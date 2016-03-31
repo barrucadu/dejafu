@@ -40,7 +40,7 @@ bufferWrite :: Monad n => Fixed n r s -> WriteBuffer r -> Int -> CRef r a -> a -
 bufferWrite fixed (WriteBuffer wb) i cref@(CRef _ ref) new tid = do
   -- Construct the new write buffer
   let write = singleton $ BufferedWrite tid cref new
-  let buffer' = I.insertWith (><) i write wb
+  let buffer' = I.insertWith (flip (><)) i write wb
 
   -- Write the thread-local value to the @CRef@'s update map.
   (locals, count, def) <- readRef fixed ref
