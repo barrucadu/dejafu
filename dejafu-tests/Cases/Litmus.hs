@@ -1,7 +1,12 @@
+{-# LANGUAGE RankNTypes #-}
+
 module Cases.Litmus where
 
+import Control.Monad (replicateM)
+import Data.List (nub, sort)
 import Test.DejaFu (MemType(..), defaultBounds, gives')
 import Test.DejaFu.Deterministic (ConcST)
+import Test.DejaFu.SCT (sctPreBound, defaultPreemptionBound)
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
@@ -58,6 +63,26 @@ litmusTest name act sq tso pso = testGroup name . hUnitTestToTests $ test
   , testDejafu' TotalStoreOrder       defaultBounds act "TSO" (gives' tso)
   , testDejafu' PartialStoreOrder     defaultBounds act "PSO" (gives' pso)
   ]
+
+-- | Run a litmus test against the three different memory models, and
+-- real IO, and print the results.
+--
+-- Make sure before doing this that you have more than 1 capability,
+-- or the @IO@ behaviour will be severely constrained! The @IO@ test
+-- is run 99,999 times, but is still not guaranteed to see all the
+-- possible results. This is why dejafu is good!
+compareTest :: (Ord a, Show a) => (forall m. MonadConc m => m a) -> IO ()
+compareTest act = do
+  putStrLn $ "DejaFu-SQ:  " ++ results SequentialConsistency
+  putStrLn $ "DejaFu-TSO: " ++ results TotalStoreOrder
+  putStrLn $ "DejaFu-PSO: " ++ results PartialStoreOrder
+  putStr     "IO:         " >> ioResults >>= putStrLn
+
+  where
+    results memtype = show . nub . sort . map (\(Right a,_) -> a) $
+      sctPreBound memtype defaultPreemptionBound act
+
+    ioResults = show . nub . sort <$> replicateM 99999 act
 
 -------------------------------------------------------------------------------
 
