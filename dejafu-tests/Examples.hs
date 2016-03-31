@@ -6,6 +6,7 @@ import qualified Examples.AutoUpdate   as A
 import qualified Examples.ClassLaws    as C
 import qualified Examples.Logger       as L
 import qualified Examples.Philosophers as P
+import qualified Examples.SearchParty  as S
 
 -- | Run all the example tests.
 testExamples :: [Test]
@@ -14,4 +15,5 @@ testExamples = map (uncurry testGroup)
   , ("Class Laws",          C.tests)
   , ("Dining Philosophers", P.tests)
   , ("Message Logger",      L.tests)
+  , ("Search Party",        S.tests)
   ]

@@ -29,6 +29,7 @@ executable dejafu-tests
                      , Examples.ClassLaws
                      , Examples.Logger
                      , Examples.Philosophers
+                     , Examples.SearchParty
 
                      , Utils
 
