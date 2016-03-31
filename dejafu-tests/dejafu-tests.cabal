@@ -23,6 +23,7 @@ executable dejafu-tests
                      , Cases.MultiThreaded
                      , Cases.Litmus
 
+                     , Examples.AutoUpdate
                      , Examples.ClassLaws
                      , Examples.Logger
                      , Examples.Philosophers
