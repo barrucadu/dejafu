@@ -1,6 +1,6 @@
 -- An implementation of the Dining Philosophers. This is interesting
 -- as it show-cases testing a non-terminating program.
-module Examples.Philosophers (tests) where
+module Examples.Philosophers where
 
 import Control.Monad (replicateM, forever)
 import Control.Monad.Conc.Class

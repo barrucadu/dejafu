@@ -1,4 +1,4 @@
-module Cases.Litmus (tests) where
+module Cases.Litmus where
 
 import Test.DejaFu (MemType(..), defaultBounds, gives')
 import Test.DejaFu.Deterministic (ConcST)

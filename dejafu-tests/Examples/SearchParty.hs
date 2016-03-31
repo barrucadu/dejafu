@@ -12,7 +12,7 @@ most of the functions not essential to exhbiting the bug removed.
 -}
 
 -- | Concurrent nondeterministic search.
-module Examples.SearchParty (tests) where
+module Examples.SearchParty where
 
 import Control.Concurrent.Classy.STM.TMVar (TMVar, newEmptyTMVar, newTMVar, readTMVar, isEmptyTMVar, putTMVar, tryPutTMVar, tryTakeTMVar)
 import Control.Monad (unless, when)

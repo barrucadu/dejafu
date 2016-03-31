@@ -1,6 +1,6 @@
 -- Modification (to introduce bug) of an example in Parallel and
 -- Concurrent Programming in Haskell, chapter 7.
-module Examples.Logger (tests) where
+module Examples.Logger where
 
 import Control.Concurrent.Classy
 import Data.Functor (void)

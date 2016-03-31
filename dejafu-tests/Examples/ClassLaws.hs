@@ -5,7 +5,7 @@
 {-# LANGUAGE ViewPatterns        #-}
 
 -- | Typeclass laws for @Concurrently@ from the async package.
-module Examples.ClassLaws (CST, Concurrently(..), tests) where
+module Examples.ClassLaws where
 
 import Control.Applicative
 import Control.Exception (SomeException)

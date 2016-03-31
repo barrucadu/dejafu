@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ImpredicativeTypes #-}
 
-module Cases.MultiThreaded (tests) where
+module Cases.MultiThreaded where
 
 import Control.Monad (void)
 import Test.DejaFu (Failure(..), gives, gives')
