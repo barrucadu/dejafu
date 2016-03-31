@@ -19,10 +19,12 @@ cabal-version:       >=1.10
 executable dejafu-tests
   main-is:             Main.hs
 
-  other-modules:       Cases.SingleThreaded
+  other-modules:       Cases
+                     , Cases.SingleThreaded
                      , Cases.MultiThreaded
                      , Cases.Litmus
 
+                     , Examples
                      , Examples.AutoUpdate
                      , Examples.ClassLaws
                      , Examples.Logger
