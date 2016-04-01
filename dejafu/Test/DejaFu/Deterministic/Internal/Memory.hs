@@ -2,10 +2,19 @@
 {-# LANGUAGE GADTs        #-}
 
 -- | Operations over @CRef@s and @MVar@s
+--
+-- Relaxed memory operations over @CRef@s are implemented with an
+-- explicit write buffer: one per thread for TSO, and one per
+-- thread/variable combination for PSO. Unsynchronised writes append
+-- to this buffer, and periodically separate threads commit from these
+-- buffers to the \"actual\" @CRef@.
+--
+-- This model comes from /Dynamic Partial Order Reduction for Relaxed
+-- Memory Models/, N. Zhang, M. Kusano, and C. Wang (2015).
 module Test.DejaFu.Deterministic.Internal.Memory where
 
 import Control.Monad (when)
-import Data.IntMap.Strict (IntMap)
+import Data.Map.Strict (Map)
 import Data.Maybe (isJust, fromJust)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..), (><), singleton, viewl)
@@ -13,7 +22,6 @@ import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.Deterministic.Internal.Threading
 import Test.DejaFu.Internal
 
-import qualified Data.IntMap.Strict as I
 import qualified Data.Map.Strict as M
 
 --------------------------------------------------------------------------------
@@ -22,8 +30,10 @@ import qualified Data.Map.Strict as M
 -- | In non-sequentially-consistent memory models, non-synchronised
 -- writes get buffered.
 --
--- In TSO, the keys are @ThreadId@s. In PSO, the keys are @CRefId@s.
-newtype WriteBuffer r = WriteBuffer { buffer :: IntMap (Seq (BufferedWrite r)) }
+-- The @CRefId@ parameter is only used under PSO. Under TSO each
+-- thread has a single buffer.
+newtype WriteBuffer r = WriteBuffer
+  { buffer :: Map (ThreadId, Maybe CRefId) (Seq (BufferedWrite r)) }
 
 -- | A buffered write is a reference to the variable, and the value to
 -- write. Universally quantified over the value type so that the only
@@ -33,14 +43,14 @@ data BufferedWrite r where
 
 -- | An empty write buffer.
 emptyBuffer :: WriteBuffer r
-emptyBuffer = WriteBuffer I.empty
+emptyBuffer = WriteBuffer M.empty
 
 -- | Add a new write to the end of a buffer.
-bufferWrite :: Monad n => Fixed n r s -> WriteBuffer r -> Int -> CRef r a -> a -> ThreadId -> n (WriteBuffer r)
-bufferWrite fixed (WriteBuffer wb) i cref@(CRef _ ref) new tid = do
+bufferWrite :: Monad n => Fixed n r s -> WriteBuffer r -> (ThreadId, Maybe CRefId) -> CRef r a -> a -> n (WriteBuffer r)
+bufferWrite fixed (WriteBuffer wb) k@(tid, _) cref@(CRef _ ref) new = do
   -- Construct the new write buffer
   let write = singleton $ BufferedWrite tid cref new
-  let buffer' = I.insertWith (flip (><)) i write wb
+  let buffer' = M.insertWith (flip (><)) k write wb
 
   -- Write the thread-local value to the @CRef@'s update map.
   (locals, count, def) <- readRef fixed ref
@@ -49,11 +59,11 @@ bufferWrite fixed (WriteBuffer wb) i cref@(CRef _ ref) new tid = do
   return $ WriteBuffer buffer'
 
 -- | Commit the write at the head of a buffer.
-commitWrite :: Monad n => Fixed n r s -> WriteBuffer r -> Int -> n (WriteBuffer r)
-commitWrite fixed w@(WriteBuffer wb) i = case maybe EmptyL viewl $ I.lookup i wb of
+commitWrite :: Monad n => Fixed n r s -> WriteBuffer r -> (ThreadId, Maybe CRefId) -> n (WriteBuffer r)
+commitWrite fixed w@(WriteBuffer wb) k = case maybe EmptyL viewl $ M.lookup k wb of
   BufferedWrite _ cref a :< rest -> do
     writeImmediate fixed cref a
-    return . WriteBuffer $ I.insert i rest wb
+    return . WriteBuffer $ M.insert k rest wb
 
   EmptyL -> return w
 
@@ -100,13 +110,16 @@ writeImmediate fixed (CRef _ ref) a = do
 
 -- | Flush all writes in the buffer.
 writeBarrier :: Monad n => Fixed n r s -> WriteBuffer r -> n ()
-writeBarrier fixed (WriteBuffer wb) = mapM_ flush $ I.elems wb where
+writeBarrier fixed (WriteBuffer wb) = mapM_ flush $ M.elems wb where
   flush = mapM_ $ \(BufferedWrite _ cref a) -> writeImmediate fixed cref a
 
 -- | Add phantom threads to the thread list to commit pending writes.
 addCommitThreads :: WriteBuffer r -> Threads n r s -> Threads n r s
 addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
-  phantoms = [(ThreadId Nothing $ negate k - 1, mkthread $ fromJust c) | (k, b) <- I.toList wb, let c = go $ viewl b, isJust c]
+  phantoms = [ (ThreadId Nothing $ negate tid, mkthread $ fromJust c)
+             | ((k, b), tid) <- zip (M.toList wb) [1..]
+             , let c = go $ viewl b
+             , isJust c]
   go (BufferedWrite tid (CRef crid _) _ :< _) = Just $ ACommit tid crid
   go EmptyL = Nothing
 

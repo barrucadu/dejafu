@@ -29,8 +29,13 @@ Each paper has a short name in parentheses, which I use in non-haddock
 comments. Haddock comments get the full citation. PDF links are
 provided where non-paywalled ones are available.
 
-- [BPOR] *Bounded partial-order reduction*, K. Coons, M. Musuvathi, K. McKinley (2013)
+- [BPOR] *Bounded partial-order reduction*, K. Coons, M. Musuvathi,
+  and K. McKinley (2013)
   http://research.microsoft.com/pubs/202164/bpor-oopsla-2013.pdf
+
+- [RDPOR] *Dynamic Partial Order Reduction for Relaxed Memory Models*,
+  N. Zhang, M. Kusano, and C. Wang (2015)
+  http://www.faculty.ece.vt.edu/chaowang/pubDOC/ZhangKW15.pdf
 
 - [Empirical] *Concurrency Testing Using Schedule Bounding: an
   Empirical Study*, P. Thompson, A. Donaldson, and A. Betts (2014)

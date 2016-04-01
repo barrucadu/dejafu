@@ -309,14 +309,12 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
 
       -- Add to buffer using thread id.
       TotalStoreOrder -> do
-        let (ThreadId _ tid') = tid
-        wb' <- bufferWrite fixed wb tid' cref a tid
+        wb' <- bufferWrite fixed wb (tid, Nothing) cref a
         return $ Right (goto c tid threads, idSource, WriteRef crid, wb', caps)
 
-      -- Add to buffer using cref id
+      -- Add to buffer using both thread id and cref id
       PartialStoreOrder -> do
-        let (CRefId _ crid') = crid
-        wb' <- bufferWrite fixed wb crid' cref a tid
+        wb' <- bufferWrite fixed wb (tid, Just crid) cref a
         return $ Right (goto c tid threads, idSource, WriteRef crid, wb', caps)
 
     -- | Perform a compare-and-swap on a @CRef@.
@@ -325,17 +323,17 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
       simple (goto (c (suc, tick')) tid threads) $ CasRef crid suc
 
     -- | Commit a @CRef@ write
-    stepCommit t@(ThreadId _ t') c@(CRefId _ c') = do
+    stepCommit t c = do
       wb' <- case memtype of
         -- Shouldn't ever get here
         SequentialConsistency ->
           error "Attempting to commit under SequentialConsistency"
 
         -- Commit using the thread id.
-        TotalStoreOrder -> commitWrite fixed wb t'
+        TotalStoreOrder -> commitWrite fixed wb (t, Nothing)
 
         -- Commit using the cref id.
-        PartialStoreOrder -> commitWrite fixed wb c'
+        PartialStoreOrder -> commitWrite fixed wb (t, Just c)
 
       return $ Right (threads, idSource, CommitRef t c, wb', caps)
 
