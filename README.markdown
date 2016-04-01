@@ -1,19 +1,37 @@
 This repository contains dejafu, a concurrency testing library based
-on typeclasses, and various utility libraries.
+on a typeclass abstraction of concurrency, and related libraries.
 
-- dejafu       [![Build Status][dejafu-status]][dejafu-log]
-- async-dejafu [![Build Status][async-status]][async-log]
-- hunit-dejafu [![Build Status][hunit-status]][hunit-log]
-- tasty-dejafu [![Build Status][tasty-status]][tasty-log]
+- dejafu ([hackage 0.2.0.0][dejafu]): Overloadable primitives for
+  testable, potentially non-deterministic, concurrency.
 
-[dejafu-status]: http://ci.barrucadu.co.uk/job/(dejafu)/job/dejafu/badge/icon?style=plastic
-[dejafu-log]:    http://ci.barrucadu.co.uk/job/(dejafu)/job/dejafu/
+- async-dejafu ([hackage 0.1.0.0][async]): Run MonadConc operations
+  asynchronously and wait for their results.
 
-[async-status]: http://ci.barrucadu.co.uk/job/(dejafu)/job/async-dejafu/badge/icon?style=plastic
-[async-log]:    http://ci.barrucadu.co.uk/job/(dejafu)/job/async-dejafu/
+- hunit-dejafu ([hackage 0.2.0.0][hunit]): Deja Fu support for the
+  HUnit test framework.
 
-[hunit-status]: http://ci.barrucadu.co.uk/job/(dejafu)/job/hunit-dejafu/badge/icon?style=plastic
-[hunit-log]:    http://ci.barrucadu.co.uk/job/(dejafu)/job/hunit-dejafu/
+- tasty-dejafu ([hackage 0.2.0.0][tasty]): Deja Fu support for the
+  Tasty test framework.
 
-[tasty-status]: http://ci.barrucadu.co.uk/job/(dejafu)/job/tasty-dejafu/badge/icon?style=plastic
-[tasty-log]:    http://ci.barrucadu.co.uk/job/(dejafu)/job/tasty-dejafu/
+There is also dejafu-tests, the test suite for dejafu. This is in a
+separate package due to Cabal being bad with test suite transitive
+dependencies.
+
+[dejafu]: http://hackage.haskell.org/package/dejafu
+[async]:  http://hackage.haskell.org/package/async-dejafu
+[hunit]:  http://hackage.haskell.org/package/hunit-dejafu
+[tasty]:  http://hackage.haskell.org/package/tasty-dejafu
+
+Bibliography
+------------
+
+Each paper has a short name in parentheses, which I use in non-haddock
+comments. Haddock comments get the full citation. PDF links are
+provided where non-paywalled ones are available.
+
+- [BPOR] *Bounded partial-order reduction*, K. Coons, M. Musuvathi, K. McKinley (2013)
+  http://research.microsoft.com/pubs/202164/bpor-oopsla-2013.pdf
+
+- [Empirical] *Concurrency Testing Using Schedule Bounding: an
+  Empirical Study*, P. Thompson, A. Donaldson, and A. Betts (2014)
+  http://www.doc.ic.ac.uk/~afd/homepages/papers/pdfs/2014/PPoPP.pdf
