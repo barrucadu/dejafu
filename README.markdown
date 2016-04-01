@@ -35,3 +35,7 @@ provided where non-paywalled ones are available.
 - [Empirical] *Concurrency Testing Using Schedule Bounding: an
   Empirical Study*, P. Thompson, A. Donaldson, and A. Betts (2014)
   http://www.doc.ic.ac.uk/~afd/homepages/papers/pdfs/2014/PPoPP.pdf
+
+- [RMMVerification] *On the Verification of Programs on Relaxed Memory
+  Models*, A. Linden (2014)
+  https://orbi.ulg.ac.be/bitstream/2268/158670/1/thesis.pdf

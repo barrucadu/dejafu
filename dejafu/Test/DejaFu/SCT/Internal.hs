@@ -333,6 +333,13 @@ dependentActions memtype buf a1 a2 = case (a1, a2) of
   (UnsynchronisedWrite r1, UnsynchronisedRead  r2) -> r1 == r2
   (UnsynchronisedWrite r1, UnsynchronisedWrite r2) -> r1 == r2
 
+  -- Unsynchronised writes and synchronisation where the buffer is not
+  -- empty.
+  --
+  -- See [RMMVerification], lemma 5.25.
+  (UnsynchronisedWrite r1, _) | same crefOf && isCommit a2 r1 && isBuffered buf r1 -> False
+  (_, UnsynchronisedWrite r2) | same crefOf && isCommit a1 r2 && isBuffered buf r2 -> False
+
   -- Unsynchronised reads where a memory barrier would flush a
   -- buffered write
   (UnsynchronisedRead r1, _) | isBarrier a2 -> isBuffered buf r1 && memtype /= SequentialConsistency
