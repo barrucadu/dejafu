@@ -714,12 +714,16 @@ isBarrier (SynchronisedWrite  _) = True
 isBarrier SynchronisedOther = True
 isBarrier _ = False
 
--- | Check if an action is synchronises a given 'CRef'.
+-- | Check if an action commits a given 'CRef'.
+isCommit :: ActionType -> CRefId -> Bool
+isCommit (PartiallySynchronisedCommit c) r = c == r
+isCommit (PartiallySynchronisedWrite  c) r = c == r
+isCommit (PartiallySynchronisedModify c) r = c == r
+isCommit _ _ = False
+
+-- | Check if an action synchronises a given 'CRef'.
 synchronises :: ActionType -> CRefId -> Bool
-synchronises (PartiallySynchronisedCommit c) r = c == r
-synchronises (PartiallySynchronisedWrite  c) r = c == r
-synchronises (PartiallySynchronisedModify c) r = c == r
-synchronises a _ = isBarrier a
+synchronises a r = isCommit a r || isBarrier a
 
 -- | Get the 'CRef' affected.
 crefOf :: ActionType -> Maybe CRefId
