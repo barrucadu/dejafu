@@ -52,6 +52,11 @@ source-repository head
   type:     git
   location: https://github.com/barrucadu/dejafu.git
 
+source-repository this
+  type:     git
+  location: https://github.com/barrucadu/dejafu.git
+  tag:      dpor-0.1.0.0
+
 library
   exposed-modules:     Test.DPOR
                      , Test.DPOR.Internal
