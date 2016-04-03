@@ -83,7 +83,7 @@ import qualified Control.Monad.Writer.Strict as WS
 class ( Applicative m, Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
-      , Eq (ThreadId m), Show (ThreadId m)) => MonadConc m  where
+      , Ord (ThreadId m), Show (ThreadId m)) => MonadConc m  where
 
   {-# MINIMAL
         (forkWithUnmask | forkWithUnmaskN)
