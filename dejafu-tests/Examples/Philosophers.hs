@@ -4,7 +4,6 @@ module Examples.Philosophers where
 
 import Control.Monad (replicateM, forever)
 import Control.Monad.Conc.Class
-import Control.Concurrent.Classy.MVar (lock, unlock)
 import Data.Functor (void)
 import Test.DejaFu
 import Test.Framework (Test)
@@ -37,11 +36,11 @@ philosophers n = do
     philosopher ident forks = forever $ do
       let leftId  = ident
       let rightId = (ident + 1) `mod` length forks
-      lock $ forks !! leftId
-      lock $ forks !! rightId
+      putMVar (forks !! leftId) ()
+      putMVar (forks !! rightId) ()
       -- In the traditional approach, we'd wait for a random time
       -- here, but we want the only source of (important)
       -- nondeterminism to come from the scheduler, which it does, as
       -- pre-emption is effectively a delay.
-      unlock $ forks !! leftId
-      unlock $ forks !! rightId
+      takeMVar $ forks !! leftId
+      takeMVar $ forks !! rightId

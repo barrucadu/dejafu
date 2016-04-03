@@ -14,6 +14,9 @@
 -- >
 -- >   c <- newMVar 0
 -- >
+-- >   let lock m = putMVar m ()
+-- >   let unlock = takeMVar
+-- >
 -- >   j1 <- spawn $ lock a >> lock b >> modifyMVar_ c (return . succ) >> unlock b >> unlock a
 -- >   j2 <- spawn $ lock b >> lock a >> modifyMVar_ c (return . pred) >> unlock a >> unlock b
 -- >

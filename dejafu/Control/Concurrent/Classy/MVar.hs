@@ -31,13 +31,6 @@ module Control.Concurrent.Classy.MVar
  , modifyMVar
  , modifyMVarMasked_
  , modifyMVarMasked
-
- -- * Binary semaphores
- -- | A common use of @MVar@s is in making binary semaphores to
- -- control mutual exclusion over a resource, so a couple of helper
- -- functions are provided.
- , lock
- , unlock
  ) where
 
 import Control.Monad.Catch (mask_, onException)
@@ -118,11 +111,3 @@ modifyMVarMasked cvar f = mask_ $ do
   (val', out) <- f val `onException` putMVar cvar val
   putMVar cvar val'
   return out
-
--- | Put a @()@ into a @MVar@, claiming the lock. This is atomic.
-lock :: MonadConc m => MVar m () -> m ()
-lock = flip putMVar ()
-
--- | Empty a @MVar@, releasing the lock. This is atomic.
-unlock :: MonadConc m => MVar m () -> m ()
-unlock = takeMVar
