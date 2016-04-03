@@ -58,7 +58,7 @@ tests = hUnitTestToTests $ test
                 (gives [Left Deadlock, Right ()])
 
   , testDejafu' SequentialConsistency
-                defaultBounds { preemptionBound = Just 3 }
+                defaultBounds { boundPreemp = Just 3 }
                 nondeterministic
                 "nondeterministic"
                 (gives [Left Deadlock, Right 0, Right 1])

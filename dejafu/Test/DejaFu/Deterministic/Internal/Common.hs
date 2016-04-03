@@ -11,8 +11,9 @@ import Data.Dynamic (Dynamic)
 import Data.Map.Strict (Map)
 import Data.Maybe (mapMaybe)
 import Data.List (sort, nub, intercalate)
-import Data.List.Extra
+import Data.List.NonEmpty (NonEmpty, fromList)
 import Test.DejaFu.Internal
+import Test.DPOR (Decision(..), Trace)
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 
@@ -271,74 +272,20 @@ initialIdSource = Id 0 0 0 0 [] [] [] []
 --------------------------------------------------------------------------------
 -- * Scheduling & Traces
 
--- | A @Scheduler@ maintains some internal state; @s@, takes the trace
--- so far; the 'ThreadId' and 'ThreadAction' of the last thread
--- scheduled (or 'Nothing' if this is the first decision); and the
--- list of runnable threads including a lookahead (as far as can be
--- determined). It produces a 'ThreadId' to schedule, and a new state.
---
--- __Note:__ In order to prevent computation from hanging, the runtime
--- will assume that a deadlock situation has arisen if the scheduler
--- attempts to (a) schedule a blocked thread, or (b) schedule a
--- nonexistent thread. In either of those cases, the computation will
--- be halted.
-type Scheduler s = s -> [(Decision, ThreadAction)] -> Maybe (ThreadId, ThreadAction) -> NonEmpty (ThreadId, NonEmpty Lookahead) -> (Maybe ThreadId, s)
-
--- | One of the outputs of the runner is a @Trace@, which is a log of
--- decisions made, alternative decisions (including what action would
--- have been performed had that decision been taken), and the action a
--- thread took in its step.
-type Trace = [(Decision, [(Decision, Lookahead)], ThreadAction)]
-
--- | Like a 'Trace', but gives more lookahead (where possible) for
--- alternative decisions.
-type Trace' = [(Decision, [(Decision, NonEmpty Lookahead)], ThreadAction)]
-
--- | Throw away information from a 'Trace'' to get just a 'Trace'.
-toTrace :: Trace' -> Trace
-toTrace = map go where
-  go (_, alters, CommitRef t c) = (Commit, goA alters, CommitRef t c)
-  go (dec, alters, act) = (dec, goA alters, act)
-
-  goA = map $ \x -> case x of
-    (_, WillCommitRef t c:|_) -> (Commit, WillCommitRef t c)
-    (d, a:|_) -> (d, a)
-
 -- | Pretty-print a trace, including a key of the thread IDs. Each
 -- line of the key is indented by two spaces.
-showTrace :: Trace -> String
+showTrace :: Trace ThreadId ThreadAction Lookahead -> String
 showTrace trc = intercalate "\n" $ trace "" 0 trc : (map ("  "++) . sort . nub $ mapMaybe toKey trc) where
+  trace prefix num ((_,_,CommitRef _ _):ds) = thread prefix num ++ trace "C" 1 ds
   trace prefix num ((Start    (ThreadId _ i),_,_):ds) = thread prefix num ++ trace ("S" ++ show i) 1 ds
   trace prefix num ((SwitchTo (ThreadId _ i),_,_):ds) = thread prefix num ++ trace ("P" ++ show i) 1 ds
   trace prefix num ((Continue,_,_):ds) = trace prefix (num + 1) ds
-  trace prefix num ((Commit,_,_):ds)   = thread prefix num ++ trace "C" 1 ds
   trace prefix num [] = thread prefix num
 
   thread prefix num = prefix ++ replicate num '-'
 
   toKey (Start (ThreadId (Just name) i), _, _) = Just $ show i ++ ": " ++ name
   toKey _ = Nothing
-
--- | Scheduling decisions are based on the state of the running
--- program, and so we can capture some of that state in recording what
--- specific decision we made.
-data Decision =
-    Start ThreadId
-  -- ^ Start a new thread, because the last was blocked (or it's the
-  -- start of computation).
-  | Continue
-  -- ^ Continue running the last thread for another step.
-  | SwitchTo ThreadId
-  -- ^ Pre-empt the running thread, and switch to another.
-  | Commit
-  -- ^ Commit a 'CRef' write action so that every thread can see the
-  -- result.
-  deriving (Eq, Show)
-
-instance NFData Decision where
-  rnf (Start    tid) = rnf tid
-  rnf (SwitchTo tid) = rnf tid
-  rnf d = d `seq` ()
 
 -- | All the actions that a thread can perform.
 data ThreadAction =
@@ -617,7 +564,7 @@ instance NFData Lookahead where
 
 -- | Look as far ahead in the given continuation as possible.
 lookahead :: Action n r s -> NonEmpty Lookahead
-lookahead = unsafeToNonEmpty . lookahead' where
+lookahead = fromList . lookahead' where
   lookahead' (AFork _ _ _)           = [WillFork]
   lookahead' (AMyTId _)              = [WillMyThreadId]
   lookahead' (AGetNumCapabilities _) = [WillGetNumCapabilities]
@@ -668,6 +615,16 @@ willRelease (WillSetMasking _ _) = True
 willRelease (WillResetMasking _ _) = True
 willRelease WillStop = True
 willRelease _ = False
+
+-- Count the number of pre-emptions in a schedule prefix.
+preEmpCount :: [(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Int
+preEmpCount ts (d, _) = go Nothing ts where
+  go p ((d', a):rest) = preEmpC p d' + go (Just a) rest
+  go p [] = preEmpC p d
+
+  preEmpC (Just Yield) (SwitchTo _) = 0
+  preEmpC _ (SwitchTo t) = if t >= initialThread then 1 else 0
+  preEmpC _ _ = 0
 
 -- | A simplified view of the possible actions a thread can perform.
 data ActionType =

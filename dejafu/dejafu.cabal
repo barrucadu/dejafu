@@ -97,7 +97,6 @@ library
 
                      , Test.DejaFu
                      , Test.DejaFu.Deterministic
-                     , Test.DejaFu.Deterministic.Schedule
                      , Test.DejaFu.SCT
                      , Test.DejaFu.STM
 
@@ -106,9 +105,7 @@ library
                      , Test.DejaFu.Deterministic.Internal.Memory
                      , Test.DejaFu.Deterministic.Internal.Threading
                      , Test.DejaFu.Internal
-                     , Test.DejaFu.SCT.Internal
                      , Test.DejaFu.STM.Internal
-                     , Data.List.Extra
 
   -- other-modules:       
   -- other-extensions:    
@@ -116,12 +113,13 @@ library
                      , array
                      , atomic-primops
                      , containers
+                     , dpor
                      , deepseq
                      , exceptions >=0.7
                      , monad-control
                      , monad-loops
                      , mtl
-                     , random
+                     , semigroups
                      , stm
                      , template-haskell
                      , transformers
