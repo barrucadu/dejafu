@@ -26,7 +26,7 @@ module Test.Tasty.DejaFu
 import Data.List (intercalate, intersperse)
 import Data.Typeable (Typeable)
 import Test.DejaFu
-import Test.DejaFu.Deterministic (ConcST, ConcIO, Trace, showFail, showTrace)
+import Test.DejaFu.Deterministic (ConcST, ConcIO, Trace, ThreadId, ThreadAction, Lookahead, showFail, showTrace)
 import Test.DejaFu.SCT (sctBound, sctBoundIO)
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.Providers (IsTest(..), singleTest, testPassed, testFailed)
@@ -147,11 +147,11 @@ testDejafusIO' = testio
 -- Tasty integration
 
 data ConcTest where
-  ConcTest   :: Show a => [(Either Failure a, Trace)] -> Predicate a -> ConcTest
+  ConcTest   :: Show a => [(Either Failure a, Trace ThreadId ThreadAction Lookahead)] -> Predicate a -> ConcTest
   deriving Typeable
 
 data ConcIOTest where
-  ConcIOTest :: Show a => IO [(Either Failure a, Trace)] -> Predicate a -> ConcIOTest
+  ConcIOTest :: Show a => IO [(Either Failure a, Trace ThreadId ThreadAction Lookahead)] -> Predicate a -> ConcIOTest
   deriving Typeable
 
 instance IsTest ConcTest where
