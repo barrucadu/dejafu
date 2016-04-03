@@ -1,4 +1,8 @@
 -- | Transactional variables, for use with 'MonadSTM'.
+--
+-- __Deviations:__ There is no @Eq@ instance for @MonadSTM@ the @TVar@
+-- type. Furthermore, the @newTVarIO@ and @mkWeakTVar@ functions are
+-- not provided.
 module Control.Concurrent.Classy.STM.TVar
   ( -- * @TVar@s
     TVar

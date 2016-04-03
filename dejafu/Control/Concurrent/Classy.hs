@@ -1,4 +1,16 @@
 -- | Classy concurrency.
+--
+-- Concurrency is \"lightweight\", which means that both thread
+-- creation and context switching overheads are extremely
+-- low. Scheduling of Haskell threads is done internally in the
+-- Haskell runtime system, and doesn't make use of any operating
+-- system-supplied thread packages.
+--
+-- Haskell threads can communicate via @MVar@s, a kind of synchronised
+-- mutable variable (see "Control.Concurrent.Classy.MVar"). Several
+-- common concurrency abstractions can be built from @MVar@s, and
+-- these are provided by the "Control.Concurrent.Classy"
+-- library. Threads may also communicate via exceptions.
 module Control.Concurrent.Classy
   ( module Control.Monad.Conc.Class
   , module Control.Concurrent.Classy.Chan

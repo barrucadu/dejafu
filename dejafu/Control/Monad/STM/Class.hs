@@ -5,6 +5,15 @@
 
 -- | This module provides an abstraction over 'STM', which can be used
 -- with 'MonadConc'.
+--
+-- This module only defines the 'STM' class; you probably want to
+-- import "Control.Concurrent.Classy.STM" (which exports
+-- "Control.Monad.STM.Class").
+--
+-- __Deviations:__ An instance of @MonadSTM@ is not required to be an
+-- @Alternative@, @MonadPlus@, and @MonadFix@, unlike @STM@. The
+-- @always@ and @alwaysSucceeds@ functions are not provided; if you
+-- need these file an issue and I'll look into it.
 module Control.Monad.STM.Class
   ( MonadSTM(..)
   , check

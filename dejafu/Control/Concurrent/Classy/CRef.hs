@@ -1,4 +1,8 @@
 -- | Mutable references in a concurrency monad.
+--
+-- __Deviations:__ There is no @Eq@ instance for @MonadConc@ the
+-- @CRef@ type. Furthermore, the @mkWeakIORef@ function is not
+-- provided.
 module Control.Concurrent.Classy.CRef
   ( -- * CRefs
     newCRef

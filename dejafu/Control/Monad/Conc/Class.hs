@@ -6,6 +6,17 @@
 
 -- | This module captures in a typeclass the interface of concurrency
 -- monads.
+--
+-- __Deviations:__ An instance of @MonadCoonc@ is not required to be
+-- an instance of @MonadFix@, unlike @IO@. The @CRef@, @MVar@, and
+-- @Ticket@ types are not required to be instances of @Show@ or @Eq@,
+-- unlike their normal counterparts. The @threadCapability@,
+-- @threadWaitRead@, @threadWaitWrite@, @threadWaitReadSTM@,
+-- @threadWaitWriteSTM@, and @mkWeakThreadId@ functions are not
+-- provided. The @threadDelay@ function is not required to delay the
+-- thread, merely to yield it. Bound threads are not supported. The
+-- @BlockedIndefinitelyOnMVar@ (and similar) exceptions are /not/
+-- thrown during testing, so do not rely on them at all.
 module Control.Monad.Conc.Class
   ( MonadConc(..)
 

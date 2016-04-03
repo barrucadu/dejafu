@@ -1,4 +1,9 @@
 -- | Transactional @MVar@s, for use with 'MonadSTM'.
+--
+-- __Deviations:__ @TMVar@ as defined here does not have an @Eq@
+-- instance, this is because the @MonadSTM@ @TVar@ type does not have
+-- an @Eq@ constraint. Furthermore, the @newTMVarIO@,
+-- @newEmptyTMVarIO@, and @mkWeakTMVar@ functions are not provided.
 module Control.Concurrent.Classy.STM.TMVar
   ( -- * @TMVar@s
     TMVar

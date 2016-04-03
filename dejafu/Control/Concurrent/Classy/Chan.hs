@@ -1,7 +1,10 @@
 -- | Unbounded channels.
 --
--- The @getChanContents@ function from Control.Concurrent.Chan is not
--- provided as it relies on @unsafeInterleaveIO@.
+-- __Deviations:__ @Chan@ as defined here does not have an @Eq@
+-- instance, this is because the @MonadConc@ @MVar@ type does not have
+-- an @Eq@ constraint. The deprecated @unGetChan@ and @isEmptyCHan@
+-- functions are not provided. Furthermore, the @getChanContents@
+-- function is not provided as it needs unsafe I/O.
 module Control.Concurrent.Classy.Chan
   ( -- * The 'Chan' type
     Chan

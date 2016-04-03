@@ -11,6 +11,13 @@
 --
 --   3. As a binary semaphore @'MVar' ()@, with 'takeMVar' and
 --      'putMVar' as wait and signal.
+--
+-- __Deviations:__ There is no @Eq@ instance for @MonadConc@ the
+-- @MVar@ type. Furthermore, the @mkWeakMVar@ and @addMVarFinalizer@
+-- functions are not provided. Finally, normal @MVar@s have a fairness
+-- guarantee, which dejafu does not currently make use of when
+-- generating schedules to test, so your program may be tested with
+-- /unfair/ schedules.
 module Control.Concurrent.Classy.MVar
  ( -- *@MVar@s
   MVar

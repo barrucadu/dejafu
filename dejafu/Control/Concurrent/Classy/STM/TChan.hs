@@ -1,4 +1,9 @@
 -- | Transactional channels
+--
+-- __Deviations:__ @TChan@ as defined here does not have an @Eq@
+-- instance, this is because the @MonadSTM@ @TVar@ type does not have
+-- an @Eq@ constraint. Furthermore, the @newTChanIO@ and
+-- @newBroadcastTChanIO@ functions are not provided.
 module Control.Concurrent.Classy.STM.TChan
   ( -- * TChans
     TChan

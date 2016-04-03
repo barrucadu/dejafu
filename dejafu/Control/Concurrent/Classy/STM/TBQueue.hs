@@ -6,6 +6,11 @@
 -- The implementation is based on the traditional purely-functional
 -- queue representation that uses two lists to obtain amortised /O(1)/
 -- enqueue and dequeue operations.
+--
+-- __Deviations:__ @TBQueue@ as defined here does not have an @Eq@
+-- instance, this is because the @MonadSTM@ @TVar@ type does not have
+-- an @Eq@ constraint. Furthermore, the @newTBQueueIO@ function is not
+-- provided.
 module Control.Concurrent.Classy.STM.TBQueue
   ( -- * TBQueue
     TBQueue
