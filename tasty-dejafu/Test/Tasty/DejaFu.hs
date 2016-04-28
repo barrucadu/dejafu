@@ -1,39 +1,120 @@
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 -- | This module allows using Deja Fu predicates with Tasty to test
 -- the behaviour of concurrent systems.
 module Test.Tasty.DejaFu
-  ( -- * Testing
+  ( -- * Unit testing
+
+  -- | This is supported by the 'IsTest' instances for 'ConcST' and
+  -- 'ConcIO'. These instances try all executions, reporting as
+  -- failures the cases which return a 'Just' string.
+  --
+  -- @instance Typeable t => IsTest (ConcST t (Maybe String))@
+  -- @instance               IsTest (ConcIO   (Maybe String))@
+  -- @instance IsOption Bounds@
+  -- @instance IsOption MemType@
+
+  -- * Property testing
     testAuto
   , testDejafu
   , testDejafus
+
+  , testAuto'
+  , testDejafu'
+  , testDejafus'
+
+  -- ** @IO@
   , testAutoIO
   , testDejafuIO
   , testDejafusIO
 
-  -- * Testing under Alternative Memory Models
-  , MemType(..)
-  , testAuto'
   , testAutoIO'
-  , testDejafu'
-  , testDejafus'
   , testDejafuIO'
   , testDejafusIO'
+
+  -- * Re-exports
+  , Bounds(..)
+  , MemType(..)
   ) where
 
+import Data.Char (toUpper)
 import Data.List (intercalate, intersperse)
+import Data.Proxy (Proxy(..))
+import Data.Tagged (Tagged(..))
 import Data.Typeable (Typeable)
 import Test.DejaFu
 import Test.DejaFu.Deterministic (ConcST, ConcIO, Trace, ThreadId, ThreadAction, Lookahead, showFail, showTrace)
 import Test.DejaFu.SCT (sctBound, sctBoundIO)
 import Test.Tasty (TestName, TestTree, testGroup)
+import Test.Tasty.Options (OptionDescription(..), IsOption(..), lookupOption)
 import Test.Tasty.Providers (IsTest(..), singleTest, testPassed, testFailed)
 
+-- Can't put the necessary forall in the @IsTest ConcST t@
+-- instance :(
+import Unsafe.Coerce (unsafeCoerce)
+
+#if MIN_VERSION_dejafu(0,3,0)
+type Trc = Trace ThreadId ThreadAction Lookahead
+#else
+type Trc = Trace
+#endif
+
 --------------------------------------------------------------------------------
--- Automated testing
+-- Unit testing
+
+instance Typeable t => IsTest (ConcST t (Maybe String)) where
+  testOptions = Tagged concOptions
+
+  run options conc callback = do
+    let memtype = lookupOption options :: MemType
+    let bounds  = lookupOption options :: Bounds
+    let sctBound' :: ConcST t (Maybe String) -> [(Either Failure (Maybe String), Trc)]
+        sctBound' = unsafeCoerce $ sctBound memtype bounds
+    let traces = sctBound' conc
+    run options (ConcTest traces assertableP) callback
+
+instance IsTest (ConcIO (Maybe String)) where
+  testOptions = Tagged concOptions
+
+  run options conc callback = do
+    let memtype = lookupOption options
+    let bounds  = lookupOption options
+    let traces = sctBoundIO memtype bounds conc
+    run options (ConcIOTest traces assertableP) callback
+
+concOptions :: [OptionDescription]
+concOptions =
+  [ Option (Proxy :: Proxy Bounds)
+  , Option (Proxy :: Proxy MemType)
+  ]
+
+assertableP :: Predicate (Maybe String)
+assertableP = alwaysTrue $ \r -> case r of
+  Right (Just _) -> False
+  _ -> True
+
+instance IsOption Bounds where
+  defaultValue = defaultBounds
+  parseValue = const Nothing
+  optionName = Tagged "schedule-bounds"
+  optionHelp = Tagged "The schedule bounds to use. This cannot be set on the command line."
+
+instance IsOption MemType where
+  defaultValue = defaultMemType
+  parseValue str = shortName (map toUpper str) where
+    shortName "SC"  = Just SequentialConsistency
+    shortName "TSO" = Just TotalStoreOrder
+    shortName "PSO" = Just PartialStoreOrder
+    shortName _ = Nothing
+  optionName = Tagged "memory-model"
+  optionHelp = Tagged "The memory model to use. This should be one of \"SC\", \"TSO\", or \"PSO\"."
+
+--------------------------------------------------------------------------------
+-- Property testing
 
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
@@ -72,9 +153,6 @@ autocheckCases =
   , ("No Exceptions", representative exceptionsNever)
   , ("Consistent Result", alwaysSame)
   ]
-
---------------------------------------------------------------------------------
--- Manual testing
 
 -- | Check that a predicate holds.
 testDejafu :: Show a
@@ -126,7 +204,7 @@ testDejafus' :: Show a
   -> [(TestName, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> TestTree
-testDejafus' = test
+testDejafus' = testst
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
 testDejafuIO :: Show a => ConcIO a -> TestName -> Predicate a -> TestTree
@@ -146,12 +224,6 @@ testDejafusIO' = testio
 
 --------------------------------------------------------------------------------
 -- Tasty integration
-
-#if MIN_VERSION_dejafu(0,3,0)
-type Trc = Trace ThreadId ThreadAction Lookahead
-#else
-type Trc = Trace
-#endif
 
 data ConcTest where
   ConcTest   :: Show a => [(Either Failure a, Trc)] -> Predicate a -> ConcTest
@@ -177,8 +249,8 @@ instance IsTest ConcIOTest where
     return $ if null err then testPassed "" else testFailed err
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu test.
-test :: Show a => MemType -> Bounds -> (forall t. ConcST t a) -> [(TestName, Predicate a)] -> TestTree
-test memtype cb conc tests = case map toTest tests of
+testst :: Show a => MemType -> Bounds -> (forall t. ConcST t a) -> [(TestName, Predicate a)] -> TestTree
+testst memtype cb conc tests = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts
 
