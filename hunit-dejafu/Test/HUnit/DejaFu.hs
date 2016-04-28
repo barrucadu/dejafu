@@ -1,34 +1,100 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 -- | This module allows using Deja Fu predicates with HUnit to test
 -- the behaviour of concurrent systems.
 module Test.HUnit.DejaFu
-  ( -- * Testing
+  ( -- * Unit testing
+
+  -- | This is supported by the 'Assertable' and 'Testable'
+  -- instances for 'ConcST' and 'ConcIO'. These instances try all
+  -- executions, reporting as failures the cases which throw an
+  -- 'HUnitFailure' exception.
+  --
+  -- @instance Testable   (ConcST t ())@
+  -- @instance Assertable (ConcST t ())@
+  -- @instance Testable   (ConcIO   ())@
+  -- @instance Assertable (ConcIO   ())@
+  --
+  -- These instances use the default memory model and schedule bounds.
+
+  -- * Property testing
     testAuto
   , testDejafu
   , testDejafus
+
+  , testAuto'
+  , testDejafu'
+  , testDejafus'
+
+  -- ** @IO@
   , testAutoIO
   , testDejafuIO
   , testDejafusIO
 
-  -- * Testing under Alternative Memory Models
-  , MemType(..)
-  , testAuto'
   , testAutoIO'
-  , testDejafu'
-  , testDejafus'
   , testDejafuIO'
   , testDejafusIO'
+
+  -- * Re-exports
+  , Bounds(..)
+  , MemType(..)
   ) where
 
+import Control.Monad.Catch (try)
 import Data.List (intercalate, intersperse)
 import Test.DejaFu
-import Test.DejaFu.Deterministic (ConcST, ConcIO, showFail, showTrace)
+import Test.DejaFu.Deterministic (ConcST, ConcIO, Trace, ThreadId, ThreadAction, Lookahead, showFail, showTrace)
 import Test.DejaFu.SCT (sctBound, sctBoundIO)
-import Test.HUnit (Test(..), assertString)
+import Test.HUnit (Assertable(..), Test(..), Testable(..), assertString)
+import Test.HUnit.Lang (HUnitFailure(..))
+
+-- Can't put the necessary forall in the @Assertable ConcST t@
+-- instance :(
+import Unsafe.Coerce (unsafeCoerce)
+
+#if MIN_VERSION_dejafu(0,3,0)
+type Trc = Trace ThreadId ThreadAction Lookahead
+#else
+type Trc = Trace
+#endif
 
 --------------------------------------------------------------------------------
--- Automated testing
+-- Unit testing
+
+instance Testable (ConcST t ()) where
+  test conc = TestCase (assert conc)
+
+instance Testable (ConcIO ()) where
+  test conc = TestCase (assert conc)
+
+instance Assertable (ConcST t ()) where
+  assert conc = do
+    let traces = sctBound' conc'
+    assertString . showErr $ assertableP traces
+
+    where
+      conc' :: ConcST t (Either HUnitFailure ())
+      conc' = try conc
+
+      sctBound' :: ConcST t (Either HUnitFailure ()) -> [(Either Failure (Either HUnitFailure ()), Trc)]
+      sctBound' = unsafeCoerce $ sctBound defaultMemType defaultBounds
+
+instance Assertable (ConcIO ()) where
+  assert conc = do
+    traces <- sctBoundIO defaultMemType defaultBounds (try conc)
+    assertString . showErr $ assertableP traces
+
+assertableP :: Predicate (Either HUnitFailure ())
+assertableP = alwaysTrue $ \r -> case r of
+  Right (Left (HUnitFailure _ _)) -> False
+  _ -> True
+
+--------------------------------------------------------------------------------
+-- Property testing
 
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
@@ -68,9 +134,6 @@ autocheckCases =
   , ("Consistent Result", alwaysSame)
   ]
 
---------------------------------------------------------------------------------
--- Manual testing
-
 -- | Check that a predicate holds.
 testDejafu :: Show a
   => (forall t. ConcST t a)
@@ -83,7 +146,7 @@ testDejafu :: Show a
 testDejafu = testDejafu' defaultMemType defaultBounds
 
 -- | Variant of 'testDejafu' which takes a memory model and
--- pre-emption bound.
+-- schedule bounds.
 testDejafu' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -109,8 +172,8 @@ testDejafus :: Show a
   -> Test
 testDejafus = testDejafus' defaultMemType defaultBounds
 
--- | Variant of 'testDejafus' which takes a memory model and pre-emption
--- bound.
+-- | Variant of 'testDejafus' which takes a memory model and schedule
+-- bounds.
 testDejafus' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -121,7 +184,7 @@ testDejafus' :: Show a
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> Test
-testDejafus' = test
+testDejafus' = testst
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
 testDejafuIO :: Show a => ConcIO a -> String -> Predicate a -> Test
@@ -143,8 +206,8 @@ testDejafusIO' = testio
 -- HUnit integration
 
 -- | Produce a HUnit 'Test' from a Deja Fu test.
-test :: Show a => MemType -> Bounds -> (forall t. ConcST t a) -> [(String, Predicate a)] -> Test
-test memtype cb conc tests = case map toTest tests of
+testst :: Show a => MemType -> Bounds -> (forall t. ConcST t a) -> [(String, Predicate a)] -> Test
+testst memtype cb conc tests = case map toTest tests of
   [t] -> t
   ts  -> TestList ts
 
@@ -169,6 +232,9 @@ testio memtype cb concio tests = case map toTest tests of
       traces <- sctBoundIO memtype cb concio
       assertString . showErr $ p traces
 
+--------------------------------------------------------------------------------
+-- Utilities
+
 -- | Convert a test result into an error message on failure (empty
 -- string on success).
 showErr :: Show a => Result a -> String
@@ -178,7 +244,9 @@ showErr res
 
   msg = if null (_failureMsg res) then "" else _failureMsg res ++ "\n"
 
-  failures = intersperse "" . map (\(r, t) -> indent $ either showFail show r ++ " " ++ showTrace t) . take 5 $ _failures res
+  failures = intersperse "" . map (indent . showres) . take 5 $ _failures res
+
+  showres (r, t) = either showFail show r ++ " " ++ showTrace t
 
   rest = if moreThan (_failures res) 5 then "\n\t..." else ""
 
