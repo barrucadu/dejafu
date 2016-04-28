@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE RankNTypes         #-}
@@ -146,12 +147,18 @@ testDejafusIO' = testio
 --------------------------------------------------------------------------------
 -- Tasty integration
 
+#if MIN_VERSION_dejafu(0,3,0)
+type Trc = Trace ThreadId ThreadAction Lookahead
+#else
+type Trc = Trace
+#endif
+
 data ConcTest where
-  ConcTest   :: Show a => [(Either Failure a, Trace ThreadId ThreadAction Lookahead)] -> Predicate a -> ConcTest
+  ConcTest   :: Show a => [(Either Failure a, Trc)] -> Predicate a -> ConcTest
   deriving Typeable
 
 data ConcIOTest where
-  ConcIOTest :: Show a => IO [(Either Failure a, Trace ThreadId ThreadAction Lookahead)] -> Predicate a -> ConcIOTest
+  ConcIOTest :: Show a => IO [(Either Failure a, Trc)] -> Predicate a -> ConcIOTest
   deriving Typeable
 
 instance IsTest ConcTest where
