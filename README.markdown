@@ -8,7 +8,7 @@ on a typeclass abstraction of concurrency, and related libraries.
   partial-order reduction (DPOR) for testing arbitrary models of
   concurrency.
 
-- async-dejafu ([hackage 0.1.1.0][async]): Run MonadConc operations
+- async-dejafu ([hackage 0.1.2.0][async]): Run MonadConc operations
   asynchronously and wait for their results.
 
 - hunit-dejafu ([hackage 0.2.1.0][hunit]): Deja Fu support for the
