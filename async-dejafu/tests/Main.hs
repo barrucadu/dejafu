@@ -1,8 +1,10 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase         #-}
 
 module Main where
 
+import Control.Applicative ((<|>))
 import Control.Concurrent.Async
 import Control.Exception (AsyncException(..), BlockedIndefinitelyOnMVar(..), Exception, SomeException(..), fromException)
 import Control.Monad (forever)
@@ -12,6 +14,16 @@ import Data.Typeable (Typeable, cast)
 import Test.DejaFu hiding (MemType(..))
 import Test.HUnit (Test(..), runTestTT, test)
 import Test.HUnit.DejaFu
+
+#if !MIN_VERSION_dejafu(0,3,0)
+type MVar m = CVar m
+
+newEmptyMVar :: MonadConc m => m (MVar m a)
+newEmptyMVar = newEmptyCVar
+
+takeMVar :: MonadConc m => MVar m a -> m a
+takeMVar = takeCVar
+#endif
 
 main :: IO ()
 main = void . runTestTT $ TestList
@@ -91,13 +103,16 @@ withasync_wait2 = do
   a <- withAsync (forever yield) return
   r <- waitCatch a
   return $ case r of
-    Left (SomeException e) -> Left $ cast e
+    -- dejafu-0.2 needs the 'cast', whereas dejafu-0.3 needs the
+    -- 'fromException'. This is due to me fixing some bugs with
+    -- exception handling in the test implementations.
+    Left  e@(SomeException e') -> Left (fromException e <|> cast e')
     Right x -> Right x
 
 withasync_waitCatch_blocked :: MonadConc m => m (Maybe BlockedIndefinitelyOnMVar)
 withasync_waitCatch_blocked = do
   _concAllKnown
-  r <- withAsync (_concAllKnown >> newEmptyCVar >>= takeCVar) waitCatch
+  r <- withAsync (_concAllKnown >> newEmptyMVar >>= takeMVar) waitCatch
   return $ case r of
     Left e -> fromException e
     _      -> Nothing
