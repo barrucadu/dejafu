@@ -414,18 +414,16 @@ yieldCount :: Eq tid
   -- ^ The thread to count yields for.
   -> [(Decision tid, action)] -> (Decision tid, lookahead) -> Int
 yieldCount didYield willYield tid ts (ld, l) = go initialThread ts where
-  go t ((Start t', act):rest)
-    | t == tid && didYield act = 1 + go t' rest
-    | otherwise = go t' rest
-  go t ((SwitchTo t', act):rest)
-    | t == tid && didYield act = 1 + go t' rest
-    | otherwise = go t' rest
-  go t ((Continue, act):rest)
-    | t == tid && didYield act = 1 + go t rest
-    | otherwise = go t rest
+  go t ((Start    t', act):rest) = go' t t' act rest
+  go t ((SwitchTo t', act):rest) = go' t t' act rest
+  go t ((Continue,    act):rest) = go' t t  act rest
   go t []
     | t == tid && willYield l = 1
     | otherwise = 0
+
+  go' t t' act rest
+    | t == tid && didYield act = 1 + go t' rest
+    | otherwise = go t' rest
 
   -- The initial thread ID
   initialThread = case (ts, ld) of

@@ -113,22 +113,26 @@ findSchedulePrefix :: Ord tid
   -- which may be useful in some cases.
   -> DPOR tid action
   -> Maybe ([tid], Bool, Map tid action)
-findSchedulePrefix predicate dporRoot = go (initialDPORThread dporRoot) dporRoot where
+findSchedulePrefix predicate dpor0 = go (initialDPORThread dpor0) dpor0 where
   go tid dpor =
         -- All the possible prefix traces from this point, with
         -- updated DPOR subtrees if taken from the done list.
-    let prefixes = mapMaybe go' (M.toList $ dporDone dpor) ++ [([t], c, sleeps dpor) | (t, c) <- M.toList $ dporTodo dpor]
+    let prefixes = mapMaybe go' (M.toList $ dporDone dpor) ++ here dpor
         -- Sort by number of preemptions, in descending order.
         cmp = Down . preEmps tid dpor . (\(a,_,_) -> a)
+        sorted = sortBy (comparing cmp) prefixes
 
     in if null prefixes
        then Nothing
-       else case partition (\(t:_,_,_) -> predicate t) $ sortBy (comparing cmp) prefixes of
+       else case partition (\(t:_,_,_) -> predicate t) sorted of
               (choice:_, _)  -> Just choice
               ([], choice:_) -> Just choice
-              ([], []) -> error "findSchedulePrefix: (internal error) empty prefix list!" 
+              ([], []) -> err "findSchedulePrefix" "empty prefix list!" 
 
   go' (tid, dpor) = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> go tid dpor
+
+  -- Prefix traces terminating with a to-do decision at this point.
+  here dpor = [([t], c, sleeps dpor) | (t, c) <- M.toList $ dporTodo dpor]
 
   -- The new sleep set is the union of the sleep set of the node we're
   -- branching from, plus all the decisions we've already explored.
@@ -143,7 +147,8 @@ findSchedulePrefix predicate dporRoot = go (initialDPORThread dporRoot) dporRoot
 -- | One of the outputs of the runner is a @Trace@, which is a log of
 -- decisions made, all the runnable threads and what they would do,
 -- and the action a thread took in its step.
-type Trace tid action lookahead = [(Decision tid, [(tid, NonEmpty lookahead)], action)]
+type Trace tid action lookahead
+  = [(Decision tid, [(tid, NonEmpty lookahead)], action)]
 
 -- | Add a new trace to the tree, creating a new subtree branching off
 -- at the point where the \"to-do\" decision was made.
@@ -162,15 +167,22 @@ incorporateTrace :: Ord tid
   -- and the action performed.
   -> DPOR tid action
   -> DPOR tid action
-incorporateTrace stinit ststep dependency conservative trace dporRoot = grow stinit (initialDPORThread dporRoot) trace dporRoot where
+incorporateTrace stinit ststep dependency conservative trace dpor0 = grow stinit (initialDPORThread dpor0) trace dpor0 where
   grow state tid trc@((d, _, a):rest) dpor =
     let tid'   = tidOf tid d
         state' = ststep state a
-    in  case M.lookup tid' $ dporDone dpor of
-          Just dpor' -> dpor { dporDone  = M.insert tid' (grow state' tid' rest dpor') $ dporDone dpor }
-          Nothing    -> dpor { dporTaken = if conservative then dporTaken dpor else M.insert tid' a $ dporTaken dpor
-                            , dporTodo  = M.delete tid' $ dporTodo dpor
-                            , dporDone  = M.insert tid' (subtree state' tid' (dporSleep dpor `M.union` dporTaken dpor) trc) $ dporDone dpor }
+    in case M.lookup tid' (dporDone dpor) of
+         Just dpor' ->
+           let done = M.insert tid' (grow state' tid' rest dpor') (dporDone dpor)
+           in dpor { dporDone = done }
+         Nothing ->
+           let taken = M.insert tid' a (dporTaken dpor)
+               sleep = dporSleep dpor `M.union` dporTaken dpor
+               done  = M.insert tid' (subtree state' tid' sleep trc) (dporDone dpor)
+           in dpor { dporTaken = if conservative then dporTaken dpor else taken
+                   , dporTodo  = M.delete tid' (dporTodo dpor)
+                   , dporDone  = done
+                   }
   grow _ _ [] dpor = dpor
 
   -- Construct a new subtree corresponding to a trace suffix.
@@ -193,7 +205,7 @@ incorporateTrace stinit ststep dependency conservative trace dporRoot = grow sti
           [] -> M.empty
         , dporAction = Just a
         }
-  subtree _ _ _ [] = error "incorporateTrace: (internal error) subtree suffix empty!"
+  subtree _ _ _ [] = err "incorporateTrace" "subtree suffix empty!"
 
 -- | Produce a list of new backtracking points from an execution
 -- trace. These are then used to inform new \"to-do\" points in the
@@ -227,11 +239,13 @@ findBacktrackSteps :: Ord tid
   -> Trace tid action lookahead
   -- ^ The execution trace.
   -> [BacktrackStep tid action lookahead s]
+findBacktrackSteps _ _ _ _ bcktrck
+  | Sq.null bcktrck = const []
 findBacktrackSteps stinit ststep dependency backtrack bcktrck = go stinit S.empty initialThread [] (Sq.viewl bcktrck) where
   -- Get the initial thread ID
   initialThread = case Sq.viewl bcktrck of
     (((tid, _):|_, _):<_) -> tid
-    _ -> error "findBacktrack: empty backtracking sequence."
+    _ -> err "findBacktrack" "impossible case reached!"
 
   -- Walk through the traces one step at a time, building up a list of
   -- new backtracking points.
@@ -306,7 +320,8 @@ incorporateBacktrackSteps bv = go Nothing [] where
 -- * DPOR scheduler
 
 -- | A @Scheduler@ where the state is a @SchedState@.
-type DPORScheduler tid action lookahead s = Scheduler tid action lookahead (SchedState tid action lookahead s)
+type DPORScheduler tid action lookahead s
+  = Scheduler tid action lookahead (SchedState tid action lookahead s)
 
 -- | The scheduler state
 data SchedState tid action lookahead s = SchedState
@@ -359,7 +374,8 @@ initialSchedState s sleep prefix = SchedState
 -- | A bounding function takes the scheduling decisions so far and a
 -- decision chosen to come next, and returns if that decision is
 -- within the bound.
-type BoundFunc tid action lookahead = [(Decision tid, action)] -> (Decision tid, lookahead) -> Bool
+type BoundFunc tid action lookahead
+  = [(Decision tid, action)] -> (Decision tid, lookahead) -> Bool
 
 -- | A backtracking step is a point in the execution where another
 -- decision needs to be made, in order to explore interesting new
@@ -373,7 +389,9 @@ type BoundFunc tid action lookahead = [(Decision tid, action)] -> (Decision tid,
 -- In general, a backtracking function should identify one or more
 -- backtracking points, and then use @backtrackAt@ to do the actual
 -- work.
-type BacktrackFunc tid action lookahead s = [BacktrackStep tid action lookahead s] -> Int -> tid -> [BacktrackStep tid action lookahead s]
+type BacktrackFunc tid action lookahead s
+  = [BacktrackStep tid action lookahead s] -> Int -> tid
+  -> [BacktrackStep tid action lookahead s]
 
 -- | DPOR scheduler: takes a list of decisions, and maintains a trace
 -- including the runnable threads, and the alternative choices allowed
@@ -474,11 +492,13 @@ toDot = toDotFiltered (\_ _ -> True)
 -- a function to determine if a subtree should be included or not.
 toDotFiltered :: (tid -> DPOR tid action -> Bool)
   -- ^ Subtree predicate.
-  -> (tid     -> String)
+  -> (tid    -> String)
   -> (action -> String)
   -> DPOR tid action
   -> String
-toDotFiltered check showTid showAct dpor = "digraph {\n" ++ go "L" dpor ++ "\n}" where
+toDotFiltered check showTid showAct = digraph . go "L" where
+  digraph str = "digraph {\n" ++ str ++ "\n}"
+
   go l b = unlines $ node l b : edges l b
 
   -- Display a labelled node.
@@ -501,10 +521,14 @@ toDotFiltered check showTid showAct dpor = "digraph {\n" ++ go "L" dpor ++ "\n}"
     ]
 
   -- Display a labelled edge
-  edge n1 n2 l = n1 ++ "-> " ++ n2 ++ " [label=\"" ++ showTid l ++ "\"]\n"
+  edge n1 n2 l = n1 ++ " -> " ++ n2 ++ " [label=\"" ++ showTid l ++ "\"]\n"
 
   -- Show a list of values
   showLst showf xs = "[" ++ intercalate ", " (map showf xs) ++ "]"
 
   -- Generate a graphviz-friendly identifier from a tid.
   tidId = concatMap (show . ord) . showTid
+
+-- | Internal errors.
+err :: String -> String -> a
+err func msg = error (func ++ ": (internal error) " ++ msg)
