@@ -661,14 +661,35 @@ willRelease WillStop = True
 willRelease _ = False
 
 -- Count the number of pre-emptions in a schedule prefix.
+--
+-- Commit threads complicate this a bit. Conceptually, commits are
+-- happening truly in parallel, nondeterministically. The commit
+-- thread implementation is just there to unify the two sources of
+-- nondeterminism: commit timing and thread scheduling.
+--
+-- SO, we don't count a switch TO a commit thread as a
+-- preemption. HOWEVER, the switch FROM a commit thread counts as a
+-- preemption if it is not to the thread that the commit interrupted.
 preEmpCount :: [(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Int
-preEmpCount ts (d, _) = go Nothing ts where
-  go p ((d', a):rest) = preEmpC p d' + go (Just a) rest
-  go p [] = preEmpC p d
+preEmpCount ts (d, _) = go initialThread Nothing ts where
+  go _ (Just Yield) ((SwitchTo t, a):rest) = go t (Just a) rest
+  go tid prior ((SwitchTo t, a):rest)
+    | isCommitThread t = go tid prior (skip rest)
+    | otherwise = 1 + go t (Just a) rest
+  go _   _ ((Start t,  a):rest) = go t   (Just a) rest
+  go tid _ ((Continue, a):rest) = go tid (Just a) rest
+  go _ prior [] = case (prior, d) of
+    (Just Yield, SwitchTo _) -> 0
+    (_, SwitchTo _) -> 1
+    _ -> 0
 
-  preEmpC (Just Yield) (SwitchTo _) = 0
-  preEmpC _ (SwitchTo t) = if t >= initialThread then 1 else 0
-  preEmpC _ _ = 0
+  -- Commit threads have negative thread IDs for easy identification.
+  isCommitThread = (< initialThread)
+
+  -- Skip until the next context switch.
+  skip = dropWhile (not . isContextSwitch . fst)
+  isContextSwitch Continue = False
+  isContextSwitch _ = True
 
 -- | A simplified view of the possible actions a thread can perform.
 data ActionType =
