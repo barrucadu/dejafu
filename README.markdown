@@ -1,7 +1,7 @@
 This repository contains dejafu, a concurrency testing library based
 on a typeclass abstraction of concurrency, and related libraries.
 
-- dejafu ([hackage 0.3.0.0][dejafu]): Overloadable primitives for
+- dejafu ([hackage 0.3.1.0][dejafu]): Overloadable primitives for
   testable, potentially non-deterministic, concurrency.
 
 - dpor ([hackage 0.1.0.0][dpor]): A generic implementation of dynamic
