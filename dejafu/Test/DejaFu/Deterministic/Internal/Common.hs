@@ -562,6 +562,50 @@ instance NFData Lookahead where
   rnf (WillMessage m) = m `seq` ()
   rnf l = l `seq` ()
 
+-- | Convert a 'ThreadAction' into a 'Lookahead': \"rewind\" what has
+-- happened. 'Killed' has no 'Lookahead' counterpart.
+rewind :: ThreadAction -> Maybe Lookahead
+rewind (Fork _) = Just WillFork
+rewind MyThreadId = Just WillMyThreadId
+rewind (GetNumCapabilities _) = Just WillGetNumCapabilities
+rewind (SetNumCapabilities i) = Just (WillSetNumCapabilities i)
+rewind Yield = Just WillYield
+rewind (NewVar _) = Just WillNewVar
+rewind (PutVar c _) = Just (WillPutVar c)
+rewind (BlockedPutVar c) = Just (WillPutVar c)
+rewind (TryPutVar c _ _) = Just (WillTryPutVar c)
+rewind (ReadVar c) = Just (WillReadVar c)
+rewind (BlockedReadVar c) = Just (WillReadVar c)
+rewind (TakeVar c _) = Just (WillTakeVar c)
+rewind (BlockedTakeVar c) = Just (WillTakeVar c)
+rewind (TryTakeVar c _ _) = Just (WillTryTakeVar c)
+rewind (NewRef _) = Just WillNewRef
+rewind (ReadRef c) = Just (WillReadRef c)
+rewind (ReadRefCas c) = Just (WillReadRefCas c)
+rewind (PeekTicket c) = Just (WillPeekTicket c)
+rewind (ModRef c) = Just (WillModRef c)
+rewind (ModRefCas c) = Just (WillModRefCas c)
+rewind (WriteRef c) = Just (WillWriteRef c)
+rewind (CasRef c _) = Just (WillCasRef c)
+rewind (CommitRef t c) = Just (WillCommitRef t c)
+rewind (STM _ _) = Just WillSTM
+rewind (BlockedSTM _) = Just WillSTM
+rewind Catching = Just WillCatching
+rewind PopCatching = Just WillPopCatching
+rewind Throw = Just WillThrow
+rewind (ThrowTo t) = Just (WillThrowTo t)
+rewind (BlockedThrowTo t) = Just (WillThrowTo t)
+rewind Killed = Nothing
+rewind (SetMasking b m) = Just (WillSetMasking b m)
+rewind (ResetMasking b m) = Just (WillResetMasking b m)
+rewind Lift = Just WillLift
+rewind Return = Just WillReturn
+rewind KnowsAbout = Just WillKnowsAbout
+rewind Forgets = Just WillForgets
+rewind AllKnown = Just WillAllKnown
+rewind (Message m) = Just (WillMessage m)
+rewind Stop = Just WillStop
+
 -- | Look as far ahead in the given continuation as possible.
 lookahead :: Action n r s -> NonEmpty Lookahead
 lookahead = fromList . lookahead' where
@@ -704,26 +748,7 @@ cvarOf _ = Nothing
 -- This is used in the SCT code to help determine interesting
 -- alternative scheduling decisions.
 simplify :: ThreadAction -> ActionType
-simplify (PutVar c _)       = SynchronisedWrite c
-simplify (BlockedPutVar c)  = SynchronisedWrite c
-simplify (TryPutVar c _ _)  = SynchronisedWrite c
-simplify (ReadVar c)        = SynchronisedRead c
-simplify (BlockedReadVar c) = SynchronisedRead c
-simplify (TakeVar c _)      = SynchronisedRead c
-simplify (BlockedTakeVar c) = SynchronisedRead c
-simplify (TryTakeVar c _ _) = SynchronisedRead c
-simplify (ReadRef r)     = UnsynchronisedRead r
-simplify (ReadRefCas r)  = UnsynchronisedRead r
-simplify (ModRef r)      = SynchronisedModify r
-simplify (ModRefCas r)   = PartiallySynchronisedModify r
-simplify (WriteRef r)    = UnsynchronisedWrite r
-simplify (CasRef r _)    = PartiallySynchronisedWrite r
-simplify (CommitRef _ r) = PartiallySynchronisedCommit r
-simplify (STM _ _)          = SynchronisedOther
-simplify (BlockedSTM _)     = SynchronisedOther
-simplify (ThrowTo _)        = SynchronisedOther
-simplify (BlockedThrowTo _) = SynchronisedOther
-simplify _ = UnsynchronisedOther
+simplify = maybe UnsynchronisedOther simplify' . rewind
 
 -- | Variant of 'simplify' that takes a 'Lookahead'.
 simplify' :: Lookahead -> ActionType

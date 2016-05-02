@@ -37,6 +37,7 @@ module Test.DejaFu.Deterministic.Internal
  , Lookahead(..)
  , isBlock
  , lookahead
+ , rewind
  , willRelease
  , preEmpCount
  , showTrace

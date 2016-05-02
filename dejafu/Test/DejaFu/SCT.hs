@@ -349,16 +349,25 @@ pruneCommits bpor
 
 -- | Check if an action is dependent on another.
 dependent :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, ThreadAction) -> Bool
-dependent _ _ (_, Lift) (_, Lift) = True
-dependent _ _ (_, ThrowTo t) (t2, Stop) | t == t2 = False
-dependent _ _ (t2, Stop) (_, ThrowTo t) | t == t2 = False
-dependent _ _ (_, ThrowTo t) (t2, _) = t == t2
-dependent _ _ (t2, _) (_, ThrowTo t) = t == t2
-dependent _ _ (_, STM _ _) (_, STM _ _) = True
-dependent _ _ (_, GetNumCapabilities a) (_, SetNumCapabilities b) = a /= b
+-- This is basically the same as 'dependent'', but can make use of the
+-- additional information in a 'ThreadAction' to make different
+-- decisions in a few cases:
+--
+--  - Firstly, @SetNumCapabilities@ and @GetNumCapabilities@ are NOT
+--    dependent IF the value read is the same as the value
+--    written. 'dependent'' can not see the value read (as it hasn't
+--    happened yet!), and so is more pessimistic here.
+--
+--  - Secondly, the @isBlock@ / @isBarrier@ case in 'dependent'' is
+--    NOT a sound optimisation when dealing with a 'ThreadAction' that
+--    has been converted to a 'Lookahead'. I'm not entirely sure why,
+--    which makes me question whether the \"optimisation\" is sound as
+--    it is.
 dependent _ _ (_, SetNumCapabilities a) (_, GetNumCapabilities b) = a /= b
-dependent _ _ (_, SetNumCapabilities a) (_, SetNumCapabilities b) = a /= b
-dependent memtype buf (_, d1) (_, d2) = dependentActions memtype buf (simplify d1) (simplify d2)
+dependent memtype buf (t1, a1) (t2, a2) = case rewind a2 of
+  Just l2 | not (isBlock a1 && isBarrier (simplify' l2)) ->
+    dependent' memtype buf (t1, a1) (t2, l2)
+  _ -> dependentActions memtype buf (simplify a1) (simplify a2)
 
 -- | Variant of 'dependent' to handle 'ThreadAction''s
 dependent' :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool
@@ -376,8 +385,8 @@ dependent' _ _ (_, SetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
 --
 -- UNLESS the pre-emption would possibly allow for a different relaxed
 -- memory stage.
-dependent' _ _ (_, a1) (_, a2) | isBlock a1 && isBarrier (simplify' a2) = False
-dependent' memtype buf (_, d1) (_, d2) = dependentActions memtype buf (simplify d1) (simplify' d2)
+dependent' _ _ (_, a1) (_, l2) | isBlock a1 && isBarrier (simplify' l2) = False
+dependent' memtype buf (_, a1) (_, l2) = dependentActions memtype buf (simplify a1) (simplify' l2)
 
 -- | Check if two 'ActionType's are dependent. Note that this is not
 -- sufficient to know if two 'ThreadAction's are dependent, without
