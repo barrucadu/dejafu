@@ -1,4 +1,4 @@
-async-dejafu [![Build Status][build-status]][build-log]
+async-dejafu
 ============
 
 The [async][] library provides a higher-level interface over threads,
@@ -22,8 +22,6 @@ Bug reports, pull requests, and comments are very welcome!
 Feel free to contact me on GitHub, through IRC (#haskell on freenode),
 or email (mike@barrucadu.co.uk).
 
-[build-status]: http://ci.barrucadu.co.uk/job/(dejafu)/job/async-dejafu/badge/icon?style=plastic
-[build-log]:    http://ci.barrucadu.co.uk/job/(dejafu)/job/async-dejafu/
-[docs]:         https://docs.barrucadu.co.uk/async-dejafu
-[async]:        https://hackage.haskell.org/package/async
-[dejafu]:       https://hackage.haskell.org/package/dejafu
+[docs]:   https://docs.barrucadu.co.uk/async-dejafu
+[async]:  https://hackage.haskell.org/package/async
+[dejafu]: https://hackage.haskell.org/package/dejafu

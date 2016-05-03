@@ -1,4 +1,4 @@
-dejafu [![Build Status][build-status]][build-log]
+dejafu
 ======
 
 > [Déjà Fu is] A martial art in which the user's limbs move in time as
@@ -69,8 +69,6 @@ Bug reports, pull requests, and comments are very welcome!
 Feel free to contact me on GitHub, through IRC (#haskell on freenode),
 or email (mike@barrucadu.co.uk).
 
-[build-status]: http://ci.barrucadu.co.uk/job/(dejafu)/job/dejafu/badge/icon?style=plastic
-[build-log]:    http://ci.barrucadu.co.uk/job/(dejafu)/job/dejafu/
 [docs]:         https://docs.barrucadu.co.uk/dejafu
 [abstract-par]: https://hackage.haskell.org/package/abstract-par/docs/Control-Monad-Par-Class.html
 [issue]:        https://github.com/commercialhaskell/stack/issues/1122

@@ -1,4 +1,4 @@
-hunit-dejafu [![Build Status][build-status]][build-log]
+hunit-dejafu
 ============
 
 Integration between the [dejafu][] library for concurrency testing and
@@ -16,8 +16,6 @@ Bug reports, pull requests, and comments are very welcome!
 Feel free to contact me on GitHub, through IRC (#haskell on freenode),
 or email (mike@barrucadu.co.uk).
 
-[build-status]: http://ci.barrucadu.co.uk/job/(dejafu)/job/hunit-dejafu/badge/icon?style=plastic
-[build-log]:    http://ci.barrucadu.co.uk/job/(dejafu)/job/hunit-dejafu/
-[docs]:         https://docs.barrucadu.co.uk/hunit-dejafu
-[dejafu]:       https://hackage.haskell.org/package/dejafu
-[HUnit]:        https://hackage.haskell.org/package/HUnit
+[docs]:   https://docs.barrucadu.co.uk/hunit-dejafu
+[dejafu]: https://hackage.haskell.org/package/dejafu
+[HUnit]:  https://hackage.haskell.org/package/HUnit
