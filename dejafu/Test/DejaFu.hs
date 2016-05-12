@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- |
@@ -199,8 +200,8 @@ module Test.DejaFu
   , Failure(..)
   , runTest
   , runTest'
-  , runTestIO
-  , runTestIO'
+  , runTestM
+  , runTestM'
 
   -- * Predicates
 
@@ -238,6 +239,7 @@ module Test.DejaFu
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when, unless)
+import Control.Monad.Ref (MonadRef)
 import Control.Monad.ST (runST)
 import Data.Function (on)
 import Data.List (intercalate, intersperse, minimumBy)
@@ -410,7 +412,7 @@ runTest ::
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Result a
-runTest = runTest' defaultMemType defaultBounds
+runTest test conc = runST (runTestM test conc)
 
 -- | Variant of 'runTest' which takes a memory model and schedule
 -- bounds.
@@ -424,15 +426,18 @@ runTest' ::
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Result a
-runTest' memtype cb predicate conc = runST (predicate <$> sctBound memtype cb conc)
+runTest' memtype cb predicate conc =
+  runST (runTestM' memtype cb predicate conc)
 
--- | Variant of 'runTest' for computations which do 'IO'.
-runTestIO :: Predicate a -> ConcIO a -> IO (Result a)
-runTestIO = runTestIO' defaultMemType defaultBounds
+-- | Monad-polymorphic variant of 'runTest'.
+runTestM :: MonadRef r n
+         => Predicate a -> Conc n r a -> n (Result a)
+runTestM = runTestM' defaultMemType defaultBounds
 
--- | Variant of 'runTest'' for computations which do 'IO'.
-runTestIO' :: MemType -> Bounds -> Predicate a -> ConcIO a -> IO (Result a)
-runTestIO' memtype cb predicate conc = predicate <$> sctBound memtype cb conc
+-- | Monad-polymorphic variant of 'runTest''.
+runTestM' :: MonadRef r n
+          => MemType -> Bounds -> Predicate a -> Conc n r a -> n (Result a)
+runTestM' memtype cb predicate conc = predicate <$> sctBound memtype cb conc
 
 -- * Predicates
 
