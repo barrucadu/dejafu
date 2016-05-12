@@ -1,5 +1,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- |
 -- Module      : Test.DejaFu.STM.Internal
@@ -27,9 +28,6 @@ import Test.DejaFu.Internal
 -- actions.
 type M n r a = Cont (STMAction n r) a
 
--- | Dict of methods for implementations to override.
-type Fixed n r = Ref n r (Cont (STMAction n r))
-
 --------------------------------------------------------------------------------
 -- * Primitive actions
 
@@ -41,10 +39,9 @@ data STMAction n r
   | forall a. SWrite (TVar r a) a (STMAction n r)
   | forall a. SOrElse (M n r a) (M n r a) (a -> STMAction n r)
   | forall a. SNew String a (TVar r a -> STMAction n r)
-  | SLift (n (STMAction n r))
   | forall e. Exception e => SThrow e
   | SRetry
-  | SStop
+  | SStop (n ())
 
 --------------------------------------------------------------------------------
 -- * @TVar@s
@@ -84,15 +81,15 @@ instance Foldable Result where
 -- * Execution
 
 -- | Run a STM transaction, returning an action to undo its effects.
-doTransaction :: Monad n => Fixed n r -> M n r a -> IdSource -> n (Result a, n (), IdSource, TTrace)
-doTransaction fixed ma idsource = do
-  ref <- newRef fixed Nothing
+doTransaction :: MonadRef r n => M n r a -> IdSource -> n (Result a, n (), IdSource, TTrace)
+doTransaction ma idsource = do
+  ref <- newRef Nothing
 
-  let c = runCont (ma >>= liftN fixed . writeRef fixed ref . Just . Right) $ const SStop
+  let c = runCont ma (SStop . writeRef ref . Just . Right)
 
   (idsource', undo, readen, written, trace) <- go ref c (return ()) idsource [] [] []
 
-  res <- readRef fixed ref
+  res <- readRef ref
 
   case res of
     Just (Right val) -> return (Success (nub readen) (nub written) val, undo, idsource', reverse trace)
@@ -102,7 +99,7 @@ doTransaction fixed ma idsource = do
 
   where
     go ref act undo nidsrc readen written sofar = do
-      (act', undo', nidsrc', readen', written', tact) <- stepTrans fixed act nidsrc
+      (act', undo', nidsrc', readen', written', tact) <- stepTrans act nidsrc
 
       let newIDSource = nidsrc'
           newAct = act'
@@ -113,25 +110,24 @@ doTransaction fixed ma idsource = do
 
       case tact of
         TStop  -> return (newIDSource, newUndo, newReaden, newWritten, TStop:newSofar)
-        TRetry -> writeRef fixed ref Nothing
+        TRetry -> writeRef ref Nothing
           >> return (newIDSource, newUndo, newReaden, newWritten, TRetry:newSofar)
-        TThrow -> writeRef fixed ref (Just . Left $ case act of SThrow e -> toException e; _ -> undefined)
+        TThrow -> writeRef ref (Just . Left $ case act of SThrow e -> toException e; _ -> undefined)
           >> return (newIDSource, newUndo, newReaden, newWritten, TThrow:newSofar)
         _ -> go ref newAct newUndo newIDSource newReaden newWritten newSofar
 
 -- | Run a transaction for one step.
-stepTrans :: Monad n => Fixed n r -> STMAction n r -> IdSource -> n (STMAction n r, n (), IdSource, [TVarId], [TVarId], TAction)
-stepTrans fixed act idsource = case act of
+stepTrans :: MonadRef r n => STMAction n r -> IdSource -> n (STMAction n r, n (), IdSource, [TVarId], [TVarId], TAction)
+stepTrans act idsource = case act of
   SCatch  h stm c -> stepCatch h stm c
   SRead   ref c   -> stepRead ref c
   SWrite  ref a c -> stepWrite ref a c
   SNew    n a c   -> stepNew n a c
   SOrElse a b c   -> stepOrElse a b c
-  SLift   na      -> stepLift na
+  SStop   na      -> stepStop na
 
   SThrow e -> return (SThrow e, nothing, idsource, [], [], TThrow)
   SRetry   -> return (SRetry,   nothing, idsource, [], [], TRetry)
-  SStop    -> return (SStop,    nothing, idsource, [], [], TStop)
 
   where
     nothing = return ()
@@ -143,17 +139,17 @@ stepTrans fixed act idsource = case act of
         Nothing   -> return (SThrow exc, nothing, idsource, [], [], TCatch trace Nothing))
 
     stepRead (TVar (tvid, ref)) c = do
-      val <- readRef fixed ref
+      val <- readRef ref
       return (c val, nothing, idsource, [tvid], [], TRead tvid)
 
     stepWrite (TVar (tvid, ref)) a c = do
-      old <- readRef fixed ref
-      writeRef fixed ref a
-      return (c, writeRef fixed ref old, idsource, [], [tvid], TWrite tvid)
+      old <- readRef ref
+      writeRef ref a
+      return (c, writeRef ref old, idsource, [], [tvid], TWrite tvid)
 
     stepNew n a c = do
       let (idsource', tvid) = nextTVId n idsource
-      ref <- newRef fixed a
+      ref <- newRef a
       let tvar = TVar (tvid, ref)
       return (c tvar, nothing, idsource', [], [tvid], TNew)
 
@@ -161,12 +157,12 @@ stepTrans fixed act idsource = case act of
       (\trace   -> transaction (TOrElse trace . Just) b c)
       (\trace exc -> return (SThrow exc, nothing, idsource, [], [], TOrElse trace Nothing))
 
-    stepLift na = do
-      a <- na
-      return (a, nothing, idsource, [], [], TLift)
+    stepStop na = do
+      na
+      return (SStop na, nothing, idsource, [], [], TStop)
 
     cases tact stm onSuccess onRetry onException = do
-      (res, undo, idsource', trace) <- doTransaction fixed stm idsource
+      (res, undo, idsource', trace) <- doTransaction stm idsource
       case res of
         Success readen written val -> return (onSuccess val, undo, idsource', readen, written, tact trace Nothing)
         Retry readen -> do

@@ -52,7 +52,6 @@ import Data.Dynamic (toDyn)
 import Data.IORef (IORef)
 import Data.STRef (STRef)
 import Test.DejaFu.Deterministic.Internal
-import Test.DejaFu.Internal (refST, refIO)
 import Test.DejaFu.STM (STMLike, STMIO, STMST, runTransactionIO, runTransactionST)
 import Test.DejaFu.STM.Internal (TVar(..))
 import Test.DPOR.Schedule
@@ -105,7 +104,7 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 
   -- ----------
 
-  forkWithUnmaskN   n ma = toConc (AFork n (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop)))
+  forkWithUnmaskN   n ma = toConc (AFork n (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
   forkOnWithUnmaskN n _  = C.forkWithUnmaskN n
 
   -- This implementation lies and returns 2 until a value is set. This
@@ -184,8 +183,7 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 runConcST :: Scheduler ThreadId ThreadAction Lookahead s -> MemType -> s -> (forall t. ConcST t a) -> (Either Failure a, s, Trace ThreadId ThreadAction Lookahead)
-runConcST sched memtype s ma = runST $ runFixed fixed runTransactionST sched memtype s $ unC ma where
-  fixed = refST $ \mb -> cont (\c -> ALift $ c <$> mb)
+runConcST sched memtype s ma = runST $ runFixed runTransactionST sched memtype s $ unC ma
 
 -- | Run a concurrent computation in the @IO@ monad with a given
 -- 'Scheduler' and initial state, returning a failure reason on
@@ -205,5 +203,4 @@ runConcST sched memtype s ma = runST $ runFixed fixed runTransactionST sched mem
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 runConcIO :: Scheduler ThreadId ThreadAction Lookahead s -> MemType -> s -> ConcIO a -> IO (Either Failure a, s, Trace ThreadId ThreadAction Lookahead)
-runConcIO sched memtype s ma = runFixed fixed runTransactionIO sched memtype s $ unC ma where
-  fixed = refIO $ \mb -> cont (\c -> ALift $ c <$> mb)
+runConcIO sched memtype s ma = runFixed runTransactionIO sched memtype s $ unC ma

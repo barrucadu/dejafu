@@ -23,7 +23,6 @@ import Data.List (sort, nub, intercalate)
 import Data.List.NonEmpty (NonEmpty, fromList)
 import Data.Set (Set)
 import qualified Data.Set as S
-import Test.DejaFu.Internal
 import Test.DPOR (Decision(..), Trace)
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
@@ -35,11 +34,10 @@ import Test.DPOR (Decision(..), Trace)
 --
 -- One might wonder why the return type isn't reflected in 'Action',
 -- and a free monad formulation used. This would remove the need for a
--- @Lift@ action as the penultimate action of thread 0 used to
--- communicate back the result, and be more pleasing in a
--- sense. However, this makes the current expression of threads and
--- exception handlers very difficult (perhaps even not possible
--- without significant reworking), so I abandoned the attempt.
+-- @AStop@ actions having their parameter. However, this makes the
+-- current expression of threads and exception handlers very difficult
+-- (perhaps even not possible without significant reworking), so I
+-- abandoned the attempt.
 newtype M n r s a = M { runM :: (a -> Action n r s) -> Action n r s }
 
 instance Functor (M n r s) where
@@ -88,9 +86,6 @@ data Ticket a = Ticket
   , _ticketWrites :: Integer
   , _ticketVal    :: a
   }
-
--- | Dict of methods for implementations to override.
-type Fixed n r s = Ref n r (M n r s)
 
 -- | Construct a continuation-passing operation from a function.
 cont :: ((a -> Action n r s) -> Action n r s) -> M n r s a
@@ -147,7 +142,7 @@ data Action n r s =
   | AYield  (Action n r s)
   | AReturn (Action n r s)
   | ACommit ThreadId CRefId
-  | AStop
+  | AStop (n ())
 
 --------------------------------------------------------------------------------
 -- * Identifiers
@@ -373,10 +368,9 @@ data ThreadAction =
   -- ^ Return to an earlier masking state.  If 'True', this is being
   -- used to return to the state of the masked block in the argument
   -- passed to a 'mask'ed function.
-  | Lift
-  -- ^ Lift an action from the underlying monad. Note that the
-  -- penultimate action in a trace will always be a @Lift@, this is an
-  -- artefact of how the runner works.
+  | LiftIO
+  -- ^ Lift an IO action. Note that this can only happen with
+  -- 'ConcIO'.
   | Return
   -- ^ A 'return' or 'pure' action was executed.
   | KnowsAbout
@@ -457,10 +451,6 @@ data TAction =
   -- the exception upwards.
   | TStop
   -- ^ Terminate successfully and commit effects.
-  | TLift
-  -- ^ Lifts an action from the underlying monad. Note that the
-  -- penultimate action in a trace will always be a @Lift@, this is an
-  -- artefact of how the runner works.
   deriving (Eq, Show)
 
 instance NFData TAction where
@@ -534,10 +524,9 @@ data Lookahead =
   -- ^ Will return to an earlier masking state.  If 'True', this is
   -- being used to return to the state of the masked block in the
   -- argument passed to a 'mask'ed function.
-  | WillLift
-  -- ^ Will lift an action from the underlying monad. Note that the
-  -- penultimate action in a trace will always be a @Lift@, this is an
-  -- artefact of how the runner works.
+  | WillLiftIO
+  -- ^ Will lift an IO action. Note that this can only happen with
+  -- 'ConcIO'.
   | WillReturn
   -- ^ Will execute a 'return' or 'pure' action.
   | WillKnowsAbout
@@ -609,7 +598,7 @@ rewind (BlockedThrowTo t) = Just (WillThrowTo t)
 rewind Killed = Nothing
 rewind (SetMasking b m) = Just (WillSetMasking b m)
 rewind (ResetMasking b m) = Just (WillResetMasking b m)
-rewind Lift = Just WillLift
+rewind LiftIO = Just WillLiftIO
 rewind Return = Just WillReturn
 rewind KnowsAbout = Just WillKnowsAbout
 rewind Forgets = Just WillForgets
@@ -646,14 +635,14 @@ lookahead = fromList . lookahead' where
   lookahead' (APopCatching k)        = WillPopCatching : lookahead' k
   lookahead' (AMasking ms _ _)       = [WillSetMasking False ms]
   lookahead' (AResetMask b1 b2 ms k) = (if b1 then WillSetMasking else WillResetMasking) b2 ms : lookahead' k
-  lookahead' (ALift _)               = [WillLift]
+  lookahead' (ALift _)               = [WillLiftIO]
   lookahead' (AKnowsAbout _ k)       = WillKnowsAbout : lookahead' k
   lookahead' (AForgets _ k)          = WillForgets : lookahead' k
   lookahead' (AAllKnown k)           = WillAllKnown : lookahead' k
   lookahead' (AMessage m k)          = WillMessage m : lookahead' k
   lookahead' (AYield k)              = WillYield : lookahead' k
   lookahead' (AReturn k)             = WillReturn : lookahead' k
-  lookahead' AStop                   = [WillStop]
+  lookahead' (AStop _)               = [WillStop]
 
 -- | Check if an operation could enable another thread.
 willRelease :: Lookahead -> Bool

@@ -1,4 +1,5 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 -- |
 -- Module      : Test.DejaFu.Internal
@@ -16,28 +17,17 @@ import Control.Monad.ST (ST)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.STRef (STRef, newSTRef, readSTRef, writeSTRef)
 
--- | Mutable references.
-data Ref n r m = Ref
-  { newRef   :: forall a. a -> n (r a)
-  , readRef  :: forall a. r a -> n a
-  , writeRef :: forall a. r a -> a -> n ()
-  , liftN    :: forall a. n a -> m a
-  }
+class Monad m => MonadRef r m | m -> r where
+  newRef :: a -> m (r a)
+  readRef :: r a -> m a
+  writeRef :: r a -> a -> m ()
 
--- | Method dict for 'ST'.
-refST :: (forall a. ST t a -> m a) -> Ref (ST t) (STRef t) m
-refST lftN = Ref
-  { newRef   = newSTRef
-  , readRef  = readSTRef
-  , writeRef = writeSTRef
-  , liftN    = lftN
-  }
+instance MonadRef (STRef t) (ST t) where
+  newRef   = newSTRef
+  readRef  = readSTRef
+  writeRef = writeSTRef
 
--- | Method dict for 'IO'.
-refIO :: (forall a. IO a -> m a) -> Ref IO IORef m
-refIO lftN = Ref
-  { newRef   = newIORef
-  , readRef  = readIORef
-  , writeRef = writeIORef
-  , liftN    = lftN
-  }
+instance MonadRef IORef IO where
+  newRef   = newIORef
+  readRef  = readIORef
+  writeRef = writeIORef

@@ -403,7 +403,7 @@ dependent' memtype ds (t1, a1) (t2, l2) = case (a1, l2) of
 #endif
 
   -- Worst-case assumption: all IO is dependent.
-  (Lift, WillLift) -> True
+  (LiftIO, WillLiftIO) -> True
 
   -- Throwing an exception is only dependent with actions in that
   -- thread and if the actions can be interrupted. We can also

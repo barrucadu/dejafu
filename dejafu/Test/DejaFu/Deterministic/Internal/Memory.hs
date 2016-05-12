@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GADTs        #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 -- |
 -- Module      : Test.DejaFu.Deterministic.Internal.Memory
@@ -55,72 +56,72 @@ emptyBuffer :: WriteBuffer r
 emptyBuffer = WriteBuffer M.empty
 
 -- | Add a new write to the end of a buffer.
-bufferWrite :: Monad n => Fixed n r s -> WriteBuffer r -> (ThreadId, Maybe CRefId) -> CRef r a -> a -> n (WriteBuffer r)
-bufferWrite fixed (WriteBuffer wb) k@(tid, _) cref@(CRef _ ref) new = do
+bufferWrite :: MonadRef r n => WriteBuffer r -> (ThreadId, Maybe CRefId) -> CRef r a -> a -> n (WriteBuffer r)
+bufferWrite (WriteBuffer wb) k@(tid, _) cref@(CRef _ ref) new = do
   -- Construct the new write buffer
   let write = singleton $ BufferedWrite tid cref new
   let buffer' = M.insertWith (flip (><)) k write wb
 
   -- Write the thread-local value to the @CRef@'s update map.
-  (locals, count, def) <- readRef fixed ref
-  writeRef fixed ref (M.insert tid new locals, count, def)
+  (locals, count, def) <- readRef ref
+  writeRef ref (M.insert tid new locals, count, def)
 
   return $ WriteBuffer buffer'
 
 -- | Commit the write at the head of a buffer.
-commitWrite :: Monad n => Fixed n r s -> WriteBuffer r -> (ThreadId, Maybe CRefId) -> n (WriteBuffer r)
-commitWrite fixed w@(WriteBuffer wb) k = case maybe EmptyL viewl $ M.lookup k wb of
+commitWrite :: MonadRef r n => WriteBuffer r -> (ThreadId, Maybe CRefId) -> n (WriteBuffer r)
+commitWrite w@(WriteBuffer wb) k = case maybe EmptyL viewl $ M.lookup k wb of
   BufferedWrite _ cref a :< rest -> do
-    writeImmediate fixed cref a
+    writeImmediate cref a
     return . WriteBuffer $ M.insert k rest wb
 
   EmptyL -> return w
 
 -- | Read from a @CRef@, returning a newer thread-local non-committed
 -- write if there is one.
-readCRef :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n a
-readCRef fixed cref tid = do
-  (val, _) <- readCRefPrim fixed cref tid
+readCRef :: MonadRef r n => CRef r a -> ThreadId -> n a
+readCRef cref tid = do
+  (val, _) <- readCRefPrim cref tid
   return val
 
 -- | Read from a @CRef@, returning a @Ticket@ representing the current
 -- view of the thread.
-readForTicket :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n (Ticket a)
-readForTicket fixed cref@(CRef crid _) tid = do
-  (val, count) <- readCRefPrim fixed cref tid
+readForTicket :: MonadRef r n => CRef r a -> ThreadId -> n (Ticket a)
+readForTicket cref@(CRef crid _) tid = do
+  (val, count) <- readCRefPrim cref tid
   return $ Ticket crid count val
 
 -- | Perform a compare-and-swap on a @CRef@ if the ticket is still
 -- valid. This is strict in the \"new\" value argument.
-casCRef :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> Ticket a -> a -> n (Bool, Ticket a)
-casCRef fixed cref tid (Ticket _ cc _) !new = do
-  tick'@(Ticket _ cc' _) <- readForTicket fixed cref tid
+casCRef :: MonadRef r n => CRef r a -> ThreadId -> Ticket a -> a -> n (Bool, Ticket a)
+casCRef cref tid (Ticket _ cc _) !new = do
+  tick'@(Ticket _ cc' _) <- readForTicket cref tid
 
   if cc == cc'
   then do
-    writeImmediate fixed cref new
-    tick'' <- readForTicket fixed cref tid
+    writeImmediate cref new
+    tick'' <- readForTicket cref tid
     return (True, tick'')
   else return (False, tick')
 
 -- | Read the local state of a @CRef@.
-readCRefPrim :: Monad n => Fixed n r s -> CRef r a -> ThreadId -> n (a, Integer)
-readCRefPrim fixed (CRef _ ref) tid = do
-  (vals, count, def) <- readRef fixed ref
+readCRefPrim :: MonadRef r n => CRef r a -> ThreadId -> n (a, Integer)
+readCRefPrim (CRef _ ref) tid = do
+  (vals, count, def) <- readRef ref
 
   return (M.findWithDefault def tid vals, count)
 
 -- | Write and commit to a @CRef@ immediately, clearing the update map
 -- and incrementing the write count.
-writeImmediate :: Monad n => Fixed n r s -> CRef r a -> a -> n ()
-writeImmediate fixed (CRef _ ref) a = do
-  (_, count, _) <- readRef fixed ref
-  writeRef fixed ref (M.empty, count + 1, a)
+writeImmediate :: MonadRef r n => CRef r a -> a -> n ()
+writeImmediate (CRef _ ref) a = do
+  (_, count, _) <- readRef ref
+  writeRef ref (M.empty, count + 1, a)
 
 -- | Flush all writes in the buffer.
-writeBarrier :: Monad n => Fixed n r s -> WriteBuffer r -> n ()
-writeBarrier fixed (WriteBuffer wb) = mapM_ flush $ M.elems wb where
-  flush = mapM_ $ \(BufferedWrite _ cref a) -> writeImmediate fixed cref a
+writeBarrier :: MonadRef r n => WriteBuffer r -> n ()
+writeBarrier (WriteBuffer wb) = mapM_ flush $ M.elems wb where
+  flush = mapM_ $ \(BufferedWrite _ cref a) -> writeImmediate cref a
 
 -- | Add phantom threads to the thread list to commit pending writes.
 addCommitThreads :: WriteBuffer r -> Threads n r s -> Threads n r s
@@ -140,36 +141,36 @@ delCommitThreads = M.filterWithKey $ \k _ -> k >= initialThread
 -- * Manipulating @MVar@s
 
 -- | Put into a @MVar@, blocking if full.
-putIntoMVar :: Monad n => MVar r a -> a -> Action n r s
-             -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+putIntoMVar :: MonadRef r n => MVar r a -> a -> Action n r s
+            -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
 putIntoMVar cvar a c = mutMVar True cvar a (const c)
 
 -- | Try to put into a @MVar@, not blocking if full.
-tryPutIntoMVar :: Monad n => MVar r a -> a -> (Bool -> Action n r s)
-                 -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+tryPutIntoMVar :: MonadRef r n => MVar r a -> a -> (Bool -> Action n r s)
+               -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
 tryPutIntoMVar = mutMVar False
 
 -- | Read from a @MVar@, blocking if empty.
-readFromMVar :: Monad n => MVar r a -> (a -> Action n r s)
-              -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+readFromMVar :: MonadRef r n => MVar r a -> (a -> Action n r s)
+            -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
 readFromMVar cvar c = seeMVar False True cvar (c . fromJust)
 
 -- | Take from a @MVar@, blocking if empty.
-takeFromMVar :: Monad n => MVar r a -> (a -> Action n r s)
-              -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+takeFromMVar :: MonadRef r n => MVar r a -> (a -> Action n r s)
+             -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
 takeFromMVar cvar c = seeMVar True True cvar (c . fromJust)
 
 -- | Try to take from a @MVar@, not blocking if empty.
-tryTakeFromMVar :: Monad n => MVar r a -> (Maybe a -> Action n r s)
-                  -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+tryTakeFromMVar :: MonadRef r n => MVar r a -> (Maybe a -> Action n r s)
+                -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
 tryTakeFromMVar = seeMVar True False
 
 -- | Mutate a @MVar@, in either a blocking or nonblocking way.
-mutMVar :: Monad n
-         => Bool -> MVar r a -> a -> (Bool -> Action n r s)
-         -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-mutMVar blocking (MVar cvid ref) a c fixed threadid threads = do
-  val <- readRef fixed ref
+mutMVar :: MonadRef r n
+        => Bool -> MVar r a -> a -> (Bool -> Action n r s)
+        -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+mutMVar blocking (MVar cvid ref) a c threadid threads = do
+  val <- readRef ref
 
   case val of
     Just _
@@ -181,21 +182,21 @@ mutMVar blocking (MVar cvid ref) a c fixed threadid threads = do
         return (False, goto (c False) threadid threads, [])
 
     Nothing -> do
-      writeRef fixed ref $ Just a
+      writeRef ref $ Just a
       let (threads', woken) = wake (OnMVarFull cvid) threads
       return (True, goto (c True) threadid threads', woken)
 
 -- | Read a @MVar@, in either a blocking or nonblocking
 -- way.
-seeMVar :: Monad n
-         => Bool -> Bool -> MVar r a -> (Maybe a -> Action n r s)
-         -> Fixed n r s -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
-seeMVar emptying blocking (MVar cvid ref) c fixed threadid threads = do
-  val <- readRef fixed ref
+seeMVar :: MonadRef r n
+        => Bool -> Bool -> MVar r a -> (Maybe a -> Action n r s)
+        -> ThreadId -> Threads n r s -> n (Bool, Threads n r s, [ThreadId])
+seeMVar emptying blocking (MVar cvid ref) c threadid threads = do
+  val <- readRef ref
 
   case val of
     Just _ -> do
-      when emptying $ writeRef fixed ref Nothing
+      when emptying $ writeRef ref Nothing
       let (threads', woken) = wake (OnMVarEmpty cvid) threads
       return (True, goto (c val) threadid threads', woken)
 

@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -22,7 +23,6 @@ module Test.DejaFu.Deterministic.Internal
  , MVar(..)
  , CRef(..)
  , Ticket(..)
- , Fixed
  , cont
  , runCont
 
@@ -91,22 +91,22 @@ import qualified Data.Map.Strict as M
 -- state, returning a 'Just' if it terminates, and 'Nothing' if a
 -- deadlock is detected. Also returned is the final state of the
 -- scheduler, and an execution trace.
-runFixed :: (Functor n, Monad n) => Fixed n r s -> (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
+runFixed :: MonadRef r n => (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
          -> Scheduler ThreadId ThreadAction Lookahead g -> MemType -> g -> M n r s a -> n (Either Failure a, g, Trace ThreadId ThreadAction Lookahead)
-runFixed fixed runstm sched memtype s ma = (\(e,g,_,t) -> (e,g,t)) <$> runFixed' fixed runstm sched memtype s initialIdSource ma
+runFixed runstm sched memtype s ma = (\(e,g,_,t) -> (e,g,t)) <$> runFixed' runstm sched memtype s initialIdSource ma
 
 -- | Same as 'runFixed', be parametrised by an 'IdSource'.
-runFixed' :: forall n r s g a. (Functor n, Monad n)
-  => Fixed n r s -> (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
+runFixed' :: forall n r s g a. MonadRef r n
+  => (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
   -> Scheduler ThreadId ThreadAction Lookahead g -> MemType -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace ThreadId ThreadAction Lookahead)
-runFixed' fixed runstm sched memtype s idSource ma = do
-  ref <- newRef fixed Nothing
+runFixed' runstm sched memtype s idSource ma = do
+  ref <- newRef Nothing
 
-  let c       = ma >>= liftN fixed . writeRef fixed ref . Just . Right
-  let threads = launch' Unmasked initialThread ((\a _ -> a) $ runCont c $ const AStop) M.empty
+  let c = runCont ma (AStop . writeRef ref . Just . Right)
+  let threads = launch' Unmasked initialThread (const c) M.empty
 
-  (s', idSource', trace) <- runThreads fixed runstm sched memtype s threads idSource ref
-  out <- readRef fixed ref
+  (s', idSource', trace) <- runThreads runstm sched memtype s threads idSource ref
+  out <- readRef ref
 
   return (fromJust out, s', idSource', reverse trace)
 
@@ -116,9 +116,9 @@ runFixed' fixed runstm sched memtype s idSource ma = do
 -- efficient to prepend to a list than append. As this function isn't
 -- exposed to users of the library, this is just an internal gotcha to
 -- watch out for.
-runThreads :: (Functor n, Monad n) => Fixed n r s -> (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
+runThreads :: MonadRef r n => (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
            -> Scheduler ThreadId ThreadAction Lookahead g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace ThreadId ThreadAction Lookahead)
-runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer 2 where
+runThreads runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer 2 where
   go idSource sofar prior g threads wb caps
     | isTerminated  = stop g
     | isDeadlocked  = die g Deadlock
@@ -127,7 +127,7 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
     | isNonexistant = die g' InternalError
     | isBlocked     = die g' InternalError
     | otherwise = do
-      stepped <- stepThread fixed runstm memtype (_continuation $ fromJust thread) idSource chosen threads wb caps
+      stepped <- stepThread runstm memtype (_continuation $ fromJust thread) idSource chosen threads wb caps
       case stepped of
         Right (threads', idSource', act, wb', caps') -> loop threads' idSource' act wb' caps'
 
@@ -168,7 +168,7 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
       nextActions t = lookahead . _continuation . fromJust $ M.lookup t threadsc
 
       stop outg = return (outg, idSource, sofar)
-      die  outg reason = writeRef fixed ref (Just $ Left reason) >> stop outg
+      die  outg reason = writeRef ref (Just $ Left reason) >> stop outg
 
       loop threads' idSource' act wb' =
         let sofar' = ((decision, runnable', act) : sofar)
@@ -180,8 +180,8 @@ runThreads fixed runstm sched memtype origg origthreads idsrc ref = go idsrc [] 
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
-stepThread :: forall n r s. (Functor n, Monad n) => Fixed n r s
-  -> (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
+stepThread :: forall n r s. MonadRef r n
+  => (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
   -- ^ Run a 'MonadSTM' transaction atomically.
   -> MemType
   -- ^ The memory model
@@ -198,7 +198,7 @@ stepThread :: forall n r s. (Functor n, Monad n) => Fixed n r s
   -> Int
   -- ^ The number of capabilities
   -> n (Either Failure (Threads n r s, IdSource, ThreadAction, WriteBuffer r, Int))
-stepThread fixed runstm memtype action idSource tid threads wb caps = case action of
+stepThread runstm memtype action idSource tid threads wb caps = case action of
   AFork    n a b   -> stepFork        n a b
   AMyTId   c       -> stepMyTId       c
   AGetNumCapabilities   c -> stepGetNumCapabilities c
@@ -232,7 +232,7 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
   AForgets    v c  -> stepForgets v c
   AAllKnown   c    -> stepAllKnown c
   AMessage    m c  -> stepMessage m c
-  AStop            -> stepStop
+  AStop       na   -> stepStop na
 
   where
     -- | Start a new thread, assigning it the next 'ThreadId'
@@ -262,39 +262,39 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
     -- | Put a value into a @MVar@, blocking the thread until it's
     -- empty.
     stepPutVar cvar@(MVar cvid _) a c = synchronised $ do
-      (success, threads', woken) <- putIntoMVar cvar a c fixed tid threads
+      (success, threads', woken) <- putIntoMVar cvar a c tid threads
       simple threads' $ if success then PutVar cvid woken else BlockedPutVar cvid
 
     -- | Try to put a value into a @MVar@, without blocking.
     stepTryPutVar cvar@(MVar cvid _) a c = synchronised $ do
-      (success, threads', woken) <- tryPutIntoMVar cvar a c fixed tid threads
+      (success, threads', woken) <- tryPutIntoMVar cvar a c tid threads
       simple threads' $ TryPutVar cvid success woken
 
     -- | Get the value from a @MVar@, without emptying, blocking the
     -- thread until it's full.
     stepReadVar cvar@(MVar cvid _) c = synchronised $ do
-      (success, threads', _) <- readFromMVar cvar c fixed tid threads
+      (success, threads', _) <- readFromMVar cvar c tid threads
       simple threads' $ if success then ReadVar cvid else BlockedReadVar cvid
 
     -- | Take the value from a @MVar@, blocking the thread until it's
     -- full.
     stepTakeVar cvar@(MVar cvid _) c = synchronised $ do
-      (success, threads', woken) <- takeFromMVar cvar c fixed tid threads
+      (success, threads', woken) <- takeFromMVar cvar c tid threads
       simple threads' $ if success then TakeVar cvid woken else BlockedTakeVar cvid
 
     -- | Try to take the value from a @MVar@, without blocking.
     stepTryTakeVar cvar@(MVar cvid _) c = synchronised $ do
-      (success, threads', woken) <- tryTakeFromMVar cvar c fixed tid threads
+      (success, threads', woken) <- tryTakeFromMVar cvar c tid threads
       simple threads' $ TryTakeVar cvid success woken
 
     -- | Read from a @CRef@.
     stepReadRef cref@(CRef crid _) c = do
-      val <- readCRef fixed cref tid
+      val <- readCRef cref tid
       simple (goto (c val) tid threads) $ ReadRef crid
 
     -- | Read from a @CRef@ for future compare-and-swap operations.
     stepReadRefCas cref@(CRef crid _) c = do
-      tick <- readForTicket fixed cref tid
+      tick <- readForTicket cref tid
       simple (goto (c tick) tid threads) $ ReadRefCas crid
 
     -- | Extract the value from a @Ticket@.
@@ -302,37 +302,37 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
 
     -- | Modify a @CRef@.
     stepModRef cref@(CRef crid _) f c = synchronised $ do
-      (new, val) <- f <$> readCRef fixed cref tid
-      writeImmediate fixed cref new
+      (new, val) <- f <$> readCRef cref tid
+      writeImmediate cref new
       simple (goto (c val) tid threads) $ ModRef crid
 
     -- | Modify a @CRef@ using a compare-and-swap.
     stepModRefCas cref@(CRef crid _) f c = synchronised $ do
-      tick@(Ticket _ _ old) <- readForTicket fixed cref tid
+      tick@(Ticket _ _ old) <- readForTicket cref tid
       let (new, val) = f old
-      void $ casCRef fixed cref tid tick new
+      void $ casCRef cref tid tick new
       simple (goto (c val) tid threads) $ ModRefCas crid
 
     -- | Write to a @CRef@ without synchronising
     stepWriteRef cref@(CRef crid _) a c = case memtype of
       -- Write immediately.
       SequentialConsistency -> do
-        writeImmediate fixed cref a
+        writeImmediate cref a
         simple (goto c tid threads) $ WriteRef crid
 
       -- Add to buffer using thread id.
       TotalStoreOrder -> do
-        wb' <- bufferWrite fixed wb (tid, Nothing) cref a
+        wb' <- bufferWrite wb (tid, Nothing) cref a
         return $ Right (goto c tid threads, idSource, WriteRef crid, wb', caps)
 
       -- Add to buffer using both thread id and cref id
       PartialStoreOrder -> do
-        wb' <- bufferWrite fixed wb (tid, Just crid) cref a
+        wb' <- bufferWrite wb (tid, Just crid) cref a
         return $ Right (goto c tid threads, idSource, WriteRef crid, wb', caps)
 
     -- | Perform a compare-and-swap on a @CRef@.
     stepCasRef cref@(CRef crid _) tick a c = synchronised $ do
-      (suc, tick') <- casCRef fixed cref tid tick a
+      (suc, tick') <- casCRef cref tid tick a
       simple (goto (c (suc, tick')) tid threads) $ CasRef crid suc
 
     -- | Commit a @CRef@ write
@@ -343,10 +343,10 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
           error "Attempting to commit under SequentialConsistency"
 
         -- Commit using the thread id.
-        TotalStoreOrder -> commitWrite fixed wb (t, Nothing)
+        TotalStoreOrder -> commitWrite wb (t, Nothing)
 
         -- Commit using the cref id.
-        PartialStoreOrder -> commitWrite fixed wb (t, Just c)
+        PartialStoreOrder -> commitWrite wb (t, Just c)
 
       return $ Right (threads, idSource, CommitRef t c, wb', caps)
 
@@ -426,14 +426,14 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
     -- | Create a new @MVar@, using the next 'MVarId'.
     stepNewVar n c = do
       let (idSource', newcvid) = nextCVId n idSource
-      ref <- newRef fixed Nothing
+      ref <- newRef Nothing
       let cvar = MVar newcvid ref
       return $ Right (knows [Left newcvid] tid $ goto (c cvar) tid threads, idSource', NewVar newcvid, wb, caps)
 
     -- | Create a new @CRef@, using the next 'CRefId'.
     stepNewRef n a c = do
       let (idSource', newcrid) = nextCRId n idSource
-      ref <- newRef fixed (M.empty, 0, a)
+      ref <- newRef (M.empty, 0, a)
       let cref = CRef newcrid ref
       return $ Right (goto (c cref) tid threads, idSource', NewRef newcrid, wb, caps)
 
@@ -441,7 +441,7 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
     -- computation.
     stepLift na = do
       a <- na
-      simple (goto a tid threads) Lift
+      simple (goto a tid threads) LiftIO
 
     -- | Execute a 'return' or 'pure'.
     stepReturn c = simple (goto c tid threads) Return
@@ -459,7 +459,7 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
     stepMessage m c = simple (goto c tid threads) (Message m)
 
     -- | Kill the current thread.
-    stepStop = simple (kill tid threads) Stop
+    stepStop na = na >> simple (kill tid threads) Stop
 
     -- | Helper for actions which don't touch the 'IdSource' or
     -- 'WriteBuffer'
@@ -467,7 +467,7 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
 
     -- | Helper for actions impose a write barrier.
     synchronised ma = do
-      writeBarrier fixed wb
+      writeBarrier wb
       res <- ma
 
       return $ case res of

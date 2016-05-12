@@ -27,7 +27,6 @@ module Test.DejaFu.STM
   , runTransactionIO
   ) where
 
-import Control.Monad (liftM)
 import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
 import Control.Monad.Cont (cont)
 import Control.Monad.ST (ST)
@@ -86,21 +85,19 @@ instance Monad n => C.MonadSTM (STMLike n r) where
 -- initial 'TVarId'. If the transaction ended by calling 'retry', any
 -- 'TVar' modifications are undone.
 runTransactionST :: STMST t a -> IdSource -> ST t (Result a, IdSource, TTrace)
-runTransactionST = runTransactionM fixedST where
-  fixedST = refST $ \mb -> cont (\c -> SLift $ c `liftM` mb)
+runTransactionST = runTransactionM
 
 -- | Run a transaction in the 'IO' monad, returning the result and new
 -- initial 'TVarId'. If the transaction ended by calling 'retry', any
 -- 'TVar' modifications are undone.
 runTransactionIO :: STMIO a -> IdSource -> IO (Result a, IdSource, TTrace)
-runTransactionIO = runTransactionM fixedIO where
-  fixedIO = refIO $ \mb -> cont (\c -> SLift $ c `liftM` mb)
+runTransactionIO = runTransactionM
 
 -- | Run a transaction in an arbitrary monad.
-runTransactionM :: Monad n
-  => Fixed n r -> STMLike n r a -> IdSource -> n (Result a, IdSource, TTrace)
-runTransactionM ref ma tvid = do
-  (res, undo, tvid', trace) <- doTransaction ref (runSTM ma) tvid
+runTransactionM :: MonadRef r n
+                => STMLike n r a -> IdSource -> n (Result a, IdSource, TTrace)
+runTransactionM ma tvid = do
+  (res, undo, tvid', trace) <- doTransaction (runSTM ma) tvid
 
   case res of
     Success _ _ _ -> return (res, tvid', trace)
