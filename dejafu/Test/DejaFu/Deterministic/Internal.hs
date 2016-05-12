@@ -68,12 +68,12 @@ module Test.DejaFu.Deterministic.Internal
  ) where
 
 import Control.Exception (MaskingState(..), toException)
+import Control.Monad.Ref (MonadRef, newRef, readRef, writeRef)
 import Data.Functor (void)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty(..), fromList)
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
 import Test.DejaFu.STM (Result(..))
-import Test.DejaFu.Internal
 import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.Deterministic.Internal.Memory
 import Test.DejaFu.Deterministic.Internal.Threading

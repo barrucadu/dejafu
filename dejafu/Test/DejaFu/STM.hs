@@ -29,11 +29,11 @@ module Test.DejaFu.STM
 
 import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
 import Control.Monad.Cont (cont)
+import Control.Monad.Ref (MonadRef)
 import Control.Monad.ST (ST)
 import Data.IORef (IORef)
 import Data.STRef (STRef)
 import Test.DejaFu.Deterministic.Internal.Common (TVarId, IdSource, TAction(..), TTrace)
-import Test.DejaFu.Internal
 import Test.DejaFu.STM.Internal
 
 import qualified Control.Monad.STM.Class as C

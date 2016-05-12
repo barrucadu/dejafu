@@ -17,9 +17,9 @@ module Test.DejaFu.STM.Internal where
 
 import Control.Exception (Exception, SomeException, fromException, toException)
 import Control.Monad.Cont (Cont, runCont)
+import Control.Monad.Ref (MonadRef, newRef, readRef, writeRef)
 import Data.List (nub)
 import Test.DejaFu.Deterministic.Internal.Common (TVarId, IdSource, TAction(..), TTrace, nextTVId)
-import Test.DejaFu.Internal
 
 --------------------------------------------------------------------------------
 -- The @STMLike@ monad

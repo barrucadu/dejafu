@@ -24,13 +24,13 @@
 module Test.DejaFu.Deterministic.Internal.Memory where
 
 import Control.Monad (when)
+import Control.Monad.Ref (MonadRef, readRef, writeRef)
 import Data.Map.Strict (Map)
 import Data.Maybe (isJust, fromJust)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..), (><), singleton, viewl)
 import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.Deterministic.Internal.Threading
-import Test.DejaFu.Internal
 
 import qualified Data.Map.Strict as M
 
