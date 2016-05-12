@@ -13,73 +13,22 @@
 -- Concurrent monads with a fixed scheduler: internal types and
 -- functions. This module is NOT considered to form part of the public
 -- interface of this library.
-module Test.DejaFu.Deterministic.Internal
- ( -- * Execution
-   runFixed
- , runFixed'
-
- -- * The @Conc@ Monad
- , M(..)
- , MVar(..)
- , CRef(..)
- , Ticket(..)
- , cont
- , runCont
-
- -- * Primitive Actions
- , Action(..)
-
- -- * Identifiers
- , ThreadId(..)
- , MVarId(..)
- , CRefId(..)
- , initialThread
-
- -- * Memory Models
- , MemType(..)
-
- -- * Scheduling & Traces
- , Scheduler
- , Trace
- , Decision(..)
- , ThreadAction(..)
- , Lookahead(..)
- , isBlock
- , lookahead
- , rewind
- , willRelease
- , preEmpCount
- , showTrace
- , showFail
- , tvarsOf
-
- -- * Synchronised and Unsynchronised Actions
- , ActionType(..)
- , isBarrier
- , isCommit
- , synchronises
- , crefOf
- , cvarOf
- , simplify
- , simplify'
-
- -- * Failures
- , Failure(..)
- ) where
+module Test.DejaFu.Deterministic.Internal where
 
 import Control.Exception (MaskingState(..), toException)
 import Control.Monad.Ref (MonadRef, newRef, readRef, writeRef)
 import Data.Functor (void)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty(..), fromList)
+import qualified Data.Map.Strict as M
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
-import Test.DejaFu.STM (Result(..))
+import Test.DPOR (Scheduler)
+
+import Test.DejaFu.Common
 import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.Deterministic.Internal.Memory
 import Test.DejaFu.Deterministic.Internal.Threading
-import Test.DPOR (Decision(..), Scheduler, Trace)
-
-import qualified Data.Map.Strict as M
+import Test.DejaFu.STM (Result(..))
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 {-# ANN module ("HLint: ignore Use const"           :: String) #-}
@@ -425,10 +374,10 @@ stepThread runstm memtype action idSource tid threads wb caps = case action of
 
     -- | Create a new @MVar@, using the next 'MVarId'.
     stepNewVar n c = do
-      let (idSource', newcvid) = nextCVId n idSource
+      let (idSource', newmvid) = nextMVId n idSource
       ref <- newRef Nothing
-      let cvar = MVar newcvid ref
-      return $ Right (knows [Left newcvid] tid $ goto (c cvar) tid threads, idSource', NewVar newcvid, wb, caps)
+      let mvar = MVar newmvid ref
+      return $ Right (knows [Left newmvid] tid $ goto (c mvar) tid threads, idSource', NewVar newmvid, wb, caps)
 
     -- | Create a new @CRef@, using the next 'CRefId'.
     stepNewRef n a c = do

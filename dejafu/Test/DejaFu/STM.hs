@@ -33,10 +33,10 @@ import Control.Monad.Ref (MonadRef)
 import Control.Monad.ST (ST)
 import Data.IORef (IORef)
 import Data.STRef (STRef)
-import Test.DejaFu.Deterministic.Internal.Common (TVarId, IdSource, TAction(..), TTrace)
-import Test.DejaFu.STM.Internal
 
 import qualified Control.Monad.STM.Class as C
+import Test.DejaFu.Common
+import Test.DejaFu.STM.Internal
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 

@@ -103,7 +103,6 @@ module Test.DejaFu.SCT
   ) where
 
 import Control.DeepSeq (NFData(..))
-import Control.Exception (MaskingState(..))
 import Data.Functor.Identity (Identity(..), runIdentity)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
@@ -117,8 +116,8 @@ import Test.DPOR ( DPOR(..), dpor
                  , LengthBound(..), defaultLengthBound, lenBound, lenBacktrack
                  )
 
-import Test.DejaFu.Deterministic (ConcIO, ConcST, runConcIO, runConcST)
-import Test.DejaFu.Deterministic.Internal
+import Test.DejaFu.Common
+import Test.DejaFu.Deterministic
 
 -------------------------------------------------------------------------------
 -- Combined Bounds
@@ -345,7 +344,7 @@ pruneCommits bpor
     onlycommits = all (<initialThread) . M.keys $ dporTodo bpor
     alldonesync = all barrier . M.elems $ dporDone bpor
 
-    barrier = isBarrier . simplify . fromJust . dporAction
+    barrier = isBarrier . simplifyAction . fromJust . dporAction
 
 -------------------------------------------------------------------------------
 -- Dependency function
@@ -381,9 +380,9 @@ dependent memtype ds (t1, a1) (t2, a2) = case rewind a2 of
   Just l2
     | isSTM a1 && isSTM a2
       -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
-    | not (isBlock a1 && isBarrier (simplify' l2)) ->
+    | not (isBlock a1 && isBarrier (simplifyLookahead l2)) ->
       dependent' memtype ds (t1, a1) (t2, l2)
-  _ -> dependentActions memtype ds (simplify a1) (simplify a2)
+  _ -> dependentActions memtype ds (simplifyAction a1) (simplifyAction a2)
 
   where
     isSTM (STM _ _) = True
@@ -429,8 +428,8 @@ dependent' memtype ds (t1, a1) (t2, l2) = case (a1, l2) of
   -- anyway so there's no point pre-empting the action UNLESS the
   -- pre-emption would possibly allow for a different relaxed memory
   -- stage.
-  _ | isBlock a1 && isBarrier (simplify' l2) -> False
-    | otherwise -> dependentActions memtype ds (simplify a1) (simplify' l2)
+  _ | isBlock a1 && isBarrier (simplifyLookahead l2) -> False
+    | otherwise -> dependentActions memtype ds (simplifyAction a1) (simplifyLookahead l2)
 
 -- | Check if two 'ActionType's are dependent. Note that this is not
 -- sufficient to know if two 'ThreadAction's are dependent, without
@@ -460,7 +459,7 @@ dependentActions memtype ds a1 a2 = case (a1, a2) of
     -- Two actions on the same CRef where at least one is synchronised
     | same crefOf && (synchronises a1 (fromJust $ crefOf a1) || synchronises a2 (fromJust $ crefOf a2)) -> True
     -- Two actions on the same MVar
-    | same cvarOf -> True
+    | same mvarOf -> True
 
   _ -> False
 
@@ -508,7 +507,7 @@ updateCRState :: ThreadAction -> Map CRefId Bool -> Map CRefId Bool
 updateCRState (CommitRef _ r) = M.delete r
 updateCRState (WriteRef    r) = M.insert r True
 updateCRState ta
-  | isBarrier $ simplify ta = const M.empty
+  | isBarrier $ simplifyAction ta = const M.empty
   | otherwise = id
 
 -- | Update the thread masking state with the action that has just

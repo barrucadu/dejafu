@@ -47,19 +47,21 @@ module Test.DejaFu.Deterministic
   ) where
 
 import Control.Exception (MaskingState(..))
+import qualified Control.Monad.Base as Ba
+import qualified Control.Monad.Catch as Ca
+import qualified Control.Monad.IO.Class as IO
 import Control.Monad.ST (ST, runST)
 import Data.Dynamic (toDyn)
 import Data.IORef (IORef)
 import Data.STRef (STRef)
-import Test.DejaFu.Deterministic.Internal
-import Test.DejaFu.STM (STMLike, STMIO, STMST, runTransactionIO, runTransactionST)
-import Test.DejaFu.STM.Internal (TVar(..))
 import Test.DPOR.Schedule
 
-import qualified Control.Monad.Base as Ba
-import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.Conc.Class as C
-import qualified Control.Monad.IO.Class as IO
+import Test.DejaFu.Common
+import Test.DejaFu.Deterministic.Internal
+import Test.DejaFu.Deterministic.Internal.Common
+import Test.DejaFu.STM
+import Test.DejaFu.STM.Internal (TVar(..))
 
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
 {-# ANN module ("HLint: ignore Use const"    :: String) #-}

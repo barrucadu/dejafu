@@ -240,10 +240,10 @@ import Control.DeepSeq (NFData(..))
 import Control.Monad (when, unless)
 import Data.Function (on)
 import Data.List (intercalate, intersperse, minimumBy)
---import Data.List.NonEmpty
 import Data.Ord (comparing)
+
+import Test.DejaFu.Common
 import Test.DejaFu.Deterministic
-import Test.DejaFu.Deterministic.Internal (preEmpCount)
 import Test.DejaFu.SCT
 
 -- | The default memory model: @TotalStoreOrder@

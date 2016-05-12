@@ -97,6 +97,7 @@ library
 
                      , Test.DejaFu
                      , Test.DejaFu.Deterministic
+                     , Test.DejaFu.Common
                      , Test.DejaFu.SCT
                      , Test.DejaFu.STM
 

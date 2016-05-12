@@ -29,6 +29,8 @@ import Data.Map.Strict (Map)
 import Data.Maybe (isJust, fromJust)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..), (><), singleton, viewl)
+
+import Test.DejaFu.Common
 import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.Deterministic.Internal.Threading
 
