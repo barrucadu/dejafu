@@ -3,10 +3,11 @@
 module Cases.Litmus where
 
 import Control.Monad (replicateM)
+import Control.Monad.ST (runST)
 import Data.List (nub, sort)
 import Test.DejaFu (MemType(..), defaultBounds, gives')
 import Test.DejaFu.Deterministic (ConcST)
-import Test.DejaFu.SCT (sctPreBound, defaultPreemptionBound)
+import Test.DejaFu.SCT (sctBound)
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
@@ -71,7 +72,7 @@ litmusTest name act sq tso pso = testGroup name . hUnitTestToTests $ test
 -- or the @IO@ behaviour will be severely constrained! The @IO@ test
 -- is run 99,999 times, but is still not guaranteed to see all the
 -- possible results. This is why dejafu is good!
-compareTest :: (Ord a, Show a) => (forall m. MonadConc m => m a) -> IO ()
+compareTest :: forall a. (Ord a, Show a) => (forall m. MonadConc m => m a) -> IO ()
 compareTest act = do
   putStrLn $ "DejaFu-SQ:  " ++ results SequentialConsistency
   putStrLn $ "DejaFu-TSO: " ++ results TotalStoreOrder
@@ -80,7 +81,7 @@ compareTest act = do
 
   where
     results memtype = show . nub . sort . map (\(Right a,_) -> a) $
-      sctPreBound memtype defaultPreemptionBound act
+      runST (sctBound memtype defaultBounds act)
 
     ioResults = show . nub . sort <$> replicateM 99999 act
 

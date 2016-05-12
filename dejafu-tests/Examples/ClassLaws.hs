@@ -14,8 +14,9 @@ import Control.Monad.Catch (onException)
 import Control.Monad.Conc.Class
 import Data.Maybe (isJust)
 import Data.Set (Set, fromList)
-import Test.DejaFu (Failure(..))
+import Test.DejaFu (Failure(..), defaultBounds, defaultMemType)
 import Test.DejaFu.Deterministic (ConcST)
+import Test.DejaFu.SCT (sctBound)
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.QuickCheck (Arbitrary(..), expectFailure, monomorphic)
@@ -167,11 +168,12 @@ instance Monoid Integer where
 eq :: Ord a => CST t a -> CST t a -> Bool
 eq left right = runConcurrently left `eq'` runConcurrently right
 
-eq' :: Ord a => ConcST t a -> ConcST t a -> Bool
-eq' left right = results left == results right
-
-results :: forall t a. Ord a => ConcST t a -> Set (Either Failure a)
-results cst = fromList . map fst $ sctBound' cst
+eq' :: forall t a. Ord a => ConcST t a -> ConcST t a -> Bool
+eq' left right = runST' $ do
+  leftTraces  <- sctBound defaultMemType defaultBounds left
+  rightTraces <- sctBound defaultMemType defaultBounds right
+  let toSet = fromList . map fst
+  pure (toSet leftTraces == toSet rightTraces)
 
 eqf :: Ord b => (a -> CST t b) -> (a -> CST t b) -> a -> Bool
 eqf left right a = left a `eq` right a

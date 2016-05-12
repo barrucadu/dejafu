@@ -23,10 +23,10 @@ module Test.DejaFu.STM
   , TTrace
   , TAction(..)
   , TVarId
-  , runTransactionST
-  , runTransactionIO
+  , runTransaction
   ) where
 
+import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
 import Control.Monad.Cont (cont)
 import Control.Monad.Ref (MonadRef)
@@ -37,8 +37,6 @@ import Data.STRef (STRef)
 import qualified Control.Monad.STM.Class as C
 import Test.DejaFu.Common
 import Test.DejaFu.STM.Internal
-
-{-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 
 newtype STMLike n r a = S { runSTM :: M n r a } deriving (Functor, Applicative, Monad)
 
@@ -81,24 +79,14 @@ instance Monad n => C.MonadSTM (STMLike n r) where
 
   writeTVar tvar a = toSTM (\c -> SWrite tvar a (c ()))
 
--- | Run a transaction in the 'ST' monad, returning the result and new
--- initial 'TVarId'. If the transaction ended by calling 'retry', any
--- 'TVar' modifications are undone.
-runTransactionST :: STMST t a -> IdSource -> ST t (Result a, IdSource, TTrace)
-runTransactionST = runTransactionM
-
--- | Run a transaction in the 'IO' monad, returning the result and new
--- initial 'TVarId'. If the transaction ended by calling 'retry', any
--- 'TVar' modifications are undone.
-runTransactionIO :: STMIO a -> IdSource -> IO (Result a, IdSource, TTrace)
-runTransactionIO = runTransactionM
-
--- | Run a transaction in an arbitrary monad.
-runTransactionM :: MonadRef r n
-                => STMLike n r a -> IdSource -> n (Result a, IdSource, TTrace)
-runTransactionM ma tvid = do
+-- | Run a transaction, returning the result and new initial
+-- 'TVarId'. If the transaction ended by calling 'retry', any 'TVar'
+-- modifications are undone.
+runTransaction :: MonadRef r n
+               => STMLike n r a -> IdSource -> n (Result a, IdSource, TTrace)
+runTransaction ma tvid = do
   (res, undo, tvid', trace) <- doTransaction (runSTM ma) tvid
 
-  case res of
-    Success _ _ _ -> return (res, tvid', trace)
-    _ -> undo >> return (res, tvid, trace)
+  unless (isSTMSuccess res) undo
+
+  pure (res, tvid', trace)

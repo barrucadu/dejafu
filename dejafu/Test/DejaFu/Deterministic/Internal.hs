@@ -16,7 +16,7 @@
 module Test.DejaFu.Deterministic.Internal where
 
 import Control.Exception (MaskingState(..), toException)
-import Control.Monad.Ref (MonadRef, newRef, readRef, writeRef)
+import Control.Monad.Ref (MonadRef, newRef, writeRef)
 import Data.Functor (void)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty(..), fromList)
@@ -36,29 +36,6 @@ import Test.DejaFu.STM (Result(..))
 --------------------------------------------------------------------------------
 -- * Execution
 
--- | Run a concurrent computation with a given 'Scheduler' and initial
--- state, returning a 'Just' if it terminates, and 'Nothing' if a
--- deadlock is detected. Also returned is the final state of the
--- scheduler, and an execution trace.
-runFixed :: MonadRef r n => (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
-         -> Scheduler ThreadId ThreadAction Lookahead g -> MemType -> g -> M n r s a -> n (Either Failure a, g, Trace ThreadId ThreadAction Lookahead)
-runFixed runstm sched memtype s ma = (\(e,g,_,t) -> (e,g,t)) <$> runFixed' runstm sched memtype s initialIdSource ma
-
--- | Same as 'runFixed', be parametrised by an 'IdSource'.
-runFixed' :: forall n r s g a. MonadRef r n
-  => (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
-  -> Scheduler ThreadId ThreadAction Lookahead g -> MemType -> g -> IdSource -> M n r s a -> n (Either Failure a, g, IdSource, Trace ThreadId ThreadAction Lookahead)
-runFixed' runstm sched memtype s idSource ma = do
-  ref <- newRef Nothing
-
-  let c = runCont ma (AStop . writeRef ref . Just . Right)
-  let threads = launch' Unmasked initialThread (const c) M.empty
-
-  (s', idSource', trace) <- runThreads runstm sched memtype s threads idSource ref
-  out <- readRef ref
-
-  return (fromJust out, s', idSource', reverse trace)
-
 -- | Run a collection of threads, until there are no threads left.
 --
 -- Note: this returns the trace in reverse order, because it's more
@@ -66,7 +43,7 @@ runFixed' runstm sched memtype s idSource ma = do
 -- exposed to users of the library, this is just an internal gotcha to
 -- watch out for.
 runThreads :: MonadRef r n => (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
-           -> Scheduler ThreadId ThreadAction Lookahead g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, IdSource, Trace ThreadId ThreadAction Lookahead)
+           -> Scheduler ThreadId ThreadAction Lookahead g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, Trace ThreadId ThreadAction Lookahead)
 runThreads runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer 2 where
   go idSource sofar prior g threads wb caps
     | isTerminated  = stop g
@@ -116,7 +93,7 @@ runThreads runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothin
 
       nextActions t = lookahead . _continuation . fromJust $ M.lookup t threadsc
 
-      stop outg = return (outg, idSource, sofar)
+      stop outg = pure (outg, sofar)
       die  outg reason = writeRef ref (Just $ Left reason) >> stop outg
 
       loop threads' idSource' act wb' =

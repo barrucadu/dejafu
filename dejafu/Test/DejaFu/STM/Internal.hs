@@ -22,6 +22,8 @@ import Data.List (nub)
 
 import Test.DejaFu.Common
 
+{-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
+
 --------------------------------------------------------------------------------
 -- The @STMLike@ monad
 
@@ -68,6 +70,11 @@ data Result a =
   | Exception SomeException
   -- ^ The transaction aborted by throwing an exception.
   deriving Show
+
+-- | Check if a 'Result' is a @Success@.
+isSTMSuccess :: Result a -> Bool
+isSTMSuccess (Success _ _ _) = True
+isSTMSuccess _ = False
 
 instance Functor Result where
   fmap f (Success rs ws a) = Success rs ws $ f a

@@ -47,6 +47,7 @@ module Test.Tasty.DejaFu
   , MemType(..)
   ) where
 
+import Control.Monad.ST (runST)
 import Data.Char (toUpper)
 import Data.List (intercalate, intersperse)
 import Data.Proxy (Proxy(..))
@@ -54,7 +55,7 @@ import Data.Tagged (Tagged(..))
 import Data.Typeable (Typeable)
 import Test.DejaFu
 import Test.DejaFu.Deterministic (ConcST, ConcIO, Trace, ThreadId, ThreadAction, Lookahead, showFail, showTrace)
-import Test.DejaFu.SCT (sctBound, sctBoundIO)
+import qualified Test.DejaFu.SCT as SCT
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.Options (OptionDescription(..), IsOption(..), lookupOption)
 import Test.Tasty.Providers (IsTest(..), singleTest, testPassed, testFailed)
@@ -69,6 +70,17 @@ type Trc = Trace ThreadId ThreadAction Lookahead
 type Trc = Trace
 #endif
 
+sctBoundST :: MemType -> Bounds -> (forall t. ConcST t a) -> [(Either Failure a, Trc)]
+sctBoundIO :: MemType -> Bounds -> ConcIO a -> IO [(Either Failure a, Trc)]
+
+#if MIN_VERSION_dejafu(0,4,0)
+sctBoundST memtype cb conc = runST (SCT.sctBound memtype cb conc)
+sctBoundIO = SCT.sctBound
+#else
+sctBoundST = SCT.sctBound
+sctBoundIO = SCT.sctBoundIO
+#endif
+
 --------------------------------------------------------------------------------
 -- Unit testing
 
@@ -79,7 +91,7 @@ instance Typeable t => IsTest (ConcST t (Maybe String)) where
     let memtype = lookupOption options :: MemType
     let bounds  = lookupOption options :: Bounds
     let sctBound' :: ConcST t (Maybe String) -> [(Either Failure (Maybe String), Trc)]
-        sctBound' = unsafeCoerce $ sctBound memtype bounds
+        sctBound' = unsafeCoerce $ sctBoundST memtype bounds
     let traces = sctBound' conc
     run options (ConcTest traces assertableP) callback
 
@@ -89,7 +101,7 @@ instance IsTest (ConcIO (Maybe String)) where
   run options conc callback = do
     let memtype = lookupOption options
     let bounds  = lookupOption options
-    let traces = sctBoundIO memtype bounds conc
+    let traces  = sctBoundIO memtype bounds conc
     run options (ConcIOTest traces assertableP) callback
 
 concOptions :: [OptionDescription]
@@ -263,7 +275,7 @@ testst memtype cb conc tests = case map toTest tests of
   where
     toTest (name, p) = singleTest name $ ConcTest traces p
 
-    traces = sctBound memtype cb conc
+    traces = sctBoundST memtype cb conc
 
 -- | Produce a Tasty 'Test' from an IO-using Deja Fu test.
 testio :: Show a => MemType -> Bounds -> ConcIO a -> [(TestName, Predicate a)] -> TestTree

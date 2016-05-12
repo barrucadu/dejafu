@@ -238,6 +238,7 @@ module Test.DejaFu
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when, unless)
+import Control.Monad.ST (runST)
 import Data.Function (on)
 import Data.List (intercalate, intersperse, minimumBy)
 import Data.Ord (comparing)
@@ -346,7 +347,7 @@ dejafus' :: Show a
   -- ^ The list of predicates (with names) to check
   -> IO Bool
 dejafus' memtype cb conc tests = do
-  let traces = sctBound memtype cb conc
+  let traces = runST (sctBound memtype cb conc)
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
@@ -365,7 +366,7 @@ dejafusIO = dejafusIO' defaultMemType defaultBounds
 -- | Variant of 'dejafus'' for computations which do 'IO'.
 dejafusIO' :: Show a => MemType -> Bounds -> ConcIO a -> [(String, Predicate a)] -> IO Bool
 dejafusIO' memtype cb concio tests = do
-  traces  <- sctBoundIO memtype cb concio
+  traces  <- sctBound memtype cb concio
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
@@ -423,7 +424,7 @@ runTest' ::
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Result a
-runTest' memtype cb predicate conc = predicate $ sctBound memtype cb conc
+runTest' memtype cb predicate conc = runST (predicate <$> sctBound memtype cb conc)
 
 -- | Variant of 'runTest' for computations which do 'IO'.
 runTestIO :: Predicate a -> ConcIO a -> IO (Result a)
@@ -431,7 +432,7 @@ runTestIO = runTestIO' defaultMemType defaultBounds
 
 -- | Variant of 'runTest'' for computations which do 'IO'.
 runTestIO' :: MemType -> Bounds -> Predicate a -> ConcIO a -> IO (Result a)
-runTestIO' memtype cb predicate conc = predicate <$> sctBoundIO memtype cb conc
+runTestIO' memtype cb predicate conc = predicate <$> sctBound memtype cb conc
 
 -- * Predicates
 

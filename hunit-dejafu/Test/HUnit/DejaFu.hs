@@ -51,10 +51,11 @@ module Test.HUnit.DejaFu
   ) where
 
 import Control.Monad.Catch (try)
+import Control.Monad.ST (runST)
 import Data.List (intercalate, intersperse)
 import Test.DejaFu
 import Test.DejaFu.Deterministic (ConcST, ConcIO, Trace, ThreadId, ThreadAction, Lookahead, showFail, showTrace)
-import Test.DejaFu.SCT (sctBound, sctBoundIO)
+import qualified Test.DejaFu.SCT as SCT
 import Test.HUnit (Assertable(..), Test(..), Testable(..), assertString)
 import Test.HUnit.Lang (HUnitFailure(..))
 
@@ -66,6 +67,17 @@ import Unsafe.Coerce (unsafeCoerce)
 type Trc = Trace ThreadId ThreadAction Lookahead
 #else
 type Trc = Trace
+#endif
+
+sctBoundST :: MemType -> Bounds -> (forall t. ConcST t a) -> [(Either Failure a, Trc)]
+sctBoundIO :: MemType -> Bounds -> ConcIO a -> IO [(Either Failure a, Trc)]
+
+#if MIN_VERSION_dejafu(0,4,0)
+sctBoundST memtype cb conc = runST (SCT.sctBound memtype cb conc)
+sctBoundIO = SCT.sctBound
+#else
+sctBoundST = SCT.sctBound
+sctBoundIO = SCT.sctBoundIO
 #endif
 
 --------------------------------------------------------------------------------
@@ -87,7 +99,7 @@ instance Assertable (ConcST t ()) where
       conc' = try conc
 
       sctBound' :: ConcST t (Either HUnitFailure ()) -> [(Either Failure (Either HUnitFailure ()), Trc)]
-      sctBound' = unsafeCoerce $ sctBound defaultMemType defaultBounds
+      sctBound' = unsafeCoerce $ sctBoundST defaultMemType defaultBounds
 
 instance Assertable (ConcIO ()) where
   assert conc = do
@@ -221,7 +233,7 @@ testst memtype cb conc tests = case map toTest tests of
     toTest (name, p) = TestLabel name . TestCase $
       assertString . showErr $ p traces
 
-    traces = sctBound memtype cb conc
+    traces = sctBoundST memtype cb conc
 
 -- | Produce a HUnit 'Test' from an IO-using Deja Fu test.
 testio :: Show a => MemType -> Bounds -> ConcIO a -> [(String, Predicate a)] -> Test
