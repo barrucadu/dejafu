@@ -14,9 +14,9 @@
 module Test.DejaFu.Deterministic.Internal.Threading where
 
 import Control.Exception (Exception, MaskingState(..), SomeException, fromException)
-import Data.List (intersect, nub)
+import Data.List (intersect)
 import Data.Map.Strict (Map)
-import Data.Maybe (fromMaybe, isJust, isNothing)
+import Data.Maybe (fromMaybe, isJust)
 
 import Test.DejaFu.Common
 import Test.DejaFu.Deterministic.Internal.Common
@@ -39,17 +39,11 @@ data Thread n r s = Thread
   -- ^ Stack of exception handlers
   , _masking      :: MaskingState
   -- ^ The exception masking state.
-  , _known        :: [Either MVarId TVarId]
-  -- ^ Shared variables the thread knows about.
-  , _fullknown    :: Bool
-  -- ^ Whether the referenced variables of the thread are completely
-  -- known. If every thread has _fullknown == True, then turn on
-  -- detection of nonglobal deadlock.
   }
 
 -- | Construct a thread with just one action
 mkthread :: Action n r s -> Thread n r s
-mkthread c = Thread c Nothing [] Unmasked [] False
+mkthread c = Thread c Nothing [] Unmasked
 
 --------------------------------------------------------------------------------
 -- * Blocking
@@ -66,41 +60,6 @@ thread ~= theblock = case (_blocking thread, theblock) of
   (Just (OnTVar      _), OnTVar      _) -> True
   (Just (OnMask      _), OnMask      _) -> True
   _ -> False
-
--- | Determine if a thread is deadlocked. If at least one thread is
--- not in a fully-known state, this will only check for global
--- deadlock.
-isLocked :: ThreadId -> Threads n r a -> Bool
-isLocked tid ts
-  | allKnown = case M.lookup tid ts of
-    Just thread -> noRefs $ _blocking thread
-    Nothing -> False
-  | otherwise = M.null $ M.filter (isNothing . _blocking) ts
-
-  where
-    -- | Check if all threads are in a fully-known state.
-    allKnown = all _fullknown $ M.elems ts
-
-    -- | Check if no other runnable thread has a reference to anything
-    -- the block references.
-    noRefs (Just (OnMVarFull  cvarid)) = null $ findMVar  cvarid
-    noRefs (Just (OnMVarEmpty cvarid)) = null $ findMVar  cvarid
-    noRefs (Just (OnTVar      tvids))  = null $ findTVars tvids
-    noRefs _ = True
-
-    -- | Get IDs of all threads (other than the one under
-    -- consideration) which reference a 'MVar'.
-    findMVar cvarid = M.keys $ M.filterWithKey (check [Left cvarid]) ts
-
-    -- | Get IDs of all runnable threads (other than the one under
-    -- consideration) which reference some 'TVar's.
-    findTVars tvids = M.keys $ M.filterWithKey (check (map Right tvids)) ts
-
-    -- | Check if a thread references a variable, and if it's not the
-    -- thread under consideration.
-    check lookingfor thetid thethread
-      | thetid == tid = False
-      | otherwise     = (not . null $ lookingfor `intersect` _known thethread) && isNothing (_blocking thethread)
 
 --------------------------------------------------------------------------------
 -- * Exceptions
@@ -155,7 +114,7 @@ launch parent tid a threads = launch' ms tid a threads where
 -- | Start a thread with the given ID and masking state. This must not already be in use!
 launch' :: MaskingState -> ThreadId -> ((forall b. M n r s b -> M n r s b) -> Action n r s) -> Threads n r s -> Threads n r s
 launch' ms tid a = M.insert tid thread where
-  thread = Thread { _continuation = a umask, _blocking = Nothing, _handlers = [], _masking = ms, _known = [], _fullknown = False }
+  thread = Thread { _continuation = a umask, _blocking = Nothing, _handlers = [], _masking = ms }
 
   umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False ms >> return b
   resetMask typ m = cont $ \k -> AResetMask typ True m $ k ()
@@ -182,21 +141,3 @@ wake blockedOn threads = (unblock <$> threads, M.keys $ M.filter isBlocked threa
   isBlocked thread = case (_blocking thread, blockedOn) of
     (Just (OnTVar tvids), OnTVar blockedOn') -> tvids `intersect` blockedOn' /= []
     (theblock, _) -> theblock == Just blockedOn
-
--- | Record that a thread knows about a shared variable.
-knows :: [Either MVarId TVarId] -> ThreadId -> Threads n r s -> Threads n r s
-knows theids = M.alter go where
-  go (Just thread) = Just $ thread { _known = nub $ theids ++ _known thread }
-  go _ = error "Invariant failure in 'knows': thread does NOT exist!"
-
--- | Forget about a shared variable.
-forgets :: [Either MVarId TVarId] -> ThreadId -> Threads n r s -> Threads n r s
-forgets theids = M.alter go where
-  go (Just thread) = Just $ thread { _known = filter (`notElem` theids) $ _known thread }
-  go _ = error "Invariant failure in 'forgets': thread does NOT exist!"
-
--- | Record that a thread's shared variable state is fully known.
-fullknown :: ThreadId -> Threads n r s -> Threads n r s
-fullknown = M.alter go where
-  go (Just thread) = Just $ thread { _fullknown = True }
-  go _ = error "Invariant failure in 'fullknown': thread does NOT exist!"

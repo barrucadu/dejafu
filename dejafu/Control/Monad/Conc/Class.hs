@@ -350,52 +350,6 @@ class ( Applicative m, Monad m
 
   -- | Does nothing.
   --
-  -- This function is purely for testing purposes, and indicates that
-  -- the thread has a reference to the provided @MVar@ or @TVar@. This
-  -- function may be called multiple times, to add new knowledge to
-  -- the system. It does not need to be called when @MVar@s or @TVar@s
-  -- are created, these get recorded automatically.
-  --
-  -- Gathering this information allows detection of cases where the
-  -- main thread is blocked on a variable no runnable thread has a
-  -- reference to, which is a deadlock situation.
-  --
-  -- > _concKnowsAbout _ = pure ()
-  _concKnowsAbout :: Either (MVar m a) (TVar (STM m) a) -> m ()
-  _concKnowsAbout _ = pure ()
-
-  -- | Does nothing.
-  --
-  -- The counterpart to '_concKnowsAbout'. Indicates that the
-  -- referenced variable will never be touched again by the current
-  -- thread.
-  --
-  -- Note that inappropriate use of @_concForgets@ can result in false
-  -- positives! Be very sure that the current thread will /never/
-  -- refer to the variable again, for instance when leaving its scope.
-  --
-  -- > _concForgets _ = pure ()
-  _concForgets :: Either (MVar m a) (TVar (STM m) a) -> m ()
-  _concForgets _ = pure ()
-
-  -- | Does nothing.
-  --
-  -- Indicates to the test runner that all variables which have been
-  -- passed in to this thread have been recorded by calls to
-  -- '_concKnowsAbout'. If every thread has called '_concAllKnown',
-  -- then detection of nonglobal deadlock is turned on.
-  --
-  -- If a thread receives references to @MVar@s or @TVar@s in the
-  -- future (for instance, if one was sent over a channel), then
-  -- '_concKnowsAbout' should be called immediately, otherwise there
-  -- is a risk of identifying false positives.
-  --
-  -- > _concAllKnown = pure ()
-  _concAllKnown :: m ()
-  _concAllKnown = pure ()
-
-  -- | Does nothing.
-  --
   -- During testing, records a message which shows up in the trace.
   --
   -- > _concMessage _ = pure ()
@@ -427,7 +381,7 @@ lineNum = do
 spawn :: MonadConc m => m a -> m (MVar m a)
 spawn ma = do
   cvar <- newEmptyMVar
-  _ <- fork $ _concKnowsAbout (Left cvar) >> ma >>= putMVar cvar
+  _ <- fork $ ma >>= putMVar cvar
   pure cvar
 
 -- | Fork a thread and call the supplied function when the thread is
@@ -632,9 +586,6 @@ instance C => MonadConc (T m) where                             { \
   atomically         = lift . atomically                       ; \
   readTVarConc       = lift . readTVarConc                     ; \
                                                                  \
-  _concKnowsAbout = lift . _concKnowsAbout                     ; \
-  _concForgets    = lift . _concForgets                        ; \
-  _concAllKnown   = lift _concAllKnown                         ; \
   _concMessage    = lift . _concMessage                        }
 
 INSTANCE(ReaderT r, MonadConc m, id)
@@ -709,9 +660,6 @@ makeTransConc unstN = do
           atomically         = lift . atomically
           readTVarConc       = lift . readTVarConc
 
-          _concKnowsAbout = lift . _concKnowsAbout
-          _concForgets    = lift . _concForgets
-          _concAllKnown   = lift _concAllKnown
           _concMessage    = lift . _concMessage
       |]
     _ -> fail "Expected a value of type (forall a -> StT t a -> a)"

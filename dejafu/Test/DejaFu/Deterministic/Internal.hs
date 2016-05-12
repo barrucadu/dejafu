@@ -97,11 +97,11 @@ runThreads runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothin
       isBlocked     = isJust . _blocking $ fromJust thread
       isNonexistant = isNothing thread
       isTerminated  = initialThread `notElem` M.keys threads
-      isDeadlocked  = isLocked initialThread threads &&
+      isDeadlocked  = M.null (M.filter (isNothing . _blocking) threads) &&
         (((~=  OnMVarFull  undefined) <$> M.lookup initialThread threads) == Just True ||
          ((~=  OnMVarEmpty undefined) <$> M.lookup initialThread threads) == Just True ||
          ((~=  OnMask      undefined) <$> M.lookup initialThread threads) == Just True)
-      isSTMLocked = isLocked initialThread threads &&
+      isSTMLocked = M.null (M.filter (isNothing . _blocking) threads) &&
         ((~=  OnTVar []) <$> M.lookup initialThread threads) == Just True
 
       unblockWaitingOn tid = fmap unblock where
@@ -177,9 +177,6 @@ stepThread runstm memtype action idSource tid threads wb caps = case action of
   AMasking m ma c  -> stepMasking     m ma c
   AResetMask b1 b2 m c -> stepResetMask b1 b2 m c
   AReturn     c    -> stepReturn c
-  AKnowsAbout v c  -> stepKnowsAbout  v c
-  AForgets    v c  -> stepForgets v c
-  AAllKnown   c    -> stepAllKnown c
   AMessage    m c  -> stepMessage m c
   AStop       na   -> stepStop na
 
@@ -305,7 +302,7 @@ stepThread runstm memtype action idSource tid threads wb caps = case action of
       case res of
         Success _ written val ->
           let (threads', woken) = wake (OnTVar written) threads
-          in return $ Right (knows (map Right written) tid $ goto (c val) tid threads', idSource', STM trace woken, wb, caps)
+          in return $ Right (goto (c val) tid threads', idSource', STM trace woken, wb, caps)
         Retry touched ->
           let threads' = block (OnTVar touched) tid threads
           in return $ Right (threads', idSource', BlockedSTM trace, wb, caps)
@@ -377,7 +374,7 @@ stepThread runstm memtype action idSource tid threads wb caps = case action of
       let (idSource', newmvid) = nextMVId n idSource
       ref <- newRef Nothing
       let mvar = MVar newmvid ref
-      return $ Right (knows [Left newmvid] tid $ goto (c mvar) tid threads, idSource', NewVar newmvid, wb, caps)
+      return $ Right (goto (c mvar) tid threads, idSource', NewVar newmvid, wb, caps)
 
     -- | Create a new @CRef@, using the next 'CRefId'.
     stepNewRef n a c = do
@@ -394,15 +391,6 @@ stepThread runstm memtype action idSource tid threads wb caps = case action of
 
     -- | Execute a 'return' or 'pure'.
     stepReturn c = simple (goto c tid threads) Return
-
-    -- | Record that a variable is known about.
-    stepKnowsAbout v c = simple (knows [v] tid $ goto c tid threads) KnowsAbout
-
-    -- | Record that a variable will never be touched again.
-    stepForgets v c = simple (forgets [v] tid $ goto c tid threads) Forgets
-
-    -- | Record that all shared variables are known.
-    stepAllKnown c = simple (fullknown tid $ goto c tid threads) AllKnown
 
     -- | Add a message to the trace.
     stepMessage m c = simple (goto c tid threads) (Message m)

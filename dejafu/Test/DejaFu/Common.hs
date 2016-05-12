@@ -270,12 +270,6 @@ data ThreadAction =
   -- 'ConcIO'.
   | Return
   -- ^ A 'return' or 'pure' action was executed.
-  | KnowsAbout
-  -- ^ A '_concKnowsAbout' annotation was processed.
-  | Forgets
-  -- ^ A '_concForgets' annotation was processed.
-  | AllKnown
-  -- ^ A '_concALlKnown' annotation was processed.
   | Message Dynamic
   -- ^ A '_concMessage' annotation was processed.
   | Stop
@@ -408,12 +402,6 @@ data Lookahead =
   -- 'ConcIO'.
   | WillReturn
   -- ^ Will execute a 'return' or 'pure' action.
-  | WillKnowsAbout
-  -- ^ Will process a '_concKnowsAbout' annotation.
-  | WillForgets
-  -- ^ Will process a '_concForgets' annotation.
-  | WillAllKnown
-  -- ^ Will process a '_concALlKnown' annotation.
   | WillMessage Dynamic
   -- ^ Will process a _concMessage' annotation.
   | WillStop
@@ -479,9 +467,6 @@ rewind (SetMasking b m) = Just (WillSetMasking b m)
 rewind (ResetMasking b m) = Just (WillResetMasking b m)
 rewind LiftIO = Just WillLiftIO
 rewind Return = Just WillReturn
-rewind KnowsAbout = Just WillKnowsAbout
-rewind Forgets = Just WillForgets
-rewind AllKnown = Just WillAllKnown
 rewind (Message m) = Just (WillMessage m)
 rewind Stop = Just WillStop
 

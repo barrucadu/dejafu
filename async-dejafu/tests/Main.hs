@@ -111,8 +111,7 @@ withasync_wait2 = do
 
 withasync_waitCatch_blocked :: MonadConc m => m (Maybe BlockedIndefinitelyOnMVar)
 withasync_waitCatch_blocked = do
-  _concAllKnown
-  r <- withAsync (_concAllKnown >> newEmptyMVar >>= takeMVar) waitCatch
+  r <- withAsync (newEmptyMVar >>= takeMVar) waitCatch
   return $ case r of
     Left e -> fromException e
     _      -> Nothing

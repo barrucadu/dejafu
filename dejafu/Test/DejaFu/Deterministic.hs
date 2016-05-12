@@ -61,7 +61,6 @@ import Test.DejaFu.Common
 import Test.DejaFu.Deterministic.Internal
 import Test.DejaFu.Deterministic.Internal.Common
 import Test.DejaFu.STM
-import Test.DejaFu.STM.Internal (TVar(..))
 
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
 {-# ANN module ("HLint: ignore Use const"    :: String) #-}
@@ -154,14 +153,6 @@ instance Monad n => C.MonadConc (Conc n r (STMLike n r)) where
   atomically = toConc . AAtom
 
   -- ----------
-
-  _concKnowsAbout (Left  (MVar cvarid  _)) = toConc (\c -> AKnowsAbout (Left  cvarid)  (c ()))
-  _concKnowsAbout (Right (TVar (ctvarid, _))) = toConc (\c -> AKnowsAbout (Right ctvarid) (c ()))
-
-  _concForgets (Left  (MVar cvarid  _)) = toConc (\c -> AForgets (Left  cvarid)  (c ()))
-  _concForgets (Right (TVar (ctvarid, _))) = toConc (\c -> AForgets (Right ctvarid) (c ()))
-
-  _concAllKnown = toConc (\c -> AAllKnown (c ()))
 
   _concMessage msg = toConc (\c -> AMessage (toDyn msg) (c ()))
 

@@ -126,9 +126,6 @@ data Action n r s =
   | forall a. AMasking MaskingState ((forall b. M n r s b -> M n r s b) -> M n r s a) (a -> Action n r s)
   | AResetMask Bool Bool MaskingState (Action n r s)
 
-  | AKnowsAbout (Either MVarId TVarId) (Action n r s)
-  | AForgets    (Either MVarId TVarId) (Action n r s)
-  | AAllKnown   (Action n r s)
   | AMessage    Dynamic (Action n r s)
 
   | forall a. AAtom (s a) (a -> Action n r s)
@@ -171,9 +168,6 @@ lookahead = fromList . lookahead' where
   lookahead' (AMasking ms _ _)       = [WillSetMasking False ms]
   lookahead' (AResetMask b1 b2 ms k) = (if b1 then WillSetMasking else WillResetMasking) b2 ms : lookahead' k
   lookahead' (ALift _)               = [WillLiftIO]
-  lookahead' (AKnowsAbout _ k)       = WillKnowsAbout : lookahead' k
-  lookahead' (AForgets _ k)          = WillForgets : lookahead' k
-  lookahead' (AAllKnown k)           = WillAllKnown : lookahead' k
   lookahead' (AMessage m k)          = WillMessage m : lookahead' k
   lookahead' (AYield k)              = WillYield : lookahead' k
   lookahead' (AReturn k)             = WillReturn : lookahead' k
