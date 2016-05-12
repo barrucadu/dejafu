@@ -263,25 +263,38 @@ autocheck :: (Eq a, Show a)
   => (forall t. ConcST t a)
   -- ^ The computation to test
   -> IO Bool
-autocheck = autocheck' defaultMemType
+autocheck = autocheck' defaultMemType defaultBounds
 
--- | Variant of 'autocheck' which tests a computation under a given
--- memory model.
+-- | Variant of 'autocheck' which takes a memor model and schedule
+-- bounds.
+--
+-- Schedule bounding is used to filter the large number of possible
+-- schedules, and can be iteratively increased for further coverage
+-- guarantees. Empirical studies (/Concurrency Testing Using Schedule
+-- Bounding: an Empirical Study/, P. Thompson, A. Donaldson, and
+-- A. Betts) have found that many concurrency bugs can be exhibited
+-- with as few as two threads and two pre-emptions, which is part of
+-- what 'dejafus' uses.
+--
+-- __Warning:__ Using largers bounds will almost certainly
+-- significantly increase the time taken to test!
 autocheck' :: (Eq a, Show a)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Bounds
+  -- ^ The schedule bounds
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> IO Bool
-autocheck' memtype conc = dejafus' memtype defaultBounds conc autocheckCases
+autocheck' memtype cb conc = dejafus' memtype cb conc autocheckCases
 
 -- | Variant of 'autocheck' for computations which do 'IO'.
 autocheckIO :: (Eq a, Show a) => ConcIO a -> IO Bool
-autocheckIO = autocheckIO' defaultMemType
+autocheckIO = autocheckIO' defaultMemType defaultBounds
 
 -- | Variant of 'autocheck'' for computations which do 'IO'.
-autocheckIO' :: (Eq a, Show a) => MemType -> ConcIO a -> IO Bool
-autocheckIO' memtype concio = dejafusIO' memtype defaultBounds concio autocheckCases
+autocheckIO' :: (Eq a, Show a) => MemType -> Bounds -> ConcIO a -> IO Bool
+autocheckIO' memtype cb concio = dejafusIO' memtype cb concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
 autocheckCases :: (Eq a, Show a) => [(String, Predicate a)]
@@ -303,17 +316,6 @@ dejafu = dejafu' defaultMemType defaultBounds
 
 -- | Variant of 'dejafu'' which takes a memory model and schedule
 -- bounds.
---
--- Schedule bounding is used to filter the large number of possible
--- schedules, and can be iteratively increased for further coverage
--- guarantees. Empirical studies (/Concurrency Testing Using Schedule
--- Bounding: an Empirical Study/, P. Thompson, A. Donaldson, and
--- A. Betts) have found that many concurrency bugs can be exhibited
--- with as few as two threads and two pre-emptions, which is part of
--- what 'dejafus' uses.
---
--- __Warning:__ Using largers bounds will almost certainly
--- significantly increase the time taken to test!
 dejafu' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
