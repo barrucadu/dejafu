@@ -11,6 +11,15 @@
 module Test.DPOR.Random
   ( -- * Randomness and partial-order reduction
     randomDPOR
+
+  -- * Unsystematic techniques
+
+  -- | These algorithms do not make use of partial-order reduction or
+  -- schedule bounding to systematically prune the search space and
+  -- search for interesting interleavings. Instead, the exploration is
+  -- driven entirely by random choice. However, the same schedule will
+  -- never be explored twice.
+  , pureRandom
   ) where
 
 import Control.DeepSeq (NFData)
@@ -132,3 +141,55 @@ randomDPOR didYield
 
     -- Incorporate the new backtracking steps into the DPOR tree.
     addBacktracks = incorporateBacktrackSteps inBound
+
+-------------------------------------------------------------------------------
+-- Unsystematic techniques
+
+-- | Pure random scheduling. Like 'randomDPOR' but all actions are
+-- dependent and there are no bounds.
+pureRandom :: ( Ord       tid
+             , NFData    tid
+             , NFData    action
+             , NFData    lookahead
+             , Monad     m
+             , RandomGen g
+             )
+  => (action    -> Bool)
+  -- ^ Determine if a thread yielded.
+  -> (lookahead -> Bool)
+  -- ^ Determine if a thread will yield.
+  -> tid
+  -- ^ The initial thread.
+  -> (DPORScheduler tid action lookahead ()
+    -> SchedState tid action lookahead ()
+    -> m (a, SchedState tid action lookahead (), Trace tid action lookahead))
+  -- ^ The runner: given the scheduler and state, execute the
+  -- computation under that scheduler.
+  -> g
+  -- ^ Random number generator, used to determine which schedules to
+  -- try.
+  -> Int
+  -- ^ Execution limit, used to abort the execution whilst schedules
+  -- still remain.
+  -> m [(a, Trace tid action lookahead)]
+pureRandom didYield willYield initialTid
+  = randomDPOR didYield
+               willYield
+               stinit
+               ststep
+               dependency1
+               dependency2
+               initialTid
+               predicate
+               inBound
+               backtrack
+               transform
+  where
+    stinit = ()
+    ststep _ _ = ()
+    dependency1 _ _ _ = True
+    dependency2 _ _ _ = True
+    predicate _ = True
+    inBound = trueBound
+    backtrack = backtrackAt (const False) False
+    transform = id

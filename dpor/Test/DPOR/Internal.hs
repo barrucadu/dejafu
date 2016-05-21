@@ -17,7 +17,7 @@ import Data.List (foldl', intercalate, partition, sortBy)
 import Data.List.NonEmpty (NonEmpty(..), toList)
 import Data.Ord (Down(..), comparing)
 import Data.Map.Strict (Map)
-import Data.Maybe (fromJust, mapMaybe)
+import Data.Maybe (fromJust, isNothing, mapMaybe)
 import qualified Data.Map.Strict as M
 import Data.Set (Set)
 import qualified Data.Set as S
@@ -395,6 +395,10 @@ initialSchedState s sleep prefix = SchedState
 type BoundFunc tid action lookahead
   = [(Decision tid, action)] -> (Decision tid, lookahead) -> Bool
 
+-- | The \"true\" bound, which allows everything.
+trueBound :: BoundFunc tid action lookahead
+trueBound _ _ = True
+
 -- | A backtracking step is a point in the execution where another
 -- decision needs to be made, in order to explore interesting new
 -- schedules. A backtracking /function/ takes the steps identified so
@@ -410,6 +414,41 @@ type BoundFunc tid action lookahead
 type BacktrackFunc tid action lookahead s
   = [BacktrackStep tid action lookahead s] -> Int -> tid
   -> [BacktrackStep tid action lookahead s]
+
+-- | Add a backtracking point. If the thread isn't runnable, add all
+-- runnable threads. If the backtracking point is already present,
+-- don't re-add it UNLESS this would make it conservative.
+backtrackAt :: Ord tid
+  => (BacktrackStep tid action lookahead s -> Bool)
+  -- ^ If this returns @True@, backtrack to all runnable threads,
+  -- rather than just the given thread.
+  -> Bool
+  -- ^ Is this backtracking point conservative? Conservative points
+  -- are always explored, whereas non-conservative ones might be
+  -- skipped based on future information.
+  -> BacktrackFunc tid action lookahead s
+backtrackAt toAll conservative bs i tid = go bs i where
+  go bx@(b:rest) 0
+    -- If the backtracking point is already present, don't re-add it,
+    -- UNLESS this would force it to backtrack (it's conservative)
+    -- where before it might not.
+    | not (toAll b) && tid `M.member` bcktRunnable b =
+      let val = M.lookup tid $ bcktBacktracks b
+      in if isNothing val || (val == Just False && conservative)
+         then b { bcktBacktracks = backtrackTo b } : rest
+         else bx
+
+    -- Otherwise just backtrack to everything runnable.
+    | otherwise = b { bcktBacktracks = backtrackAll b } : rest
+
+  go (b:rest) n = b : go rest (n-1)
+  go [] _ = error "backtrackAt: Ran out of schedule whilst backtracking!"
+
+  -- Backtrack to a single thread
+  backtrackTo = M.insert tid conservative . bcktBacktracks
+
+  -- Backtrack to all runnable threads
+  backtrackAll = M.map (const conservative) . bcktRunnable
 
 -- | DPOR scheduler: takes a list of decisions, and maintains a trace
 -- including the runnable threads, and the alternative choices allowed
