@@ -110,10 +110,6 @@ initialState initialThread = DPOR
 -- have already been made, terminated by a single decision from the
 -- to-do set. The intent is to put the system into a new state when
 -- executed with this initial sequence of scheduling decisions.
---
--- This returns the longest prefix, on the assumption that this will
--- lead to lots of backtracking points being identified before
--- higher-up decisions are reconsidered, so enlarging the sleep sets.
 findSchedulePrefix :: Ord tid
   => (tid -> Bool)
   -- ^ Some partitioning function, applied to the to-do decisions. If
@@ -121,38 +117,50 @@ findSchedulePrefix :: Ord tid
   -- rather than any which fail it. This allows a very basic way of
   -- domain-specific prioritisation between otherwise equal choices,
   -- which may be useful in some cases.
+  -> (Int -> (Int, g))
+  -- ^ List indexing function, used to select which schedule to
+  -- return. Takes the length of the list, and returns an index and
+  -- some generator state. The index returned MUST be in range!
   -> DPOR tid action
-  -> Maybe ([tid], Bool, Map tid action)
-findSchedulePrefix predicate dpor0 = go (initialDPORThread dpor0) dpor0 where
-  go tid dpor =
-        -- All the possible prefix traces from this point, with
-        -- updated DPOR subtrees if taken from the done list.
-    let prefixes = mapMaybe go' (M.toList $ dporDone dpor) ++ here dpor
-        -- Sort by number of preemptions, in descending order.
-        cmp = Down . preEmps tid dpor . (\(a,_,_) -> a)
-        sorted = sortBy (comparing cmp) prefixes
+  -> Maybe ([tid], Bool, Map tid action, g)
+findSchedulePrefix predicate idx dpor0
+  | null allPrefixes = Nothing
+  | otherwise = let (i, g)       = idx (length allPrefixes)
+                    (ts, c, slp) = allPrefixes !! i
+                in Just (ts, c, slp, g)
+  where
+    allPrefixes = go (initialDPORThread dpor0) dpor0
 
-    in if null prefixes
-       then Nothing
-       else case partition (\(t:_,_,_) -> predicate t) sorted of
-              (choice:_, _)  -> Just choice
-              ([], choice:_) -> Just choice
-              ([], []) -> err "findSchedulePrefix" "empty prefix list!" 
+    go tid dpor =
+          -- All the possible prefix traces from this point, with
+          -- updated DPOR subtrees if taken from the done list.
+      let prefixes = concatMap go' (M.toList $ dporDone dpor) ++ here dpor
+          -- Sort by number of preemptions, in descending order.
+          cmp = Down . preEmps tid dpor . (\(a,_,_) -> a)
+          sorted = sortBy (comparing cmp) prefixes
 
-  go' (tid, dpor) = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> go tid dpor
+      in if null prefixes
+         then []
+         else case partition (\(t:_,_,_) -> predicate t) sorted of
+                ([], []) -> err "findSchedulePrefix" "empty prefix list!" 
+                ([], choices) -> choices
+                (choices, _)  -> choices
 
-  -- Prefix traces terminating with a to-do decision at this point.
-  here dpor = [([t], c, sleeps dpor) | (t, c) <- M.toList $ dporTodo dpor]
+    go' (tid, dpor) = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> go tid dpor
 
-  -- The new sleep set is the union of the sleep set of the node we're
-  -- branching from, plus all the decisions we've already explored.
-  sleeps dpor = dporSleep dpor `M.union` dporTaken dpor
+    -- Prefix traces terminating with a to-do decision at this point.
+    here dpor = [([t], c, sleeps dpor) | (t, c) <- M.toList $ dporTodo dpor]
 
-  -- The number of pre-emptive context switches
-  preEmps tid dpor (t:ts) =
-    let rest = preEmps t (fromJust . M.lookup t $ dporDone dpor) ts
-    in  if tid `S.member` dporRunnable dpor then 1 + rest else rest
-  preEmps _ _ [] = 0::Int
+    -- The new sleep set is the union of the sleep set of the node
+    -- we're branching from, plus all the decisions we've already
+    -- explored.
+    sleeps dpor = dporSleep dpor `M.union` dporTaken dpor
+
+    -- The number of pre-emptive context switches
+    preEmps tid dpor (t:ts) =
+      let rest = preEmps t (fromJust . M.lookup t $ dporDone dpor) ts
+      in  if tid `S.member` dporRunnable dpor then 1 + rest else rest
+    preEmps _ _ [] = 0::Int
 
 -- | One of the outputs of the runner is a @Trace@, which is a log of
 -- decisions made, all the runnable threads and what they would do,

@@ -86,6 +86,9 @@ module Test.DPOR
   , lenBound
   , lenBacktrack
 
+  -- * Random approaches
+  , module Test.DPOR.Random
+
   -- * Scheduling & execution traces
 
   -- | The partial-order reduction is driven by incorporating
@@ -105,6 +108,7 @@ import Data.Maybe (isNothing)
 import qualified Data.Map.Strict as M
 
 import Test.DPOR.Internal
+import Test.DPOR.Random
 import Test.DPOR.Schedule
 
 -------------------------------------------------------------------------------
@@ -183,7 +187,7 @@ dpor didYield
     -- traces into a list until there are no schedules remaining to
     -- try.
     go dp = case nextPrefix dp of
-      Just (prefix, conservative, sleep) -> do
+      Just (prefix, conservative, sleep, ()) -> do
         (res, s, trace) <- run scheduler
                               (initialSchedState stinit sleep prefix)
 
@@ -197,7 +201,7 @@ dpor didYield
       Nothing -> pure []
 
     -- Find the next schedule prefix.
-    nextPrefix = findSchedulePrefix predicate
+    nextPrefix = findSchedulePrefix predicate (const (0, ()))
 
     -- The DPOR scheduler.
     scheduler = dporSched didYield willYield dependency1 ststep inBound

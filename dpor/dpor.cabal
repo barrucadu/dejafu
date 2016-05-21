@@ -60,6 +60,7 @@ source-repository this
 library
   exposed-modules:     Test.DPOR
                      , Test.DPOR.Internal
+                     , Test.DPOR.Random
                      , Test.DPOR.Schedule
   -- other-modules:       
   -- other-extensions:    
