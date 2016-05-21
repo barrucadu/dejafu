@@ -1,4 +1,12 @@
--- | Scheduling for concurrent computations.
+-- |
+-- Module      : Test.DPOR.Schedule
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : portable
+--
+-- Scheduling for concurrent computations.
 module Test.DPOR.Schedule
   ( -- * Scheduling
     Scheduler

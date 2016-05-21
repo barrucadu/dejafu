@@ -1,6 +1,14 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
--- | Systematic testing of concurrent computations through dynamic
+-- |
+-- Module      : Test.DPOR
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : GeneralizedNewtypeDeriving
+--
+-- Systematic testing of concurrent computations through dynamic
 -- partial-order reduction and schedule bounding.
 module Test.DPOR
   ( -- * Bounded dynamic partial-order reduction

@@ -1,4 +1,14 @@
--- | Internal types and functions for dynamic partial-order reduction.
+-- |
+-- Module      : Test.DPOR.Internal
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : portable
+--
+-- Internal types and functions for dynamic partial-order
+-- reduction. This module is NOT considered to form part of the public
+-- interface of this library.
 module Test.DPOR.Internal where
 
 import Control.DeepSeq (NFData(..), force)
