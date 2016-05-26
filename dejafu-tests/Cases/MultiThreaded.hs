@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE ImpredicativeTypes #-}
 
 module Cases.MultiThreaded where
 
@@ -150,7 +149,7 @@ threadKillMask :: MonadConc m => m ()
 threadKillMask = do
   x <- newEmptyMVar
   y <- newEmptyMVar
-  tid <- fork . mask . const $ putMVar x () >> putMVar y ()
+  tid <- fork $ mask $ \_ -> putMVar x () >> putMVar y ()
   readMVar x
   killThread tid
   readMVar y
@@ -160,7 +159,7 @@ threadKillUmask :: MonadConc m => m ()
 threadKillUmask = do
   x <- newEmptyMVar
   y <- newEmptyMVar
-  tid <- fork . mask $ \umask -> putMVar x () >> umask (putMVar y ())
+  tid <- fork $ mask $ \umask -> putMVar x () >> umask (putMVar y ())
   readMVar x
   killThread tid
   readMVar y

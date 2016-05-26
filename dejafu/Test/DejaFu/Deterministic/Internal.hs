@@ -226,6 +226,13 @@ stepThread fixed runstm memtype action idSource tid threads wb caps = case actio
 
   where
     -- | Start a new thread, assigning it the next 'ThreadId'
+    --
+    -- Explicit type signature needed for GHC 8. Looks like the
+    -- impredicative polymorphism checks got stronger.
+    stepFork :: String
+             -> ((forall b. M n r s b -> M n r s b) -> Action n r s)
+             -> (ThreadId -> Action n r s)
+             -> n (Either Failure (Threads n r s, IdSource, ThreadAction, WriteBuffer r, Int))
     stepFork n a b = return $ Right (goto (b newtid) tid threads', idSource', Fork newtid, wb, caps) where
       threads' = launch tid newtid a threads
       (idSource', newtid) = nextTId n idSource

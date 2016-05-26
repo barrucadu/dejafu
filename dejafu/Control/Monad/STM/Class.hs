@@ -146,7 +146,7 @@ INSTANCE(SS.StateT s, MonadSTM stm, fst)
 INSTANCE(RL.RWST r w s, (MonadSTM stm, Monoid w), (\(a,_,_) -> a))
 INSTANCE(RS.RWST r w s, (MonadSTM stm, Monoid w), (\(a,_,_) -> a))
 
-#undef INSTANC
+#undef INSTANCE
 
 -------------------------------------------------------------------------------
 
@@ -157,7 +157,12 @@ makeTransSTM :: Name -> DecsQ
 makeTransSTM unstN = do
   unstI <- reify unstN
   case unstI of
+#if MIN_VERSION_template_haskell(2,11,0)
+    -- template-haskell-2.11.0.0 drops the 'Fixity' value from 'VarI'
+    VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ ->
+#else
     VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ _ ->
+#endif
       [d|
         instance (MonadSTM stm, MonadTransControl $(pure t)) => MonadSTM ($(pure t) stm) where
           type TVar ($(pure t) stm) = TVar stm

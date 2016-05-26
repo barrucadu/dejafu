@@ -4,6 +4,12 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
+#if __GLASGOW_HASKELL__ >= 800
+-- Impredicative polymorphism checks got stronger in GHC 8, breaking
+-- the use of 'unsafeCoerce' below.
+{-# LANGUAGE ImpredicativeTypes #-}
+#endif
+
 -- | This module allows using Deja Fu predicates with Tasty to test
 -- the behaviour of concurrent systems.
 module Test.Tasty.DejaFu

@@ -14,15 +14,14 @@ import Control.Monad.Catch (onException)
 import Control.Monad.Conc.Class
 import Data.Maybe (isJust)
 import Data.Set (Set, fromList)
-import Test.DejaFu (Failure(..), defaultMemType)
-import Test.DejaFu.Deterministic (ConcST, Trace)
-import qualified Test.DejaFu.Deterministic as D
-import Test.DejaFu.SCT (sctBound, defaultBounds)
+import Test.DejaFu (Failure(..))
+import Test.DejaFu.Deterministic (ConcST)
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.QuickCheck (Arbitrary(..), expectFailure, monomorphic)
 import Test.QuickCheck.Function (Fun, apply)
-import Unsafe.Coerce (unsafeCoerce)
+
+import Examples.ClassLaws.Impredicative
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>), (<*>))
@@ -172,9 +171,7 @@ eq' :: Ord a => ConcST t a -> ConcST t a -> Bool
 eq' left right = results left == results right
 
 results :: forall t a. Ord a => ConcST t a -> Set (Either Failure a)
-results cst = fromList . map fst $ sctBound' cst where
-  sctBound' :: ConcST t a -> [(Either Failure a, Trace D.ThreadId D.ThreadAction D.Lookahead)]
-  sctBound' = unsafeCoerce $ sctBound defaultMemType defaultBounds
+results cst = fromList . map fst $ sctBound' cst
 
 eqf :: Ord b => (a -> CST t b) -> (a -> CST t b) -> a -> Bool
 eqf left right a = left a `eq` right a

@@ -642,7 +642,7 @@ INSTANCE(SS.StateT s, MonadConc m, fst)
 INSTANCE(RL.RWST r w s, (MonadConc m, Monoid w), (\(a,_,_) -> a))
 INSTANCE(RS.RWST r w s, (MonadConc m, Monoid w), (\(a,_,_) -> a))
 
-#undef INSTANC
+#undef INSTANCE
 
 -------------------------------------------------------------------------------
 
@@ -653,7 +653,12 @@ makeTransConc :: Name -> DecsQ
 makeTransConc unstN = do
   unstI <- reify unstN
   case unstI of
+#if MIN_VERSION_template_haskell(2,11,0)
+    -- template-haskell-2.11.0.0 drops the 'Fixity' value from 'VarI'
+    VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ ->
+#else
     VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ _ ->
+#endif
       [d|
         instance (MonadConc m) => MonadConc ($(pure t) m) where
           type STM      ($(pure t) m) = STM m
