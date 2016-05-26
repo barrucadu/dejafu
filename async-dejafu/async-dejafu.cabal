@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                async-dejafu
-version:             0.1.2.1
+version:             0.1.2.2
 synopsis:            Run MonadConc operations asynchronously and wait for their results.
 
 description:
@@ -37,7 +37,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      async-dejafu-0.1.2.1
+  tag:      async-dejafu-0.1.2.2
 
 library
   exposed-modules:     Control.Concurrent.Async
