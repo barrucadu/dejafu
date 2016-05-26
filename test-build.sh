@@ -26,6 +26,7 @@ fi
 # dejafu-0.2 compat of async/hunit/tasty-dejafu)
 OLDYAML="stack-old-dejafu.yaml"
 sed 's:^- dejafu$::' stack.yaml > $OLDYAML
+sed -i 's/^extra-deps: \[\]/extra-deps: [ dejafu-0.2.0.0 ]/' $OLDYAML
 
 # Try dejafu-0.2 first
 for pkg in hunit-dejafu tasty-dejafu async-dejafu; do

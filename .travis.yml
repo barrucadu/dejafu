@@ -13,7 +13,13 @@ cache:
 # Build matrix configuration
 matrix:
   include:
+  - env: RESOLVER="lts-3"
+    addons: {apt: {packages: [ghc-7.10.2], sources: [hvr-ghc]}}
+  - env: RESOLVER="lts-4"
+    addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
   - env: RESOLVER="lts-5"
+    addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
+  - env: RESOLVER="lts-6"
     addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
   - env: RESOLVER="nightly"
     addons: {apt: {packages: [libgmp-dev]}}
