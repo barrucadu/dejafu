@@ -12,17 +12,18 @@ module Test.DPOR.Random
   ( -- * Randomness and partial-order reduction
     randomDPOR
 
-  -- * Unsystematic techniques
+  -- * Non-POR techniques
 
-  -- | These algorithms do not make use of partial-order reduction or
-  -- schedule bounding to systematically prune the search space and
-  -- search for interesting interleavings. Instead, the exploration is
-  -- driven entirely by random choice. However, the same schedule will
-  -- never be explored twice.
-  , pureRandom
+  -- | These algorithms do not make use of partial-order reduction to
+  -- systematically prune the search space and search for interesting
+  -- interleavings. Instead, the exploration is driven entirely by
+  -- random choice, with optional bounds. However, the same schedule
+  -- will never be explored twice.
+  , boundedRandom
   ) where
 
 import Control.DeepSeq (NFData)
+import Data.Maybe (fromMaybe)
 import System.Random (RandomGen, randomR)
 
 import Test.DPOR.Internal
@@ -146,20 +147,23 @@ randomDPOR didYield
 -- Unsystematic techniques
 
 -- | Pure random scheduling. Like 'randomDPOR' but all actions are
--- dependent and there are no bounds.
-pureRandom :: ( Ord       tid
-             , NFData    tid
-             , NFData    action
-             , NFData    lookahead
-             , Monad     m
-             , RandomGen g
-             )
+-- dependent and the bounds are optional.
+boundedRandom :: ( Ord       tid
+                , NFData    tid
+                , NFData    action
+                , NFData    lookahead
+                , Monad     m
+                , RandomGen g
+                )
   => (action    -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
   -- ^ Determine if a thread will yield.
   -> tid
   -- ^ The initial thread.
+  -> Maybe (BoundFunc tid action lookahead)
+  -- ^ The bounding function. If no function is provided, 'trueBound'
+  -- is used.
   -> (DPORScheduler tid action lookahead ()
     -> SchedState tid action lookahead ()
     -> m (a, SchedState tid action lookahead (), Trace tid action lookahead))
@@ -172,7 +176,7 @@ pureRandom :: ( Ord       tid
   -- ^ Execution limit, used to abort the execution whilst schedules
   -- still remain.
   -> m [(a, Trace tid action lookahead)]
-pureRandom didYield willYield initialTid
+boundedRandom didYield willYield initialTid inBoundm
   = randomDPOR didYield
                willYield
                stinit
@@ -190,6 +194,6 @@ pureRandom didYield willYield initialTid
     dependency1 _ _ _ = True
     dependency2 _ _ _ = True
     predicate _ = True
-    inBound = trueBound
+    inBound = fromMaybe trueBound inBoundm
     backtrack = backtrackAt (const False) False
     transform = id
