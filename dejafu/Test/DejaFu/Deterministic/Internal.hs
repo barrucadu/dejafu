@@ -42,6 +42,7 @@ module Test.DejaFu.Deterministic.Internal
  , preEmpCount
  , showTrace
  , showFail
+ , tvarsOf
 
  -- * Synchronised and Unsynchronised Actions
  , ActionType(..)

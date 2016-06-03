@@ -97,6 +97,7 @@ import Data.Functor.Identity (Identity(..), runIdentity)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.Maybe (isJust, fromJust)
+import qualified Data.Set as S
 import Test.DPOR ( DPOR(..), dpor
                  , BacktrackStep(..), backtrackAt
                  , BoundFunc, (&+&), trueBound
@@ -375,12 +376,24 @@ dependent :: MemType -> DepState -> (ThreadId, ThreadAction) -> (ThreadId, Threa
 --    converted to a 'Lookahead'. I'm not entirely sure why, which
 --    makes me question whether the \"optimisation\" is sound as it
 --    is.
+--
+--  - Dependency of STM transactions can be /greatly/ improved here,
+--    as the 'Lookahead' does not know which @TVar@s will be touched,
+--    and so has to assume all transactions are dependent.
 dependent _ _ (_, SetNumCapabilities a) (_, GetNumCapabilities b) = a /= b
 dependent _ ds (_, ThrowTo t) (t2, a) = t == t2 && canInterrupt ds t2 a
 dependent memtype ds (t1, a1) (t2, a2) = case rewind a2 of
-  Just l2 | not (isBlock a1 && isBarrier (simplify' l2)) ->
-    dependent' memtype ds (t1, a1) (t2, l2)
+  Just l2
+    | isSTM a1 && isSTM a2
+      -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
+    | not (isBlock a1 && isBarrier (simplify' l2)) ->
+      dependent' memtype ds (t1, a1) (t2, l2)
   _ -> dependentActions memtype ds (simplify a1) (simplify a2)
+
+  where
+    isSTM (STM _ _) = True
+    isSTM (BlockedSTM _) = True
+    isSTM _ = False
 
 -- | Variant of 'dependent' to handle 'Lookahead'.
 dependent' :: MemType -> DepState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool
