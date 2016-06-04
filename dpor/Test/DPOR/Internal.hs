@@ -468,13 +468,15 @@ dporSched :: (Ord tid, NFData tid, NFData action, NFData lookahead, NFData s)
   -- ^ Determine if a thread will yield.
   -> (s -> (tid, action) -> (tid, action) -> Bool)
   -- ^ Dependency function.
+  -> (s -> (tid, lookahead) -> NonEmpty tid -> Bool)
+  -- ^ Daemon-termination predicate.
   -> (s -> (tid, action) -> s)
   -- ^ Dependency function's state step function.
   -> BoundFunc tid action lookahead
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
   -> DPORScheduler tid action lookahead s
-dporSched didYield willYield dependency ststep inBound trc prior threads s = force schedule where
+dporSched didYield willYield dependency killsDaemons ststep inBound trc prior threads s = force schedule where
   -- Pick a thread to run.
   schedule = case schedPrefix s of
     -- If there is a decision available, make it
@@ -498,33 +500,44 @@ dporSched didYield willYield dependency ststep inBound trc prior threads s = for
   -- The next scheduler state
   nextState rest = s
     { schedBPoints  = schedBPoints s |> (threads, rest)
-    , schedDepState = let ds = schedDepState s in maybe ds (ststep ds) prior
+    , schedDepState = nextDepState
     }
+  nextDepState = let ds = schedDepState s in maybe ds (ststep ds) prior
 
   -- Pick a new thread to run, which does not exceed the bound. Choose
   -- the current thread if available and it hasn't just yielded,
   -- otherwise add all runnable threads.
-  initialise = restrictToBound . yieldsToEnd $ case prior of
+  initialise = restrictToBound . tryDaemons . yieldsToEnd $ case prior of
     Just (tid, act)
-      | didYield act -> map fst (toList threads)
-      | any (\(t, _) -> t == tid) threads -> [tid]
-    _ -> map fst (toList threads)
+      | not (didYield act) && tid `elem` tids -> [tid]
+    _ -> tids'
+
+  -- If one of the chosen actions will kill the computation, and there
+  -- are daemon threads, try them instead.
+  tryDaemons ts
+    | any doesKill ts = filter (not . doesKill) tids' ++ filter doesKill ts
+    | otherwise       = ts
+  doesKill t = killsDaemons nextDepState (t, action t) tids
 
   -- Restrict the possible decisions to those in the bound.
-  restrictToBound = fst . partition (\t -> inBound trc (decision t, action t))
+  restrictToBound = filter (\t -> inBound trc (decision t, action t))
 
   -- Move the threads which will immediately yield to the end of the list
   yieldsToEnd ts = case partition (willYield . action) ts of
     (yields, noyields) -> noyields ++ yields
 
   -- Get the decision that will lead to a thread being scheduled.
-  decision = decisionOf (fst <$> prior) (S.fromList $ map fst threads')
+  decision = decisionOf (fst <$> prior) (S.fromList tids')
 
   -- Get the action of a thread
   action t = fromJust $ lookup t threads'
 
+  -- The runnable thread IDs
+  tids = fst <$> threads
+
   -- The runnable threads as a normal list.
   threads' = toList threads
+  tids'    = toList tids
 
 -------------------------------------------------------------------------------
 -- * Utilities

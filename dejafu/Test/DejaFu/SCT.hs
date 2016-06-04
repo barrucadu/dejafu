@@ -317,6 +317,10 @@ sctBoundedM memtype bf backtrack run =
        updateCRState
        (dependent  memtype)
        (dependent' memtype)
+#if MIN_VERSION_dpor(0,2,0)
+       -- dpor-0.2 knows about daemon threads.
+       (\_ (t, l) _ -> t == initialThread && case l of WillStop -> True; _ -> False)
+#endif
        initialThread
        (>=initialThread)
        bf

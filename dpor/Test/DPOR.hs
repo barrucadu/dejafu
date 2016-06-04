@@ -104,6 +104,7 @@ module Test.DPOR
 
 import Control.DeepSeq (NFData)
 import Data.List (nub)
+import Data.List.NonEmpty (NonEmpty)
 import qualified Data.Map.Strict as M
 
 import Test.DPOR.Internal
@@ -129,6 +130,14 @@ import Test.DPOR.Schedule
 -- the most specific and (2) will be more pessimistic (due to,
 -- typically, less information being available when merely looking
 -- ahead).
+--
+-- The daemon-termination predicate returns @True@ if the action being
+-- looked at will cause the entire computation to terminate,
+-- regardless of the other runnable threads (which are passed in the
+-- 'NonEmpty' list). Such actions will then be put off for as long as
+-- possible. This allows supporting concurrency models with daemon
+-- threads without doing something as drastic as imposing a dependency
+-- between the program-terminating action and /everything/ else.
 dpor :: ( Ord    tid
        , NFData tid
        , NFData action
@@ -148,6 +157,8 @@ dpor :: ( Ord    tid
   -- ^ The dependency (1) function.
   -> (s -> (tid, action) -> (tid, lookahead) -> Bool)
   -- ^ The dependency (2) function.
+  -> (s -> (tid, lookahead) -> NonEmpty tid -> Bool)
+  -- ^ The daemon-termination predicate.
   -> tid
   -- ^ The initial thread.
   -> (tid -> Bool)
@@ -173,6 +184,7 @@ dpor didYield
      ststep
      dependency1
      dependency2
+     killsDaemons
      initialTid
      predicate
      inBound
@@ -203,7 +215,7 @@ dpor didYield
     nextPrefix = findSchedulePrefix predicate (const (0, ()))
 
     -- The DPOR scheduler.
-    scheduler = dporSched didYield willYield dependency1 ststep inBound
+    scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound
 
     -- Find the new backtracking steps.
     findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack .
@@ -231,6 +243,8 @@ simpleDPOR :: ( Ord    tid
   -- ^ The dependency (1) function.
   -> ((tid, action) -> (tid, lookahead) -> Bool)
   -- ^ The dependency (2) function.
+  -> ((tid, lookahead) -> NonEmpty tid -> Bool)
+  -- ^ The daemon-termination predicate.
   -> tid
   -- ^ The initial thread.
   -> BoundFunc tid action lookahead
@@ -249,6 +263,7 @@ simpleDPOR didYield
            willYield
            dependency1
            dependency2
+           killsDaemons
            initialTid
            inBound
            backtrack
@@ -258,6 +273,7 @@ simpleDPOR didYield
          (\_ _ -> ())
          (const dependency1)
          (const dependency2)
+         (const killsDaemons)
          initialTid
          (const True)
          inBound

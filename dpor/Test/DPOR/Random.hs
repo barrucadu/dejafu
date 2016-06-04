@@ -23,6 +23,7 @@ module Test.DPOR.Random
   ) where
 
 import Control.DeepSeq (NFData)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe)
 import System.Random (RandomGen, randomR)
 
@@ -65,6 +66,8 @@ randomDPOR :: ( Ord       tid
   -- ^ The dependency (1) function.
   -> (s -> (tid, action) -> (tid, lookahead) -> Bool)
   -- ^ The dependency (2) function.
+  -> (s -> (tid, lookahead) -> NonEmpty tid -> Bool)
+  -- ^ The daemon-termination predicate.
   -> tid
   -- ^ The initial thread.
   -> (tid -> Bool)
@@ -96,6 +99,7 @@ randomDPOR didYield
            ststep
            dependency1
            dependency2
+           killsDaemons
            initialTid
            predicate
            inBound
@@ -131,7 +135,7 @@ randomDPOR didYield
     nextPrefix = findSchedulePrefix predicate . gen
 
     -- The DPOR scheduler.
-    scheduler = dporSched didYield willYield dependency1 ststep inBound
+    scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound
 
     -- Find the new backtracking steps.
     findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack .
@@ -183,6 +187,7 @@ boundedRandom didYield willYield initialTid inBoundm
                ststep
                dependency1
                dependency2
+               killsDaemons
                initialTid
                predicate
                inBound
@@ -193,6 +198,7 @@ boundedRandom didYield willYield initialTid inBoundm
     ststep _ _ = ()
     dependency1 _ _ _ = True
     dependency2 _ _ _ = True
+    killsDaemons _ _ _ = True
     predicate _ = True
     inBound = fromMaybe trueBound inBoundm
     backtrack = backtrackAt (const False) False
