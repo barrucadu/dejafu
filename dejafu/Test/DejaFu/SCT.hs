@@ -398,6 +398,15 @@ dependent memtype ds (t1, a1) (t2, a2) = case rewind a2 of
 -- | Variant of 'dependent' to handle 'Lookahead'.
 dependent' :: MemType -> DepState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool
 dependent' memtype ds (t1, a1) (t2, l2) = case (a1, l2) of
+#if MIN_VERSION_dpor(0,2,0)
+  -- dpor-0.2 handles this case, woo.
+#else
+  -- Because Haskell threads are daemonised, when the initial thread
+  -- stops all child threads do too, this imposes a dependency.
+  (Stop, _)     | t1 == initialThread -> True
+  (_, WillStop) | t2 == initialThread -> True
+#endif
+
   -- Worst-case assumption: all IO is dependent.
   (Lift, WillLift) -> True
 
