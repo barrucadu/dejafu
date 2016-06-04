@@ -59,7 +59,7 @@ randomDPOR :: ( Ord       tid
   -- ^ Determine if a thread will yield.
   -> s
   -- ^ The initial state for backtracking.
-  -> (s -> action -> s)
+  -> (s -> (tid, action) -> s)
   -- ^ The backtracking state step function.
   -> (s -> (tid, action) -> (tid, action)    -> Bool)
   -- ^ The dependency (1) function.

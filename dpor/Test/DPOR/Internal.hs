@@ -173,7 +173,7 @@ type Trace tid action lookahead
 incorporateTrace :: Ord tid
   => state
   -- ^ Initial state
-  -> (state -> action -> state)
+  -> (state -> (tid, action) -> state)
   -- ^ State step function
   -> (state -> (tid, action) -> (tid, action) -> Bool)
   -- ^ Dependency function
@@ -188,7 +188,7 @@ incorporateTrace :: Ord tid
 incorporateTrace stinit ststep dependency conservative trace dpor0 = grow stinit (initialDPORThread dpor0) trace dpor0 where
   grow state tid trc@((d, _, a):rest) dpor =
     let tid'   = tidOf tid d
-        state' = ststep state a
+        state' = ststep state (tid', a)
     in case M.lookup tid' (dporDone dpor) of
          Just dpor' ->
            let done = M.insert tid' (grow state' tid' rest dpor') (dporDone dpor)
@@ -205,7 +205,7 @@ incorporateTrace stinit ststep dependency conservative trace dpor0 = grow stinit
 
   -- Construct a new subtree corresponding to a trace suffix.
   subtree state tid sleep ((_, _, a):rest) =
-    let state' = ststep state a
+    let state' = ststep state (tid, a)
         sleep' = M.filterWithKey (\t a' -> not $ dependency state' (tid, a) (t,a')) sleep
     in DPOR
         { dporRunnable = S.fromList $ case rest of
@@ -239,7 +239,7 @@ incorporateTrace stinit ststep dependency conservative trace dpor0 = grow stinit
 findBacktrackSteps :: Ord tid
   => s
   -- ^ Initial state.
-  -> (s -> action -> s)
+  -> (s -> (tid, action) -> s)
   -- ^ State step function.
   -> (s -> (tid, action) -> (tid, lookahead) -> Bool)
   -- ^ Dependency function.
@@ -269,7 +269,7 @@ findBacktrackSteps stinit ststep dependency backtrack bcktrck = go stinit S.empt
   -- new backtracking points.
   go state allThreads tid bs ((e,i):<is) ((d,_,a):ts) =
     let tid' = tidOf tid d
-        state' = ststep state a
+        state' = ststep state (tid', a)
         this = BacktrackStep
           { bcktThreadid   = tid'
           , bcktDecision   = (d, a)
@@ -468,7 +468,7 @@ dporSched :: (Ord tid, NFData tid, NFData action, NFData lookahead, NFData s)
   -- ^ Determine if a thread will yield.
   -> (s -> (tid, action) -> (tid, action) -> Bool)
   -- ^ Dependency function.
-  -> (s -> action -> s)
+  -> (s -> (tid, action) -> s)
   -- ^ Dependency function's state step function.
   -> BoundFunc tid action lookahead
   -- ^ Bound function: returns true if that schedule prefix terminated
@@ -498,9 +498,7 @@ dporSched didYield willYield dependency ststep inBound trc prior threads s = for
   -- The next scheduler state
   nextState rest = s
     { schedBPoints  = schedBPoints s |> (threads, rest)
-    , schedDepState = case prior of
-        Just (_, act) -> ststep (schedDepState s) act
-        Nothing -> schedDepState s
+    , schedDepState = let ds = schedDepState s in maybe ds (ststep ds) prior
     }
 
   -- Pick a new thread to run, which does not exceed the bound. Choose

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | Systematic testing for concurrent computations.
@@ -434,10 +435,20 @@ initialCRState = M.empty
 
 -- | Update the 'CRef' buffer state with the action that has just
 -- happened.
+#if MIN_VERSION_dpor(0,2,0)
+updateCRState :: CRState -> (ThreadId, ThreadAction) -> CRState
+updateCRState crstate = updateCRState' crstate . snd
+#else
 updateCRState :: CRState -> ThreadAction -> CRState
-updateCRState crstate (CommitRef _ r) = M.delete r crstate
-updateCRState crstate (WriteRef r) = M.insert r True crstate
-updateCRState crstate ta
+updateCRState = updateCRState'
+#endif
+
+-- | Update the 'CRef' buffer state with the action that has just
+-- happened.
+updateCRState' :: CRState -> ThreadAction -> CRState
+updateCRState' crstate (CommitRef _ r) = M.delete r crstate
+updateCRState' crstate (WriteRef r) = M.insert r True crstate
+updateCRState' crstate ta
   | isBarrier $ simplify ta = initialCRState
   | otherwise = crstate
 
