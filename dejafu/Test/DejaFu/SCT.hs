@@ -382,24 +382,38 @@ dependent memtype ds (t1, a1) (t2, a2) = case rewind a2 of
     dependent' memtype ds (t1, a1) (t2, l2)
   _ -> dependentActions memtype ds (simplify a1) (simplify a2)
 
--- | Variant of 'dependent' to handle 'ThreadAction''s
+-- | Variant of 'dependent' to handle 'Lookahead'.
 dependent' :: MemType -> DepState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool
-dependent' _ _ (_, Lift) (_, WillLift) = True
-dependent' _ _ (_, ThrowTo t) (t2, WillStop) | t == t2 = False
-dependent' _ _ (t2, Stop) (_, WillThrowTo t) | t == t2 = False
-dependent' _ ds (_, ThrowTo t) (t2, l)     = t == t2 && canInterruptL ds t2 l
-dependent' _ ds (t2, a) (_, WillThrowTo t) = t == t2 && canInterrupt  ds t2 a
-dependent' _ _ (_, STM _ _) (_, WillSTM) = True
-dependent' _ _ (_, GetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
-dependent' _ _ (_, SetNumCapabilities _) (_, WillGetNumCapabilities)   = True
-dependent' _ _ (_, SetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
--- This is safe because, if the thread blocks anyway, a context switch
--- will occur anyway so there's no point pre-empting the action.
---
--- UNLESS the pre-emption would possibly allow for a different relaxed
--- memory stage.
-dependent' _ _ (_, a1) (_, l2) | isBlock a1 && isBarrier (simplify' l2) = False
-dependent' memtype ds (_, a1) (_, l2) = dependentActions memtype ds (simplify a1) (simplify' l2)
+dependent' memtype ds (t1, a1) (t2, l2) = case (a1, l2) of
+  -- Worst-case assumption: all IO is dependent.
+  (Lift, WillLift) -> True
+
+  -- Throwing an exception is only dependent with actions in that
+  -- thread and if the actions can be interrupted. We can also
+  -- slightly improve on that by not considering interrupting the
+  -- normal termination of a thread: it doesn't make a difference.
+  (ThrowTo t, WillStop) | t == t2 -> False
+  (Stop, WillThrowTo t) | t == t1 -> False
+  (ThrowTo t, _)     -> t == t2 && canInterruptL ds t2 l2
+  (_, WillThrowTo t) -> t == t1 && canInterrupt  ds t1 a1
+
+  -- Another worst-case: assume all STM is dependent.
+  (STM _ _, WillSTM) -> True
+
+  -- This is a bit pessimistic: Set/Get are only dependent if the
+  -- value set is not the same as the value that will be got, but we
+  -- can't know that here. 'dependent' optimises this case.
+  (GetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
+  (SetNumCapabilities _, WillGetNumCapabilities)   -> True
+  (SetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
+
+  -- Don't impose a dependency if the other thread will immediately
+  -- block already. This is safe because a context switch will occur
+  -- anyway so there's no point pre-empting the action UNLESS the
+  -- pre-emption would possibly allow for a different relaxed memory
+  -- stage.
+  _ | isBlock a1 && isBarrier (simplify' l2) -> False
+    | otherwise -> dependentActions memtype ds (simplify a1) (simplify' l2)
 
 -- | Check if two 'ActionType's are dependent. Note that this is not
 -- sufficient to know if two 'ThreadAction's are dependent, without
