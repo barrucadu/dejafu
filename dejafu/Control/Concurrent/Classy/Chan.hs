@@ -1,4 +1,12 @@
--- | Unbounded channels.
+-- |
+-- Module      : Control.Concurrent.Classy.Chan
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : stable
+-- Portability : portable
+--
+-- Unbounded channels.
 --
 -- __Deviations:__ @Chan@ as defined here does not have an @Eq@
 -- instance, this is because the @MonadConc@ @MVar@ type does not have

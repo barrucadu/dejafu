@@ -1,4 +1,12 @@
--- | Simple quantity semaphores.
+-- |
+-- Module      : Control.Concurrent.Classy.QSem
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : stable
+-- Portability : portable
+--
+-- Simple quantity semaphores.
 module Control.Concurrent.Classy.QSem
   ( -- * Simple Quantity Semaphores
     QSem

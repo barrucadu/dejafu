@@ -1,5 +1,13 @@
--- | An @'MVar' t@ is mutable location that is either empty or contains a
--- value of type @t@.  It has two fundamental operations: 'putMVar'
+-- |
+-- Module      : Control.Concurrent.Classy.MVar
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : stable
+-- Portability : portable
+--
+-- An @'MVar' t@ is mutable location that is either empty or contains
+-- a value of type @t@.  It has two fundamental operations: 'putMVar'
 -- which fills an 'MVar' if it is empty and blocks otherwise, and
 -- 'takeMVar' which empties an 'MVar' if it is full and blocks
 -- otherwise.  They can be used in multiple different ways:

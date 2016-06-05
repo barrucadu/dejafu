@@ -1,6 +1,15 @@
 {-# LANGUAGE RankNTypes #-}
 
--- | Dealing with mutable state.
+-- |
+-- Module      : Test.DejaFu.Internal
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : RankNTypes
+--
+-- Dealing with mutable state. This module is NOT considered to form
+-- part of the public interface of this library.
 module Test.DejaFu.Internal where
 
 import Control.Monad.ST (ST)

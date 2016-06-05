@@ -1,8 +1,17 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 
--- | 'MonadSTM' testing implementation, internal types and
--- definitions.
+-- |
+-- Module      : Test.DejaFu.STM.Internal
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : ExistentialQuantification, RankNTypes
+--
+-- 'MonadSTM' testing implementation, internal types and
+-- definitions. This module is NOT considered to form part of the
+-- public interface of this library.
 module Test.DejaFu.STM.Internal where
 
 import Control.Exception (Exception, SomeException, fromException, toException)

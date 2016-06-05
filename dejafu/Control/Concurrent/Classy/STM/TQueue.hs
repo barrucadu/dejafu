@@ -1,4 +1,12 @@
--- | A 'TQueue' is like a 'TChan', with two important differences:
+-- |
+-- Module      : Control.Concurrent.Classy.STM.TQueue
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : stable
+-- Portability : portable
+--
+-- A 'TQueue' is like a 'TChan', with two important differences:
 --
 --  * it has faster throughput than both 'TChan' and 'Chan' (although
 --    the costs are amortised, so the cost of individual operations

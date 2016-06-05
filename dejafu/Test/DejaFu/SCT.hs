@@ -1,7 +1,15 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | Systematic testing for concurrent computations.
+-- |
+-- Module      : Test.DejaFu.SCT
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : CPP, RankNTypes
+--
+-- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
   ( -- * Bounded Partial-order Reduction
 

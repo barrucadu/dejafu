@@ -1,8 +1,17 @@
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | Concurrent monads with a fixed scheduler: internal types and
--- functions.
+-- |
+-- Module      : Test.DejaFu.Deterministic.Internal
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : RankNTypes, ScopedTypeVariables
+--
+-- Concurrent monads with a fixed scheduler: internal types and
+-- functions. This module is NOT considered to form part of the public
+-- interface of this library.
 module Test.DejaFu.Deterministic.Internal
  ( -- * Execution
    runFixed

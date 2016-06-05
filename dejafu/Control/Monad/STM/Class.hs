@@ -3,7 +3,15 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies    #-}
 
--- | This module provides an abstraction over 'STM', which can be used
+-- |
+-- Module      : Control.Monad.STM.Class
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : CPP, RankNTypes, TemplateHaskell, TypeFamilies
+--
+-- This module provides an abstraction over 'STM', which can be used
 -- with 'MonadConc'.
 --
 -- This module only defines the 'STM' class; you probably want to

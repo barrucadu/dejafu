@@ -1,4 +1,12 @@
--- | Mutable references in a concurrency monad.
+-- |
+-- Module      : Control.Concurrent.Classy.CRef
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : stable
+-- Portability : portable
+--
+-- Mutable references in a concurrency monad.
 --
 -- __Deviations:__ There is no @Eq@ instance for @MonadConc@ the
 -- @CRef@ type. Furthermore, the @mkWeakIORef@ function is not

@@ -1,4 +1,12 @@
--- | Classy concurrency.
+-- |
+-- Module      : Control.Concurrent.Classy
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : non-portable
+--
+-- Classy concurrency.
 --
 -- Concurrency is \"lightweight\", which means that both thread
 -- creation and context switching overheads are extremely

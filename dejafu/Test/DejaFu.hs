@@ -1,6 +1,14 @@
 {-# LANGUAGE RankNTypes #-}
 
--- | Deterministic testing for concurrent computations.
+-- |
+-- Module      : Test.DejaFu
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : RankNTypes
+--
+-- Deterministic testing for concurrent computations.
 --
 -- As an example, consider this program, which has two locks and a
 -- shared variable. Two threads are spawned, which claim the locks,

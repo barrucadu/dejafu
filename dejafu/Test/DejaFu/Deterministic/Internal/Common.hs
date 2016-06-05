@@ -1,8 +1,17 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 
--- | Common types and utility functions for deterministic execution of
--- 'MonadConc' implementations.
+-- |
+-- Module      : Test.DejaFu.Deterministic.Internal.Common
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : ExistentialQuantification, RankNTypes
+--
+-- Common types and utility functions for deterministic execution of
+-- 'MonadConc' implementations. This module is NOT considered to form
+-- part of the public interface of this library.
 module Test.DejaFu.Deterministic.Internal.Common where
 
 import Control.DeepSeq (NFData(..))

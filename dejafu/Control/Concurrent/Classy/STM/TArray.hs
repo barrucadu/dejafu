@@ -1,6 +1,14 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 
--- | TArrays: transactional arrays, for use in STM-like monads.
+-- |
+-- Module      : Control.Concurrent.Classy.STM.
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : stable
+-- Portability : FlexibleInstances, MultiParamTypeClasses
+--
+-- TArrays: transactional arrays, for use in STM-like monads.
 --
 -- __Deviations:__ @TArray@ as defined here does not have an @Eq@
 -- instance, this is because the @MonadSTM@ @TVar@ type does not have

@@ -4,7 +4,15 @@
 {-# LANGUAGE TemplateHaskell  #-}
 {-# LANGUAGE TypeFamilies     #-}
 
--- | This module captures in a typeclass the interface of concurrency
+-- |
+-- Module      : Control.Monad.Conc.Class
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : CPP, FlexibleContexts, RankNTypes, TemplateHaskell, TypeFamilies
+--
+-- This module captures in a typeclass the interface of concurrency
 -- monads.
 --
 -- __Deviations:__ An instance of @MonadCoonc@ is not required to be
