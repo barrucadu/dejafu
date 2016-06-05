@@ -22,18 +22,17 @@ if [[ "$RESOLVER" == "" ]]; then
   STACKOPTS="--no-terminal --install-ghc"
 fi
 
-# Produce a stack.yaml which doesn't build dejafu (for testing the
-# dejafu-0.2 compat of async/hunit/tasty-dejafu)
-OLDYAML="stack-old-dejafu.yaml"
-sed 's:^- dejafu$::' stack.yaml > $OLDYAML
-sed -i 's/^extra-deps: \[\]/extra-deps: [ dejafu-0.2.0.0 ]/' $OLDYAML
+# Test dejafu-0.2 compat of async/hunit/tasty-dejafu
+if [[ -z "$SKIP_OLD_DEJAFU" ]]; then
+  sed 's:^- dejafu$::' stack.yaml > stack-old-dejafu.yaml
+  sed -i 's/^extra-deps: \[\]/extra-deps: [ dejafu-0.2.0.0 ]/' stack-old-dejafu.yaml
 
-# Try dejafu-0.2 first
-for pkg in hunit-dejafu tasty-dejafu async-dejafu; do
-  testcmd "${pkg} (dejafu-0.2)" stack $STACKOPTS --stack-yaml=$OLDYAML test $pkg
-done
+  for pkg in hunit-dejafu tasty-dejafu async-dejafu; do
+    testcmd "${pkg} (dejafu-0.2)" stack $STACKOPTS --stack-yaml=stack-old-dejafu.yaml test $pkg
+  done
+fi
 
-# Then try dejafu-0.3
+# Test HEAD version of everything
 testcmd "dpor" stack $STACKOPTS test dpor
 
 echo "== dejafu"
