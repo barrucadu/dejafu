@@ -42,6 +42,10 @@ tests =
     , testDejafu threadKillMask  "masked"     $ gives' [()]
     , testDejafu threadKillUmask "unmasked"   $ gives  [Left Deadlock, Right ()]
     ]
+
+  , testGroup "Daemons" . hUnitTestToTests $ test
+    [ testDejafu schedDaemon "schedule daemon" $ gives' [0,1]
+    ]
   ]
 
 --------------------------------------------------------------------------------
@@ -163,3 +167,15 @@ threadKillUmask = do
   readMVar x
   killThread tid
   readMVar y
+
+-------------------------------------------------------------------------------
+-- Daemon threads
+
+-- | Fork off a thread where the first action has no dependency with
+-- anything the initial thread does, but which has a later action
+-- which does. This exhibits issue #40.
+schedDaemon :: MonadConc m => m Int
+schedDaemon = do
+  x <- newCRef 0
+  _ <- fork $ myThreadId >> writeCRef x 1
+  readCRef x
