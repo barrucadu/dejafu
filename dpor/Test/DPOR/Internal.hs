@@ -248,6 +248,9 @@ findBacktrackSteps :: Ord tid
   -- a thread to backtrack to at a specific point in that list, add
   -- the new backtracking points. There will be at least one: this
   -- chosen one, but the function may add others.
+  -> Bool
+  -- ^ Whether the computation was aborted due to no decisions being
+  -- in-bounds.
   -> Seq (NonEmpty (tid, lookahead), [tid])
   -- ^ A sequence of threads at each step: the nonempty list of
   -- runnable threads (with lookahead values), and the list of threads
@@ -257,9 +260,9 @@ findBacktrackSteps :: Ord tid
   -> Trace tid action lookahead
   -- ^ The execution trace.
   -> [BacktrackStep tid action lookahead s]
-findBacktrackSteps _ _ _ _ bcktrck
+findBacktrackSteps _ _ _ _ _ bcktrck
   | Sq.null bcktrck = const []
-findBacktrackSteps stinit ststep dependency backtrack bcktrck = go stinit S.empty initialThread [] (Sq.viewl bcktrck) where
+findBacktrackSteps stinit ststep dependency backtrack boundKill bcktrck = go stinit S.empty initialThread [] (Sq.viewl bcktrck) where
   -- Get the initial thread ID
   initialThread = case Sq.viewl bcktrck of
     (((tid, _):|_, _):<_) -> tid
@@ -280,7 +283,7 @@ findBacktrackSteps stinit ststep dependency backtrack bcktrck = go stinit S.empt
         bs' = doBacktrack killsEarly allThreads' (toList e) (bs++[this])
         runnable = S.fromList (M.keys $ bcktRunnable this)
         allThreads' = allThreads `S.union` runnable
-        killsEarly = null ts && any (/=initialThread) runnable
+        killsEarly = null ts && boundKill
     in go state' allThreads' tid' bs' (Sq.viewl is) ts
   go _ _ _ bs _ _ = bs
 
@@ -297,6 +300,9 @@ findBacktrackSteps stinit ststep dependency backtrack bcktrck = go stinit S.empt
 
         idxs' u n v = mapMaybe go' where
           go' (i, b)
+            -- If this is the final action in the trace and the
+            -- execution was killed due to nothing being within bounds
+            -- (@killsEarly == True@) assume worst-case dependency.
             | bcktThreadid b == v && (killsEarly || isDependent b) = Just i
             | otherwise = Nothing
 
@@ -343,20 +349,23 @@ type DPORScheduler tid action lookahead s
 
 -- | The scheduler state
 data SchedState tid action lookahead s = SchedState
-  { schedSleep   :: Map tid action
+  { schedSleep     :: Map tid action
   -- ^ The sleep set: decisions not to make until something dependent
   -- with them happens.
-  , schedPrefix  :: [tid]
+  , schedPrefix    :: [tid]
   -- ^ Decisions still to make
-  , schedBPoints :: Seq (NonEmpty (tid, lookahead), [tid])
+  , schedBPoints   :: Seq (NonEmpty (tid, lookahead), [tid])
   -- ^ Which threads are runnable at each step, and the alternative
   -- decisions still to make.
-  , schedIgnore  :: Bool
+  , schedIgnore    :: Bool
   -- ^ Whether to ignore this execution or not: @True@ if the
   -- execution is aborted due to all possible decisions being in the
   -- sleep set, as then everything in this execution is covered by
   -- another.
-  , schedDepState :: s
+  , schedBoundKill :: Bool
+  -- ^ Whether the execution was terminated due to all decisions being
+  -- out of bounds.
+  , schedDepState  :: s
   -- ^ State used by the dependency function to determine when to
   -- remove decisions from the sleep set.
   } deriving Show
@@ -366,11 +375,12 @@ instance ( NFData tid
          , NFData lookahead
          , NFData s
          ) => NFData (SchedState tid action lookahead s) where
-  rnf s = rnf ( schedSleep    s
-              , schedPrefix   s
-              , schedBPoints  s
-              , schedIgnore   s
-              , schedDepState s
+  rnf s = rnf ( schedSleep     s
+              , schedPrefix    s
+              , schedBPoints   s
+              , schedIgnore    s
+              , schedBoundKill s
+              , schedDepState  s
               )
 
 -- | Initial scheduler state for a given prefix
@@ -382,11 +392,12 @@ initialSchedState :: s
   -- ^ The schedule prefix.
   -> SchedState tid action lookahead s
 initialSchedState s sleep prefix = SchedState
-  { schedSleep    = sleep
-  , schedPrefix   = prefix
-  , schedBPoints  = Sq.empty
-  , schedIgnore   = False
-  , schedDepState = s
+  { schedSleep     = sleep
+  , schedPrefix    = prefix
+  , schedBPoints   = Sq.empty
+  , schedIgnore    = False
+  , schedBoundKill = False
+  , schedDepState  = s
   }
 
 -- | A bounding function takes the scheduling decisions so far and a
@@ -486,16 +497,17 @@ dporSched didYield willYield dependency killsDaemons ststep inBound trc prior th
     -- choices, filter out anything in the sleep set, and make one of
     -- them arbitrarily (recording the others).
     [] ->
-      let choices  = initialise
+      let choices  = restrictToBound initialise
           checkDep t a = case prior of
             Just (tid, act) -> dependency (schedDepState s) (tid, act) (t, a)
             Nothing -> False
           ssleep'  = M.filterWithKey (\t a -> not $ checkDep t a) $ schedSleep s
           choices' = filter (`notElem` M.keys ssleep') choices
           signore' = not (null choices) && all (`elem` M.keys ssleep') choices
+          sbkill'  = not (null initialise) && null choices
       in case choices' of
             (nextTid:rest) -> (Just nextTid, (nextState rest) { schedSleep = ssleep' })
-            [] -> (Nothing, (nextState []) { schedIgnore = signore' })
+            [] -> (Nothing, (nextState []) { schedIgnore = signore', schedBoundKill = sbkill' })
 
   -- The next scheduler state
   nextState rest = s
@@ -504,10 +516,10 @@ dporSched didYield willYield dependency killsDaemons ststep inBound trc prior th
     }
   nextDepState = let ds = schedDepState s in maybe ds (ststep ds) prior
 
-  -- Pick a new thread to run, which does not exceed the bound. Choose
-  -- the current thread if available and it hasn't just yielded,
-  -- otherwise add all runnable threads.
-  initialise = restrictToBound . tryDaemons . yieldsToEnd $ case prior of
+  -- Pick a new thread to run, not considering bounds. Choose the
+  -- current thread if available and it hasn't just yielded, otherwise
+  -- add all runnable threads.
+  initialise = tryDaemons . yieldsToEnd $ case prior of
     Just (tid, act)
       | not (didYield act) && tid `elem` tids -> [tid]
     _ -> tids'

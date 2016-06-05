@@ -118,7 +118,7 @@ randomDPOR didYield
         (res, s, trace) <- run scheduler
                               (initialSchedState stinit sleep prefix)
 
-        let bpoints  = findBacktracks s trace
+        let bpoints  = findBacktracks (schedBoundKill s) (schedBPoints s) trace
         let newDPOR  = addTrace conservative trace dp
         let newDPOR' = transform (addBacktracks bpoints newDPOR)
 
@@ -138,8 +138,7 @@ randomDPOR didYield
     scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound
 
     -- Find the new backtracking steps.
-    findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack .
-                     schedBPoints
+    findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack
 
     -- Incorporate a trace into the DPOR tree.
     addTrace = incorporateTrace stinit ststep dependency1
