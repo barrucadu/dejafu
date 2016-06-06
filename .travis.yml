@@ -26,10 +26,6 @@ matrix:
     # dejafu-0.2 is not ghc-8 compatible.
     - SKIP_OLD_DEJAFU=1
     addons: {apt: {packages: [libgmp-dev]}}
-  allow_failures:
-  - env:
-    - RESOLVER="nightly"
-    - SKIP_OLD_DEJAFU=1
 
 # Download and unpack the stack executable
 before_install:
