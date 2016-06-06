@@ -1,7 +1,16 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 
--- | Operations and types for threads.
+-- |
+-- Module      : Test.DejaFu.Deterministic.Internal.Threading
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : ExistentialQuantification, RankNTypes
+--
+-- Operations and types for threads. This module is NOT considered to
+-- form part of the public interface of this library.
 module Test.DejaFu.Deterministic.Internal.Threading where
 
 import Control.Exception (Exception, MaskingState(..), SomeException, fromException)

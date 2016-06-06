@@ -1,4 +1,12 @@
--- | 'TBQueue' is a bounded version of 'TQueue'. The queue has a maximum
+-- |
+-- Module      : Control.Concurrent.Classy.STM.TBQueue
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : stable
+-- Portability : portable
+--
+-- 'TBQueue' is a bounded version of 'TQueue'. The queue has a maximum
 -- capacity set when it is created.  If the queue already contains the
 -- maximum number of elements, then 'writeTBQueue' blocks until an
 -- element is removed from the queue.

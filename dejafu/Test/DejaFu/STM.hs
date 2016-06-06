@@ -2,7 +2,15 @@
 {-# LANGUAGE RankNTypes                 #-}
 {-# LANGUAGE TypeFamilies               #-}
 
--- | A 'MonadSTM' implementation, which can be run on top of 'IO' or
+-- |
+-- Module      : Test.DejaFu.STM
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : GeneralizedNewtypeDeriving, RankNTypes, TypeFamilies
+--
+-- A 'MonadSTM' implementation, which can be run on top of 'IO' or
 -- 'ST'.
 module Test.DejaFu.STM
   ( -- * The @STMLike@ Monad

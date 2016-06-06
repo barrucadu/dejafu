@@ -1,4 +1,12 @@
--- | Transactional variables, for use with 'MonadSTM'.
+-- |
+-- Module      : Control.Concurrent.Classy.STM.TVar
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : stable
+-- Portability : portable
+--
+-- Transactional variables, for use with 'MonadSTM'.
 --
 -- __Deviations:__ There is no @Eq@ instance for @MonadSTM@ the @TVar@
 -- type. Furthermore, the @newTVarIO@ and @mkWeakTVar@ functions are

@@ -1,4 +1,12 @@
--- | Quantity semaphores in which each thread may wait for an arbitrary
+-- |
+-- Module      : Control.Concurrent.Classy.QSemN
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : stable
+-- Portability : portable
+--
+-- Quantity semaphores in which each thread may wait for an arbitrary
 -- \"amount\".
 module Control.Concurrent.Classy.QSemN
   ( -- * General Quantity Semaphores

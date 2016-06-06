@@ -1,7 +1,16 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GADTs        #-}
 
--- | Operations over @CRef@s and @MVar@s
+-- |
+-- Module      : Test.DejaFu.Deterministic.Internal.Memory
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : BangPatterns, GADTs
+--
+-- Operations over @CRef@s and @MVar@s. This module is NOT considered
+-- to form part of the public interface of this library.
 --
 -- Relaxed memory operations over @CRef@s are implemented with an
 -- explicit write buffer: one per thread for TSO, and one per

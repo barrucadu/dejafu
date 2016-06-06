@@ -5,7 +5,15 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeSynonymInstances       #-}
 
--- | Deterministic traced execution of concurrent computations.
+-- |
+-- Module      : Test.DejaFu.Deterministic
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RankNTypes, TypeFamilies, TypeSynonymInstances
+--
+-- Deterministic traced execution of concurrent computations.
 --
 -- This works by executing the computation on a single thread, calling
 -- out to the supplied scheduler after each step to determine which

@@ -1,17 +1,28 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes                #-}
 
--- | Common types and utility functions for deterministic execution of
--- 'MonadConc' implementations.
+-- |
+-- Module      : Test.DejaFu.Deterministic.Internal.Common
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : ExistentialQuantification, RankNTypes
+--
+-- Common types and utility functions for deterministic execution of
+-- 'MonadConc' implementations. This module is NOT considered to form
+-- part of the public interface of this library.
 module Test.DejaFu.Deterministic.Internal.Common where
 
 import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception, MaskingState(..))
 import Data.Dynamic (Dynamic)
 import Data.Map.Strict (Map)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.List (sort, nub, intercalate)
 import Data.List.NonEmpty (NonEmpty, fromList)
+import Data.Set (Set)
+import qualified Data.Set as S
 import Test.DejaFu.Internal
 import Test.DPOR (Decision(..), Trace)
 
@@ -762,6 +773,20 @@ cvarOf :: ActionType -> Maybe MVarId
 cvarOf (SynchronisedRead  c) = Just c
 cvarOf (SynchronisedWrite c) = Just c
 cvarOf _ = Nothing
+
+-- | Get the 'TVar's affected.
+tvarsOf :: ThreadAction -> Set TVarId
+tvarsOf act = S.fromList $ case act of
+  STM trc _ -> concatMap tvarsOf' trc
+  BlockedSTM trc -> concatMap tvarsOf' trc
+  _ -> []
+
+  where
+    tvarsOf' (TRead  tv) = [tv]
+    tvarsOf' (TWrite tv) = [tv]
+    tvarsOf' (TOrElse ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
+    tvarsOf' (TCatch  ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
+    tvarsOf' _ = []
 
 -- | Throw away information from a 'ThreadAction' and give a
 -- simplified view of what is happening.

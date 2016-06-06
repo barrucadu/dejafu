@@ -1,7 +1,15 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | Systematic testing for concurrent computations.
+-- |
+-- Module      : Test.DejaFu.SCT
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : CPP, RankNTypes
+--
+-- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
   ( -- * Bounded Partial-order Reduction
 
@@ -91,10 +99,13 @@ module Test.DejaFu.SCT
   , sctLengthBoundIO
   ) where
 
+import Control.DeepSeq (NFData(..))
+import Control.Exception (MaskingState(..))
 import Data.Functor.Identity (Identity(..), runIdentity)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.Maybe (isJust, fromJust)
+import qualified Data.Set as S
 import Test.DPOR ( DPOR(..), dpor
                  , BacktrackStep(..), backtrackAt
                  , BoundFunc, (&+&), trueBound
@@ -285,7 +296,7 @@ sctBounded :: MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> BoundFunc ThreadId ThreadAction Lookahead
   -- ^ Check if a prefix trace is within the bound
-  -> ([BacktrackStep ThreadId ThreadAction Lookahead CRState] -> Int -> ThreadId -> [BacktrackStep ThreadId ThreadAction Lookahead CRState])
+  -> ([BacktrackStep ThreadId ThreadAction Lookahead DepState] -> Int -> ThreadId -> [BacktrackStep ThreadId ThreadAction Lookahead DepState])
   -- ^ Add a new backtrack point, this takes the history of the
   -- execution so far, the index to insert the backtracking point, and
   -- the thread to backtrack to. This may insert more than one
@@ -297,7 +308,7 @@ sctBounded memtype bf backtrack c = runIdentity $ sctBoundedM memtype bf backtra
 -- | Variant of 'sctBounded' for computations which do 'IO'.
 sctBoundedIO :: MemType
   -> BoundFunc ThreadId ThreadAction Lookahead
-  -> ([BacktrackStep ThreadId ThreadAction Lookahead CRState] -> Int -> ThreadId -> [BacktrackStep ThreadId ThreadAction Lookahead CRState])
+  -> ([BacktrackStep ThreadId ThreadAction Lookahead DepState] -> Int -> ThreadId -> [BacktrackStep ThreadId ThreadAction Lookahead DepState])
   -> ConcIO a -> IO [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
 sctBoundedIO memtype bf backtrack c = sctBoundedM memtype bf backtrack run where
   run memty sched s = runConcIO sched memty s c
@@ -306,15 +317,15 @@ sctBoundedIO memtype bf backtrack c = sctBoundedM memtype bf backtrack run where
 sctBoundedM :: Monad m
   => MemType
   -> ([(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Bool)
-  -> ([BacktrackStep ThreadId ThreadAction Lookahead CRState] -> Int -> ThreadId -> [BacktrackStep ThreadId ThreadAction Lookahead CRState])
+  -> ([BacktrackStep ThreadId ThreadAction Lookahead DepState] -> Int -> ThreadId -> [BacktrackStep ThreadId ThreadAction Lookahead DepState])
   -> (forall s. MemType -> Scheduler ThreadId ThreadAction Lookahead s -> s -> m (Either Failure a, s, Trace ThreadId ThreadAction Lookahead))
   -- ^ Monadic runner, with computation fixed.
   -> m [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
 sctBoundedM memtype bf backtrack run =
   dpor didYield
        willYield
-       initialCRState
-       updateCRState
+       initialDepState
+       updateDepState
        (dependent  memtype)
        (dependent' memtype)
 #if MIN_VERSION_dpor(0,2,0)
@@ -353,51 +364,92 @@ pruneCommits bpor
 -- Dependency function
 
 -- | Check if an action is dependent on another.
-dependent :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, ThreadAction) -> Bool
+dependent :: MemType -> DepState -> (ThreadId, ThreadAction) -> (ThreadId, ThreadAction) -> Bool
 -- This is basically the same as 'dependent'', but can make use of the
 -- additional information in a 'ThreadAction' to make different
 -- decisions in a few cases:
 --
---  - Firstly, @SetNumCapabilities@ and @GetNumCapabilities@ are NOT
---    dependent IF the value read is the same as the value
---    written. 'dependent'' can not see the value read (as it hasn't
---    happened yet!), and so is more pessimistic here.
+--  - @SetNumCapabilities@ and @GetNumCapabilities@ are NOT dependent
+--    IF the value read is the same as the value written. 'dependent''
+--    can not see the value read (as it hasn't happened yet!), and so
+--    is more pessimistic here.
 --
---  - Secondly, the @isBlock@ / @isBarrier@ case in 'dependent'' is
---    NOT a sound optimisation when dealing with a 'ThreadAction' that
---    has been converted to a 'Lookahead'. I'm not entirely sure why,
---    which makes me question whether the \"optimisation\" is sound as
---    it is.
+--  - When masked interruptible, a thread can only be interrupted when
+--    actually blocked. 'dependent'' has to assume that all
+--    potentially-blocking operations can block, and so is more
+--    pessimistic in this case.
+--
+--  - The @isBlock@ / @isBarrier@ case in 'dependent'' is NOT a sound
+--    optimisation when dealing with a 'ThreadAction' that has been
+--    converted to a 'Lookahead'. I'm not entirely sure why, which
+--    makes me question whether the \"optimisation\" is sound as it
+--    is.
+--
+--  - Dependency of STM transactions can be /greatly/ improved here,
+--    as the 'Lookahead' does not know which @TVar@s will be touched,
+--    and so has to assume all transactions are dependent.
 dependent _ _ (_, SetNumCapabilities a) (_, GetNumCapabilities b) = a /= b
-dependent memtype buf (t1, a1) (t2, a2) = case rewind a2 of
-  Just l2 | not (isBlock a1 && isBarrier (simplify' l2)) ->
-    dependent' memtype buf (t1, a1) (t2, l2)
-  _ -> dependentActions memtype buf (simplify a1) (simplify a2)
+dependent _ ds (_, ThrowTo t) (t2, a) = t == t2 && canInterrupt ds t2 a
+dependent memtype ds (t1, a1) (t2, a2) = case rewind a2 of
+  Just l2
+    | isSTM a1 && isSTM a2
+      -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
+    | not (isBlock a1 && isBarrier (simplify' l2)) ->
+      dependent' memtype ds (t1, a1) (t2, l2)
+  _ -> dependentActions memtype ds (simplify a1) (simplify a2)
 
--- | Variant of 'dependent' to handle 'ThreadAction''s
-dependent' :: MemType -> CRState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool
-dependent' _ _ (_, Lift) (_, WillLift) = True
-dependent' _ _ (_, ThrowTo t) (t2, WillStop) | t == t2 = False
-dependent' _ _ (t2, Stop) (_, WillThrowTo t) | t == t2 = False
-dependent' _ _ (_, ThrowTo t) (t2, _)     = t == t2
-dependent' _ _ (t2, _) (_, WillThrowTo t) = t == t2
-dependent' _ _ (_, STM _ _) (_, WillSTM) = True
-dependent' _ _ (_, GetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
-dependent' _ _ (_, SetNumCapabilities _) (_, WillGetNumCapabilities)   = True
-dependent' _ _ (_, SetNumCapabilities a) (_, WillSetNumCapabilities b) = a /= b
--- This is safe because, if the thread blocks anyway, a context switch
--- will occur anyway so there's no point pre-empting the action.
---
--- UNLESS the pre-emption would possibly allow for a different relaxed
--- memory stage.
-dependent' _ _ (_, a1) (_, l2) | isBlock a1 && isBarrier (simplify' l2) = False
-dependent' memtype buf (_, a1) (_, l2) = dependentActions memtype buf (simplify a1) (simplify' l2)
+  where
+    isSTM (STM _ _) = True
+    isSTM (BlockedSTM _) = True
+    isSTM _ = False
+
+-- | Variant of 'dependent' to handle 'Lookahead'.
+dependent' :: MemType -> DepState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool
+dependent' memtype ds (t1, a1) (t2, l2) = case (a1, l2) of
+#if MIN_VERSION_dpor(0,2,0)
+  -- dpor-0.2 handles this case, woo.
+#else
+  -- Because Haskell threads are daemonised, when the initial thread
+  -- stops all child threads do too, this imposes a dependency.
+  (Stop, _)     | t1 == initialThread -> True
+  (_, WillStop) | t2 == initialThread -> True
+#endif
+
+  -- Worst-case assumption: all IO is dependent.
+  (Lift, WillLift) -> True
+
+  -- Throwing an exception is only dependent with actions in that
+  -- thread and if the actions can be interrupted. We can also
+  -- slightly improve on that by not considering interrupting the
+  -- normal termination of a thread: it doesn't make a difference.
+  (ThrowTo t, WillStop) | t == t2 -> False
+  (Stop, WillThrowTo t) | t == t1 -> False
+  (ThrowTo t, _)     -> t == t2 && canInterruptL ds t2 l2
+  (_, WillThrowTo t) -> t == t1 && canInterrupt  ds t1 a1
+
+  -- Another worst-case: assume all STM is dependent.
+  (STM _ _, WillSTM) -> True
+
+  -- This is a bit pessimistic: Set/Get are only dependent if the
+  -- value set is not the same as the value that will be got, but we
+  -- can't know that here. 'dependent' optimises this case.
+  (GetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
+  (SetNumCapabilities _, WillGetNumCapabilities)   -> True
+  (SetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
+
+  -- Don't impose a dependency if the other thread will immediately
+  -- block already. This is safe because a context switch will occur
+  -- anyway so there's no point pre-empting the action UNLESS the
+  -- pre-emption would possibly allow for a different relaxed memory
+  -- stage.
+  _ | isBlock a1 && isBarrier (simplify' l2) -> False
+    | otherwise -> dependentActions memtype ds (simplify a1) (simplify' l2)
 
 -- | Check if two 'ActionType's are dependent. Note that this is not
 -- sufficient to know if two 'ThreadAction's are dependent, without
 -- being so great an over-approximation as to be useless!
-dependentActions :: MemType -> CRState -> ActionType -> ActionType -> Bool
-dependentActions memtype buf a1 a2 = case (a1, a2) of
+dependentActions :: MemType -> DepState -> ActionType -> ActionType -> Bool
+dependentActions memtype ds a1 a2 = case (a1, a2) of
   -- Unsynchronised reads and writes are always dependent, even under
   -- a relaxed memory model, as an unsynchronised write gives rise to
   -- a commit, which synchronises.
@@ -409,13 +461,13 @@ dependentActions memtype buf a1 a2 = case (a1, a2) of
   -- empty.
   --
   -- See [RMMVerification], lemma 5.25.
-  (UnsynchronisedWrite r1, _) | same crefOf && isCommit a2 r1 && isBuffered buf r1 -> False
-  (_, UnsynchronisedWrite r2) | same crefOf && isCommit a1 r2 && isBuffered buf r2 -> False
+  (UnsynchronisedWrite r1, _) | same crefOf && isCommit a2 r1 && isBuffered ds r1 -> False
+  (_, UnsynchronisedWrite r2) | same crefOf && isCommit a1 r2 && isBuffered ds r2 -> False
 
   -- Unsynchronised reads where a memory barrier would flush a
   -- buffered write
-  (UnsynchronisedRead r1, _) | isBarrier a2 -> isBuffered buf r1 && memtype /= SequentialConsistency
-  (_, UnsynchronisedRead r2) | isBarrier a1 -> isBuffered buf r2 && memtype /= SequentialConsistency
+  (UnsynchronisedRead r1, _) | isBarrier a2 -> isBuffered ds r1 && memtype /= SequentialConsistency
+  (_, UnsynchronisedRead r2) | isBarrier a1 -> isBuffered ds r2 && memtype /= SequentialConsistency
 
   (_, _)
     -- Two actions on the same CRef where at least one is synchronised
@@ -431,36 +483,104 @@ dependentActions memtype buf a1 a2 = case (a1, a2) of
 -------------------------------------------------------------------------------
 -- Dependency function state
 
-type CRState = Map CRefId Bool
+data DepState = DepState
+  { depCRState :: Map CRefId Bool
+  -- ^ Keep track of which @CRef@s have buffered writes.
+  , depMaskState :: Map ThreadId MaskingState
+  -- ^ Keep track of thread masking states. If a thread isn't present,
+  -- the masking state is assumed to be @Unmasked@. This nicely
+  -- provides compatibility with dpor-0.1, where the thread IDs are
+  -- not available.
+  }
 
--- | Initial global 'CRef buffer state.
-initialCRState :: CRState
-initialCRState = M.empty
+instance NFData DepState where
+  -- Cheats: 'MaskingState' has no 'NFData' instance.
+  rnf ds = rnf (depCRState ds, M.keys (depMaskState ds))
+
+-- | Initial dependency state.
+initialDepState :: DepState
+initialDepState = DepState M.empty M.empty
 
 -- | Update the 'CRef' buffer state with the action that has just
 -- happened.
 #if MIN_VERSION_dpor(0,2,0)
-updateCRState :: CRState -> (ThreadId, ThreadAction) -> CRState
-updateCRState crstate = updateCRState' crstate . snd
+updateDepState :: DepState -> (ThreadId, ThreadAction) -> DepState
+updateDepState depstate (tid, act) = DepState
+  { depCRState   = updateCRState       act $ depCRState   depstate
+  , depMaskState = updateMaskState tid act $ depMaskState depstate
+  }
 #else
-updateCRState :: CRState -> ThreadAction -> CRState
-updateCRState = updateCRState'
+updateDepState :: DepState -> ThreadAction -> DepState
+updateDepState depstate act = depstate
+  { depCRState = updateCRState act $ depCRState depstate }
 #endif
 
 -- | Update the 'CRef' buffer state with the action that has just
 -- happened.
-updateCRState' :: CRState -> ThreadAction -> CRState
-updateCRState' crstate (CommitRef _ r) = M.delete r crstate
-updateCRState' crstate (WriteRef r) = M.insert r True crstate
-updateCRState' crstate ta
-  | isBarrier $ simplify ta = initialCRState
-  | otherwise = crstate
+updateCRState :: ThreadAction -> Map CRefId Bool -> Map CRefId Bool
+updateCRState (CommitRef _ r) = M.delete r
+updateCRState (WriteRef    r) = M.insert r True
+updateCRState ta
+  | isBarrier $ simplify ta = const M.empty
+  | otherwise = id
+
+-- | Update the thread masking state with the action that has just
+-- happened.
+updateMaskState :: ThreadId -> ThreadAction -> Map ThreadId MaskingState -> Map ThreadId MaskingState
+updateMaskState tid (Fork tid2) = \masks -> case M.lookup tid masks of
+  -- A thread inherits the masking state of its parent.
+  Just ms -> M.insert tid2 ms masks
+  Nothing -> masks
+updateMaskState tid (SetMasking   _ ms) = M.insert tid ms
+updateMaskState tid (ResetMasking _ ms) = M.insert tid ms
+updateMaskState _ _ = id
 
 -- | Check if a 'CRef' has a buffered write pending.
---
--- If the state is @Unknown@, this assumes @True@.
-isBuffered :: CRState -> CRefId -> Bool
-isBuffered crstate r = M.findWithDefault False r crstate
+isBuffered :: DepState -> CRefId -> Bool
+isBuffered depstate r = M.findWithDefault False r (depCRState depstate)
+
+-- | Check if an exception can interrupt a thread (action).
+canInterrupt :: DepState -> ThreadId -> ThreadAction -> Bool
+canInterrupt depstate tid act
+  -- If masked interruptible, blocked actions can be interrupted.
+  | isMaskedInterruptible depstate tid = case act of
+    BlockedPutVar  _ -> True
+    BlockedReadVar _ -> True
+    BlockedTakeVar _ -> True
+    BlockedSTM     _ -> True
+    BlockedThrowTo _ -> True
+    _ -> False
+  -- If masked uninterruptible, nothing can be.
+  | isMaskedUninterruptible depstate tid = False
+  -- If no mask, anything can be.
+  | otherwise = True
+
+-- | Check if an exception can interrupt a thread (lookahead).
+canInterruptL :: DepState -> ThreadId -> Lookahead -> Bool
+canInterruptL depstate tid lh
+  -- If masked interruptible, actions which can block may be
+  -- interrupted.
+  | isMaskedInterruptible depstate tid = case lh of
+    WillPutVar  _ -> True
+    WillReadVar _ -> True
+    WillTakeVar _ -> True
+    WillSTM       -> True
+    WillThrowTo _ -> True
+    _ -> False
+  -- If masked uninterruptible, nothing can be.
+  | isMaskedUninterruptible depstate tid = False
+  -- If no mask, anything can be.
+  | otherwise = True
+
+-- | Check if a thread is masked interruptible.
+isMaskedInterruptible :: DepState -> ThreadId -> Bool
+isMaskedInterruptible depstate tid =
+  M.lookup tid (depMaskState depstate) == Just MaskedInterruptible
+
+-- | Check if a thread is masked uninterruptible.
+isMaskedUninterruptible :: DepState -> ThreadId -> Bool
+isMaskedUninterruptible depstate tid =
+  M.lookup tid (depMaskState depstate) == Just MaskedUninterruptible
 
 -------------------------------------------------------------------------------
 -- Utilities
