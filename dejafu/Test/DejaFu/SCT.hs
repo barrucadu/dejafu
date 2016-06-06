@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | Systematic testing for concurrent computations.
@@ -316,6 +317,10 @@ sctBoundedM memtype bf backtrack run =
        updateCRState
        (dependent  memtype)
        (dependent' memtype)
+#if MIN_VERSION_dpor(0,2,0)
+       -- dpor-0.2 knows about daemon threads.
+       (\_ (t, l) _ -> t == initialThread && case l of WillStop -> True; _ -> False)
+#endif
        initialThread
        (>=initialThread)
        bf
@@ -434,10 +439,20 @@ initialCRState = M.empty
 
 -- | Update the 'CRef' buffer state with the action that has just
 -- happened.
+#if MIN_VERSION_dpor(0,2,0)
+updateCRState :: CRState -> (ThreadId, ThreadAction) -> CRState
+updateCRState crstate = updateCRState' crstate . snd
+#else
 updateCRState :: CRState -> ThreadAction -> CRState
-updateCRState crstate (CommitRef _ r) = M.delete r crstate
-updateCRState crstate (WriteRef r) = M.insert r True crstate
-updateCRState crstate ta
+updateCRState = updateCRState'
+#endif
+
+-- | Update the 'CRef' buffer state with the action that has just
+-- happened.
+updateCRState' :: CRState -> ThreadAction -> CRState
+updateCRState' crstate (CommitRef _ r) = M.delete r crstate
+updateCRState' crstate (WriteRef r) = M.insert r True crstate
+updateCRState' crstate ta
   | isBarrier $ simplify ta = initialCRState
   | otherwise = crstate
 

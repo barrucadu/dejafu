@@ -1,6 +1,14 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
--- | Systematic testing of concurrent computations through dynamic
+-- |
+-- Module      : Test.DPOR
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : experimental
+-- Portability : GeneralizedNewtypeDeriving
+--
+-- Systematic testing of concurrent computations through dynamic
 -- partial-order reduction and schedule bounding.
 module Test.DPOR
   ( -- * Bounded dynamic partial-order reduction
@@ -78,6 +86,9 @@ module Test.DPOR
   , lenBound
   , lenBacktrack
 
+  -- * Random approaches
+  , module Test.DPOR.Random
+
   -- * Scheduling & execution traces
 
   -- | The partial-order reduction is driven by incorporating
@@ -93,10 +104,11 @@ module Test.DPOR
 
 import Control.DeepSeq (NFData)
 import Data.List (nub)
-import Data.Maybe (isNothing)
+import Data.List.NonEmpty (NonEmpty)
 import qualified Data.Map.Strict as M
 
 import Test.DPOR.Internal
+import Test.DPOR.Random
 import Test.DPOR.Schedule
 
 -------------------------------------------------------------------------------
@@ -118,6 +130,14 @@ import Test.DPOR.Schedule
 -- the most specific and (2) will be more pessimistic (due to,
 -- typically, less information being available when merely looking
 -- ahead).
+--
+-- The daemon-termination predicate returns @True@ if the action being
+-- looked at will cause the entire computation to terminate,
+-- regardless of the other runnable threads (which are passed in the
+-- 'NonEmpty' list). Such actions will then be put off for as long as
+-- possible. This allows supporting concurrency models with daemon
+-- threads without doing something as drastic as imposing a dependency
+-- between the program-terminating action and /everything/ else.
 dpor :: ( Ord    tid
        , NFData tid
        , NFData action
@@ -131,12 +151,14 @@ dpor :: ( Ord    tid
   -- ^ Determine if a thread will yield.
   -> s
   -- ^ The initial state for backtracking.
-  -> (s -> action -> s)
+  -> (s -> (tid, action) -> s)
   -- ^ The backtracking state step function.
   -> (s -> (tid, action) -> (tid, action)    -> Bool)
   -- ^ The dependency (1) function.
   -> (s -> (tid, action) -> (tid, lookahead) -> Bool)
   -- ^ The dependency (2) function.
+  -> (s -> (tid, lookahead) -> NonEmpty tid -> Bool)
+  -- ^ The daemon-termination predicate.
   -> tid
   -- ^ The initial thread.
   -> (tid -> Bool)
@@ -162,6 +184,7 @@ dpor didYield
      ststep
      dependency1
      dependency2
+     killsDaemons
      initialTid
      predicate
      inBound
@@ -175,11 +198,11 @@ dpor didYield
     -- traces into a list until there are no schedules remaining to
     -- try.
     go dp = case nextPrefix dp of
-      Just (prefix, conservative, sleep) -> do
+      Just (prefix, conservative, sleep, ()) -> do
         (res, s, trace) <- run scheduler
                               (initialSchedState stinit sleep prefix)
 
-        let bpoints = findBacktracks s trace
+        let bpoints = findBacktracks (schedBoundKill s) (schedBPoints s) trace
         let newDPOR = addTrace conservative trace dp
 
         if schedIgnore s
@@ -189,14 +212,13 @@ dpor didYield
       Nothing -> pure []
 
     -- Find the next schedule prefix.
-    nextPrefix = findSchedulePrefix predicate
+    nextPrefix = findSchedulePrefix predicate (const (0, ()))
 
     -- The DPOR scheduler.
-    scheduler = dporSched didYield willYield dependency1 ststep inBound
+    scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound
 
     -- Find the new backtracking steps.
-    findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack .
-                     schedBPoints
+    findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack
 
     -- Incorporate a trace into the DPOR tree.
     addTrace = incorporateTrace stinit ststep dependency1
@@ -220,6 +242,8 @@ simpleDPOR :: ( Ord    tid
   -- ^ The dependency (1) function.
   -> ((tid, action) -> (tid, lookahead) -> Bool)
   -- ^ The dependency (2) function.
+  -> ((tid, lookahead) -> NonEmpty tid -> Bool)
+  -- ^ The daemon-termination predicate.
   -> tid
   -- ^ The initial thread.
   -> BoundFunc tid action lookahead
@@ -238,6 +262,7 @@ simpleDPOR didYield
            willYield
            dependency1
            dependency2
+           killsDaemons
            initialTid
            inBound
            backtrack
@@ -247,46 +272,12 @@ simpleDPOR didYield
          (\_ _ -> ())
          (const dependency1)
          (const dependency2)
+         (const killsDaemons)
          initialTid
          (const True)
          inBound
          backtrack
          id
-
--- | Add a backtracking point. If the thread isn't runnable, add all
--- runnable threads. If the backtracking point is already present,
--- don't re-add it UNLESS this would make it conservative.
-backtrackAt :: Ord tid
-  => (BacktrackStep tid action lookahead s -> Bool)
-  -- ^ If this returns @True@, backtrack to all runnable threads,
-  -- rather than just the given thread.
-  -> Bool
-  -- ^ Is this backtracking point conservative? Conservative points
-  -- are always explored, whereas non-conservative ones might be
-  -- skipped based on future information.
-  -> BacktrackFunc tid action lookahead s
-backtrackAt toAll conservative bs i tid = go bs i where
-  go bx@(b:rest) 0
-    -- If the backtracking point is already present, don't re-add it,
-    -- UNLESS this would force it to backtrack (it's conservative)
-    -- where before it might not.
-    | not (toAll b) && tid `M.member` bcktRunnable b =
-      let val = M.lookup tid $ bcktBacktracks b
-      in if isNothing val || (val == Just False && conservative)
-         then b { bcktBacktracks = backtrackTo b } : rest
-         else bx
-
-    -- Otherwise just backtrack to everything runnable.
-    | otherwise = b { bcktBacktracks = backtrackAll b } : rest
-
-  go (b:rest) n = b : go rest (n-1)
-  go [] _ = error "backtrackAt: Ran out of schedule whilst backtracking!"
-
-  -- Backtrack to a single thread
-  backtrackTo = M.insert tid conservative . bcktBacktracks
-
-  -- Backtrack to all runnable threads
-  backtrackAll = M.map (const conservative) . bcktRunnable
 
 -------------------------------------------------------------------------------
 -- Bounds
@@ -297,10 +288,6 @@ backtrackAt toAll conservative bs i tid = go bs i where
       -> BoundFunc tid action lookahead
       -> BoundFunc tid action lookahead
 (&+&) b1 b2 ts dl = b1 ts dl && b2 ts dl
-
--- | The \"true\" bound, which allows everything.
-trueBound :: BoundFunc tid action lookahead
-trueBound _ _ = True
 
 -------------------------------------------------------------------------------
 -- Preemption bounding
