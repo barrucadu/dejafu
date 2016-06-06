@@ -31,9 +31,7 @@ module Test.DejaFu.SCT
   -- See /Bounded partial-order reduction/, K. Coons, M. Musuvathi,
   -- K. McKinley for more details.
 
-    BacktrackStep(..)
-
-  , sctBounded
+    sctBounded
   , sctBoundedIO
 
   -- * Combination Bounds
@@ -97,6 +95,11 @@ module Test.DejaFu.SCT
   , defaultLengthBound
   , sctLengthBound
   , sctLengthBoundIO
+
+  -- * Backtracking
+
+  , BacktrackStep(..)
+  , BacktrackFunc
   ) where
 
 import Control.DeepSeq (NFData(..))
@@ -107,7 +110,7 @@ import qualified Data.Map.Strict as M
 import Data.Maybe (isJust, fromJust)
 import qualified Data.Set as S
 import Test.DPOR ( DPOR(..), dpor
-                 , BacktrackStep(..), backtrackAt
+                 , BacktrackFunc, BacktrackStep(..), backtrackAt
                  , BoundFunc, (&+&), trueBound
                  , PreemptionBound(..), defaultPreemptionBound, preempBacktrack
                  , FairBound(..), defaultFairBound, fairBound, fairBacktrack
@@ -169,11 +172,7 @@ cBound (Bounds pb fb lb) = maybe trueBound pBound pb &+& maybe trueBound fBound 
 -- corresponding to enabled bound functions.
 --
 -- If no bounds are enabled, just backtrack to the given point.
-cBacktrack :: Bounds
-  -> [BacktrackStep ThreadId ThreadAction Lookahead s]
-  -> Int
-  -> ThreadId
-  -> [BacktrackStep ThreadId ThreadAction Lookahead s]
+cBacktrack :: Bounds -> BacktrackFunc ThreadId ThreadAction Lookahead s
 cBacktrack (Bounds Nothing Nothing Nothing) bs i t = backtrackAt (const False) False bs i t
 cBacktrack (Bounds pb fb lb) bs i t = lBack . fBack $ pBack bs where
   pBack backs = if isJust pb then pBacktrack   backs i t else backs
@@ -205,13 +204,7 @@ sctPreBoundIO memtype pb = sctBoundedIO memtype (pBound pb) pBacktrack
 -- the most recent transition before that point. This may result in
 -- the same state being reached multiple times, but is needed because
 -- of the artificial dependency imposed by the bound.
-pBacktrack :: [BacktrackStep ThreadId ThreadAction Lookahead s]
-  -- ^ The current backtracking points.
-  -> Int
-  -- ^ The point to backtrack to.
-  -> ThreadId
-  -- ^ The thread to backtrack to.
-  -> [BacktrackStep ThreadId ThreadAction Lookahead s]
+pBacktrack :: BacktrackFunc ThreadId ThreadAction Lookahead s
 pBacktrack = preempBacktrack isCommitRef
 
 -- | Pre-emption bound function. This is different to @preempBound@ in
@@ -247,13 +240,7 @@ fBound = fairBound didYield willYield (\act -> case act of Fork t -> [t]; _ -> [
 
 -- | Add a backtrack point. If the thread isn't runnable, or performs
 -- a release operation, add all runnable threads.
-fBacktrack :: [BacktrackStep ThreadId ThreadAction Lookahead s]
-  -- ^ The current backtracking points.
-  -> Int
-  -- ^ The point to backtrack to.
-  -> ThreadId
-  -- ^ The thread to backtrack to.
-  -> [BacktrackStep ThreadId ThreadAction Lookahead s]
+fBacktrack :: BacktrackFunc ThreadId ThreadAction Lookahead s
 fBacktrack = fairBacktrack willRelease
 
 -------------------------------------------------------------------------------
@@ -296,7 +283,7 @@ sctBounded :: MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> BoundFunc ThreadId ThreadAction Lookahead
   -- ^ Check if a prefix trace is within the bound
-  -> ([BacktrackStep ThreadId ThreadAction Lookahead DepState] -> Int -> ThreadId -> [BacktrackStep ThreadId ThreadAction Lookahead DepState])
+  -> BacktrackFunc ThreadId ThreadAction Lookahead DepState
   -- ^ Add a new backtrack point, this takes the history of the
   -- execution so far, the index to insert the backtracking point, and
   -- the thread to backtrack to. This may insert more than one
@@ -308,7 +295,7 @@ sctBounded memtype bf backtrack c = runIdentity $ sctBoundedM memtype bf backtra
 -- | Variant of 'sctBounded' for computations which do 'IO'.
 sctBoundedIO :: MemType
   -> BoundFunc ThreadId ThreadAction Lookahead
-  -> ([BacktrackStep ThreadId ThreadAction Lookahead DepState] -> Int -> ThreadId -> [BacktrackStep ThreadId ThreadAction Lookahead DepState])
+  -> BacktrackFunc ThreadId ThreadAction Lookahead DepState
   -> ConcIO a -> IO [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
 sctBoundedIO memtype bf backtrack c = sctBoundedM memtype bf backtrack run where
   run memty sched s = runConcIO sched memty s c
@@ -317,7 +304,7 @@ sctBoundedIO memtype bf backtrack c = sctBoundedM memtype bf backtrack run where
 sctBoundedM :: Monad m
   => MemType
   -> ([(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Bool)
-  -> ([BacktrackStep ThreadId ThreadAction Lookahead DepState] -> Int -> ThreadId -> [BacktrackStep ThreadId ThreadAction Lookahead DepState])
+  -> BacktrackFunc ThreadId ThreadAction Lookahead DepState
   -> (forall s. MemType -> Scheduler ThreadId ThreadAction Lookahead s -> s -> m (Either Failure a, s, Trace ThreadId ThreadAction Lookahead))
   -- ^ Monadic runner, with computation fixed.
   -> m [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
