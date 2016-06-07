@@ -1,8 +1,7 @@
-{-# LANGUAGE CPP              #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes       #-}
-{-# LANGUAGE TemplateHaskell  #-}
-{-# LANGUAGE TypeFamilies     #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- |
 -- Module      : Control.Monad.Conc.Class
@@ -10,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, FlexibleContexts, RankNTypes, TemplateHaskell, TypeFamilies
+-- Portability : CPP, FlexibleContexts, RankNTypes, TypeFamilies
 --
 -- This module captures in a typeclass the interface of concurrency
 -- monads.
@@ -36,7 +35,6 @@ module Control.Monad.Conc.Class
   -- ** Named Threads
   , forkN
   , forkOnN
-  , lineNum
 
   -- ** Bound Threads
 
@@ -58,7 +56,6 @@ module Control.Monad.Conc.Class
   , cas
 
   -- * Utilities for instance writers
-  , makeTransConc
   , liftedF
   , liftedFork
   ) where
@@ -70,7 +67,6 @@ import qualified Control.Monad.Catch as Ca
 import Control.Monad.STM.Class (MonadSTM, TVar, readTVar)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
 import Data.Typeable (Typeable)
-import Language.Haskell.TH (Q, DecsQ, Exp, Loc(..), Info(VarI), Name, Type(..), reify, location, varE)
 
 -- for the 'IO' instance
 import qualified Control.Concurrent as IO
@@ -359,21 +355,6 @@ class ( Applicative m, Monad m
 -------------------------------------------------------------------------------
 -- Utilities
 
--- | Get the current line number as a String. Useful for automatically
--- naming threads, @MVar@s, and @CRef@s.
---
--- Example usage:
---
--- > forkN $lineNum ...
---
--- Unfortunately this can't be packaged up into a
--- @forkL@/@forkOnL@/etc set of functions, because this imposes a
--- 'Lift' constraint on the monad, which 'IO' does not have.
-lineNum :: Q Exp
-lineNum = do
-  line <- show . fst . loc_start <$> location
-  [| line |]
-
 -- Threads
 
 -- | Create a concurrent computation for the provided action, and
@@ -604,65 +585,6 @@ INSTANCE(RS.RWST r w s, (MonadConc m, Monoid w), (\(a,_,_) -> a))
 #undef INSTANCE
 
 -------------------------------------------------------------------------------
-
--- | Make an instance @MonadConc m => MonadConc (t m)@ for a given
--- transformer, @t@. The parameter should be the name of a function
--- @:: forall a. StT t a -> a@.
-makeTransConc :: Name -> DecsQ
-makeTransConc unstN = do
-  unstI <- reify unstN
-  case unstI of
-#if MIN_VERSION_template_haskell(2,11,0)
-    -- template-haskell-2.11.0.0 drops the 'Fixity' value from 'VarI'
-    VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ ->
-#else
-    VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ _ ->
-#endif
-      [d|
-        instance (MonadConc m) => MonadConc ($(pure t) m) where
-          type STM      ($(pure t) m) = STM m
-          type MVar     ($(pure t) m) = MVar m
-          type CRef     ($(pure t) m) = CRef m
-          type Ticket   ($(pure t) m) = Ticket m
-          type ThreadId ($(pure t) m) = ThreadId m
-
-          fork   = liftedF $(varE unstN) fork
-          forkOn = liftedF $(varE unstN) . forkOn
-
-          forkWithUnmask        = liftedFork $(varE unstN) forkWithUnmask
-          forkWithUnmaskN   n   = liftedFork $(varE unstN) (forkWithUnmaskN   n  )
-          forkOnWithUnmask    i = liftedFork $(varE unstN) (forkOnWithUnmask    i)
-          forkOnWithUnmaskN n i = liftedFork $(varE unstN) (forkOnWithUnmaskN n i)
-
-          getNumCapabilities = lift getNumCapabilities
-          setNumCapabilities = lift . setNumCapabilities
-          myThreadId         = lift myThreadId
-          yield              = lift yield
-          threadDelay        = lift . threadDelay
-          throwTo tid        = lift . throwTo tid
-          newEmptyMVar       = lift newEmptyMVar
-          newEmptyMVarN      = lift . newEmptyMVarN
-          readMVar           = lift . readMVar
-          putMVar v          = lift . putMVar v
-          tryPutMVar v       = lift . tryPutMVar v
-          takeMVar           = lift . takeMVar
-          tryTakeMVar        = lift . tryTakeMVar
-          newCRef            = lift . newCRef
-          newCRefN n         = lift . newCRefN n
-          readCRef           = lift . readCRef
-          atomicModifyCRef r = lift . atomicModifyCRef r
-          writeCRef r        = lift . writeCRef r
-          atomicWriteCRef r  = lift . atomicWriteCRef r
-          readForCAS         = lift . readForCAS
-          peekTicket         = lift . peekTicket
-          casCRef r tick     = lift . casCRef r tick
-          modifyCRefCAS r    = lift . modifyCRefCAS r
-          atomically         = lift . atomically
-          readTVarConc       = lift . readTVarConc
-
-          _concMessage    = lift . _concMessage
-      |]
-    _ -> fail "Expected a value of type (forall a -> StT t a -> a)"
 
 -- | Given a function to remove the transformer-specific state, lift
 -- a function invocation.

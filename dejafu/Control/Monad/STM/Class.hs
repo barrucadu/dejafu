@@ -1,7 +1,6 @@
-{-# LANGUAGE CPP             #-}
-{-# LANGUAGE RankNTypes      #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies    #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- |
 -- Module      : Control.Monad.STM.Class
@@ -29,7 +28,6 @@ module Control.Monad.STM.Class
   , catchSTM
 
   -- * Utilities for instance writers
-  , makeTransSTM
   , liftedOrElse
   ) where
 
@@ -39,7 +37,6 @@ import Control.Monad.Reader (ReaderT)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
 import Control.Monad.Trans.Identity (IdentityT)
-import Language.Haskell.TH (DecsQ, Info(VarI), Name, Type(..), reify, varE)
 
 import qualified Control.Concurrent.STM as STM
 import qualified Control.Monad.Catch as Ca
@@ -157,32 +154,6 @@ INSTANCE(RS.RWST r w s, (MonadSTM stm, Monoid w), (\(a,_,_) -> a))
 #undef INSTANCE
 
 -------------------------------------------------------------------------------
-
--- | Make an instance @MonadSTM m => MonadSTM (t m)@ for a given
--- transformer, @t@. The parameter should be the name of a function
--- @:: forall a. StT t a -> a@.
-makeTransSTM :: Name -> DecsQ
-makeTransSTM unstN = do
-  unstI <- reify unstN
-  case unstI of
-#if MIN_VERSION_template_haskell(2,11,0)
-    -- template-haskell-2.11.0.0 drops the 'Fixity' value from 'VarI'
-    VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ ->
-#else
-    VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ _ ->
-#endif
-      [d|
-        instance (MonadSTM stm, MonadTransControl $(pure t)) => MonadSTM ($(pure t) stm) where
-          type TVar ($(pure t) stm) = TVar stm
-
-          retry       = lift retry
-          orElse      = liftedOrElse $(varE unstN)
-          newTVar     = lift . newTVar
-          newTVarN n  = lift . newTVarN n
-          readTVar    = lift . readTVar
-          writeTVar v = lift . writeTVar v
-      |]
-    _ -> fail "Expected a value of type (forall a -> StT t a -> a)"
 
 -- | Given a function to remove the transformer-specific state, lift
 -- an @orElse@ invocation.

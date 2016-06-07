@@ -122,7 +122,6 @@ library
                      , ref-fd            >=0.4  && <0.5
                      , semigroups        >=0.16 && <0.19
                      , stm               >=2.4  && <2.5
-                     , template-haskell  >=2.10 && <2.12
                      , transformers      >=0.4  && <0.6
                      , transformers-base >=0.4  && <0.5
   -- hs-source-dirs:      
