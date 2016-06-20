@@ -1,6 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- |
@@ -9,12 +11,12 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, FlexibleContexts, RankNTypes, TypeFamilies
+-- Portability : CPP, FlexibleContexts, PolyKinds, RankNTypes, ScopedTypeVariables, TypeFamilies
 --
 -- This module captures in a typeclass the interface of concurrency
 -- monads.
 --
--- __Deviations:__ An instance of @MonadCoonc@ is not required to be
+-- __Deviations:__ An instance of @MonadConc@ is not required to be
 -- an instance of @MonadFix@, unlike @IO@. The @CRef@, @MVar@, and
 -- @Ticket@ types are not required to be instances of @Show@ or @Eq@,
 -- unlike their normal counterparts. The @threadCapability@,
@@ -54,6 +56,7 @@ module Control.Monad.Conc.Class
   , newMVar
   , newMVarN
   , cas
+  , peekTicket
 
   -- * Utilities for instance writers
   , liftedF
@@ -66,6 +69,7 @@ import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import qualified Control.Monad.Catch as Ca
 import Control.Monad.STM.Class (MonadSTM, TVar, readTVar)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
+import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable)
 
 -- for the 'IO' instance
@@ -117,7 +121,7 @@ class ( Applicative m, Monad m
       , atomicModifyCRef
       , writeCRef
       , readForCAS
-      , peekTicket
+      , peekTicket'
       , casCRef
       , modifyCRefCAS
       , atomically
@@ -306,10 +310,8 @@ class ( Applicative m, Monad m
 
   -- | Extract the actual Haskell value from a @Ticket@.
   --
-  -- This shouldn't need to do any monadic computation, the @m@
-  -- appears in the result type because of the need for injectivity in
-  -- the @Ticket@ type family, which can't be expressed currently.
-  peekTicket :: Ticket m a -> m a
+  -- The @proxy m@ is to determine the @m@ in the @Ticket@ type.
+  peekTicket' :: proxy m -> Ticket m a -> a
 
   -- | Perform a machine-level compare-and-swap (CAS) operation on a
   -- @CRef@. Returns an indication of success and a @Ticket@ for the
@@ -472,6 +474,13 @@ newMVarN n a = do
   putMVar cvar a
   pure cvar
 
+-- | Extract the actual Haskell value from a @Ticket@.
+--
+-- This doesn't do do any monadic computation, the @m@ appears in the
+-- result type to determine the @m@ in the @Ticket@ type.
+peekTicket :: forall m a. MonadConc m => Ticket m a -> m a
+peekTicket t = pure $ peekTicket' (Proxy :: Proxy m) (t :: Ticket m a)
+
 -- | Compare-and-swap a value in a @CRef@, returning an indication of
 -- success and the new value.
 cas :: MonadConc m => CRef m a -> a -> m (Bool, a)
@@ -516,7 +525,7 @@ instance MonadConc IO where
   writeCRef          = IO.writeIORef
   atomicWriteCRef    = IO.atomicWriteIORef
   readForCAS         = IO.readForCAS
-  peekTicket         = pure . IO.peekTicket
+  peekTicket' _      = IO.peekTicket
   casCRef            = IO.casIORef
   modifyCRefCAS      = IO.atomicModifyIORefCAS
   atomically         = IO.atomically
@@ -561,7 +570,7 @@ instance C => MonadConc (T m) where                             { \
   writeCRef r        = lift . writeCRef r                      ; \
   atomicWriteCRef r  = lift . atomicWriteCRef r                ; \
   readForCAS         = lift . readForCAS                       ; \
-  peekTicket         = lift . peekTicket                       ; \
+  peekTicket' _      = peekTicket' (Proxy :: Proxy m)          ; \
   casCRef r t        = lift . casCRef r t                      ; \
   modifyCRefCAS r    = lift . modifyCRefCAS r                  ; \
   atomically         = lift . atomically                       ; \

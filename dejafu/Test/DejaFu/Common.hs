@@ -226,8 +226,6 @@ data ThreadAction =
   -- ^ Read from a 'CRef'.
   | ReadRefCas CRefId
   -- ^ Read from a 'CRef' for a future compare-and-swap.
-  | PeekTicket CRefId
-  -- ^ Extract the value from a 'Ticket'.
   | ModRef CRefId
   -- ^ Modify a 'CRef'.
   | ModRefCas CRefId
@@ -292,7 +290,6 @@ instance NFData ThreadAction where
   rnf (NewRef c) = rnf c
   rnf (ReadRef c) = rnf c
   rnf (ReadRefCas c) = rnf c
-  rnf (PeekTicket c) = rnf c
   rnf (ModRef c) = rnf c
   rnf (ModRefCas c) = rnf c
   rnf (WriteRef c) = rnf c
@@ -363,8 +360,6 @@ data Lookahead =
   -- ^ Will create a new 'CRef'.
   | WillReadRef CRefId
   -- ^ Will read from a 'CRef'.
-  | WillPeekTicket CRefId
-  -- ^ Will extract the value from a 'Ticket'.
   | WillReadRefCas CRefId
   -- ^ Will read from a 'CRef' for a future compare-and-swap.
   | WillModRef CRefId
@@ -417,7 +412,6 @@ instance NFData Lookahead where
   rnf (WillTryTakeVar c) = rnf c
   rnf (WillReadRef c) = rnf c
   rnf (WillReadRefCas c) = rnf c
-  rnf (WillPeekTicket c) = rnf c
   rnf (WillModRef c) = rnf c
   rnf (WillModRefCas c) = rnf c
   rnf (WillWriteRef c) = rnf c
@@ -449,7 +443,6 @@ rewind (TryTakeVar c _ _) = Just (WillTryTakeVar c)
 rewind (NewRef _) = Just WillNewRef
 rewind (ReadRef c) = Just (WillReadRef c)
 rewind (ReadRefCas c) = Just (WillReadRefCas c)
-rewind (PeekTicket c) = Just (WillPeekTicket c)
 rewind (ModRef c) = Just (WillModRef c)
 rewind (ModRefCas c) = Just (WillModRefCas c)
 rewind (WriteRef c) = Just (WillWriteRef c)

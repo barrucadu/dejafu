@@ -113,7 +113,6 @@ data Action n r s =
   | forall a.   ANewRef String a (CRef r a -> Action n r s)
   | forall a.   AReadRef    (CRef r a) (a -> Action n r s)
   | forall a.   AReadRefCas (CRef r a) (Ticket a -> Action n r s)
-  | forall a.   APeekTicket (Ticket a) (a -> Action n r s)
   | forall a b. AModRef     (CRef r a) (a -> (a, b)) (b -> Action n r s)
   | forall a b. AModRefCas  (CRef r a) (a -> (a, b)) (b -> Action n r s)
   | forall a.   AWriteRef   (CRef r a) a (Action n r s)
@@ -154,7 +153,6 @@ lookahead = fromList . lookahead' where
   lookahead' (ANewRef _ _ _)         = [WillNewRef]
   lookahead' (AReadRef (CRef r _) _)     = [WillReadRef r]
   lookahead' (AReadRefCas (CRef r _) _)  = [WillReadRefCas r]
-  lookahead' (APeekTicket (Ticket r _ _) _) = [WillPeekTicket r]
   lookahead' (AModRef (CRef r _) _ _)    = [WillModRef r]
   lookahead' (AModRefCas (CRef r _) _ _) = [WillModRefCas r]
   lookahead' (AWriteRef (CRef r _) _ k) = WillWriteRef r : lookahead' k

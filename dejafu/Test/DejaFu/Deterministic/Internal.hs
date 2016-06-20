@@ -139,7 +139,6 @@ stepThread runstm memtype action idSource tid threads wb caps = case action of
   ANewRef  n a c   -> stepNewRef      n a c
   AReadRef ref c   -> stepReadRef     ref c
   AReadRefCas ref c -> stepReadRefCas ref c
-  APeekTicket tick c -> stepPeekTicket tick c
   AModRef  ref f c -> stepModRef      ref f c
   AModRefCas ref f c -> stepModRefCas ref f c
   AWriteRef ref a c -> stepWriteRef   ref a c
@@ -219,9 +218,6 @@ stepThread runstm memtype action idSource tid threads wb caps = case action of
     stepReadRefCas cref@(CRef crid _) c = do
       tick <- readForTicket cref tid
       simple (goto (c tick) tid threads) $ ReadRefCas crid
-
-    -- | Extract the value from a @Ticket@.
-    stepPeekTicket (Ticket crid _ a) c = simple (goto (c a) tid threads) $ PeekTicket crid
 
     -- | Modify a @CRef@.
     stepModRef cref@(CRef crid _) f c = synchronised $ do
