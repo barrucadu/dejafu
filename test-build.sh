@@ -44,7 +44,7 @@ if [[ -z "$SKIP_OLD_DEJAFU" ]]; then
   sed 's:^- dejafu$::' stack.yaml > stack-old-dejafu.yaml
   sed -i 's/^extra-deps: \[\]/extra-deps: [ dejafu-0.2.0.0 ]/' stack-old-dejafu.yaml
 
-  for pkg in hunit-dejafu tasty-dejafu async-dejafu; do
+  for pkg in hunit-dejafu tasty-dejafu; do
     testcmd "${pkg} (dejafu-0.2)" stack $STACKOPTS --stack-yaml=stack-old-dejafu.yaml test $pkg
   done
 fi
