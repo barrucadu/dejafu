@@ -37,6 +37,7 @@ executable dejafu-tests
 
   -- other-extensions:    
   build-depends:       base
+                     , concurrency
                      , containers
                      , dejafu
                      , exceptions

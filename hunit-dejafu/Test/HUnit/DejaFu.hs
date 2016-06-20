@@ -116,7 +116,7 @@ assertableP = alwaysTrue $ \r -> case r of
 
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
--- 
+--
 -- This uses the 'Conc' monad for testing, which is an instance of
 -- 'MonadConc'. If you need to test something which also uses
 -- 'MonadIO', use 'testAutoIO'.

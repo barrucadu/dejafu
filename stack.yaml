@@ -2,11 +2,12 @@ flags: {}
 
 packages:
 - async-dejafu
-- hunit-dejafu
-- tasty-dejafu
+- concurrency
 - dejafu
 - dejafu-tests
 - dpor
+- hunit-dejafu
+- tasty-dejafu
 
 extra-deps: []
 
