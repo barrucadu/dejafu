@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                tasty-dejafu
-version:             0.3.0.1
+version:             0.3.0.2
 synopsis:            Deja Fu support for the Tasty test framework.
 
 description:

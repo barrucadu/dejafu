@@ -2,7 +2,7 @@
 {-# LANGUAGE RankNTypes                #-}
 
 -- |
--- Module      : Test.DejaFu.Deterministic.Internal.Threading
+-- Module      : Test.DejaFu.Conc.Internal.Threading
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
@@ -11,7 +11,7 @@
 --
 -- Operations and types for threads. This module is NOT considered to
 -- form part of the public interface of this library.
-module Test.DejaFu.Deterministic.Internal.Threading where
+module Test.DejaFu.Conc.Internal.Threading where
 
 import Control.Exception (Exception, MaskingState(..), SomeException, fromException)
 import Data.List (intersect)
@@ -19,7 +19,7 @@ import Data.Map.Strict (Map)
 import Data.Maybe (fromMaybe, isJust)
 
 import Test.DejaFu.Common
-import Test.DejaFu.Deterministic.Internal.Common
+import Test.DejaFu.Conc.Internal.Common
 
 import qualified Data.Map.Strict as M
 

@@ -3,7 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 -- |
--- Module      : Test.DejaFu.Deterministic.Internal.Memory
+-- Module      : Test.DejaFu.Conc.Internal.Memory
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
@@ -21,7 +21,7 @@
 --
 -- This model comes from /Dynamic Partial Order Reduction for Relaxed
 -- Memory Models/, N. Zhang, M. Kusano, and C. Wang (2015).
-module Test.DejaFu.Deterministic.Internal.Memory where
+module Test.DejaFu.Conc.Internal.Memory where
 
 import Control.Monad (when)
 import Control.Monad.Ref (MonadRef, readRef, writeRef)
@@ -31,8 +31,8 @@ import Data.Monoid ((<>))
 import Data.Sequence (Seq, ViewL(..), (><), singleton, viewl)
 
 import Test.DejaFu.Common
-import Test.DejaFu.Deterministic.Internal.Common
-import Test.DejaFu.Deterministic.Internal.Threading
+import Test.DejaFu.Conc.Internal.Common
+import Test.DejaFu.Conc.Internal.Threading
 
 import qualified Data.Map.Strict as M
 

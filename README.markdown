@@ -36,10 +36,10 @@ on a typeclass abstraction of concurrency, and related libraries.
 - async-dejafu ([hackage 0.1.3.0][async]): Run MonadConc operations
   asynchronously and wait for their results.
 
-- hunit-dejafu ([hackage 0.3.0.1][hunit]): Deja Fu support for the
+- hunit-dejafu ([hackage 0.3.0.2][hunit]): Deja Fu support for the
   HUnit test framework.
 
-- tasty-dejafu ([hackage 0.3.0.1][tasty]): Deja Fu support for the
+- tasty-dejafu ([hackage 0.3.0.2][tasty]): Deja Fu support for the
   Tasty test framework.
 
 There is also dejafu-tests, the test suite for dejafu. This is in a

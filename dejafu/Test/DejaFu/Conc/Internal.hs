@@ -3,7 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
--- Module      : Test.DejaFu.Deterministic.Internal
+-- Module      : Test.DejaFu.Conc.Internal
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
@@ -13,7 +13,7 @@
 -- Concurrent monads with a fixed scheduler: internal types and
 -- functions. This module is NOT considered to form part of the public
 -- interface of this library.
-module Test.DejaFu.Deterministic.Internal where
+module Test.DejaFu.Conc.Internal where
 
 import Control.Exception (MaskingState(..), toException)
 import Control.Monad.Ref (MonadRef, newRef, writeRef)
@@ -25,9 +25,9 @@ import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
 import Test.DPOR (Scheduler)
 
 import Test.DejaFu.Common
-import Test.DejaFu.Deterministic.Internal.Common
-import Test.DejaFu.Deterministic.Internal.Memory
-import Test.DejaFu.Deterministic.Internal.Threading
+import Test.DejaFu.Conc.Internal.Common
+import Test.DejaFu.Conc.Internal.Memory
+import Test.DejaFu.Conc.Internal.Threading
 import Test.DejaFu.STM (Result(..))
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}

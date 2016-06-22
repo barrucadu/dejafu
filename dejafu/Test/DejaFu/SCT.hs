@@ -111,7 +111,7 @@ import Test.DPOR ( DPOR(..), dpor
                  )
 
 import Test.DejaFu.Common
-import Test.DejaFu.Deterministic
+import Test.DejaFu.Conc
 
 -------------------------------------------------------------------------------
 -- Combined Bounds

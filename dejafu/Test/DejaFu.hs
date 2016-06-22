@@ -246,7 +246,7 @@ import Data.List (intercalate, intersperse, minimumBy)
 import Data.Ord (comparing)
 
 import Test.DejaFu.Common
-import Test.DejaFu.Deterministic
+import Test.DejaFu.Conc
 import Test.DejaFu.SCT
 
 -- | The default memory model: @TotalStoreOrder@

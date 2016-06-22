@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeSynonymInstances       #-}
 
 -- |
--- Module      : Test.DejaFu.Deterministic
+-- Module      : Test.DejaFu.Conc
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
@@ -18,7 +18,7 @@
 -- This works by executing the computation on a single thread, calling
 -- out to the supplied scheduler after each step to determine which
 -- thread runs next.
-module Test.DejaFu.Deterministic
+module Test.DejaFu.Conc
   ( -- * The @Conc@ Monad
     Conc
   , ConcST
@@ -60,9 +60,9 @@ import Test.DPOR.Schedule
 
 import qualified Control.Monad.Conc.Class as C
 import Test.DejaFu.Common
-import Test.DejaFu.Deterministic.Internal
-import Test.DejaFu.Deterministic.Internal.Common
-import Test.DejaFu.Deterministic.Internal.Threading
+import Test.DejaFu.Conc.Internal
+import Test.DejaFu.Conc.Internal.Common
+import Test.DejaFu.Conc.Internal.Threading
 import Test.DejaFu.STM
 
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}

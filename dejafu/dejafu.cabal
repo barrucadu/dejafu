@@ -78,15 +78,15 @@ source-repository this
 
 library
   exposed-modules:     Test.DejaFu
-                     , Test.DejaFu.Deterministic
+                     , Test.DejaFu.Conc
                      , Test.DejaFu.Common
                      , Test.DejaFu.SCT
                      , Test.DejaFu.STM
 
-                     , Test.DejaFu.Deterministic.Internal
-                     , Test.DejaFu.Deterministic.Internal.Common
-                     , Test.DejaFu.Deterministic.Internal.Memory
-                     , Test.DejaFu.Deterministic.Internal.Threading
+                     , Test.DejaFu.Conc.Internal
+                     , Test.DejaFu.Conc.Internal.Common
+                     , Test.DejaFu.Conc.Internal.Memory
+                     , Test.DejaFu.Conc.Internal.Threading
                      , Test.DejaFu.STM.Internal
 
   -- other-modules:       

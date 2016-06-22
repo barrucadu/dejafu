@@ -54,24 +54,29 @@ import Data.Proxy (Proxy(..))
 import Data.Tagged (Tagged(..))
 import Data.Typeable (Typeable)
 import Test.DejaFu
-import Test.DejaFu.Deterministic (ConcST, ConcIO, Trace, ThreadId, ThreadAction, Lookahead, showFail, showTrace)
 import qualified Test.DejaFu.SCT as SCT
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.Options (OptionDescription(..), IsOption(..), lookupOption)
 import Test.Tasty.Providers (IsTest(..), singleTest, testPassed, testFailed)
+
+#if MIN_VERSION_dejafu(0,4,0)
+import qualified Test.DejaFu.Conc as Conc
+#else
+import qualified Test.DejaFu.Deterministic as Conc
+#endif
 
 -- Can't put the necessary forall in the @IsTest ConcST t@
 -- instance :(
 import Unsafe.Coerce (unsafeCoerce)
 
 #if MIN_VERSION_dejafu(0,3,0)
-type Trc = Trace ThreadId ThreadAction Lookahead
+type Trc = Conc.Trace Conc.ThreadId Conc.ThreadAction Conc.Lookahead
 #else
-type Trc = Trace
+type Trc = Conc.Trace
 #endif
 
-sctBoundST :: MemType -> Bounds -> (forall t. ConcST t a) -> [(Either Failure a, Trc)]
-sctBoundIO :: MemType -> Bounds -> ConcIO a -> IO [(Either Failure a, Trc)]
+sctBoundST :: MemType -> Bounds -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Trc)]
+sctBoundIO :: MemType -> Bounds -> Conc.ConcIO a -> IO [(Either Failure a, Trc)]
 
 #if MIN_VERSION_dejafu(0,4,0)
 sctBoundST memtype cb conc = runST (SCT.sctBound memtype cb conc)
@@ -84,18 +89,18 @@ sctBoundIO = SCT.sctBoundIO
 --------------------------------------------------------------------------------
 -- Unit testing
 
-instance Typeable t => IsTest (ConcST t (Maybe String)) where
+instance Typeable t => IsTest (Conc.ConcST t (Maybe String)) where
   testOptions = Tagged concOptions
 
   run options conc callback = do
     let memtype = lookupOption options :: MemType
     let bounds  = lookupOption options :: Bounds
-    let sctBound' :: ConcST t (Maybe String) -> [(Either Failure (Maybe String), Trc)]
+    let sctBound' :: Conc.ConcST t (Maybe String) -> [(Either Failure (Maybe String), Trc)]
         sctBound' = unsafeCoerce $ sctBoundST memtype bounds
     let traces = sctBound' conc
     run options (ConcTest traces assertableP) callback
 
-instance IsTest (ConcIO (Maybe String)) where
+instance IsTest (Conc.ConcIO (Maybe String)) where
   testOptions = Tagged concOptions
 
   run options conc callback = do
@@ -141,7 +146,7 @@ instance IsOption MemType where
 -- 'MonadConc'. If you need to test something which also uses
 -- 'MonadIO', use 'testAutoIO'.
 testAuto :: (Eq a, Show a)
-  => (forall t. ConcST t a)
+  => (forall t. Conc.ConcST t a)
   -- ^ The computation to test
   -> TestTree
 testAuto = testAuto' defaultMemType
@@ -151,17 +156,17 @@ testAuto = testAuto' defaultMemType
 testAuto' :: (Eq a, Show a)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> (forall t. ConcST t a)
+  -> (forall t. Conc.ConcST t a)
   -- ^ The computation to test
   -> TestTree
 testAuto' memtype conc = testDejafus' memtype defaultBounds conc autocheckCases
 
 -- | Variant of 'testAuto' for computations which do 'IO'.
-testAutoIO :: (Eq a, Show a) => ConcIO a -> TestTree
+testAutoIO :: (Eq a, Show a) => Conc.ConcIO a -> TestTree
 testAutoIO = testAutoIO' defaultMemType
 
 -- | Variant of 'testAuto'' for computations which do 'IO'.
-testAutoIO' :: (Eq a, Show a) => MemType -> ConcIO a -> TestTree
+testAutoIO' :: (Eq a, Show a) => MemType -> Conc.ConcIO a -> TestTree
 testAutoIO' memtype concio = testDejafusIO' memtype defaultBounds  concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
@@ -174,7 +179,7 @@ autocheckCases =
 
 -- | Check that a predicate holds.
 testDejafu :: Show a
-  => (forall t. ConcST t a)
+  => (forall t. Conc.ConcST t a)
   -- ^ The computation to test
   -> TestName
   -- ^ The name of the test.
@@ -190,7 +195,7 @@ testDejafu' :: Show a
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Bounds
   -- ^ The schedule bounds.
-  -> (forall t. ConcST t a)
+  -> (forall t. Conc.ConcST t a)
   -- ^ The computation to test
   -> TestName
   -- ^ The name of the test.
@@ -203,7 +208,7 @@ testDejafu' memtype cb conc name p = testDejafus' memtype cb conc [(name, p)]
 -- test. This will share work between the predicates, rather than
 -- running the concurrent computation many times for each predicate.
 testDejafus :: Show a
-  => (forall t. ConcST t a)
+  => (forall t. Conc.ConcST t a)
   -- ^ The computation to test
   -> [(TestName, Predicate a)]
   -- ^ The list of predicates (with names) to check
@@ -217,7 +222,7 @@ testDejafus' :: Show a
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Bounds
   -- ^ The schedule bounds.
-  -> (forall t. ConcST t a)
+  -> (forall t. Conc.ConcST t a)
   -- ^ The computation to test
   -> [(TestName, Predicate a)]
   -- ^ The list of predicates (with names) to check
@@ -225,19 +230,19 @@ testDejafus' :: Show a
 testDejafus' = testst
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
-testDejafuIO :: Show a => ConcIO a -> TestName -> Predicate a -> TestTree
+testDejafuIO :: Show a => Conc.ConcIO a -> TestName -> Predicate a -> TestTree
 testDejafuIO = testDejafuIO' defaultMemType defaultBounds
 
 -- | Variant of 'testDejafu'' for computations which do 'IO'.
-testDejafuIO' :: Show a => MemType -> Bounds -> ConcIO a -> TestName -> Predicate a -> TestTree
+testDejafuIO' :: Show a => MemType -> Bounds -> Conc.ConcIO a -> TestName -> Predicate a -> TestTree
 testDejafuIO' memtype cb concio name p = testDejafusIO' memtype cb concio [(name, p)]
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
-testDejafusIO :: Show a => ConcIO a -> [(TestName, Predicate a)] -> TestTree
+testDejafusIO :: Show a => Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
 testDejafusIO = testDejafusIO' defaultMemType defaultBounds
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-testDejafusIO' :: Show a => MemType -> Bounds -> ConcIO a -> [(TestName, Predicate a)] -> TestTree
+testDejafusIO' :: Show a => MemType -> Bounds -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
 testDejafusIO' = testio
 
 --------------------------------------------------------------------------------
@@ -267,7 +272,7 @@ instance IsTest ConcIOTest where
     return $ if null err then testPassed "" else testFailed err
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu test.
-testst :: Show a => MemType -> Bounds -> (forall t. ConcST t a) -> [(TestName, Predicate a)] -> TestTree
+testst :: Show a => MemType -> Bounds -> (forall t. Conc.ConcST t a) -> [(TestName, Predicate a)] -> TestTree
 testst memtype cb conc tests = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts
@@ -278,7 +283,7 @@ testst memtype cb conc tests = case map toTest tests of
     traces = sctBoundST memtype cb conc
 
 -- | Produce a Tasty 'Test' from an IO-using Deja Fu test.
-testio :: Show a => MemType -> Bounds -> ConcIO a -> [(TestName, Predicate a)] -> TestTree
+testio :: Show a => MemType -> Bounds -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
 testio memtype cb concio tests = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts
@@ -299,7 +304,7 @@ showErr res
 
   msg = if null (_failureMsg res) then "" else _failureMsg res ++ "\n"
 
-  failures = intersperse "" . map (\(r, t) -> indent $ either showFail show r ++ " " ++ showTrace t) . take 5 $ _failures res
+  failures = intersperse "" . map (\(r, t) -> indent $ either Conc.showFail show r ++ " " ++ Conc.showTrace t) . take 5 $ _failures res
 
   rest = if moreThan (_failures res) 5 then "\n\t..." else ""
 

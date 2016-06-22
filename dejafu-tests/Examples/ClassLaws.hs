@@ -15,7 +15,7 @@ import Control.Monad.Conc.Class
 import Data.Maybe (isJust)
 import Data.Set (Set, fromList)
 import Test.DejaFu (Failure(..), defaultBounds, defaultMemType)
-import Test.DejaFu.Deterministic (ConcST)
+import Test.DejaFu.Conc (ConcST)
 import Test.DejaFu.SCT (sctBound)
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
