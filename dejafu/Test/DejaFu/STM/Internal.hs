@@ -137,7 +137,7 @@ stepTrans fixed act idsource = case act of
     nothing = return ()
 
     stepCatch h stm c = cases TCatch stm c
-      (\trace readen -> return (SRetry, nothing, idsource, readen, [], TCatch trace Nothing))
+      (\trace -> return (SRetry, nothing, idsource, [], [], TCatch trace Nothing))
       (\trace exc    -> case fromException exc of
         Just exc' -> transaction (TCatch trace . Just) (h exc') c
         Nothing   -> return (SThrow exc, nothing, idsource, [], [], TCatch trace Nothing))
@@ -158,7 +158,7 @@ stepTrans fixed act idsource = case act of
       return (c tvar, nothing, idsource', [], [tvid], TNew)
 
     stepOrElse a b c = cases TOrElse a c
-      (\trace _   -> transaction (TOrElse trace . Just) b c)
+      (\trace   -> transaction (TOrElse trace . Just) b c)
       (\trace exc -> return (SThrow exc, nothing, idsource, [], [], TOrElse trace Nothing))
 
     stepLift na = do
@@ -169,9 +169,11 @@ stepTrans fixed act idsource = case act of
       (res, undo, idsource', trace) <- doTransaction fixed stm idsource
       case res of
         Success readen written val -> return (onSuccess val, undo, idsource', readen, written, tact trace Nothing)
-        Retry readen  -> onRetry     trace readen
+        Retry readen -> do
+          (res', undo', idsource'', readen', written', trace') <- onRetry trace
+          pure (res', undo', idsource'', readen ++ readen', written', trace')
         Exception exc -> onException trace exc
 
     transaction tact stm onSuccess = cases (\t _ -> tact t) stm onSuccess
-      (\trace readen -> return (SRetry, nothing, idsource, readen, [], tact trace))
-      (\trace exc    -> return (SThrow exc, nothing, idsource, [], [], tact trace))
+      (\trace     -> return (SRetry, nothing, idsource, [], [], tact trace))
+      (\trace exc -> return (SThrow exc, nothing, idsource, [], [], tact trace))

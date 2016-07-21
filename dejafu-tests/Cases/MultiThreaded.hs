@@ -34,7 +34,10 @@ tests =
     ]
 
   , testGroup "STM" . hUnitTestToTests $ test
-    [ testDejafu stmAtomic "atomicity" $ gives' [0,2]
+    [ testDejafu stmAtomic     "atomicity"   $ gives' [0,2]
+    , testDejafu stmLeftRetry  "left retry"  $ gives' [()]
+    , testDejafu stmRightRetry "right retry" $ gives' [()]
+    , testDejafu stmIssue55    "issue 55"    $ gives' [True]
     ]
 
   , testGroup "Killing Threads" . hUnitTestToTests $ test
@@ -136,6 +139,31 @@ stmAtomic = do
   x <- atomically $ newTVar (0::Int)
   void . fork . atomically $ writeTVar x 1 >> writeTVar x 2
   atomically $ readTVar x
+
+-- | 'retry' is the left identity of 'orElse'.
+stmLeftRetry :: MonadConc m => m ()
+stmLeftRetry = do
+  x <- atomically $ newTVar Nothing
+  let readJust var = maybe retry pure =<< readTVar var
+  fork . atomically . writeTVar x $ Just ()
+  atomically $ retry `orElse` readJust x
+
+-- | 'retry' is the right identity of 'orElse'.
+stmRightRetry :: MonadConc m => m ()
+stmRightRetry = do
+  x <- atomically $ newTVar Nothing
+  let readJust var = maybe retry pure =<< readTVar var
+  fork . atomically . writeTVar x $ Just ()
+  atomically $ readJust x `orElse` retry
+
+-- | Test case from issue #55.
+stmIssue55 :: MonadConc m => m Bool
+stmIssue55 = do
+  a <- atomically $ newTQueue
+  b <- atomically $ newTQueue
+  fork . atomically $ writeTQueue b True
+  let both a b = readTQueue a `orElse` readTQueue b `orElse` retry
+  atomically $ both a b
 
 --------------------------------------------------------------------------------
 -- Exceptions
