@@ -38,7 +38,7 @@ module Control.Concurrent.Classy.CRef
   -- >   x <- spawn $ writeCRef r1 True >> readCRef r2
   -- >   y <- spawn $ writeCRef r2 True >> readCRef r1
   -- >
-  -- >   (,) <$> readCVar x <*> readCVar y
+  -- >   (,) <$> readMVar x <*> readMVar y
   --
   -- Under a sequentially consistent memory model the possible results
   -- are @(True, True)@, @(True, False)@, and @(False, True)@. Under
