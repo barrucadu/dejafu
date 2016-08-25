@@ -45,22 +45,31 @@
 -- Here is what Deja Fu has to say about it:
 --
 -- > > autocheck example1
--- > [fail] Never Deadlocks (checked: 2)
--- >         [deadlock] S0---------S1--P2---S1-
--- > [pass] No Exceptions (checked: 11)
--- > [fail] Consistent Result (checked: 10)
--- >         0 S0---------S1---------------S0--S2---------------S0----
--- >         [deadlock] S0---------S1--P2---S1-
+-- > [fail] Never Deadlocks (checked: 5)
+-- >         [deadlock] S0------------S1-P2--S1-
+-- >
+-- >             0: main
+-- > [pass] No Exceptions (checked: 12)
+-- > [fail] Consistent Result (checked: 11)
+-- >         0 S0------------S2-----------------S1-----------------S0----
+-- >
+-- >             0: main
+-- >
+-- >         [deadlock] S0------------S1-P2--S1-
+-- >
+-- >             0: main
 -- > False
 --
 -- It identifies the deadlock, and also the possible results the
 -- computation can produce, and displays a simplified trace leading to
--- each failing outcome. It also returns @False@ as there are test
--- failures. The automatic testing functionality is good enough if you
--- only want to check your computation is deterministic, but if you
--- have more specific requirements (or have some expected and
--- tolerated level of nondeterminism), you can write tests yourself
--- using the @dejafu*@ functions.
+-- each failing outcome. The trace contains thread numbers, and the
+-- names (which can be set by the programmer) are displayed beneath.
+-- It also returns @False@ as there are test failures. The automatic
+-- testing functionality is good enough if you only want to check your
+-- computation is deterministic, but if you have more specific
+-- requirements (or have some expected and tolerated level of
+-- nondeterminism), you can write tests yourself using the @dejafu*@
+-- functions.
 --
 -- __Warning:__ If your computation under test does @IO@, the @IO@
 -- will be executed lots of times! Be sure that it is deterministic
