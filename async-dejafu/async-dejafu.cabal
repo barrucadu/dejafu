@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                async-dejafu
-version:             0.1.2.2
+version:             0.1.3.0
 synopsis:            Run MonadConc operations asynchronously and wait for their results.
 
 description:
@@ -11,9 +11,12 @@ description:
   conveniently run IO operations asynchronously and wait for their
   results. This package is a reimplementation of async using the
   @MonadConc@ abstraction from
-  <https://hackage.haskell.org/package/dejafu dejafu>, providing
+  <https://hackage.haskell.org/package/concurrency concurrency>, providing
   easy-to-use asynchronous operaitons within an easily-testable
   framework.
+  .
+  This library itself is tested with
+  <https://hackage.haskell.org/package/dejafu dejafu>.
   .
   When these functions are used in an IO context, the behaviour should
   appear identical to the original async package.
@@ -37,15 +40,15 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      async-dejafu-0.1.2.2
+  tag:      async-dejafu-0.1.3.0
 
 library
   exposed-modules:     Control.Concurrent.Async
   -- other-modules:       
   -- other-extensions:    
-  build-depends:       base       >=4.8 && <5
-                     , dejafu     >=0.2 && <0.4
-                     , exceptions >=0.7 && <0.9
+  build-depends:       base        >=4.8 && <5
+                     , concurrency >=1   && <2
+                     , exceptions  >=0.7 && <0.9
   -- hs-source-dirs:      
   default-language:    Haskell2010
   ghc-options: -Wall
@@ -54,5 +57,5 @@ test-suite tests
   hs-source-dirs:      tests
   type:                exitcode-stdio-1.0
   main-is:             Main.hs
-  build-depends:       base, async-dejafu, dejafu, HUnit, hunit-dejafu
+  build-depends:       base, async-dejafu, concurrency, dejafu>=0.4, HUnit, hunit-dejafu
   default-language:    Haskell2010

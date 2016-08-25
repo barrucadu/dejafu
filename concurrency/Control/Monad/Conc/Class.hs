@@ -1,8 +1,9 @@
-{-# LANGUAGE CPP              #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes       #-}
-{-# LANGUAGE TemplateHaskell  #-}
-{-# LANGUAGE TypeFamilies     #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- |
 -- Module      : Control.Monad.Conc.Class
@@ -10,12 +11,12 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, FlexibleContexts, RankNTypes, TemplateHaskell, TypeFamilies
+-- Portability : CPP, FlexibleContexts, PolyKinds, RankNTypes, ScopedTypeVariables, TypeFamilies
 --
 -- This module captures in a typeclass the interface of concurrency
 -- monads.
 --
--- __Deviations:__ An instance of @MonadCoonc@ is not required to be
+-- __Deviations:__ An instance of @MonadConc@ is not required to be
 -- an instance of @MonadFix@, unlike @IO@. The @CRef@, @MVar@, and
 -- @Ticket@ types are not required to be instances of @Show@ or @Eq@,
 -- unlike their normal counterparts. The @threadCapability@,
@@ -36,7 +37,6 @@ module Control.Monad.Conc.Class
   -- ** Named Threads
   , forkN
   , forkOnN
-  , lineNum
 
   -- ** Bound Threads
 
@@ -56,9 +56,9 @@ module Control.Monad.Conc.Class
   , newMVar
   , newMVarN
   , cas
+  , peekTicket
 
   -- * Utilities for instance writers
-  , makeTransConc
   , liftedF
   , liftedFork
   ) where
@@ -69,8 +69,8 @@ import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
 import qualified Control.Monad.Catch as Ca
 import Control.Monad.STM.Class (MonadSTM, TVar, readTVar)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
+import Data.Proxy (Proxy(..))
 import Data.Typeable (Typeable)
-import Language.Haskell.TH (Q, DecsQ, Exp, Loc(..), Info(VarI), Name, Type(..), reify, location, varE)
 
 -- for the 'IO' instance
 import qualified Control.Concurrent as IO
@@ -121,7 +121,7 @@ class ( Applicative m, Monad m
       , atomicModifyCRef
       , writeCRef
       , readForCAS
-      , peekTicket
+      , peekTicket'
       , casCRef
       , modifyCRefCAS
       , atomically
@@ -310,10 +310,8 @@ class ( Applicative m, Monad m
 
   -- | Extract the actual Haskell value from a @Ticket@.
   --
-  -- This shouldn't need to do any monadic computation, the @m@
-  -- appears in the result type because of the need for injectivity in
-  -- the @Ticket@ type family, which can't be expressed currently.
-  peekTicket :: Ticket m a -> m a
+  -- The @proxy m@ is to determine the @m@ in the @Ticket@ type.
+  peekTicket' :: proxy m -> Ticket m a -> a
 
   -- | Perform a machine-level compare-and-swap (CAS) operation on a
   -- @CRef@. Returns an indication of success and a @Ticket@ for the
@@ -350,52 +348,6 @@ class ( Applicative m, Monad m
 
   -- | Does nothing.
   --
-  -- This function is purely for testing purposes, and indicates that
-  -- the thread has a reference to the provided @MVar@ or @TVar@. This
-  -- function may be called multiple times, to add new knowledge to
-  -- the system. It does not need to be called when @MVar@s or @TVar@s
-  -- are created, these get recorded automatically.
-  --
-  -- Gathering this information allows detection of cases where the
-  -- main thread is blocked on a variable no runnable thread has a
-  -- reference to, which is a deadlock situation.
-  --
-  -- > _concKnowsAbout _ = pure ()
-  _concKnowsAbout :: Either (MVar m a) (TVar (STM m) a) -> m ()
-  _concKnowsAbout _ = pure ()
-
-  -- | Does nothing.
-  --
-  -- The counterpart to '_concKnowsAbout'. Indicates that the
-  -- referenced variable will never be touched again by the current
-  -- thread.
-  --
-  -- Note that inappropriate use of @_concForgets@ can result in false
-  -- positives! Be very sure that the current thread will /never/
-  -- refer to the variable again, for instance when leaving its scope.
-  --
-  -- > _concForgets _ = pure ()
-  _concForgets :: Either (MVar m a) (TVar (STM m) a) -> m ()
-  _concForgets _ = pure ()
-
-  -- | Does nothing.
-  --
-  -- Indicates to the test runner that all variables which have been
-  -- passed in to this thread have been recorded by calls to
-  -- '_concKnowsAbout'. If every thread has called '_concAllKnown',
-  -- then detection of nonglobal deadlock is turned on.
-  --
-  -- If a thread receives references to @MVar@s or @TVar@s in the
-  -- future (for instance, if one was sent over a channel), then
-  -- '_concKnowsAbout' should be called immediately, otherwise there
-  -- is a risk of identifying false positives.
-  --
-  -- > _concAllKnown = pure ()
-  _concAllKnown :: m ()
-  _concAllKnown = pure ()
-
-  -- | Does nothing.
-  --
   -- During testing, records a message which shows up in the trace.
   --
   -- > _concMessage _ = pure ()
@@ -405,21 +357,6 @@ class ( Applicative m, Monad m
 -------------------------------------------------------------------------------
 -- Utilities
 
--- | Get the current line number as a String. Useful for automatically
--- naming threads, @MVar@s, and @CRef@s.
---
--- Example usage:
---
--- > forkN $lineNum ...
---
--- Unfortunately this can't be packaged up into a
--- @forkL@/@forkOnL@/etc set of functions, because this imposes a
--- 'Lift' constraint on the monad, which 'IO' does not have.
-lineNum :: Q Exp
-lineNum = do
-  line <- show . fst . loc_start <$> location
-  [| line |]
-
 -- Threads
 
 -- | Create a concurrent computation for the provided action, and
@@ -427,7 +364,7 @@ lineNum = do
 spawn :: MonadConc m => m a -> m (MVar m a)
 spawn ma = do
   cvar <- newEmptyMVar
-  _ <- fork $ _concKnowsAbout (Left cvar) >> ma >>= putMVar cvar
+  _ <- fork $ ma >>= putMVar cvar
   pure cvar
 
 -- | Fork a thread and call the supplied function when the thread is
@@ -537,6 +474,13 @@ newMVarN n a = do
   putMVar cvar a
   pure cvar
 
+-- | Extract the actual Haskell value from a @Ticket@.
+--
+-- This doesn't do do any monadic computation, the @m@ appears in the
+-- result type to determine the @m@ in the @Ticket@ type.
+peekTicket :: forall m a. MonadConc m => Ticket m a -> m a
+peekTicket t = pure $ peekTicket' (Proxy :: Proxy m) (t :: Ticket m a)
+
 -- | Compare-and-swap a value in a @CRef@, returning an indication of
 -- success and the new value.
 cas :: MonadConc m => CRef m a -> a -> m (Bool, a)
@@ -581,7 +525,7 @@ instance MonadConc IO where
   writeCRef          = IO.writeIORef
   atomicWriteCRef    = IO.atomicWriteIORef
   readForCAS         = IO.readForCAS
-  peekTicket         = pure . IO.peekTicket
+  peekTicket' _      = IO.peekTicket
   casCRef            = IO.casIORef
   modifyCRefCAS      = IO.atomicModifyIORefCAS
   atomically         = IO.atomically
@@ -626,15 +570,12 @@ instance C => MonadConc (T m) where                             { \
   writeCRef r        = lift . writeCRef r                      ; \
   atomicWriteCRef r  = lift . atomicWriteCRef r                ; \
   readForCAS         = lift . readForCAS                       ; \
-  peekTicket         = lift . peekTicket                       ; \
+  peekTicket' _      = peekTicket' (Proxy :: Proxy m)          ; \
   casCRef r t        = lift . casCRef r t                      ; \
   modifyCRefCAS r    = lift . modifyCRefCAS r                  ; \
   atomically         = lift . atomically                       ; \
   readTVarConc       = lift . readTVarConc                     ; \
                                                                  \
-  _concKnowsAbout = lift . _concKnowsAbout                     ; \
-  _concForgets    = lift . _concForgets                        ; \
-  _concAllKnown   = lift _concAllKnown                         ; \
   _concMessage    = lift . _concMessage                        }
 
 INSTANCE(ReaderT r, MonadConc m, id)
@@ -653,68 +594,6 @@ INSTANCE(RS.RWST r w s, (MonadConc m, Monoid w), (\(a,_,_) -> a))
 #undef INSTANCE
 
 -------------------------------------------------------------------------------
-
--- | Make an instance @MonadConc m => MonadConc (t m)@ for a given
--- transformer, @t@. The parameter should be the name of a function
--- @:: forall a. StT t a -> a@.
-makeTransConc :: Name -> DecsQ
-makeTransConc unstN = do
-  unstI <- reify unstN
-  case unstI of
-#if MIN_VERSION_template_haskell(2,11,0)
-    -- template-haskell-2.11.0.0 drops the 'Fixity' value from 'VarI'
-    VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ ->
-#else
-    VarI _ (ForallT _ _ (AppT (AppT ArrowT (AppT (AppT (ConT _) t) _)) _)) _ _ ->
-#endif
-      [d|
-        instance (MonadConc m) => MonadConc ($(pure t) m) where
-          type STM      ($(pure t) m) = STM m
-          type MVar     ($(pure t) m) = MVar m
-          type CRef     ($(pure t) m) = CRef m
-          type Ticket   ($(pure t) m) = Ticket m
-          type ThreadId ($(pure t) m) = ThreadId m
-
-          fork   = liftedF $(varE unstN) fork
-          forkOn = liftedF $(varE unstN) . forkOn
-
-          forkWithUnmask        = liftedFork $(varE unstN) forkWithUnmask
-          forkWithUnmaskN   n   = liftedFork $(varE unstN) (forkWithUnmaskN   n  )
-          forkOnWithUnmask    i = liftedFork $(varE unstN) (forkOnWithUnmask    i)
-          forkOnWithUnmaskN n i = liftedFork $(varE unstN) (forkOnWithUnmaskN n i)
-
-          getNumCapabilities = lift getNumCapabilities
-          setNumCapabilities = lift . setNumCapabilities
-          myThreadId         = lift myThreadId
-          yield              = lift yield
-          threadDelay        = lift . threadDelay
-          throwTo tid        = lift . throwTo tid
-          newEmptyMVar       = lift newEmptyMVar
-          newEmptyMVarN      = lift . newEmptyMVarN
-          readMVar           = lift . readMVar
-          putMVar v          = lift . putMVar v
-          tryPutMVar v       = lift . tryPutMVar v
-          takeMVar           = lift . takeMVar
-          tryTakeMVar        = lift . tryTakeMVar
-          newCRef            = lift . newCRef
-          newCRefN n         = lift . newCRefN n
-          readCRef           = lift . readCRef
-          atomicModifyCRef r = lift . atomicModifyCRef r
-          writeCRef r        = lift . writeCRef r
-          atomicWriteCRef r  = lift . atomicWriteCRef r
-          readForCAS         = lift . readForCAS
-          peekTicket         = lift . peekTicket
-          casCRef r tick     = lift . casCRef r tick
-          modifyCRefCAS r    = lift . modifyCRefCAS r
-          atomically         = lift . atomically
-          readTVarConc       = lift . readTVarConc
-
-          _concKnowsAbout = lift . _concKnowsAbout
-          _concForgets    = lift . _concForgets
-          _concAllKnown   = lift _concAllKnown
-          _concMessage    = lift . _concMessage
-      |]
-    _ -> fail "Expected a value of type (forall a -> StT t a -> a)"
 
 -- | Given a function to remove the transformer-specific state, lift
 -- a function invocation.

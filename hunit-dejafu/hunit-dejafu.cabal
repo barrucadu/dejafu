@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                hunit-dejafu
-version:             0.3.0.1
+version:             0.3.0.2
 synopsis:            Deja Fu support for the HUnit test framework.
 
 description:
@@ -41,7 +41,7 @@ library
   -- other-extensions:    
   build-depends:       base       >=4.8 && <5
                      , exceptions >=0.7 && <0.9
-                     , dejafu     >=0.2 && <0.4
+                     , dejafu     >=0.2 && <0.5
                      , HUnit      >=1.2 && <1.4
   -- hs-source-dirs:      
   default-language:    Haskell2010

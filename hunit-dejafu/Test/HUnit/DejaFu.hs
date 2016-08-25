@@ -51,45 +51,62 @@ module Test.HUnit.DejaFu
   ) where
 
 import Control.Monad.Catch (try)
+import Control.Monad.ST (runST)
 import Data.List (intercalate, intersperse)
 import Test.DejaFu
-import Test.DejaFu.Deterministic (ConcST, ConcIO, Trace, ThreadId, ThreadAction, Lookahead, showFail, showTrace)
-import Test.DejaFu.SCT (sctBound, sctBoundIO)
+import qualified Test.DejaFu.SCT as SCT
 import Test.HUnit (Assertable(..), Test(..), Testable(..), assertString)
 import Test.HUnit.Lang (HUnitFailure(..))
 
--- Can't put the necessary forall in the @Assertable ConcST t@
+#if MIN_VERSION_dejafu(0,4,0)
+import qualified Test.DejaFu.Conc as Conc
+#else
+import qualified Test.DejaFu.Deterministic as Conc
+#endif
+
+-- Can't put the necessary forall in the @Assertable Conc.ConcST t@
 -- instance :(
 import Unsafe.Coerce (unsafeCoerce)
 
 #if MIN_VERSION_dejafu(0,3,0)
-type Trc = Trace ThreadId ThreadAction Lookahead
+type Trc = Conc.Trace Conc.ThreadId Conc.ThreadAction Conc.Lookahead
 #else
-type Trc = Trace
+type Trc = Conc.Trace
+#endif
+
+sctBoundST :: MemType -> Bounds -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Trc)]
+sctBoundIO :: MemType -> Bounds -> Conc.ConcIO a -> IO [(Either Failure a, Trc)]
+
+#if MIN_VERSION_dejafu(0,4,0)
+sctBoundST memtype cb conc = runST (SCT.sctBound memtype cb conc)
+sctBoundIO = SCT.sctBound
+#else
+sctBoundST = SCT.sctBound
+sctBoundIO = SCT.sctBoundIO
 #endif
 
 --------------------------------------------------------------------------------
 -- Unit testing
 
-instance Testable (ConcST t ()) where
+instance Testable (Conc.ConcST t ()) where
   test conc = TestCase (assert conc)
 
-instance Testable (ConcIO ()) where
+instance Testable (Conc.ConcIO ()) where
   test conc = TestCase (assert conc)
 
-instance Assertable (ConcST t ()) where
+instance Assertable (Conc.ConcST t ()) where
   assert conc = do
     let traces = sctBound' conc'
     assertString . showErr $ assertableP traces
 
     where
-      conc' :: ConcST t (Either HUnitFailure ())
+      conc' :: Conc.ConcST t (Either HUnitFailure ())
       conc' = try conc
 
-      sctBound' :: ConcST t (Either HUnitFailure ()) -> [(Either Failure (Either HUnitFailure ()), Trc)]
-      sctBound' = unsafeCoerce $ sctBound defaultMemType defaultBounds
+      sctBound' :: Conc.ConcST t (Either HUnitFailure ()) -> [(Either Failure (Either HUnitFailure ()), Trc)]
+      sctBound' = unsafeCoerce $ sctBoundST defaultMemType defaultBounds
 
-instance Assertable (ConcIO ()) where
+instance Assertable (Conc.ConcIO ()) where
   assert conc = do
     traces <- sctBoundIO defaultMemType defaultBounds (try conc)
     assertString . showErr $ assertableP traces
@@ -104,12 +121,12 @@ assertableP = alwaysTrue $ \r -> case r of
 
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
--- 
+--
 -- This uses the 'Conc' monad for testing, which is an instance of
 -- 'MonadConc'. If you need to test something which also uses
 -- 'MonadIO', use 'testAutoIO'.
 testAuto :: (Eq a, Show a)
-  => (forall t. ConcST t a)
+  => (forall t. Conc.ConcST t a)
   -- ^ The computation to test
   -> Test
 testAuto = testAuto' defaultMemType
@@ -119,17 +136,17 @@ testAuto = testAuto' defaultMemType
 testAuto' :: (Eq a, Show a)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> (forall t. ConcST t a)
+  -> (forall t. Conc.ConcST t a)
   -- ^ The computation to test
   -> Test
 testAuto' memtype conc = testDejafus' memtype defaultBounds conc autocheckCases
 
 -- | Variant of 'testAuto' for computations which do 'IO'.
-testAutoIO :: (Eq a, Show a) => ConcIO a -> Test
+testAutoIO :: (Eq a, Show a) => Conc.ConcIO a -> Test
 testAutoIO = testAutoIO' defaultMemType
 
 -- | Variant of 'testAuto'' for computations which do 'IO'.
-testAutoIO' :: (Eq a, Show a) => MemType -> ConcIO a -> Test
+testAutoIO' :: (Eq a, Show a) => MemType -> Conc.ConcIO a -> Test
 testAutoIO' memtype concio = testDejafusIO' memtype defaultBounds concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
@@ -142,7 +159,7 @@ autocheckCases =
 
 -- | Check that a predicate holds.
 testDejafu :: Show a
-  => (forall t. ConcST t a)
+  => (forall t. Conc.ConcST t a)
   -- ^ The computation to test
   -> String
   -- ^ The name of the test.
@@ -158,7 +175,7 @@ testDejafu' :: Show a
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Bounds
   -- ^ The schedule bound.
-  -> (forall t. ConcST t a)
+  -> (forall t. Conc.ConcST t a)
   -- ^ The computation to test
   -> String
   -- ^ The name of the test.
@@ -171,7 +188,7 @@ testDejafu' memtype cb conc name p = testDejafus' memtype cb conc [(name, p)]
 -- test. This will share work between the predicates, rather than
 -- running the concurrent computation many times for each predicate.
 testDejafus :: Show a
-  => (forall t. ConcST t a)
+  => (forall t. Conc.ConcST t a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
@@ -185,7 +202,7 @@ testDejafus' :: Show a
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Bounds
   -- ^ The schedule bounds
-  -> (forall t. ConcST t a)
+  -> (forall t. Conc.ConcST t a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
@@ -193,26 +210,26 @@ testDejafus' :: Show a
 testDejafus' = testst
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
-testDejafuIO :: Show a => ConcIO a -> String -> Predicate a -> Test
+testDejafuIO :: Show a => Conc.ConcIO a -> String -> Predicate a -> Test
 testDejafuIO = testDejafuIO' defaultMemType defaultBounds
 
 -- | Variant of 'testDejafu'' for computations which do 'IO'.
-testDejafuIO' :: Show a => MemType -> Bounds -> ConcIO a -> String -> Predicate a -> Test
+testDejafuIO' :: Show a => MemType -> Bounds -> Conc.ConcIO a -> String -> Predicate a -> Test
 testDejafuIO' memtype cb concio name p = testDejafusIO' memtype cb concio [(name, p)]
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
-testDejafusIO :: Show a => ConcIO a -> [(String, Predicate a)] -> Test
+testDejafusIO :: Show a => Conc.ConcIO a -> [(String, Predicate a)] -> Test
 testDejafusIO = testDejafusIO' defaultMemType defaultBounds
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
-testDejafusIO' :: Show a => MemType -> Bounds -> ConcIO a -> [(String, Predicate a)] -> Test
+testDejafusIO' :: Show a => MemType -> Bounds -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
 testDejafusIO' = testio
 
 --------------------------------------------------------------------------------
 -- HUnit integration
 
 -- | Produce a HUnit 'Test' from a Deja Fu test.
-testst :: Show a => MemType -> Bounds -> (forall t. ConcST t a) -> [(String, Predicate a)] -> Test
+testst :: Show a => MemType -> Bounds -> (forall t. Conc.ConcST t a) -> [(String, Predicate a)] -> Test
 testst memtype cb conc tests = case map toTest tests of
   [t] -> t
   ts  -> TestList ts
@@ -221,10 +238,10 @@ testst memtype cb conc tests = case map toTest tests of
     toTest (name, p) = TestLabel name . TestCase $
       assertString . showErr $ p traces
 
-    traces = sctBound memtype cb conc
+    traces = sctBoundST memtype cb conc
 
 -- | Produce a HUnit 'Test' from an IO-using Deja Fu test.
-testio :: Show a => MemType -> Bounds -> ConcIO a -> [(String, Predicate a)] -> Test
+testio :: Show a => MemType -> Bounds -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
 testio memtype cb concio tests = case map toTest tests of
   [t] -> t
   ts  -> TestList ts
@@ -252,7 +269,7 @@ showErr res
 
   failures = intersperse "" . map (indent . showres) . take 5 $ _failures res
 
-  showres (r, t) = either showFail show r ++ " " ++ showTrace t
+  showres (r, t) = either Conc.showFail show r ++ " " ++ Conc.showTrace t
 
   rest = if moreThan (_failures res) 5 then "\n\t..." else ""
 

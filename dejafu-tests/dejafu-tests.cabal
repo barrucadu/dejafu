@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                dejafu-tests
-version:             0.3.1.1
+version:             0.4.0.0
 synopsis:            The test suite for dejafu
 -- description:         
 homepage:            https://github.com/barrucadu/dejafu
@@ -37,6 +37,7 @@ executable dejafu-tests
 
   -- other-extensions:    
   build-depends:       base
+                     , concurrency
                      , containers
                      , dejafu
                      , exceptions

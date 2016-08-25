@@ -2,8 +2,8 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                dejafu
-version:             0.3.2.1
-synopsis:            Overloadable primitives for testable, potentially non-deterministic, concurrency.
+version:             0.4.0.0
+synopsis:            Systematic testing for Haskell concurrency.
 
 description:
   /[Déjà Fu is] A martial art in which the user's limbs move in time as well as space, […] It is best described as "the feeling that you have been kicked in the head this way before"/ -- Terry Pratchett, Thief of Time
@@ -14,18 +14,17 @@ description:
   provides deterministic parallelism, but sometimes we can tolerate a
   bit of nondeterminism.
   .
-  This package provides a class of monads for potentially
-  nondeterministic concurrency, with an interface in the spirit of
-  GHC's normal concurrency abstraction.
+  This package builds on the
+  <https://hackage.haskell.org/package/concurrency concurrency>
+  package by enabling you to systematically and deterministically test
+  your concurrent programs.
   .
-  == @MonadConc@ with 'IO':
+  == Déjà Fu with 'IO':
   .
-  The intention of the @MonadConc@ class is to provide concurrency
-  where any apparent nondeterminism arises purely from the scheduling
-  behaviour. To put it another way, a given computation, parametrised
-  with a fixed set of scheduling decisions, is deterministic. This
-  assumption is used by the testing functionality provided by
-  Test.DejaFu.
+  The core assumption underlying Déjà Fu is that any apparent
+  nondeterminism arises purely from the scheduling behaviour. To put
+  it another way, a given computation, parametrised with a fixed set
+  of scheduling decisions, is deterministic.
   .
   Whilst this assumption may not hold in general when 'IO' is
   involved, you should strive to produce test cases where it does.
@@ -75,53 +74,33 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      dejafu-0.3.2.1
+  tag:      dejafu-0.4.0.0
 
 library
-  exposed-modules:     Control.Monad.Conc.Class
-                     , Control.Monad.STM.Class
-
-                     , Control.Concurrent.Classy
-                     , Control.Concurrent.Classy.Chan
-                     , Control.Concurrent.Classy.CRef
-                     , Control.Concurrent.Classy.MVar
-                     , Control.Concurrent.Classy.QSem
-                     , Control.Concurrent.Classy.QSemN
-                     , Control.Concurrent.Classy.STM
-                     , Control.Concurrent.Classy.STM.TVar
-                     , Control.Concurrent.Classy.STM.TMVar
-                     , Control.Concurrent.Classy.STM.TChan
-                     , Control.Concurrent.Classy.STM.TQueue
-                     , Control.Concurrent.Classy.STM.TBQueue
-                     , Control.Concurrent.Classy.STM.TArray
-
-                     , Test.DejaFu
-                     , Test.DejaFu.Deterministic
+  exposed-modules:     Test.DejaFu
+                     , Test.DejaFu.Conc
+                     , Test.DejaFu.Common
                      , Test.DejaFu.SCT
                      , Test.DejaFu.STM
 
-                     , Test.DejaFu.Deterministic.Internal
-                     , Test.DejaFu.Deterministic.Internal.Common
-                     , Test.DejaFu.Deterministic.Internal.Memory
-                     , Test.DejaFu.Deterministic.Internal.Threading
-                     , Test.DejaFu.Internal
+                     , Test.DejaFu.Conc.Internal
+                     , Test.DejaFu.Conc.Internal.Common
+                     , Test.DejaFu.Conc.Internal.Memory
+                     , Test.DejaFu.Conc.Internal.Threading
                      , Test.DejaFu.STM.Internal
 
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base              >=4.8  && <5
-                     , array             >=0.5  && <0.6
-                     , atomic-primops    >=0.8  && <0.9
+                     , concurrency       >=1.0  && <1.1
                      , containers        >=0.5  && <0.6
-                     , dpor              >=0.1  && <0.3
                      , deepseq           >=1.3  && <1.5
+                     , dpor              >=0.1  && <0.3
                      , exceptions        >=0.7  && <0.9
-                     , monad-control     >=1.0  && <1.1
                      , monad-loops       >=0.4  && <0.5
                      , mtl               >=2.2  && <2.3
+                     , ref-fd            >=0.4  && <0.5
                      , semigroups        >=0.16 && <0.19
-                     , stm               >=2.4  && <2.5
-                     , template-haskell  >=2.10 && <2.12
                      , transformers      >=0.4  && <0.6
                      , transformers-base >=0.4  && <0.5
   -- hs-source-dirs:      

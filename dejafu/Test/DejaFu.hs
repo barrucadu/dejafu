@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- |
@@ -199,8 +200,8 @@ module Test.DejaFu
   , Failure(..)
   , runTest
   , runTest'
-  , runTestIO
-  , runTestIO'
+  , runTestM
+  , runTestM'
 
   -- * Predicates
 
@@ -238,12 +239,14 @@ module Test.DejaFu
 import Control.Arrow (first)
 import Control.DeepSeq (NFData(..))
 import Control.Monad (when, unless)
+import Control.Monad.Ref (MonadRef)
+import Control.Monad.ST (runST)
 import Data.Function (on)
 import Data.List (intercalate, intersperse, minimumBy)
---import Data.List.NonEmpty
 import Data.Ord (comparing)
-import Test.DejaFu.Deterministic
-import Test.DejaFu.Deterministic.Internal (preEmpCount)
+
+import Test.DejaFu.Common
+import Test.DejaFu.Conc
 import Test.DejaFu.SCT
 
 -- | The default memory model: @TotalStoreOrder@
@@ -260,25 +263,38 @@ autocheck :: (Eq a, Show a)
   => (forall t. ConcST t a)
   -- ^ The computation to test
   -> IO Bool
-autocheck = autocheck' defaultMemType
+autocheck = autocheck' defaultMemType defaultBounds
 
--- | Variant of 'autocheck' which tests a computation under a given
--- memory model.
+-- | Variant of 'autocheck' which takes a memor model and schedule
+-- bounds.
+--
+-- Schedule bounding is used to filter the large number of possible
+-- schedules, and can be iteratively increased for further coverage
+-- guarantees. Empirical studies (/Concurrency Testing Using Schedule
+-- Bounding: an Empirical Study/, P. Thompson, A. Donaldson, and
+-- A. Betts) have found that many concurrency bugs can be exhibited
+-- with as few as two threads and two pre-emptions, which is part of
+-- what 'dejafus' uses.
+--
+-- __Warning:__ Using largers bounds will almost certainly
+-- significantly increase the time taken to test!
 autocheck' :: (Eq a, Show a)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Bounds
+  -- ^ The schedule bounds
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> IO Bool
-autocheck' memtype conc = dejafus' memtype defaultBounds conc autocheckCases
+autocheck' memtype cb conc = dejafus' memtype cb conc autocheckCases
 
 -- | Variant of 'autocheck' for computations which do 'IO'.
 autocheckIO :: (Eq a, Show a) => ConcIO a -> IO Bool
-autocheckIO = autocheckIO' defaultMemType
+autocheckIO = autocheckIO' defaultMemType defaultBounds
 
 -- | Variant of 'autocheck'' for computations which do 'IO'.
-autocheckIO' :: (Eq a, Show a) => MemType -> ConcIO a -> IO Bool
-autocheckIO' memtype concio = dejafusIO' memtype defaultBounds concio autocheckCases
+autocheckIO' :: (Eq a, Show a) => MemType -> Bounds -> ConcIO a -> IO Bool
+autocheckIO' memtype cb concio = dejafusIO' memtype cb concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
 autocheckCases :: (Eq a, Show a) => [(String, Predicate a)]
@@ -300,17 +316,6 @@ dejafu = dejafu' defaultMemType defaultBounds
 
 -- | Variant of 'dejafu'' which takes a memory model and schedule
 -- bounds.
---
--- Schedule bounding is used to filter the large number of possible
--- schedules, and can be iteratively increased for further coverage
--- guarantees. Empirical studies (/Concurrency Testing Using Schedule
--- Bounding: an Empirical Study/, P. Thompson, A. Donaldson, and
--- A. Betts) have found that many concurrency bugs can be exhibited
--- with as few as two threads and two pre-emptions, which is part of
--- what 'dejafus' uses.
---
--- __Warning:__ Using largers bounds will almost certainly
--- significantly increase the time taken to test!
 dejafu' :: Show a
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -346,7 +351,7 @@ dejafus' :: Show a
   -- ^ The list of predicates (with names) to check
   -> IO Bool
 dejafus' memtype cb conc tests = do
-  let traces = sctBound memtype cb conc
+  let traces = runST (sctBound memtype cb conc)
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
@@ -365,7 +370,7 @@ dejafusIO = dejafusIO' defaultMemType defaultBounds
 -- | Variant of 'dejafus'' for computations which do 'IO'.
 dejafusIO' :: Show a => MemType -> Bounds -> ConcIO a -> [(String, Predicate a)] -> IO Bool
 dejafusIO' memtype cb concio tests = do
-  traces  <- sctBoundIO memtype cb concio
+  traces  <- sctBound memtype cb concio
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
@@ -409,7 +414,7 @@ runTest ::
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Result a
-runTest = runTest' defaultMemType defaultBounds
+runTest test conc = runST (runTestM test conc)
 
 -- | Variant of 'runTest' which takes a memory model and schedule
 -- bounds.
@@ -423,15 +428,18 @@ runTest' ::
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Result a
-runTest' memtype cb predicate conc = predicate $ sctBound memtype cb conc
+runTest' memtype cb predicate conc =
+  runST (runTestM' memtype cb predicate conc)
 
--- | Variant of 'runTest' for computations which do 'IO'.
-runTestIO :: Predicate a -> ConcIO a -> IO (Result a)
-runTestIO = runTestIO' defaultMemType defaultBounds
+-- | Monad-polymorphic variant of 'runTest'.
+runTestM :: MonadRef r n
+         => Predicate a -> Conc n r a -> n (Result a)
+runTestM = runTestM' defaultMemType defaultBounds
 
--- | Variant of 'runTest'' for computations which do 'IO'.
-runTestIO' :: MemType -> Bounds -> Predicate a -> ConcIO a -> IO (Result a)
-runTestIO' memtype cb predicate conc = predicate <$> sctBoundIO memtype cb conc
+-- | Monad-polymorphic variant of 'runTest''.
+runTestM' :: MonadRef r n
+          => MemType -> Bounds -> Predicate a -> Conc n r a -> n (Result a)
+runTestM' memtype cb predicate conc = predicate <$> sctBound memtype cb conc
 
 -- * Predicates
 

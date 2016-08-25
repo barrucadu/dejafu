@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE RankNTypes #-}
 
 -- |
 -- Module      : Test.DejaFu.SCT
@@ -7,7 +6,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, RankNTypes
+-- Portability : CPP
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
@@ -32,7 +31,6 @@ module Test.DejaFu.SCT
   -- K. McKinley for more details.
 
     sctBounded
-  , sctBoundedIO
 
   -- * Combination Bounds
 
@@ -51,7 +49,6 @@ module Test.DejaFu.SCT
   , noBounds
 
   , sctBound
-  , sctBoundIO
 
   -- * Individual Bounds
 
@@ -67,7 +64,6 @@ module Test.DejaFu.SCT
   , PreemptionBound(..)
   , defaultPreemptionBound
   , sctPreBound
-  , sctPreBoundIO
   , pBacktrack
   , pBound
 
@@ -82,7 +78,6 @@ module Test.DejaFu.SCT
   , FairBound(..)
   , defaultFairBound
   , sctFairBound
-  , sctFairBoundIO
   , fBacktrack
   , fBound
 
@@ -94,7 +89,6 @@ module Test.DejaFu.SCT
   , LengthBound(..)
   , defaultLengthBound
   , sctLengthBound
-  , sctLengthBoundIO
 
   -- * Backtracking
 
@@ -103,8 +97,7 @@ module Test.DejaFu.SCT
   ) where
 
 import Control.DeepSeq (NFData(..))
-import Control.Exception (MaskingState(..))
-import Data.Functor.Identity (Identity(..), runIdentity)
+import Control.Monad.Ref (MonadRef)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.Maybe (isJust, fromJust)
@@ -117,8 +110,8 @@ import Test.DPOR ( DPOR(..), dpor
                  , LengthBound(..), defaultLengthBound, lenBound, lenBacktrack
                  )
 
-import Test.DejaFu.Deterministic (ConcIO, ConcST, runConcIO, runConcST)
-import Test.DejaFu.Deterministic.Internal
+import Test.DejaFu.Common
+import Test.DejaFu.Conc
 
 -------------------------------------------------------------------------------
 -- Combined Bounds
@@ -148,21 +141,15 @@ noBounds = Bounds
   }
 
 -- | An SCT runner using a bounded scheduler
-sctBound :: MemType
+sctBound :: MonadRef r n
+  => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Bounds
   -- ^ The combined bounds.
-  -> (forall t. ConcST t a)
+  -> Conc n r a
   -- ^ The computation to run many times
-  -> [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
+  -> n [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
 sctBound memtype cb = sctBounded memtype (cBound cb) (cBacktrack cb)
-
--- | Variant of 'sctBound' for computations which do 'IO'.
-sctBoundIO :: MemType
-  -> Bounds
-  -> ConcIO a
-  -> IO [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
-sctBoundIO memtype cb = sctBoundedIO memtype (cBound cb) (cBacktrack cb)
 
 -- | Combination bound function
 cBound :: Bounds -> BoundFunc ThreadId ThreadAction Lookahead
@@ -183,22 +170,16 @@ cBacktrack (Bounds pb fb lb) bs i t = lBack . fBack $ pBack bs where
 -- Pre-emption bounding
 
 -- | An SCT runner using a pre-emption bounding scheduler.
-sctPreBound :: MemType
+sctPreBound :: MonadRef r n
+  => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> PreemptionBound
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
-  -> (forall t. ConcST t a)
+  -> Conc n r a
   -- ^ The computation to run many times
-  -> [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
+  -> n [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
 sctPreBound memtype pb = sctBounded memtype (pBound pb) pBacktrack
-
--- | Variant of 'sctPreBound' for computations which do 'IO'.
-sctPreBoundIO :: MemType
-  -> PreemptionBound
-  -> ConcIO a
-  -> IO [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
-sctPreBoundIO memtype pb = sctBoundedIO memtype (pBound pb) pBacktrack
 
 -- | Add a backtrack point, and also conservatively add one prior to
 -- the most recent transition before that point. This may result in
@@ -217,22 +198,16 @@ pBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb
 -- Fair bounding
 
 -- | An SCT runner using a fair bounding scheduler.
-sctFairBound :: MemType
+sctFairBound :: MonadRef r n
+  => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> FairBound
   -- ^ The maximum difference between the number of yield operations
   -- performed by different threads.
-  -> (forall t. ConcST t a)
+  -> Conc n r a
   -- ^ The computation to run many times
-  -> [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
+  -> n [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
 sctFairBound memtype fb = sctBounded memtype (fBound fb) fBacktrack
-
--- | Variant of 'sctFairBound' for computations which do 'IO'.
-sctFairBoundIO :: MemType
-  -> FairBound
-  -> ConcIO a
-  -> IO [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
-sctFairBoundIO memtype fb = sctBoundedIO memtype (fBound fb) fBacktrack
 
 -- | Fair bound function
 fBound :: FairBound -> BoundFunc ThreadId ThreadAction Lookahead
@@ -247,22 +222,16 @@ fBacktrack = fairBacktrack willRelease
 -- Length bounding
 
 -- | An SCT runner using a length bounding scheduler.
-sctLengthBound :: MemType
+sctLengthBound :: MonadRef r n
+  => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> LengthBound
   -- ^ The maximum length of a schedule, in terms of primitive
   -- actions.
-  -> (forall t. ConcST t a)
+  -> Conc n r a
   -- ^ The computation to run many times
-  -> [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
+  -> n [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
 sctLengthBound memtype lb = sctBounded memtype (lenBound lb) lenBacktrack
-
--- | Variant of 'sctFairBound' for computations which do 'IO'.
-sctLengthBoundIO :: MemType
-  -> LengthBound
-  -> ConcIO a
-  -> IO [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
-sctLengthBoundIO memtype lb = sctBoundedIO memtype (lenBound lb) lenBacktrack
 
 -------------------------------------------------------------------------------
 -- DPOR
@@ -279,7 +248,8 @@ sctLengthBoundIO memtype lb = sctBoundedIO memtype (lenBound lb) lenBacktrack
 -- Note that unlike with non-bounded partial-order reduction, this may
 -- do some redundant work as the introduction of a bound can make
 -- previously non-interfering events interfere with each other.
-sctBounded :: MemType
+sctBounded :: MonadRef r n
+  => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> BoundFunc ThreadId ThreadAction Lookahead
   -- ^ Check if a prefix trace is within the bound
@@ -288,27 +258,9 @@ sctBounded :: MemType
   -- execution so far, the index to insert the backtracking point, and
   -- the thread to backtrack to. This may insert more than one
   -- backtracking point.
-  -> (forall t. ConcST t a) -> [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
-sctBounded memtype bf backtrack c = runIdentity $ sctBoundedM memtype bf backtrack run where
-  run memty sched s = Identity $ runConcST sched memty s c
-
--- | Variant of 'sctBounded' for computations which do 'IO'.
-sctBoundedIO :: MemType
-  -> BoundFunc ThreadId ThreadAction Lookahead
-  -> BacktrackFunc ThreadId ThreadAction Lookahead DepState
-  -> ConcIO a -> IO [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
-sctBoundedIO memtype bf backtrack c = sctBoundedM memtype bf backtrack run where
-  run memty sched s = runConcIO sched memty s c
-
--- | Generic SCT runner.
-sctBoundedM :: Monad m
-  => MemType
-  -> ([(Decision ThreadId, ThreadAction)] -> (Decision ThreadId, Lookahead) -> Bool)
-  -> BacktrackFunc ThreadId ThreadAction Lookahead DepState
-  -> (forall s. MemType -> Scheduler ThreadId ThreadAction Lookahead s -> s -> m (Either Failure a, s, Trace ThreadId ThreadAction Lookahead))
-  -- ^ Monadic runner, with computation fixed.
-  -> m [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
-sctBoundedM memtype bf backtrack run =
+  -> Conc n r a
+  -> n [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
+sctBounded memtype bf backtrack conc =
   dpor didYield
        willYield
        initialDepState
@@ -324,7 +276,7 @@ sctBoundedM memtype bf backtrack run =
        bf
        backtrack
        pruneCommits
-       (run memtype)
+       (\sched s -> runConcurrent sched memtype s conc)
 
 -------------------------------------------------------------------------------
 -- Post-processing
@@ -345,7 +297,7 @@ pruneCommits bpor
     onlycommits = all (<initialThread) . M.keys $ dporTodo bpor
     alldonesync = all barrier . M.elems $ dporDone bpor
 
-    barrier = isBarrier . simplify . fromJust . dporAction
+    barrier = isBarrier . simplifyAction . fromJust . dporAction
 
 -------------------------------------------------------------------------------
 -- Dependency function
@@ -381,9 +333,9 @@ dependent memtype ds (t1, a1) (t2, a2) = case rewind a2 of
   Just l2
     | isSTM a1 && isSTM a2
       -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
-    | not (isBlock a1 && isBarrier (simplify' l2)) ->
+    | not (isBlock a1 && isBarrier (simplifyLookahead l2)) ->
       dependent' memtype ds (t1, a1) (t2, l2)
-  _ -> dependentActions memtype ds (simplify a1) (simplify a2)
+  _ -> dependentActions memtype ds (simplifyAction a1) (simplifyAction a2)
 
   where
     isSTM (STM _ _) = True
@@ -403,7 +355,7 @@ dependent' memtype ds (t1, a1) (t2, l2) = case (a1, l2) of
 #endif
 
   -- Worst-case assumption: all IO is dependent.
-  (Lift, WillLift) -> True
+  (LiftIO, WillLiftIO) -> True
 
   -- Throwing an exception is only dependent with actions in that
   -- thread and if the actions can be interrupted. We can also
@@ -429,8 +381,8 @@ dependent' memtype ds (t1, a1) (t2, l2) = case (a1, l2) of
   -- anyway so there's no point pre-empting the action UNLESS the
   -- pre-emption would possibly allow for a different relaxed memory
   -- stage.
-  _ | isBlock a1 && isBarrier (simplify' l2) -> False
-    | otherwise -> dependentActions memtype ds (simplify a1) (simplify' l2)
+  _ | isBlock a1 && isBarrier (simplifyLookahead l2) -> False
+    | otherwise -> dependentActions memtype ds (simplifyAction a1) (simplifyLookahead l2)
 
 -- | Check if two 'ActionType's are dependent. Note that this is not
 -- sufficient to know if two 'ThreadAction's are dependent, without
@@ -460,7 +412,7 @@ dependentActions memtype ds a1 a2 = case (a1, a2) of
     -- Two actions on the same CRef where at least one is synchronised
     | same crefOf && (synchronises a1 (fromJust $ crefOf a1) || synchronises a2 (fromJust $ crefOf a2)) -> True
     -- Two actions on the same MVar
-    | same cvarOf -> True
+    | same mvarOf -> True
 
   _ -> False
 
@@ -508,7 +460,7 @@ updateCRState :: ThreadAction -> Map CRefId Bool -> Map CRefId Bool
 updateCRState (CommitRef _ r) = M.delete r
 updateCRState (WriteRef    r) = M.insert r True
 updateCRState ta
-  | isBarrier $ simplify ta = const M.empty
+  | isBarrier $ simplifyAction ta = const M.empty
   | otherwise = id
 
 -- | Update the thread masking state with the action that has just

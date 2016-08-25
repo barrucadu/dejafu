@@ -78,45 +78,15 @@ module Control.Concurrent.Async
   ) where
 
 import Control.Applicative
+import Control.Concurrent.Classy.STM.TMVar (newEmptyTMVar, putTMVar, readTMVar)
 import Control.Exception (AsyncException(ThreadKilled), BlockedIndefinitelyOnSTM(..), Exception, SomeException)
 import Control.Monad
 import Control.Monad.Catch (finally, try, onException)
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
 
-#if MIN_VERSION_dejafu(0,3,0)
-import Control.Concurrent.Classy.STM.TMVar (newEmptyTMVar, putTMVar, readTMVar)
-#else
-import Control.Concurrent.STM.CTMVar (CTMVar, newEmptyCTMVar, putCTMVar, readCTMVar)
-#endif
-
 #if !MIN_VERSION_base(4,8,0)
 import Data.Traversable
-#endif
-
-#if !MIN_VERSION_dejafu(0,3,0)
-type MVar m = CVar m
-
-newEmptyMVar :: MonadConc m => m (MVar m a)
-newEmptyMVar = newEmptyCVar
-
-putMVar :: MonadConc m => MVar m a -> a -> m ()
-putMVar = putCVar
-
-takeMVar :: MonadConc m => MVar m a -> m a
-takeMVar = takeCVar
-
-type STM   m = STMLike m
-type TMVar m = CTMVar  m
-
-newEmptyTMVar :: MonadSTM stm => stm (TMVar stm a)
-newEmptyTMVar = newEmptyCTMVar
-
-putTMVar :: MonadSTM stm => TMVar stm a -> a -> stm ()
-putTMVar = putCTMVar
-
-readTMVar :: MonadSTM stm => TMVar stm a -> stm a
-readTMVar = readCTMVar
 #endif
 
 -----------------------------------------------------------------------------------------

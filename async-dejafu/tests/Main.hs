@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase         #-}
 
@@ -14,16 +13,6 @@ import Data.Typeable (Typeable, cast)
 import Test.DejaFu hiding (MemType(..))
 import Test.HUnit (Test(..), runTestTT, test)
 import Test.HUnit.DejaFu
-
-#if !MIN_VERSION_dejafu(0,3,0)
-type MVar m = CVar m
-
-newEmptyMVar :: MonadConc m => m (MVar m a)
-newEmptyMVar = newEmptyCVar
-
-takeMVar :: MonadConc m => MVar m a -> m a
-takeMVar = takeCVar
-#endif
 
 main :: IO ()
 main = void . runTestTT $ TestList
@@ -111,8 +100,7 @@ withasync_wait2 = do
 
 withasync_waitCatch_blocked :: MonadConc m => m (Maybe BlockedIndefinitelyOnMVar)
 withasync_waitCatch_blocked = do
-  _concAllKnown
-  r <- withAsync (_concAllKnown >> newEmptyMVar >>= takeMVar) waitCatch
+  r <- withAsync (newEmptyMVar >>= takeMVar) waitCatch
   return $ case r of
     Left e -> fromException e
     _      -> Nothing

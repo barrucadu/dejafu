@@ -23,23 +23,20 @@ module Test.DejaFu.STM
   , TTrace
   , TAction(..)
   , TVarId
-  , runTransactionST
-  , runTransactionIO
+  , runTransaction
   ) where
 
-import Control.Monad (liftM)
+import Control.Monad (unless)
 import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
 import Control.Monad.Cont (cont)
+import Control.Monad.Ref (MonadRef)
 import Control.Monad.ST (ST)
 import Data.IORef (IORef)
 import Data.STRef (STRef)
-import Test.DejaFu.Deterministic.Internal.Common (TVarId, IdSource, TAction(..), TTrace)
-import Test.DejaFu.Internal
-import Test.DejaFu.STM.Internal
 
 import qualified Control.Monad.STM.Class as C
-
-{-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
+import Test.DejaFu.Common
+import Test.DejaFu.STM.Internal
 
 newtype STMLike n r a = S { runSTM :: M n r a } deriving (Functor, Applicative, Monad)
 
@@ -82,26 +79,14 @@ instance Monad n => C.MonadSTM (STMLike n r) where
 
   writeTVar tvar a = toSTM (\c -> SWrite tvar a (c ()))
 
--- | Run a transaction in the 'ST' monad, returning the result and new
--- initial 'TVarId'. If the transaction ended by calling 'retry', any
--- 'TVar' modifications are undone.
-runTransactionST :: STMST t a -> IdSource -> ST t (Result a, IdSource, TTrace)
-runTransactionST = runTransactionM fixedST where
-  fixedST = refST $ \mb -> cont (\c -> SLift $ c `liftM` mb)
+-- | Run a transaction, returning the result and new initial
+-- 'TVarId'. If the transaction ended by calling 'retry', any 'TVar'
+-- modifications are undone.
+runTransaction :: MonadRef r n
+               => STMLike n r a -> IdSource -> n (Result a, IdSource, TTrace)
+runTransaction ma tvid = do
+  (res, undo, tvid', trace) <- doTransaction (runSTM ma) tvid
 
--- | Run a transaction in the 'IO' monad, returning the result and new
--- initial 'TVarId'. If the transaction ended by calling 'retry', any
--- 'TVar' modifications are undone.
-runTransactionIO :: STMIO a -> IdSource -> IO (Result a, IdSource, TTrace)
-runTransactionIO = runTransactionM fixedIO where
-  fixedIO = refIO $ \mb -> cont (\c -> SLift $ c `liftM` mb)
+  unless (isSTMSuccess res) undo
 
--- | Run a transaction in an arbitrary monad.
-runTransactionM :: Monad n
-  => Fixed n r -> STMLike n r a -> IdSource -> n (Result a, IdSource, TTrace)
-runTransactionM ref ma tvid = do
-  (res, undo, tvid', trace) <- doTransaction ref (runSTM ma) tvid
-
-  case res of
-    Success _ _ _ -> return (res, tvid', trace)
-    _ -> undo >> return (res, tvid, trace)
+  pure (res, tvid', trace)

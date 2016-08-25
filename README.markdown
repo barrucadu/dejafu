@@ -23,31 +23,35 @@ exploration of the possible results of your program.
 This repository contains dejafu, a concurrency testing library based
 on a typeclass abstraction of concurrency, and related libraries.
 
-- dejafu ([hackage 0.3.2.1][dejafu]): Overloadable primitives for
-  testable, potentially non-deterministic, concurrency.
+- concurrency ([hackage 0.1.0.0][concurrency]): A typeclass for
+  concurrency.
+
+- dejafu ([hackage 0.4.0.0][dejafu]): Systematic testing for Haskell
+  concurrency.
 
 - dpor ([hackage 0.2.0.0][dpor]): A generic implementation of dynamic
   partial-order reduction (DPOR) for testing arbitrary models of
   concurrency.
 
-- async-dejafu ([hackage 0.1.2.2][async]): Run MonadConc operations
+- async-dejafu ([hackage 0.1.3.0][async]): Run MonadConc operations
   asynchronously and wait for their results.
 
-- hunit-dejafu ([hackage 0.3.0.1][hunit]): Deja Fu support for the
+- hunit-dejafu ([hackage 0.3.0.2][hunit]): Deja Fu support for the
   HUnit test framework.
 
-- tasty-dejafu ([hackage 0.3.0.1][tasty]): Deja Fu support for the
+- tasty-dejafu ([hackage 0.3.0.2][tasty]): Deja Fu support for the
   Tasty test framework.
 
 There is also dejafu-tests, the test suite for dejafu. This is in a
 separate package due to Cabal being bad with test suite transitive
 dependencies.
 
-[dejafu]: https://hackage.haskell.org/package/dejafu
-[dpor]:   https://hackage.haskell.org/package/dpor
-[async]:  https://hackage.haskell.org/package/async-dejafu
-[hunit]:  https://hackage.haskell.org/package/hunit-dejafu
-[tasty]:  https://hackage.haskell.org/package/tasty-dejafu
+[concurrency]: https://hackage.haskell.org/package/concurrency
+[dejafu]:      https://hackage.haskell.org/package/dejafu
+[dpor]:        https://hackage.haskell.org/package/dpor
+[async]:       https://hackage.haskell.org/package/async-dejafu
+[hunit]:       https://hackage.haskell.org/package/hunit-dejafu
+[tasty]:       https://hackage.haskell.org/package/tasty-dejafu
 
 Features
 --------

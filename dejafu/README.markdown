@@ -12,9 +12,9 @@ Concurrency is nice, deadlocks and race conditions not so much. The
 deterministic parallelism, but sometimes we can tolerate a bit of
 nondeterminism.
 
-This package provides a class of monads for potentially
-nondeterministic concurrency, with an interface in the spirit of GHC's
-normal concurrency abstraction.
+This package builds on the concurrency package (also in this
+repository) by enabling you to systematically and deterministically
+test your concurrent programs.
 
 The documentation of the latest developmental version is
 [available online][docs]. Examples can be found in the test suite.
@@ -23,15 +23,13 @@ The documentation of the latest developmental version is
 (dejafu-tests) because Cabal-the-library is a bit naff. See this
 [issue][].
 
-`MonadConc` and `IO`
---------------------
+Déjà Fu and `IO`
+----------------
 
-The intention of the `MonadConc` class is to provide concurrency where
-any apparent nondeterminism arises purely from the scheduling
-behaviour. To put it another way, a given computation, parametrised
-with a fixed set of scheduling decisions, is deterministic. This
-assumption is used by the testing functionality provided by
-Control.Monad.Conc.SCT.
+The core assumption underlying Déjà Fu is that any apparent
+nondeterminism arises purely from the scheduling behaviour. To put it
+another way, a given computation, parametrised with a fixed set of
+scheduling decisions, is deterministic.
 
 Whilst this assumption may not hold in general when `IO` is involved,
 you should strive to produce test cases where it does.
