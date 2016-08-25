@@ -3,7 +3,7 @@
 
 name:                concurrency
 version:             1.0.0.0
-synopsis:            A typeclass for concurrency
+synopsis:            Typeclasses, functions, and data types for concurrency and STM.
 
 description:
   A typeclass abstraction over much of Control.Concurrent (and some
