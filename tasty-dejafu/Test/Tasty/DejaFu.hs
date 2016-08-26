@@ -10,8 +10,16 @@
 {-# LANGUAGE ImpredicativeTypes #-}
 #endif
 
--- | This module allows using Deja Fu predicates with Tasty to test
--- the behaviour of concurrent systems.
+-- |
+-- Module      : Test.Tasty.DejaFu
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : stable
+-- Portability : CPP, FlexibleInstances, GADTs, ImpredicativeTypes, RankNTypes, TypeSynonymInstances
+--
+-- This module allows using Deja Fu predicates with Tasty to test the
+-- behaviour of concurrent systems.
 module Test.Tasty.DejaFu
   ( -- * Unit testing
 

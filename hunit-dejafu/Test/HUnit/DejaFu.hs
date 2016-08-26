@@ -10,8 +10,16 @@
 {-# LANGUAGE ImpredicativeTypes #-}
 #endif
 
--- | This module allows using Deja Fu predicates with HUnit to test
--- the behaviour of concurrent systems.
+-- |
+-- Module      : Test.HUnit.DejaFu
+-- Copyright   : (c) 2016 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : stable
+-- Portability : CPP, FlexibleInstances, ImpredicativeTypes, RankNTypes, ScopedTypeVariables, TypeSynonymInstances
+--
+-- This module allows using Deja Fu predicates with HUnit to test the
+-- behaviour of concurrent systems.
 module Test.HUnit.DejaFu
   ( -- * Unit testing
 
