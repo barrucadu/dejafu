@@ -273,25 +273,19 @@ Here is what `autocheck` has to say about it:
 > autocheck example
 [fail] Never Deadlocks (checked: 5)
         [deadlock] S0------------S1-P2--S1-
-
-          0: main
 [pass] No Exceptions (checked: 12)
 [fail] Consistent Result (checked: 11)
         0 S0------------S2-----------------S1-----------------S0----
 
-          0: main
-
         [deadlock] S0------------S1-P2--S1-
-
-          0: main
 False
 ```
 
 It identifies the deadlock, and also the possible results the
 computation can produce, and displays a simplified trace leading to
-each failing outcome. The traces contain thread numbers, and below is
-displayed thread names (which can be set by the programmer when
-forking them). It also returns false as there are test failures.
+each failing outcome. The traces contain thread numbers, which the
+programmer can give a thread a name when forking. It also returns
+false as there are test failures.
 
 Note that if your test case does `IO`, the `IO` will be executed a lot
 of times. It needs to be deterministic enough to not invalidate the

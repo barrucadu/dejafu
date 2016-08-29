@@ -64,7 +64,7 @@ import Control.DeepSeq (NFData(..))
 import Control.Exception (MaskingState(..))
 import Data.Dynamic (Dynamic)
 import Data.List (sort, nub, intercalate)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Set (Set)
 import qualified Data.Set as S
 import Test.DPOR (Decision(..), Trace)
@@ -621,18 +621,22 @@ instance NFData TAction where
 -------------------------------------------------------------------------------
 -- Traces
 
--- | Pretty-print a trace, including a key of the thread IDs. Each
--- line of the key is indented by two spaces.
+-- | Pretty-print a trace, including a key of the thread IDs (not
+-- including thread 0). Each line of the key is indented by two
+-- spaces.
 showTrace :: Trace ThreadId ThreadAction Lookahead -> String
-showTrace trc = intercalate "\n" $ concatMap go trc : map ("  "++) key where
+showTrace trc = intercalate "\n" $ concatMap go trc : strkey where
   go (_,_,CommitRef _ _) = "C-"
   go (Start    (ThreadId _ i),_,_) = "S" ++ show i ++ "-"
   go (SwitchTo (ThreadId _ i),_,_) = "P" ++ show i ++ "-"
   go (Continue,_,_) = "-"
 
-  key = sort . nub $ map toKey trc where
-    toKey (Start (ThreadId (Just name) i), _, _) = show i ++ ": " ++ name
-    toKey _ = ""
+  strkey = ["  " ++ show i ++ ": " ++ name | (i, name) <- key]
+
+  key = sort . nub $ mapMaybe toKey trc where
+    toKey (Start (ThreadId (Just name) i), _, _)
+      | i > 0 = Just (i, name)
+    toKey _ = Nothing
 
 -- | Count the number of pre-emptions in a schedule prefix.
 --
