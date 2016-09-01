@@ -120,13 +120,14 @@ findSchedulePrefix :: Ord tid
   -> (Int -> (Int, g))
   -- ^ List indexing function, used to select which schedule to
   -- return. Takes the length of the list, and returns an index and
-  -- some generator state. The index returned MUST be in range!
+  -- some generator state.
   -> DPOR tid action
   -> Maybe ([tid], Bool, Map tid action, g)
 findSchedulePrefix predicate idx dpor0
   | null allPrefixes = Nothing
-  | otherwise = let (i, g)       = idx (length allPrefixes)
-                    (ts, c, slp) = allPrefixes !! i
+  | otherwise = let plen         = length allPrefixes
+                    (i, g)       = idx plen
+                    (ts, c, slp) = allPrefixes !! (i `mod` plen)
                 in Just (ts, c, slp, g)
   where
     allPrefixes = go (initialDPORThread dpor0) dpor0
