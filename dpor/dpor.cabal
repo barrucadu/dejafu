@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                dpor
-version:             0.2.0.0
+version:             0.3.0.0
 synopsis:            A generic implementation of dynamic partial-order reduction (DPOR) for testing arbitrary models of concurrency.
 
 description:
@@ -55,7 +55,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      dpor-0.2.0.0
+  tag:      dpor-0.3.0.0
 
 library
   exposed-modules:     Test.DPOR
