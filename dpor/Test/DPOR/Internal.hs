@@ -526,9 +526,28 @@ dporSched didYield willYield dependency killsDaemons ststep inBound trc prior th
 
   -- If one of the chosen actions will kill the computation, and there
   -- are daemon threads, try them instead.
+  --
+  -- This is necessary if the killing action is NOT dependent with
+  -- every other action, according to the dependency function. This
+  -- is, strictly speaking, wrong; an action that kills another thread
+  -- is definitely dependent with everything in that thread. HOWEVER,
+  -- implementing it that way leads to an explosion of schedules
+  -- tried. Really, all that needs to happen is for the
+  -- thread-that-would-be-killed to be executed fully ONCE, and then
+  -- the normal dependency mechanism will identify any other
+  -- backtracking points that should be tried. This is achieved by
+  -- adding every thread that would be killed to the to-do list.
+  -- Furthermore, these threads MUST be ahead of the killing thread,
+  -- or the killing thread will end up in the sleep set and so the
+  -- killing action not performed. This is, again, because of the lack
+  -- of the dependency messing things up in the name of performance.
+  --
+  -- See commits a056f54 and 8554ce9, and my 4th June comment in issue
+  -- #52.
   tryDaemons ts
-    | any doesKill ts = filter (not . doesKill) tids' ++ filter doesKill ts
-    | otherwise       = ts
+    | any doesKill ts = case partition doesKill tids' of
+        (kills, nokills) -> nokills ++ kills
+    | otherwise = ts
   doesKill t = killsDaemons nextDepState (t, action t) tids
 
   -- Restrict the possible decisions to those in the bound.
