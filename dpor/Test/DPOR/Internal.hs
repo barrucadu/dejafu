@@ -91,7 +91,7 @@ instance ( NFData tid
 
 -- | Initial DPOR state, given an initial thread ID. This initial
 -- thread should exist and be runnable at the start of execution.
-initialState :: Ord tid => tid -> DPOR tid action
+initialState :: tid -> DPOR tid action
 initialState initialThread = DPOR
   { dporRunnable = S.singleton initialThread
   , dporTodo     = M.singleton initialThread False
@@ -345,11 +345,11 @@ incorporateBacktrackSteps bv = go Nothing [] where
 -- * DPOR scheduler
 
 -- | A @Scheduler@ where the state is a @SchedState@.
-type DPORScheduler tid action lookahead s
-  = Scheduler tid action lookahead (SchedState tid action lookahead s)
+type DPORScheduler tid action lookahead s g
+  = Scheduler tid action lookahead (SchedState tid action lookahead s g)
 
 -- | The scheduler state
-data SchedState tid action lookahead s = SchedState
+data SchedState tid action lookahead s g = SchedState
   { schedSleep     :: Map tid action
   -- ^ The sleep set: decisions not to make until something dependent
   -- with them happens.
@@ -369,14 +369,20 @@ data SchedState tid action lookahead s = SchedState
   , schedDepState  :: s
   -- ^ State used by the dependency function to determine when to
   -- remove decisions from the sleep set.
+  , schedGenState  :: g
+  -- ^ State for the generator in the list indexing function. Without
+  -- this, there won't be much variation between the schedules tried
+  -- by subsequent executions, so this is to avoid obvious
+  -- duplication.
   } deriving Show
 
 instance ( NFData tid
          , NFData action
          , NFData lookahead
          , NFData s
-         ) => NFData (SchedState tid action lookahead s) where
-  rnf s = rnf ( schedSleep     s
+         ) => NFData (SchedState tid action lookahead s g) where
+  rnf s = schedGenState s `seq`
+          rnf ( schedSleep     s
               , schedPrefix    s
               , schedBPoints   s
               , schedIgnore    s
@@ -391,14 +397,17 @@ initialSchedState :: s
   -- ^ The initial sleep set.
   -> [tid]
   -- ^ The schedule prefix.
-  -> SchedState tid action lookahead s
-initialSchedState s sleep prefix = SchedState
+  -> g
+  -- ^ Initial state for the list indexing function.
+  -> SchedState tid action lookahead s g
+initialSchedState s sleep prefix g = SchedState
   { schedSleep     = sleep
   , schedPrefix    = prefix
   , schedBPoints   = Sq.empty
   , schedIgnore    = False
   , schedBoundKill = False
   , schedDepState  = s
+  , schedGenState  = g
   }
 
 -- | A bounding function takes the scheduling decisions so far and a
@@ -487,8 +496,12 @@ dporSched :: (Ord tid, NFData tid, NFData action, NFData lookahead, NFData s)
   -> BoundFunc tid action lookahead
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
-  -> DPORScheduler tid action lookahead s
-dporSched didYield willYield dependency killsDaemons ststep inBound trc prior threads s = force schedule where
+  -> (Int -> g -> (Int, g))
+  -- ^ List indexing function, used to select which thread to execute.
+  -- Takes the length of the list, and returns an index and the new
+  -- generator state.
+  -> DPORScheduler tid action lookahead s g
+dporSched didYield willYield dependency killsDaemons ststep inBound idx trc prior threads s = force schedule where
   -- Pick a thread to run.
   schedule = case schedPrefix s of
     -- If there is a decision available, make it
@@ -498,17 +511,37 @@ dporSched didYield willYield dependency killsDaemons ststep inBound trc prior th
     -- choices, filter out anything in the sleep set, and make one of
     -- them arbitrarily (recording the others).
     [] ->
-      let choices  = restrictToBound initialise
+      let
+          -- sleep sets
           checkDep t a = case prior of
             Just (tid, act) -> dependency (schedDepState s) (tid, act) (t, a)
             Nothing -> False
           ssleep'  = M.filterWithKey (\t a -> not $ checkDep t a) $ schedSleep s
-          choices' = filter (`notElem` M.keys ssleep') choices
-          signore' = not (null choices) && all (`elem` M.keys ssleep') choices
-          sbkill'  = not (null initialise) && null choices
-      in case choices' of
-            (nextTid:rest) -> (Just nextTid, (nextState rest) { schedSleep = ssleep' })
-            [] -> (Nothing, (nextState []) { schedIgnore = signore', schedBoundKill = sbkill' })
+          removeSleeps = filter (`notElem` M.keys ssleep')
+
+          -- apply schedule bounds and sleep sets
+          boundedCanTry   = restrictToBound canTry
+          boundedMustWait = restrictToBound mustWait
+          finalCanTry     = removeSleeps boundedCanTry
+          finalMustWait   = removeSleeps boundedMustWait
+
+          -- check if everything is excluded by the bounds or sleep sets
+          allBoundExcluded = not (null (canTry++mustWait)) &&
+                             null (boundedCanTry++boundedMustWait)
+          allSleepExcluded = not (null (boundedCanTry++boundedMustWait)) &&
+                             null (finalCanTry++finalMustWait)
+
+          -- given the 'canTry' and 'mustWait' sets, produce the next state.
+          next canTry' mustWait' =
+            let llen    = length canTry'
+                (i, g)  = idx llen (schedGenState s)
+                nextTid = canTry' !! (i `mod` llen)
+                rest    = [tid | (tid, j) <- zip canTry' [0..], j /= i `mod` llen] ++ mustWait'
+            in (Just nextTid, (nextState rest) { schedSleep = ssleep', schedGenState = g })
+      in case (finalCanTry, finalMustWait) of
+            ([], []) -> (Nothing, (nextState []) { schedIgnore = allSleepExcluded, schedBoundKill = allBoundExcluded })
+            ([], mustWait') -> next mustWait' []
+            (canTry', mustWait') -> next canTry' mustWait'
 
   -- The next scheduler state
   nextState rest = s
@@ -517,10 +550,14 @@ dporSched didYield willYield dependency killsDaemons ststep inBound trc prior th
     }
   nextDepState = let ds = schedDepState s in maybe ds (ststep ds) prior
 
-  -- Pick a new thread to run, not considering bounds. Choose the
+  -- Pick new threads to run, not considering bounds. Choose the
   -- current thread if available and it hasn't just yielded, otherwise
-  -- add all runnable threads.
-  initialise = tryDaemons . yieldsToEnd $ case prior of
+  -- add all runnable threads. The chosen threads are in two
+  -- categories: one of the @canTry@ threads is picked randomly, using
+  -- the list indexing function; and the @mustWait@ functions are
+  -- added to the to-do set. If the @canTry@ list is empty, a
+  -- @mustWait@ is used.
+  (canTry, mustWait) = tryDaemons . yieldsToEnd $ case prior of
     Just (tid, act)
       | not (didYield act) && tid `elem` tids -> [tid]
     _ -> tids'
@@ -547,8 +584,8 @@ dporSched didYield willYield dependency killsDaemons ststep inBound trc prior th
   -- #52.
   tryDaemons ts
     | any doesKill ts = case partition doesKill tids' of
-        (kills, nokills) -> nokills ++ kills
-    | otherwise = ts
+        (kills, nokills) -> (nokills, kills)
+    | otherwise = (ts, [])
   doesKill t = killsDaemons nextDepState (t, action t) tids
 
   -- Restrict the possible decisions to those in the bound.

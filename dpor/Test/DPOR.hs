@@ -172,9 +172,9 @@ dpor :: ( Ord    tid
   -- points.
   -> (DPOR tid action -> DPOR tid action)
   -- ^ Some post-processing to do after adding the new to-do points.
-  -> (DPORScheduler tid action lookahead s
-    -> SchedState tid action lookahead s
-    -> m (a, SchedState tid action lookahead s, Trace tid action lookahead))
+  -> (DPORScheduler tid action lookahead s ()
+    -> SchedState tid action lookahead s ()
+    -> m (a, SchedState tid action lookahead s (), Trace tid action lookahead))
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
   -> m [(a, Trace tid action lookahead)]
@@ -197,10 +197,10 @@ dpor didYield
     -- Repeatedly run the computation gathering all the results and
     -- traces into a list until there are no schedules remaining to
     -- try.
-    go dp = case nextPrefix dp of
+    go dp = case nextPrefix () dp of
       Just (prefix, conservative, sleep, ()) -> do
-        (res, s, trace) <- run scheduler
-                              (initialSchedState stinit sleep prefix)
+        (res, s, trace) <- run (scheduler gen)
+                               (initialSchedState stinit sleep prefix ())
 
         let bpoints = findBacktracks (schedBoundKill s) (schedBPoints s) trace
         let newDPOR = addTrace conservative trace dp
@@ -211,8 +211,11 @@ dpor didYield
 
       Nothing -> pure []
 
+    -- The random number generator. Only, not so random.
+    gen _ s = (0, s)
+
     -- Find the next schedule prefix.
-    nextPrefix = findSchedulePrefix predicate (const (0, ()))
+    nextPrefix = findSchedulePrefix predicate . flip gen
 
     -- The DPOR scheduler.
     scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound
@@ -252,9 +255,9 @@ simpleDPOR :: ( Ord    tid
   -- ^ The backtracking function. Note that, for some bounding
   -- functions, this will need to add conservative backtracking
   -- points.
-  -> (DPORScheduler tid action lookahead ()
-    -> SchedState tid action lookahead ()
-    -> m (a, SchedState tid action lookahead (), Trace tid action lookahead))
+  -> (DPORScheduler tid action lookahead () ()
+    -> SchedState tid action lookahead () ()
+    -> m (a, SchedState tid action lookahead () (), Trace tid action lookahead))
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
   -> m [(a, Trace tid action lookahead)]

@@ -81,9 +81,9 @@ randomDPOR :: ( Ord       tid
   -- points.
   -> (DPOR tid action -> DPOR tid action)
   -- ^ Some post-processing to do after adding the new to-do points.
-  -> (DPORScheduler tid action lookahead s
-    -> SchedState tid action lookahead s
-    -> m (a, SchedState tid action lookahead s, Trace tid action lookahead))
+  -> (DPORScheduler tid action lookahead s g
+    -> SchedState tid action lookahead s g
+    -> m (a, SchedState tid action lookahead s g, Trace tid action lookahead))
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
   -> g
@@ -115,24 +115,26 @@ randomDPOR didYield
     go _ _ 0 = pure []
     go dp g elim = case nextPrefix g dp of
       Just (prefix, conservative, sleep, g') -> do
-        (res, s, trace) <- run scheduler
-                              (initialSchedState stinit sleep prefix)
+        (res, s, trace) <- run (scheduler gen)
+                               (initialSchedState stinit sleep prefix g')
 
         let bpoints  = findBacktracks (schedBoundKill s) (schedBPoints s) trace
         let newDPOR  = addTrace conservative trace dp
         let newDPOR' = transform (addBacktracks bpoints newDPOR)
 
+        let g'' = schedGenState s
+
         if schedIgnore s
-        then go newDPOR g' (elim-1)
-        else ((res, trace):) <$> go newDPOR' g' (elim-1)
+        then go newDPOR g'' (elim-1)
+        else ((res, trace):) <$> go newDPOR' g'' (elim-1)
 
       Nothing -> pure []
 
     -- Generate a random value from a range
-    gen g hi = randomR (0, hi - 1) g
+    gen hi = randomR (0, hi - 1)
 
     -- Find the next schedule prefix.
-    nextPrefix = findSchedulePrefix predicate . gen
+    nextPrefix = findSchedulePrefix predicate . flip gen
 
     -- The DPOR scheduler.
     scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound
@@ -167,9 +169,9 @@ boundedRandom :: ( Ord       tid
   -> Maybe (BoundFunc tid action lookahead)
   -- ^ The bounding function. If no function is provided, 'trueBound'
   -- is used.
-  -> (DPORScheduler tid action lookahead ()
-    -> SchedState tid action lookahead ()
-    -> m (a, SchedState tid action lookahead (), Trace tid action lookahead))
+  -> (DPORScheduler tid action lookahead () g
+    -> SchedState tid action lookahead () g
+    -> m (a, SchedState tid action lookahead () g, Trace tid action lookahead))
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
   -> g
