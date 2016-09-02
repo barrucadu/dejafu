@@ -29,6 +29,113 @@ import Test.DPOR.Schedule (Decision(..), Scheduler, decisionOf, tidOf)
 -------------------------------------------------------------------------------
 -- * Dynamic partial-order reduction
 
+-- | An implementation of DPOR that does EVERYTHING.
+runDPOR :: ( Ord       tid
+           , NFData    tid
+           , NFData    action
+           , NFData    lookahead
+           , NFData    s
+           , Monad     m
+           )
+  => Maybe Int
+  -- ^ Optional execution limit, used to abort the execution whilst
+  -- schedules still remain.
+  -> g
+  -- ^ Initial state for the random number generator.
+  -> (Int -> g -> (Int, g))
+  -- ^ Random number generator. Takes an upper bound and generates an
+  -- integer in the range [0, max).
+  -> (action    -> Bool)
+  -- ^ Determine if a thread yielded.
+  -> (lookahead -> Bool)
+  -- ^ Determine if a thread will yield.
+  -> s
+  -- ^ The initial state for backtracking.
+  -> (s -> (tid, action) -> s)
+  -- ^ The backtracking state step function.
+  -> (s -> (tid, action) -> (tid, action)    -> Bool)
+  -- ^ The dependency (1) function.
+  -> (s -> (tid, action) -> (tid, lookahead) -> Bool)
+  -- ^ The dependency (2) function.
+  -> (s -> (tid, lookahead) -> NonEmpty tid -> Bool)
+  -- ^ The daemon-termination predicate.
+  -> tid
+  -- ^ The initial thread.
+  -> (tid -> Bool)
+  -- ^ The thread partitioning function: when choosing what to
+  -- execute, prefer threads which return true.
+  -> BoundFunc tid action lookahead
+  -- ^ The bounding function.
+  -> BacktrackFunc tid action lookahead s
+  -- ^ The backtracking function. Note that, for some bounding
+  -- functions, this will need to add conservative backtracking
+  -- points.
+  -> (DPOR tid action -> DPOR tid action)
+  -- ^ Some post-processing to do after adding the new to-do points.
+  -> (DPORScheduler tid action lookahead s g
+    -> SchedState tid action lookahead s g
+    -> m (a, SchedState tid action lookahead s g, Trace tid action lookahead))
+  -- ^ The runner: given the scheduler and state, execute the
+  -- computation under that scheduler.
+  -> m [(a, Trace tid action lookahead)]
+runDPOR lim0
+        g0
+        gen
+        didYield
+        willYield
+        stinit
+        ststep
+        dependency1
+        dependency2
+        killsDaemons
+        initialTid
+        predicate
+        inBound
+        backtrack
+        transform
+        run
+  = go (initialState initialTid) g0 lim0
+
+  where
+    -- Repeatedly run the computation gathering all the results and
+    -- traces into a list until there are no schedules remaining to
+    -- try.
+    go _ _ (Just 0) = pure []
+    go dp g lim = case nextPrefix g dp of
+      Just (prefix, conservative, sleep, g') -> do
+        (res, s, trace) <- run (scheduler gen)
+                               (initialSchedState stinit sleep prefix g')
+
+        let bpoints  = findBacktracks (schedBoundKill s) (schedBPoints s) trace
+        let newDPOR  = addTrace conservative trace dp
+        let newDPOR' = transform (addBacktracks bpoints newDPOR)
+
+        let g'' = schedGenState s
+
+        if schedIgnore s
+        then go newDPOR g'' (subtract 1 <$> lim)
+        else ((res, trace):) <$> go newDPOR' g'' (subtract 1 <$> lim)
+
+      Nothing -> pure []
+
+    -- Find the next schedule prefix.
+    nextPrefix = findSchedulePrefix predicate . flip gen
+
+    -- The DPOR scheduler.
+    scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound
+
+    -- Find the new backtracking steps.
+    findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack
+
+    -- Incorporate a trace into the DPOR tree.
+    addTrace = incorporateTrace stinit ststep dependency1
+
+    -- Incorporate the new backtracking steps into the DPOR tree.
+    addBacktracks = incorporateBacktrackSteps inBound
+
+-------------------------------------------------------------------------------
+-- * Implementation of DPOR
+
 -- | DPOR execution is represented as a tree of states, characterised
 -- by the decisions that lead to that state.
 data DPOR tid action = DPOR

@@ -139,12 +139,12 @@ import Test.DPOR.Schedule
 -- threads without doing something as drastic as imposing a dependency
 -- between the program-terminating action and /everything/ else.
 dpor :: ( Ord    tid
-       , NFData tid
-       , NFData action
-       , NFData lookahead
-       , NFData s
-       , Monad  m
-       )
+        , NFData tid
+        , NFData action
+        , NFData lookahead
+        , NFData s
+        , Monad  m
+        )
   => (action    -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
@@ -178,65 +178,16 @@ dpor :: ( Ord    tid
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
   -> m [(a, Trace tid action lookahead)]
-dpor didYield
-     willYield
-     stinit
-     ststep
-     dependency1
-     dependency2
-     killsDaemons
-     initialTid
-     predicate
-     inBound
-     backtrack
-     transform
-     run
-  = go (initialState initialTid)
-
-  where
-    -- Repeatedly run the computation gathering all the results and
-    -- traces into a list until there are no schedules remaining to
-    -- try.
-    go dp = case nextPrefix () dp of
-      Just (prefix, conservative, sleep, ()) -> do
-        (res, s, trace) <- run (scheduler gen)
-                               (initialSchedState stinit sleep prefix ())
-
-        let bpoints = findBacktracks (schedBoundKill s) (schedBPoints s) trace
-        let newDPOR = addTrace conservative trace dp
-
-        if schedIgnore s
-        then go newDPOR
-        else ((res, trace):) <$> go (transform $ addBacktracks bpoints newDPOR)
-
-      Nothing -> pure []
-
-    -- The random number generator. Only, not so random.
-    gen _ s = (0, s)
-
-    -- Find the next schedule prefix.
-    nextPrefix = findSchedulePrefix predicate . flip gen
-
-    -- The DPOR scheduler.
-    scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound
-
-    -- Find the new backtracking steps.
-    findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack
-
-    -- Incorporate a trace into the DPOR tree.
-    addTrace = incorporateTrace stinit ststep dependency1
-
-    -- Incorporate the new backtracking steps into the DPOR tree.
-    addBacktracks = incorporateBacktrackSteps inBound
+dpor = runDPOR Nothing () (\_ s -> (0, s))
 
 -- | A much simplified DPOR function: no state, no preference between
 -- threads, and no post-processing between iterations.
 simpleDPOR :: ( Ord    tid
-             , NFData tid
-             , NFData action
-             , NFData lookahead
-             , Monad  m
-             )
+              , NFData tid
+              , NFData action
+              , NFData lookahead
+              , Monad  m
+              )
   => (action    -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)

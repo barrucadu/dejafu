@@ -54,7 +54,13 @@ randomDPOR :: ( Ord       tid
              , Monad     m
              , RandomGen g
              )
-  => (action    -> Bool)
+  => Maybe Int
+  -- ^ Optional execution limit, used to abort the execution whilst
+  -- schedules still remain.
+  -> g
+  -- ^ Random number generator, used to determine which schedules to
+  -- try.
+  -> (action    -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
   -- ^ Determine if a thread will yield.
@@ -86,67 +92,8 @@ randomDPOR :: ( Ord       tid
     -> m (a, SchedState tid action lookahead s g, Trace tid action lookahead))
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
-  -> g
-  -- ^ Random number generator, used to determine which schedules to
-  -- try.
-  -> Int
-  -- ^ Execution limit, used to abort the execution whilst schedules
-  -- still remain.
   -> m [(a, Trace tid action lookahead)]
-randomDPOR didYield
-           willYield
-           stinit
-           ststep
-           dependency1
-           dependency2
-           killsDaemons
-           initialTid
-           predicate
-           inBound
-           backtrack
-           transform
-           run
-  = go (initialState initialTid)
-
-  where
-    -- Repeatedly run the computation gathering all the results and
-    -- traces into a list until there are no schedules remaining to
-    -- try.
-    go _ _ 0 = pure []
-    go dp g elim = case nextPrefix g dp of
-      Just (prefix, conservative, sleep, g') -> do
-        (res, s, trace) <- run (scheduler gen)
-                               (initialSchedState stinit sleep prefix g')
-
-        let bpoints  = findBacktracks (schedBoundKill s) (schedBPoints s) trace
-        let newDPOR  = addTrace conservative trace dp
-        let newDPOR' = transform (addBacktracks bpoints newDPOR)
-
-        let g'' = schedGenState s
-
-        if schedIgnore s
-        then go newDPOR g'' (elim-1)
-        else ((res, trace):) <$> go newDPOR' g'' (elim-1)
-
-      Nothing -> pure []
-
-    -- Generate a random value from a range
-    gen hi = randomR (0, hi - 1)
-
-    -- Find the next schedule prefix.
-    nextPrefix = findSchedulePrefix predicate . flip gen
-
-    -- The DPOR scheduler.
-    scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound
-
-    -- Find the new backtracking steps.
-    findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack
-
-    -- Incorporate a trace into the DPOR tree.
-    addTrace = incorporateTrace stinit ststep dependency1
-
-    -- Incorporate the new backtracking steps into the DPOR tree.
-    addBacktracks = incorporateBacktrackSteps inBound
+randomDPOR lim0 g0 = runDPOR lim0 g0 (\hi -> randomR (0, hi - 1))
 
 -------------------------------------------------------------------------------
 -- Unsystematic techniques
@@ -154,13 +101,19 @@ randomDPOR didYield
 -- | Pure random scheduling. Like 'randomDPOR' but all actions are
 -- dependent and the bounds are optional.
 boundedRandom :: ( Ord       tid
-                , NFData    tid
-                , NFData    action
-                , NFData    lookahead
-                , Monad     m
-                , RandomGen g
-                )
-  => (action    -> Bool)
+                 , NFData    tid
+                 , NFData    action
+                 , NFData    lookahead
+                 , Monad     m
+                 , RandomGen g
+                 )
+  => Maybe Int
+  -- ^ Optional execution limit, used to abort the execution whilst
+  -- schedules still remain.
+  -> g
+  -- ^ Random number generator, used to determine which schedules to
+  -- try.
+  -> (action    -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
   -- ^ Determine if a thread will yield.
@@ -174,15 +127,11 @@ boundedRandom :: ( Ord       tid
     -> m (a, SchedState tid action lookahead () g, Trace tid action lookahead))
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
-  -> g
-  -- ^ Random number generator, used to determine which schedules to
-  -- try.
-  -> Int
-  -- ^ Execution limit, used to abort the execution whilst schedules
-  -- still remain.
   -> m [(a, Trace tid action lookahead)]
-boundedRandom didYield willYield initialTid inBoundm
-  = randomDPOR didYield
+boundedRandom lim gen didYield willYield initialTid inBoundm
+  = randomDPOR lim
+               gen
+               didYield
                willYield
                stinit
                ststep
