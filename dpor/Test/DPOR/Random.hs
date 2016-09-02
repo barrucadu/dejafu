@@ -10,6 +10,19 @@
 -- infeasible.
 module Test.DPOR.Random
   ( -- * Randomness and partial-order reduction
+
+  -- | This are the 'dpor' algorithm in "Test.DPOR", however without
+  -- the promise to test every distinct schedule: instead, an optional
+  -- execution limit is passed in, and a PRNG used to decide which
+  -- actual schedules to test. Testing terminates when either the
+  -- execution limit is reached, or when there are no distinct
+  -- schedules remaining.
+  --
+  -- Despite being \"random\", these still uses the normal
+  -- partial-order reduction and schedule bounding machinery, and so
+  -- will prune the search space to \"interesting\" cases, and will
+  -- never try the same schedule twice. Additionally, the thread
+  -- partitioning function still applies when selecting schedules.
     randomDPOR
 
   -- * Non-POR techniques
@@ -24,6 +37,7 @@ module Test.DPOR.Random
 
 import Control.DeepSeq (NFData)
 import Data.List.NonEmpty (NonEmpty)
+import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import System.Random (RandomGen, randomR)
 
@@ -33,27 +47,14 @@ import Test.DPOR.Internal
 -- Randomness and partial-order reduction
 
 -- | Random dynamic partial-order reduction.
---
--- This is the 'dpor' algorithm in "Test.DPOR", however it does not
--- promise to test every distinct schedule: instead, an execution
--- limit is passed in, and a PRNG used to decide which actual
--- schedules to test. Testing terminates when either the execution
--- limit is reached, or when there are no distinct schedules
--- remaining.
---
--- Despite being \"random\", this still uses the normal partial-order
--- reduction and schedule bounding machinery, and so will prune the
--- search space to \"interesting\" cases, and will never try the same
--- schedule twice. Additionally, the thread partitioning function
--- still applies when selecting schedules.
 randomDPOR :: ( Ord       tid
-             , NFData    tid
-             , NFData    action
-             , NFData    lookahead
-             , NFData    s
-             , Monad     m
-             , RandomGen g
-             )
+              , NFData    tid
+              , NFData    action
+              , NFData    lookahead
+              , NFData    s
+              , Monad     m
+              , RandomGen g
+              )
   => Maybe Int
   -- ^ Optional execution limit, used to abort the execution whilst
   -- schedules still remain.
@@ -93,7 +94,12 @@ randomDPOR :: ( Ord       tid
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
   -> m [(a, Trace tid action lookahead)]
-randomDPOR lim0 g0 = runDPOR lim0 g0 (\hi -> randomR (0, hi - 1))
+randomDPOR lim0 g0 = runDPOR lim0 g0 genprior gennum genpch where
+  -- Generate random priorities in the range [0, num threads)
+  genprior _ _ ps = gennum (M.size ps + 1)
+  gennum hi = randomR (0, hi - 1)
+  -- Change the priorities with a 1/4 probability.
+  genpch _ g = let (x, g') = gennum 4 g in (x == (0::Int), g')
 
 -------------------------------------------------------------------------------
 -- Unsystematic techniques

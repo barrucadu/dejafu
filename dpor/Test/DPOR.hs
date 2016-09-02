@@ -178,7 +178,10 @@ dpor :: ( Ord    tid
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
   -> m [(a, Trace tid action lookahead)]
-dpor = runDPOR Nothing () (\_ s -> (0, s))
+dpor = runDPOR Nothing () genprior gennum genpch where
+  genprior _ _ _ g = (0, g)
+  gennum _ g = (0, g)
+  genpch _ g = (False, g)
 
 -- | A much simplified DPOR function: no state, no preference between
 -- threads, and no post-processing between iterations.

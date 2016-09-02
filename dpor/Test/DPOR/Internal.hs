@@ -13,9 +13,10 @@ module Test.DPOR.Internal where
 
 import Control.DeepSeq (NFData(..), force)
 import Data.Char (ord)
-import Data.List (foldl', intercalate, partition, sortBy)
+import Data.Function (on)
+import Data.List (foldl', intercalate, partition, groupBy, sortOn)
 import Data.List.NonEmpty (NonEmpty(..), toList)
-import Data.Ord (Down(..), comparing)
+import Data.Ord (Down(..))
 import Data.Map.Strict (Map)
 import Data.Maybe (fromJust, isNothing, mapMaybe)
 import qualified Data.Map.Strict as M
@@ -42,9 +43,14 @@ runDPOR :: ( Ord       tid
   -- schedules still remain.
   -> g
   -- ^ Initial state for the random number generator.
+  -> (s -> tid -> Map tid Int -> g -> (Int, g))
+  -- ^ Thread priority assignment function, given the old priorities.
   -> (Int -> g -> (Int, g))
   -- ^ Random number generator. Takes an upper bound and generates an
   -- integer in the range [0, max).
+  -> (Map tid Int -> g -> (Bool, g))
+  -- ^ Priority change predicate. If true, every thread gets a new
+  -- priority.
   -> (action    -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
@@ -80,7 +86,9 @@ runDPOR :: ( Ord       tid
   -> m [(a, Trace tid action lookahead)]
 runDPOR lim0
         g0
-        gen
+        genprior
+        gennum
+        genpch
         didYield
         willYield
         stinit
@@ -103,7 +111,7 @@ runDPOR lim0
     go _ _ (Just 0) = pure []
     go dp g lim = case nextPrefix g dp of
       Just (prefix, conservative, sleep, g') -> do
-        (res, s, trace) <- run (scheduler gen)
+        (res, s, trace) <- run scheduler
                                (initialSchedState stinit sleep prefix g')
 
         let bpoints  = findBacktracks (schedBoundKill s) (schedBPoints s) trace
@@ -119,10 +127,10 @@ runDPOR lim0
       Nothing -> pure []
 
     -- Find the next schedule prefix.
-    nextPrefix = findSchedulePrefix predicate . flip gen
+    nextPrefix = findSchedulePrefix predicate . flip gennum
 
     -- The DPOR scheduler.
-    scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound
+    scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound genprior gennum genpch
 
     -- Find the new backtracking steps.
     findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack
@@ -225,15 +233,14 @@ findSchedulePrefix :: Ord tid
   -- domain-specific prioritisation between otherwise equal choices,
   -- which may be useful in some cases.
   -> (Int -> (Int, g))
-  -- ^ List indexing function, used to select which schedule to
-  -- return. Takes the length of the list, and returns an index and
-  -- some generator state.
+  -- ^ Random number generator. Takes an upper bound and generates an
+  -- integer in the range [0, max).
   -> DPOR tid action
   -> Maybe ([tid], Bool, Map tid action, g)
-findSchedulePrefix predicate idx dpor0
+findSchedulePrefix predicate gennum dpor0
   | null allPrefixes = Nothing
   | otherwise = let plen         = length allPrefixes
-                    (i, g)       = idx plen
+                    (i, g)       = gennum plen
                     (ts, c, slp) = allPrefixes !! (i `mod` plen)
                 in Just (ts, c, slp, g)
   where
@@ -245,7 +252,7 @@ findSchedulePrefix predicate idx dpor0
       let prefixes = concatMap go' (M.toList $ dporDone dpor) ++ here dpor
           -- Sort by number of preemptions, in descending order.
           cmp = Down . preEmps tid dpor . (\(a,_,_) -> a)
-          sorted = sortBy (comparing cmp) prefixes
+          sorted = sortOn cmp prefixes
 
       in if null prefixes
          then []
@@ -477,10 +484,9 @@ data SchedState tid action lookahead s g = SchedState
   -- ^ State used by the dependency function to determine when to
   -- remove decisions from the sleep set.
   , schedGenState  :: g
-  -- ^ State for the generator in the list indexing function. Without
-  -- this, there won't be much variation between the schedules tried
-  -- by subsequent executions, so this is to avoid obvious
-  -- duplication.
+  -- ^ State for the random number generator.
+  , schedPriorities :: Map tid Int
+  -- ^ Thread priorities. 0 is the LOWEST priority.
   } deriving Show
 
 instance ( NFData tid
@@ -489,12 +495,13 @@ instance ( NFData tid
          , NFData s
          ) => NFData (SchedState tid action lookahead s g) where
   rnf s = schedGenState s `seq`
-          rnf ( schedSleep     s
-              , schedPrefix    s
-              , schedBPoints   s
-              , schedIgnore    s
-              , schedBoundKill s
-              , schedDepState  s
+          rnf ( schedSleep      s
+              , schedPrefix     s
+              , schedBPoints    s
+              , schedIgnore     s
+              , schedBoundKill  s
+              , schedDepState   s
+              , schedPriorities s
               )
 
 -- | Initial scheduler state for a given prefix
@@ -505,16 +512,17 @@ initialSchedState :: s
   -> [tid]
   -- ^ The schedule prefix.
   -> g
-  -- ^ Initial state for the list indexing function.
+  -- ^ Initial state for the random number generator.
   -> SchedState tid action lookahead s g
 initialSchedState s sleep prefix g = SchedState
-  { schedSleep     = sleep
-  , schedPrefix    = prefix
-  , schedBPoints   = Sq.empty
-  , schedIgnore    = False
-  , schedBoundKill = False
-  , schedDepState  = s
-  , schedGenState  = g
+  { schedSleep      = sleep
+  , schedPrefix     = prefix
+  , schedBPoints    = Sq.empty
+  , schedIgnore     = False
+  , schedBoundKill  = False
+  , schedDepState   = s
+  , schedGenState   = g
+  , schedPriorities = M.empty
   }
 
 -- | A bounding function takes the scheduling decisions so far and a
@@ -570,7 +578,7 @@ backtrackAt toAll conservative bs i tid = go bs i where
     | otherwise = b { bcktBacktracks = backtrackAll b } : rest
 
   go (b:rest) n = b : go rest (n-1)
-  go [] _ = error "backtrackAt: Ran out of schedule whilst backtracking!"
+  go [] _ = err "backtrackAt" "ran out of schedule whilst backtracking!"
 
   -- Backtrack to a single thread
   backtrackTo = M.insert tid conservative . bcktBacktracks
@@ -603,12 +611,16 @@ dporSched :: (Ord tid, NFData tid, NFData action, NFData lookahead, NFData s)
   -> BoundFunc tid action lookahead
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
+  -> (s -> tid -> Map tid Int -> g -> (Int, g))
+  -- ^ Thread priority assignment function, given the old priorities.
   -> (Int -> g -> (Int, g))
-  -- ^ List indexing function, used to select which thread to execute.
-  -- Takes the length of the list, and returns an index and the new
-  -- generator state.
+  -- ^ Random number generator. Takes an upper bound and generates an
+  -- integer in the range [0, max).
+  -> (Map tid Int -> g -> (Bool, g))
+  -- ^ Priority change predicate. If true, every thread gets a new
+  -- priority.
   -> DPORScheduler tid action lookahead s g
-dporSched didYield willYield dependency killsDaemons ststep inBound idx trc prior threads s = force schedule where
+dporSched didYield willYield dependency killsDaemons ststep inBound genprior gennum genpch trc prior threads s = force schedule where
   -- Pick a thread to run.
   schedule = case schedPrefix s of
     -- If there is a decision available, make it
@@ -619,6 +631,16 @@ dporSched didYield willYield dependency killsDaemons ststep inBound idx trc prio
     -- them arbitrarily (recording the others).
     [] ->
       let
+          -- assign priorities to any new threads
+          (priorities, g) =
+            let (pchange, g') = genpch (schedPriorities s) (schedGenState s)
+                genpriorF (ps, g0) t
+                  | t `M.member` ps && not pchange = (ps, g0)
+                  | otherwise = let depState = schedDepState s
+                                    (p, g')  = genprior depState t ps g0
+                                in (M.insert t p ps, g')
+            in foldl' genpriorF (schedPriorities s, g') tids
+
           -- sleep sets
           checkDep t a = case prior of
             Just (tid, act) -> dependency (schedDepState s) (tid, act) (t, a)
@@ -639,12 +661,17 @@ dporSched didYield willYield dependency killsDaemons ststep inBound idx trc prio
                              null (finalCanTry++finalMustWait)
 
           -- given the 'canTry' and 'mustWait' sets, produce the next state.
+          --
+          -- First argument MUST be nonempty.
+          next [] _ = err "dporSched.next" "empty list of threads to try!"
           next canTry' mustWait' =
-            let llen    = length canTry'
-                (i, g)  = idx llen (schedGenState s)
-                nextTid = canTry' !! (i `mod` llen)
-                rest    = [tid | (tid, j) <- zip canTry' [0..], j /= i `mod` llen] ++ mustWait'
-            in (Just nextTid, (nextState rest) { schedSleep = ssleep', schedGenState = g })
+            let pcanTry = sortOn (Down . threadPr) canTry'
+                gcanTry = groupBy ((==) `on` threadPr) pcanTry
+                llen    = length (head gcanTry)
+                (i, g') = gennum llen g
+                nextTid = pcanTry !! (i `mod` llen)
+                rest    = [tid | (tid, j) <- zip pcanTry [0..], j /= i `mod` llen] ++ mustWait'
+            in (Just nextTid, (nextState rest) { schedSleep = ssleep', schedGenState = g', schedPriorities = priorities })
       in case (finalCanTry, finalMustWait) of
             ([], []) -> (Nothing, (nextState []) { schedIgnore = allSleepExcluded, schedBoundKill = allBoundExcluded })
             ([], mustWait') -> next mustWait' []
@@ -657,13 +684,16 @@ dporSched didYield willYield dependency killsDaemons ststep inBound idx trc prio
     }
   nextDepState = let ds = schedDepState s in maybe ds (ststep ds) prior
 
+  -- The priority of a thread, defaulting to 0 (lowest) for unknown
+  -- threads.
+  threadPr t = M.findWithDefault 0 t (schedPriorities s)
+
   -- Pick new threads to run, not considering bounds. Choose the
   -- current thread if available and it hasn't just yielded, otherwise
   -- add all runnable threads. The chosen threads are in two
-  -- categories: one of the @canTry@ threads is picked randomly, using
-  -- the list indexing function; and the @mustWait@ functions are
-  -- added to the to-do set. If the @canTry@ list is empty, a
-  -- @mustWait@ is used.
+  -- categories: one of the @canTry@ threads is picked randomly; and
+  -- the @mustWait@ functions are added to the to-do set. If the
+  -- @canTry@ list is empty, a @mustWait@ is used.
   (canTry, mustWait) = tryDaemons . yieldsToEnd $ case prior of
     Just (tid, act)
       | not (didYield act) && tid `elem` tids -> [tid]
