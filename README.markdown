@@ -46,7 +46,7 @@ Packages
 | concurrency  [[docs][d:conc]]   [[hackage][h:conc]]   | 1.0.0.0 | Authors | Typeclasses, functions, and data types for concurrency and STM. |
 | dejafu       [[docs][d:dejafu]] [[hackage][h:dejafu]] | 0.4.1.0 | Testers | Systematic testing for Haskell concurrency. |
 | dpor         [[docs][d:dpor]]   [[hackage][h:dpor]]   | 0.3.0.0 | Me[1]   | A generic implementation of dynamic partial-order reduction (DPOR) for testing arbitrary models of concurrency. |
-| hunit-dejafu [[docs][d:hunit]]  [[hackage][h:hunit]]  | 0.3.0.2 | Testers | Deja Fu support for the HUnit test framework. |
+| hunit-dejafu [[docs][d:hunit]]  [[hackage][h:hunit]]  | 0.3.1.0 | Testers | Deja Fu support for the HUnit test framework. |
 | tasty-dejafu [[docs][d:tasty]]  [[hackage][h:tasty]]  | 0.3.0.2 | Testers | Deja Fu support for the Tasty test framework. |
 
 Each package has its own README in its subdirectory.
