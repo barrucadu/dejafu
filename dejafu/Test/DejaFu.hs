@@ -94,9 +94,9 @@ module Test.DejaFu
   -- * Testing with different settings
 
   , autocheck'
-  , autocheckIO'
   , dejafu'
   , dejafus'
+  , autocheckIO'
   , dejafuIO'
   , dejafusIO'
 
@@ -191,6 +191,23 @@ module Test.DejaFu
   , LengthBound(..)
   , defaultLengthBound
 
+  -- * Unsystematic techniques
+
+  -- | These algorithms do not promise to visit every unique schedule,
+  -- or to avoid trying the same schedule twice. This greatly reduces
+  -- the memory requirements in testing complex systems. Randomness
+  -- drives everything. No partial-order reduction is done, but
+  -- schedule bounds are still available.
+
+  , unsystematicRandom
+  , unsystematicPCT
+  , unsystematicRandom'
+  , unsystematicPCT'
+  , unsystematicRandomIO
+  , unsystematicPCTIO
+  , unsystematicRandomIO'
+  , unsystematicPCTIO'
+
   -- * Results
 
   -- | The results of a test can be pretty-printed to the console, as
@@ -247,10 +264,12 @@ import Control.Monad.ST (runST)
 import Data.Function (on)
 import Data.List (intercalate, intersperse, minimumBy)
 import Data.Ord (comparing)
+import System.Random (RandomGen)
 
 import Test.DejaFu.Common
 import Test.DejaFu.Conc
-import Test.DejaFu.SCT
+import Test.DejaFu.SCT hiding (unsystematicRandom, unsystematicPCT)
+import qualified Test.DejaFu.SCT as SCT
 
 -- | The default memory model: @TotalStoreOrder@
 defaultMemType :: MemType
@@ -353,10 +372,8 @@ dejafus' :: Show a
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> IO Bool
-dejafus' memtype cb conc tests = do
-  let traces = runST (sctBound memtype cb conc)
-  results <- mapM (\(name, test) -> doTest name $ test traces) tests
-  return $ and results
+dejafus' memtype cb conc tests =
+  checkPredicates tests $ runST (sctBound memtype cb conc)
 
 -- | Variant of 'dejafu' for computations which do 'IO'.
 dejafuIO :: Show a => ConcIO a -> (String, Predicate a) -> IO Bool
@@ -372,12 +389,107 @@ dejafusIO = dejafusIO' defaultMemType defaultBounds
 
 -- | Variant of 'dejafus'' for computations which do 'IO'.
 dejafusIO' :: Show a => MemType -> Bounds -> ConcIO a -> [(String, Predicate a)] -> IO Bool
-dejafusIO' memtype cb concio tests = do
-  traces  <- sctBound memtype cb concio
-  results <- mapM (\(name, test) -> doTest name $ test traces) tests
-  return $ and results
+dejafusIO' memtype cb concio tests =
+  checkPredicates tests =<< sctBound memtype cb concio
 
--- * Test cases
+-------------------------------------------------------------------------------
+-- Unsystematic techniques
+
+-- | Try random schedules up to some limit.
+unsystematicRandom :: (Show a, RandomGen g)
+  => Int
+  -- ^ The number of executions to try.
+  -> g
+  -- ^ The random number generator.
+  -> (forall t. ConcST t a)
+  -- ^ The computation to test.
+  -> [(String, Predicate a)]
+  -- ^ The list of predicates (with names) to check
+  -> IO Bool
+unsystematicRandom = unsystematicRandom' defaultMemType defaultBounds
+
+-- | Probabilistic concurrency testing (PCT). This is like random
+-- scheduling, but schedules threads by priority, with random
+-- priority-reassignment points during the execution. This is
+-- typically more effective at finding bugs than just random
+-- scheduling. This may be because, conceptually, PCT causes threads
+-- to get very \"out of sync\" with each other, whereas random
+-- scheduling will result in every thread progressing at roughly the
+-- same rate.
+--
+-- See /A Randomized Scheduler with Probabilistic Guarantees of
+-- Finding Bugs/, S. Burckhardt et al (2010).
+unsystematicPCT :: (Show a, RandomGen g)
+  => Int
+  -- ^ The number of executions to try.
+  -> g
+  -- ^ The random number generator.
+  -> (forall t. ConcST t a)
+  -- ^ The computation to test.
+  -> [(String, Predicate a)]
+  -- ^ The list of predicates (with names) to check
+  -> IO Bool
+unsystematicPCT = unsystematicPCT' defaultMemType defaultBounds
+
+-- | Variant of 'unsystematicRandom' that takes a memory model and
+-- schedule bounds.
+unsystematicRandom' :: (Show a, RandomGen g)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Bounds
+  -- ^ The schedule bounds.
+  -> Int
+  -- ^ The number of executions to try.
+  -> g
+  -- ^ The random number generator.
+  -> (forall t. ConcST t a)
+  -- ^ The computation to test.
+  -> [(String, Predicate a)]
+  -- ^ The predicate (with a name) to check
+  -> IO Bool
+unsystematicRandom' memtype cb lim gen conc tests =
+  checkPredicates tests $ runST $ SCT.unsystematicRandom lim gen memtype (cBound cb) conc
+
+-- | Variant of 'unsystematicPCT' that takes a memory model and
+-- schedule bounds.
+unsystematicPCT' :: (Show a, RandomGen g)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Bounds
+  -- ^ The schedule bounds.
+  -> Int
+  -- ^ The number of executions to try.
+  -> g
+  -- ^ The random number generator.
+  -> (forall t. ConcST t a)
+  -- ^ The computation to test.
+  -> [(String, Predicate a)]
+  -- ^ The predicate (with a name) to check
+  -> IO Bool
+unsystematicPCT' memtype cb lim gen conc tests =
+  checkPredicates tests $ runST $ SCT.unsystematicPCT lim gen memtype (cBound cb) conc
+
+-- | Variant of 'unsystematicRandom' for computations which do 'IO'.
+unsystematicRandomIO :: (Show a, RandomGen g) => Int -> g -> ConcIO a -> [(String, Predicate a)] -> IO Bool
+unsystematicRandomIO = unsystematicRandomIO' defaultMemType defaultBounds
+
+-- | Variant of 'unsystematicPCT' for computations which do 'IO'.
+unsystematicPCTIO :: (Show a, RandomGen g) => Int -> g -> ConcIO a -> [(String, Predicate a)] -> IO Bool
+unsystematicPCTIO = unsystematicRandomIO' defaultMemType defaultBounds
+
+-- | Variant of 'unsystematicRandom'' for computations which do 'IO'.
+unsystematicRandomIO' :: (Show a, RandomGen g) => MemType -> Bounds -> Int -> g -> ConcIO a -> [(String, Predicate a)] -> IO Bool
+unsystematicRandomIO' memtype cb lim gen conc tests =
+  checkPredicates tests =<< SCT.unsystematicRandom lim gen memtype (cBound cb) conc
+
+-- | Variant of 'unsystematicPCT'' for computations which do 'IO'.
+unsystematicPCTIO' :: (Show a, RandomGen g) => MemType -> Bounds -> Int -> g -> ConcIO a -> [(String, Predicate a)] -> IO Bool
+unsystematicPCTIO' memtype cb lim gen conc tests =
+  checkPredicates tests =<< SCT.unsystematicPCT lim gen memtype (cBound cb) conc
+
+
+-------------------------------------------------------------------------------
+-- Test cases
 
 -- | The results of a test, including the number of cases checked to
 -- determine the final boolean outcome.
@@ -444,7 +556,9 @@ runTestM' :: MonadRef r n
           => MemType -> Bounds -> Predicate a -> Conc n r a -> n (Result a)
 runTestM' memtype cb predicate conc = predicate <$> sctBound memtype cb conc
 
--- * Predicates
+
+-------------------------------------------------------------------------------
+-- Predicates
 
 -- | A @Predicate@ is a function which collapses a list of results
 -- into a 'Result'.
@@ -601,7 +715,18 @@ gives expected results = go expected [] results $ defaultFail failures where
 gives' :: (Eq a, Show a) => [a] -> Predicate a
 gives' = gives . map Right
 
--- * Internal
+
+-------------------------------------------------------------------------------
+-- Internal
+
+-- | Check predicates against a collection of traces and print the
+-- output.
+checkPredicates :: Show a
+  => [(String, Predicate a)]
+  -> [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
+  -> IO Bool
+checkPredicates tests traces =
+  and <$> mapM (\(name, test) -> doTest name $ test traces) tests
 
 -- | Run a test and print to stdout
 doTest :: Show a => String -> Result a -> IO Bool

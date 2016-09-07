@@ -49,23 +49,6 @@ if [[ -z "$SKIP_DEJAFU_02" ]]; then
   done
 fi
 
-# Test dpor-0.1 compat of dejafu
-if [[ -z "$SKIP_DPOR_01" ]]; then
-  # Use 0.1.0.1 because it builds with ghc 8.
-  sed 's:^- dpor$::' stack.yaml > stack-dpor_01.yaml
-  sed -i 's/^extra-deps: \[\]/extra-deps: [ dpor-0.1.0.1 ]/' stack-dpor_01.yaml
-
-  testdejafu "dejafu (dpor-0.1)" $STACKOPTS --stack-yaml=stack-dpor_01.yaml
-fi
-
-# Test dpor-0.2 compat of dejafu
-if [[ -z "$SKIP_DPOR_02" ]]; then
-  sed 's:^- dpor$::' stack.yaml > stack-dpor_02.yaml
-  sed -i 's/^extra-deps: \[\]/extra-deps: [ dpor-0.2.0.0 ]/' stack-dpor_02.yaml
-
-  testdejafu "dejafu (dpor-0.2)" $STACKOPTS --stack-yaml=stack-dpor_02.yaml
-fi
-
 # Test HEAD version of everything
 testcmd "dpor" stack $STACKOPTS test dpor
 
