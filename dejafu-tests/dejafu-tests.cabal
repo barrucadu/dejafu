@@ -44,6 +44,7 @@ executable dejafu-tests
                      , HUnit
                      , hunit-dejafu
                      , QuickCheck
+                     , random
                      , test-framework
                      , test-framework-hunit
                      , test-framework-quickcheck2

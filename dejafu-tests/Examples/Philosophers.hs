@@ -5,16 +5,26 @@ module Examples.Philosophers where
 import Control.Monad (replicateM, forever)
 import Control.Monad.Conc.Class
 import Data.Functor (void)
+import System.Random (mkStdGen)
 import Test.DejaFu
-import Test.Framework (Test)
+import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
 import Test.HUnit.DejaFu
 
+predicates :: [(String, Predicate ())]
+predicates = [ ("deadlocks", deadlocksSometimes)
+             , ("aborts", abortsSometimes)
+              ]
+
 tests :: [Test]
-tests = hUnitTestToTests $ test
-  [ testDejafu' defaultMemType bound (philosophers 3) "deadlocks" deadlocksSometimes
-  , testDejafu' defaultMemType bound (philosophers 3) "loops"     abortsSometimes
+tests =
+  [ testGroup "Systematic" . hUnitTestToTests . test $
+      testDejafus' defaultMemType bound (philosophers 3) predicates
+  , testGroup "Random" . hUnitTestToTests . test $
+      testUnsystematicRandom' SequentialConsistency bound 1000 (mkStdGen 0) (philosophers 3) predicates
+  , testGroup "PCT" . hUnitTestToTests . test $
+      testUnsystematicPCT' SequentialConsistency bound 1000 (mkStdGen 0) (philosophers 3) predicates
   ]
 
 -- | Shorter execution length bound
