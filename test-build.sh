@@ -39,17 +39,6 @@ if [[ "$RESOLVER" == "" ]]; then
   STACKOPTS="--no-terminal --install-ghc"
 fi
 
-# Test dejafu-0.2 compat of async/hunit/tasty-dejafu
-if [[ -z "$SKIP_DEJAFU_02" ]]; then
-  sed 's:^- dejafu$::' stack.yaml > stack-dejafu_02.yaml
-  sed -i 's/^extra-deps: \[\]/extra-deps: [ dejafu-0.2.0.0 ]/' stack-dejafu_02.yaml
-
-  for pkg in hunit-dejafu tasty-dejafu; do
-    testcmd "${pkg} (dejafu-0.2)" stack $STACKOPTS --stack-yaml=stack-dejafu_02.yaml test $pkg
-  done
-fi
-
-# Test HEAD version of everything
 testcmd "dpor" stack $STACKOPTS test dpor
 
 testdejafu "dejafu" $STACKOPTS
