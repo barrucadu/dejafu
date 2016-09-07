@@ -130,7 +130,7 @@ runDPOR lim0
     nextPrefix = findSchedulePrefix predicate . flip gennum
 
     -- The DPOR scheduler.
-    scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound genprior gennum genpch
+    scheduler = dporSched True didYield willYield dependency1 killsDaemons ststep inBound genprior gennum genpch
 
     -- Find the new backtracking steps.
     findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack
@@ -140,6 +140,65 @@ runDPOR lim0
 
     -- Incorporate the new backtracking steps into the DPOR tree.
     addBacktracks = incorporateBacktrackSteps inBound
+
+-------------------------------------------------------------------------------
+-- * Unsystematic techniques
+
+-- | An implementation of DPOR that does EVERYTHING.
+runUnsystematic :: ( Ord       tid
+                   , NFData    tid
+                   , NFData    action
+                   , NFData    lookahead
+                   , Monad     m
+                   )
+  => Int
+  -- ^ Execution limit, used to abort execution.
+  -> g
+  -- ^ Initial state for the random number generator.
+  -> (tid -> Map tid Int -> g -> (Int, g))
+  -- ^ Thread priority assignment function, given the old priorities.
+  -> (Int -> g -> (Int, g))
+  -- ^ Random number generator. Takes an upper bound and generates an
+  -- integer in the range [0, max).
+  -> (Map tid Int -> g -> (Bool, g))
+  -- ^ Priority change predicate. If true, every thread gets a new
+  -- priority.
+  -> BoundFunc tid action lookahead
+  -- ^ The bounding function.
+  -> (DPORScheduler tid action lookahead () g
+    -> SchedState tid action lookahead () g
+    -> m (a, SchedState tid action lookahead () g, Trace tid action lookahead))
+  -- ^ The runner: given the scheduler and state, execute the
+  -- computation under that scheduler.
+  -> m [(a, Trace tid action lookahead)]
+runUnsystematic lim0
+                g0
+                genprior
+                gennum
+                genpch
+                inBound
+                run
+  = go g0 lim0
+
+  where
+    -- Repeatedly run the computation gathering all the results and
+    -- traces into a list until the limit is reached.
+    go _ 0 = pure []
+    go g lim = do
+      (res, s, trace) <- run scheduler (initialSchedState () M.empty [] g)
+      ((res, trace):) <$> go (schedGenState s) (lim - 1)
+
+    -- The DPOR scheduler.
+    scheduler = dporSched False
+                          (const False)
+                          (const False)
+                          (\_ _ _ -> True)
+                          (\_ _ _ -> False)
+                          (\s _ -> s)
+                          inBound
+                          (const genprior)
+                          gennum
+                          genpch
 
 -------------------------------------------------------------------------------
 -- * Implementation of DPOR
@@ -598,7 +657,11 @@ backtrackAt toAll conservative bs i tid = go bs i where
 -- This forces full evaluation of the result every step, to avoid any
 -- possible space leaks.
 dporSched :: (Ord tid, NFData tid, NFData action, NFData lookahead, NFData s)
-  => (action -> Bool)
+  => Bool
+  -- ^ Whether running in \"systematic\" or \"unsystematic\" mode. In
+  -- the former, preemptions are never scheduled; in the latter they
+  -- are.
+  -> (action -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
   -- ^ Determine if a thread will yield.
@@ -620,7 +683,7 @@ dporSched :: (Ord tid, NFData tid, NFData action, NFData lookahead, NFData s)
   -- ^ Priority change predicate. If true, every thread gets a new
   -- priority.
   -> DPORScheduler tid action lookahead s g
-dporSched didYield willYield dependency killsDaemons ststep inBound genprior gennum genpch trc prior threads s = force schedule where
+dporSched isSystematic didYield willYield dependency killsDaemons ststep inBound genprior gennum genpch trc prior threads s = force schedule where
   -- Pick a thread to run.
   schedule = case schedPrefix s of
     -- If there is a decision available, make it
@@ -696,7 +759,7 @@ dporSched didYield willYield dependency killsDaemons ststep inBound genprior gen
   -- @canTry@ list is empty, a @mustWait@ is used.
   (canTry, mustWait) = tryDaemons . yieldsToEnd $ case prior of
     Just (tid, act)
-      | not (didYield act) && tid `elem` tids -> [tid]
+      | not (didYield act) && tid `elem` tids && isSystematic -> [tid]
     _ -> tids'
 
   -- If one of the chosen actions will kill the computation, and there
