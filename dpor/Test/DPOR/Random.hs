@@ -10,6 +10,19 @@
 -- infeasible.
 module Test.DPOR.Random
   ( -- * Randomness and partial-order reduction
+
+  -- | These use the 'dpor' algorithm in "Test.DPOR", however without
+  -- the promise to test every distinct schedule: instead, an optional
+  -- execution limit is passed in, and a PRNG used to decide which
+  -- actual schedules to test. Testing terminates when either the
+  -- execution limit is reached, or when there are no distinct
+  -- schedules remaining.
+  --
+  -- Despite being \"random\", these still uses the normal
+  -- partial-order reduction and schedule bounding machinery, and so
+  -- will prune the search space to \"interesting\" cases, and will
+  -- never try the same schedule twice. Additionally, the thread
+  -- partitioning function still applies when selecting schedules.
     randomDPOR
 
   -- * Non-POR techniques
@@ -20,10 +33,22 @@ module Test.DPOR.Random
   -- random choice, with optional bounds. However, the same schedule
   -- will never be explored twice.
   , boundedRandom
+
+  -- * Unsystematic techniques
+
+  -- | These algorithms do not promise to visit every unique schedule,
+  -- or to avoid trying the same schedule twice. This greatly reduces
+  -- the memory requirements in testing complex systems. Randomness
+  -- drives everything. No partial-order reduction is done, but
+  -- schedule bounds are still available.
+
+  , unsystematicRandom
+  , unsystematicPCT
   ) where
 
 import Control.DeepSeq (NFData)
 import Data.List.NonEmpty (NonEmpty)
+import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 import System.Random (RandomGen, randomR)
 
@@ -34,27 +59,23 @@ import Test.DPOR.Internal
 
 -- | Random dynamic partial-order reduction.
 --
--- This is the 'dpor' algorithm in "Test.DPOR", however it does not
--- promise to test every distinct schedule: instead, an execution
--- limit is passed in, and a PRNG used to decide which actual
--- schedules to test. Testing terminates when either the execution
--- limit is reached, or when there are no distinct schedules
--- remaining.
---
--- Despite being \"random\", this still uses the normal partial-order
--- reduction and schedule bounding machinery, and so will prune the
--- search space to \"interesting\" cases, and will never try the same
--- schedule twice. Additionally, the thread partitioning function
--- still applies when selecting schedules.
+-- This uses a systematic variant of PCT internally. See
+-- 'unsystematicPCT' for an overview of the algorithm.
 randomDPOR :: ( Ord       tid
-             , NFData    tid
-             , NFData    action
-             , NFData    lookahead
-             , NFData    s
-             , Monad     m
-             , RandomGen g
-             )
-  => (action    -> Bool)
+              , NFData    tid
+              , NFData    action
+              , NFData    lookahead
+              , NFData    s
+              , Monad     m
+              , RandomGen g
+              )
+  => Maybe Int
+  -- ^ Optional execution limit, used to abort the execution whilst
+  -- schedules still remain.
+  -> g
+  -- ^ Random number generator, used to determine which schedules to
+  -- try.
+  -> (action    -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
   -- ^ Determine if a thread will yield.
@@ -81,84 +102,38 @@ randomDPOR :: ( Ord       tid
   -- points.
   -> (DPOR tid action -> DPOR tid action)
   -- ^ Some post-processing to do after adding the new to-do points.
-  -> (DPORScheduler tid action lookahead s
-    -> SchedState tid action lookahead s
-    -> m (a, SchedState tid action lookahead s, Trace tid action lookahead))
+  -> (DPORScheduler tid action lookahead s g
+    -> SchedState tid action lookahead s g
+    -> m (a, SchedState tid action lookahead s g, Trace tid action lookahead))
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
+  -> m [(a, Trace tid action lookahead)]
+randomDPOR lim0 g0 = runDPOR lim0 g0 genprior gennum genpch where
+  -- Generate random priorities in the range [0, num threads)
+  genprior _ _ ps = gennum (M.size ps + 1)
+  gennum hi = randomR (0, hi - 1)
+  -- Change the priorities with a 1/4 probability.
+  genpch _ g = let (x, g') = gennum 4 g in (x == (0::Int), g')
+
+-------------------------------------------------------------------------------
+-- Non-POR techniques
+
+-- | Pure random scheduling. Uses 'randomDPOR' internally, but all
+-- actions are dependent and the bounds are optional.
+boundedRandom :: ( Ord       tid
+                 , NFData    tid
+                 , NFData    action
+                 , NFData    lookahead
+                 , Monad     m
+                 , RandomGen g
+                 )
+  => Maybe Int
+  -- ^ Optional execution limit, used to abort the execution whilst
+  -- schedules still remain.
   -> g
   -- ^ Random number generator, used to determine which schedules to
   -- try.
-  -> Int
-  -- ^ Execution limit, used to abort the execution whilst schedules
-  -- still remain.
-  -> m [(a, Trace tid action lookahead)]
-randomDPOR didYield
-           willYield
-           stinit
-           ststep
-           dependency1
-           dependency2
-           killsDaemons
-           initialTid
-           predicate
-           inBound
-           backtrack
-           transform
-           run
-  = go (initialState initialTid)
-
-  where
-    -- Repeatedly run the computation gathering all the results and
-    -- traces into a list until there are no schedules remaining to
-    -- try.
-    go _ _ 0 = pure []
-    go dp g elim = case nextPrefix g dp of
-      Just (prefix, conservative, sleep, g') -> do
-        (res, s, trace) <- run scheduler
-                              (initialSchedState stinit sleep prefix)
-
-        let bpoints  = findBacktracks (schedBoundKill s) (schedBPoints s) trace
-        let newDPOR  = addTrace conservative trace dp
-        let newDPOR' = transform (addBacktracks bpoints newDPOR)
-
-        if schedIgnore s
-        then go newDPOR g' (elim-1)
-        else ((res, trace):) <$> go newDPOR' g' (elim-1)
-
-      Nothing -> pure []
-
-    -- Generate a random value from a range
-    gen g hi = randomR (0, hi - 1) g
-
-    -- Find the next schedule prefix.
-    nextPrefix = findSchedulePrefix predicate . gen
-
-    -- The DPOR scheduler.
-    scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound
-
-    -- Find the new backtracking steps.
-    findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack
-
-    -- Incorporate a trace into the DPOR tree.
-    addTrace = incorporateTrace stinit ststep dependency1
-
-    -- Incorporate the new backtracking steps into the DPOR tree.
-    addBacktracks = incorporateBacktrackSteps inBound
-
--------------------------------------------------------------------------------
--- Unsystematic techniques
-
--- | Pure random scheduling. Like 'randomDPOR' but all actions are
--- dependent and the bounds are optional.
-boundedRandom :: ( Ord       tid
-                , NFData    tid
-                , NFData    action
-                , NFData    lookahead
-                , Monad     m
-                , RandomGen g
-                )
-  => (action    -> Bool)
+  -> (action    -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
   -- ^ Determine if a thread will yield.
@@ -167,20 +142,16 @@ boundedRandom :: ( Ord       tid
   -> Maybe (BoundFunc tid action lookahead)
   -- ^ The bounding function. If no function is provided, 'trueBound'
   -- is used.
-  -> (DPORScheduler tid action lookahead ()
-    -> SchedState tid action lookahead ()
-    -> m (a, SchedState tid action lookahead (), Trace tid action lookahead))
+  -> (DPORScheduler tid action lookahead () g
+    -> SchedState tid action lookahead () g
+    -> m (a, SchedState tid action lookahead () g, Trace tid action lookahead))
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
-  -> g
-  -- ^ Random number generator, used to determine which schedules to
-  -- try.
-  -> Int
-  -- ^ Execution limit, used to abort the execution whilst schedules
-  -- still remain.
   -> m [(a, Trace tid action lookahead)]
-boundedRandom didYield willYield initialTid inBoundm
-  = randomDPOR didYield
+boundedRandom lim gen didYield willYield initialTid inBoundm
+  = randomDPOR lim
+               gen
+               didYield
                willYield
                stinit
                ststep
@@ -202,3 +173,71 @@ boundedRandom didYield willYield initialTid inBoundm
     inBound = fromMaybe trueBound inBoundm
     backtrack = backtrackAt (const False) False
     transform = id
+
+-------------------------------------------------------------------------------
+-- Unsystematic techniques
+
+-- | Random scheduling. Like 'randomDPOR' but all actions are
+-- dependent and the bounds are optional.
+unsystematicRandom :: ( Ord       tid
+                      , NFData    tid
+                      , NFData    action
+                      , NFData    lookahead
+                      , Monad     m
+                      , RandomGen g
+                      )
+  => Int
+  -- ^ Execution limit, used to abort the execution.
+  -> g
+  -- ^ Random number generator, used to determine which schedules to
+  -- try.
+  -> Maybe (BoundFunc tid action lookahead)
+  -- ^ The bounding function. If no function is provided, 'trueBound'
+  -- is used.
+  -> (DPORScheduler tid action lookahead () g
+    -> SchedState tid action lookahead () g
+    -> m (a, SchedState tid action lookahead () g, Trace tid action lookahead))
+  -- ^ The runner: given the scheduler and state, execute the
+  -- computation under that scheduler.
+  -> m [(a, Trace tid action lookahead)]
+unsystematicRandom lim gen = runUnsystematic lim gen genprior gennum genpch  . fromMaybe trueBound where
+  genprior _ ps = gennum (M.size ps + 1)
+  gennum hi = randomR (0, hi - 1)
+  genpch _ g = (False, g)
+
+-- | Probabilistic concurrency testing (PCT). This is like random
+-- scheduling, but schedules threads by priority, with random
+-- priority-reassignment points during the execution. This is
+-- typically more effective at finding bugs than just random
+-- scheduling. This may be because, conceptually, PCT causes threads
+-- to get very \"out of sync\" with each other, whereas random
+-- scheduling will result in every thread progressing at roughly the
+-- same rate.
+--
+-- See /A Randomized Scheduler with Probabilistic Guarantees of
+-- Finding Bugs/, S. Burckhardt et al (2010).
+unsystematicPCT :: ( Ord       tid
+                   , NFData    tid
+                   , NFData    action
+                   , NFData    lookahead
+                   , Monad     m
+                   , RandomGen g
+                   )
+  => Int
+  -- ^ Execution limit, used to abort the execution.
+  -> g
+  -- ^ Random number generator, used to determine which schedules to
+  -- try.
+  -> Maybe (BoundFunc tid action lookahead)
+  -- ^ The bounding function. If no function is provided, 'trueBound'
+  -- is used.
+  -> (DPORScheduler tid action lookahead () g
+    -> SchedState tid action lookahead () g
+    -> m (a, SchedState tid action lookahead () g, Trace tid action lookahead))
+  -- ^ The runner: given the scheduler and state, execute the
+  -- computation under that scheduler.
+  -> m [(a, Trace tid action lookahead)]
+unsystematicPCT lim gen = runUnsystematic lim gen genprior gennum genpch . fromMaybe trueBound where
+  genprior _ ps = gennum (M.size ps + 1)
+  gennum hi = randomR (0, hi - 1)
+  genpch _ g = let (x, g') = gennum 4 g in (x == (0::Int), g')

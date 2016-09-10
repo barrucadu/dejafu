@@ -13,9 +13,10 @@ module Test.DPOR.Internal where
 
 import Control.DeepSeq (NFData(..), force)
 import Data.Char (ord)
-import Data.List (foldl', intercalate, partition, sortBy)
+import Data.Function (on)
+import Data.List (foldl', intercalate, partition, groupBy, sortOn)
 import Data.List.NonEmpty (NonEmpty(..), toList)
-import Data.Ord (Down(..), comparing)
+import Data.Ord (Down(..))
 import Data.Map.Strict (Map)
 import Data.Maybe (fromJust, isNothing, mapMaybe)
 import qualified Data.Map.Strict as M
@@ -28,6 +29,179 @@ import Test.DPOR.Schedule (Decision(..), Scheduler, decisionOf, tidOf)
 
 -------------------------------------------------------------------------------
 -- * Dynamic partial-order reduction
+
+-- | An implementation of DPOR that does EVERYTHING.
+runDPOR :: ( Ord       tid
+           , NFData    tid
+           , NFData    action
+           , NFData    lookahead
+           , NFData    s
+           , Monad     m
+           )
+  => Maybe Int
+  -- ^ Optional execution limit, used to abort the execution whilst
+  -- schedules still remain.
+  -> g
+  -- ^ Initial state for the random number generator.
+  -> (s -> tid -> Map tid Int -> g -> (Int, g))
+  -- ^ Thread priority assignment function, given the old priorities.
+  -> (Int -> g -> (Int, g))
+  -- ^ Random number generator. Takes an upper bound and generates an
+  -- integer in the range [0, max).
+  -> (Map tid Int -> g -> (Bool, g))
+  -- ^ Priority change predicate. If true, every thread gets a new
+  -- priority.
+  -> (action    -> Bool)
+  -- ^ Determine if a thread yielded.
+  -> (lookahead -> Bool)
+  -- ^ Determine if a thread will yield.
+  -> s
+  -- ^ The initial state for backtracking.
+  -> (s -> (tid, action) -> s)
+  -- ^ The backtracking state step function.
+  -> (s -> (tid, action) -> (tid, action)    -> Bool)
+  -- ^ The dependency (1) function.
+  -> (s -> (tid, action) -> (tid, lookahead) -> Bool)
+  -- ^ The dependency (2) function.
+  -> (s -> (tid, lookahead) -> NonEmpty tid -> Bool)
+  -- ^ The daemon-termination predicate.
+  -> tid
+  -- ^ The initial thread.
+  -> (tid -> Bool)
+  -- ^ The thread partitioning function: when choosing what to
+  -- execute, prefer threads which return true.
+  -> BoundFunc tid action lookahead
+  -- ^ The bounding function.
+  -> BacktrackFunc tid action lookahead s
+  -- ^ The backtracking function. Note that, for some bounding
+  -- functions, this will need to add conservative backtracking
+  -- points.
+  -> (DPOR tid action -> DPOR tid action)
+  -- ^ Some post-processing to do after adding the new to-do points.
+  -> (DPORScheduler tid action lookahead s g
+    -> SchedState tid action lookahead s g
+    -> m (a, SchedState tid action lookahead s g, Trace tid action lookahead))
+  -- ^ The runner: given the scheduler and state, execute the
+  -- computation under that scheduler.
+  -> m [(a, Trace tid action lookahead)]
+runDPOR lim0
+        g0
+        genprior
+        gennum
+        genpch
+        didYield
+        willYield
+        stinit
+        ststep
+        dependency1
+        dependency2
+        killsDaemons
+        initialTid
+        predicate
+        inBound
+        backtrack
+        transform
+        run
+  = go (initialState initialTid) g0 lim0
+
+  where
+    -- Repeatedly run the computation gathering all the results and
+    -- traces into a list until there are no schedules remaining to
+    -- try.
+    go _ _ (Just 0) = pure []
+    go dp g lim = case nextPrefix g dp of
+      Just (prefix, conservative, sleep, g') -> do
+        (res, s, trace) <- run scheduler
+                               (initialSchedState stinit sleep prefix g')
+
+        let bpoints  = findBacktracks (schedBoundKill s) (schedBPoints s) trace
+        let newDPOR  = addTrace conservative trace dp
+        let newDPOR' = transform (addBacktracks bpoints newDPOR)
+
+        let g'' = schedGenState s
+
+        if schedIgnore s
+        then go newDPOR g'' (subtract 1 <$> lim)
+        else ((res, trace):) <$> go newDPOR' g'' (subtract 1 <$> lim)
+
+      Nothing -> pure []
+
+    -- Find the next schedule prefix.
+    nextPrefix = findSchedulePrefix predicate . flip gennum
+
+    -- The DPOR scheduler.
+    scheduler = dporSched True didYield willYield dependency1 killsDaemons ststep inBound genprior gennum genpch
+
+    -- Find the new backtracking steps.
+    findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack
+
+    -- Incorporate a trace into the DPOR tree.
+    addTrace = incorporateTrace stinit ststep dependency1
+
+    -- Incorporate the new backtracking steps into the DPOR tree.
+    addBacktracks = incorporateBacktrackSteps inBound
+
+-------------------------------------------------------------------------------
+-- * Unsystematic techniques
+
+-- | An implementation of DPOR that does EVERYTHING.
+runUnsystematic :: ( Ord       tid
+                   , NFData    tid
+                   , NFData    action
+                   , NFData    lookahead
+                   , Monad     m
+                   )
+  => Int
+  -- ^ Execution limit, used to abort execution.
+  -> g
+  -- ^ Initial state for the random number generator.
+  -> (tid -> Map tid Int -> g -> (Int, g))
+  -- ^ Thread priority assignment function, given the old priorities.
+  -> (Int -> g -> (Int, g))
+  -- ^ Random number generator. Takes an upper bound and generates an
+  -- integer in the range [0, max).
+  -> (Map tid Int -> g -> (Bool, g))
+  -- ^ Priority change predicate. If true, every thread gets a new
+  -- priority.
+  -> BoundFunc tid action lookahead
+  -- ^ The bounding function.
+  -> (DPORScheduler tid action lookahead () g
+    -> SchedState tid action lookahead () g
+    -> m (a, SchedState tid action lookahead () g, Trace tid action lookahead))
+  -- ^ The runner: given the scheduler and state, execute the
+  -- computation under that scheduler.
+  -> m [(a, Trace tid action lookahead)]
+runUnsystematic lim0
+                g0
+                genprior
+                gennum
+                genpch
+                inBound
+                run
+  = go g0 lim0
+
+  where
+    -- Repeatedly run the computation gathering all the results and
+    -- traces into a list until the limit is reached.
+    go _ 0 = pure []
+    go g lim = do
+      (res, s, trace) <- run scheduler (initialSchedState () M.empty [] g)
+      ((res, trace):) <$> go (schedGenState s) (lim - 1)
+
+    -- The DPOR scheduler.
+    scheduler = dporSched False
+                          (const False)
+                          (const False)
+                          (\_ _ _ -> True)
+                          (\_ _ _ -> False)
+                          (\s _ -> s)
+                          inBound
+                          (const genprior)
+                          gennum
+                          genpch
+
+-------------------------------------------------------------------------------
+-- * Implementation of DPOR
 
 -- | DPOR execution is represented as a tree of states, characterised
 -- by the decisions that lead to that state.
@@ -91,7 +265,7 @@ instance ( NFData tid
 
 -- | Initial DPOR state, given an initial thread ID. This initial
 -- thread should exist and be runnable at the start of execution.
-initialState :: Ord tid => tid -> DPOR tid action
+initialState :: tid -> DPOR tid action
 initialState initialThread = DPOR
   { dporRunnable = S.singleton initialThread
   , dporTodo     = M.singleton initialThread False
@@ -118,15 +292,15 @@ findSchedulePrefix :: Ord tid
   -- domain-specific prioritisation between otherwise equal choices,
   -- which may be useful in some cases.
   -> (Int -> (Int, g))
-  -- ^ List indexing function, used to select which schedule to
-  -- return. Takes the length of the list, and returns an index and
-  -- some generator state. The index returned MUST be in range!
+  -- ^ Random number generator. Takes an upper bound and generates an
+  -- integer in the range [0, max).
   -> DPOR tid action
   -> Maybe ([tid], Bool, Map tid action, g)
-findSchedulePrefix predicate idx dpor0
+findSchedulePrefix predicate gennum dpor0
   | null allPrefixes = Nothing
-  | otherwise = let (i, g)       = idx (length allPrefixes)
-                    (ts, c, slp) = allPrefixes !! i
+  | otherwise = let plen         = length allPrefixes
+                    (i, g)       = gennum plen
+                    (ts, c, slp) = allPrefixes !! (i `mod` plen)
                 in Just (ts, c, slp, g)
   where
     allPrefixes = go (initialDPORThread dpor0) dpor0
@@ -137,7 +311,7 @@ findSchedulePrefix predicate idx dpor0
       let prefixes = concatMap go' (M.toList $ dporDone dpor) ++ here dpor
           -- Sort by number of preemptions, in descending order.
           cmp = Down . preEmps tid dpor . (\(a,_,_) -> a)
-          sorted = sortBy (comparing cmp) prefixes
+          sorted = sortOn cmp prefixes
 
       in if null prefixes
          then []
@@ -344,11 +518,11 @@ incorporateBacktrackSteps bv = go Nothing [] where
 -- * DPOR scheduler
 
 -- | A @Scheduler@ where the state is a @SchedState@.
-type DPORScheduler tid action lookahead s
-  = Scheduler tid action lookahead (SchedState tid action lookahead s)
+type DPORScheduler tid action lookahead s g
+  = Scheduler tid action lookahead (SchedState tid action lookahead s g)
 
 -- | The scheduler state
-data SchedState tid action lookahead s = SchedState
+data SchedState tid action lookahead s g = SchedState
   { schedSleep     :: Map tid action
   -- ^ The sleep set: decisions not to make until something dependent
   -- with them happens.
@@ -368,19 +542,25 @@ data SchedState tid action lookahead s = SchedState
   , schedDepState  :: s
   -- ^ State used by the dependency function to determine when to
   -- remove decisions from the sleep set.
+  , schedGenState  :: g
+  -- ^ State for the random number generator.
+  , schedPriorities :: Map tid Int
+  -- ^ Thread priorities. 0 is the LOWEST priority.
   } deriving Show
 
 instance ( NFData tid
          , NFData action
          , NFData lookahead
          , NFData s
-         ) => NFData (SchedState tid action lookahead s) where
-  rnf s = rnf ( schedSleep     s
-              , schedPrefix    s
-              , schedBPoints   s
-              , schedIgnore    s
-              , schedBoundKill s
-              , schedDepState  s
+         ) => NFData (SchedState tid action lookahead s g) where
+  rnf s = schedGenState s `seq`
+          rnf ( schedSleep      s
+              , schedPrefix     s
+              , schedBPoints    s
+              , schedIgnore     s
+              , schedBoundKill  s
+              , schedDepState   s
+              , schedPriorities s
               )
 
 -- | Initial scheduler state for a given prefix
@@ -390,14 +570,18 @@ initialSchedState :: s
   -- ^ The initial sleep set.
   -> [tid]
   -- ^ The schedule prefix.
-  -> SchedState tid action lookahead s
-initialSchedState s sleep prefix = SchedState
-  { schedSleep     = sleep
-  , schedPrefix    = prefix
-  , schedBPoints   = Sq.empty
-  , schedIgnore    = False
-  , schedBoundKill = False
-  , schedDepState  = s
+  -> g
+  -- ^ Initial state for the random number generator.
+  -> SchedState tid action lookahead s g
+initialSchedState s sleep prefix g = SchedState
+  { schedSleep      = sleep
+  , schedPrefix     = prefix
+  , schedBPoints    = Sq.empty
+  , schedIgnore     = False
+  , schedBoundKill  = False
+  , schedDepState   = s
+  , schedGenState   = g
+  , schedPriorities = M.empty
   }
 
 -- | A bounding function takes the scheduling decisions so far and a
@@ -453,7 +637,7 @@ backtrackAt toAll conservative bs i tid = go bs i where
     | otherwise = b { bcktBacktracks = backtrackAll b } : rest
 
   go (b:rest) n = b : go rest (n-1)
-  go [] _ = error "backtrackAt: Ran out of schedule whilst backtracking!"
+  go [] _ = err "backtrackAt" "ran out of schedule whilst backtracking!"
 
   -- Backtrack to a single thread
   backtrackTo = M.insert tid conservative . bcktBacktracks
@@ -473,7 +657,11 @@ backtrackAt toAll conservative bs i tid = go bs i where
 -- This forces full evaluation of the result every step, to avoid any
 -- possible space leaks.
 dporSched :: (Ord tid, NFData tid, NFData action, NFData lookahead, NFData s)
-  => (action -> Bool)
+  => Bool
+  -- ^ Whether running in \"systematic\" or \"unsystematic\" mode. In
+  -- the former, preemptions are never scheduled; in the latter they
+  -- are.
+  -> (action -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
   -- ^ Determine if a thread will yield.
@@ -486,8 +674,16 @@ dporSched :: (Ord tid, NFData tid, NFData action, NFData lookahead, NFData s)
   -> BoundFunc tid action lookahead
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
-  -> DPORScheduler tid action lookahead s
-dporSched didYield willYield dependency killsDaemons ststep inBound trc prior threads s = force schedule where
+  -> (s -> tid -> Map tid Int -> g -> (Int, g))
+  -- ^ Thread priority assignment function, given the old priorities.
+  -> (Int -> g -> (Int, g))
+  -- ^ Random number generator. Takes an upper bound and generates an
+  -- integer in the range [0, max).
+  -> (Map tid Int -> g -> (Bool, g))
+  -- ^ Priority change predicate. If true, every thread gets a new
+  -- priority.
+  -> DPORScheduler tid action lookahead s g
+dporSched isSystematic didYield willYield dependency killsDaemons ststep inBound genprior gennum genpch trc prior threads s = force schedule where
   -- Pick a thread to run.
   schedule = case schedPrefix s of
     -- If there is a decision available, make it
@@ -497,17 +693,52 @@ dporSched didYield willYield dependency killsDaemons ststep inBound trc prior th
     -- choices, filter out anything in the sleep set, and make one of
     -- them arbitrarily (recording the others).
     [] ->
-      let choices  = restrictToBound initialise
+      let
+          -- assign priorities to any new threads
+          (priorities, g) =
+            let (pchange, g') = genpch (schedPriorities s) (schedGenState s)
+                genpriorF (ps, g0) t
+                  | t `M.member` ps && not pchange = (ps, g0)
+                  | otherwise = let depState = schedDepState s
+                                    (p, g')  = genprior depState t ps g0
+                                in (M.insert t p ps, g')
+            in foldl' genpriorF (schedPriorities s, g') tids
+
+          -- sleep sets
           checkDep t a = case prior of
             Just (tid, act) -> dependency (schedDepState s) (tid, act) (t, a)
             Nothing -> False
           ssleep'  = M.filterWithKey (\t a -> not $ checkDep t a) $ schedSleep s
-          choices' = filter (`notElem` M.keys ssleep') choices
-          signore' = not (null choices) && all (`elem` M.keys ssleep') choices
-          sbkill'  = not (null initialise) && null choices
-      in case choices' of
-            (nextTid:rest) -> (Just nextTid, (nextState rest) { schedSleep = ssleep' })
-            [] -> (Nothing, (nextState []) { schedIgnore = signore', schedBoundKill = sbkill' })
+          removeSleeps = filter (`notElem` M.keys ssleep')
+
+          -- apply schedule bounds and sleep sets
+          boundedCanTry   = restrictToBound canTry
+          boundedMustWait = restrictToBound mustWait
+          finalCanTry     = removeSleeps boundedCanTry
+          finalMustWait   = removeSleeps boundedMustWait
+
+          -- check if everything is excluded by the bounds or sleep sets
+          allBoundExcluded = not (null (canTry++mustWait)) &&
+                             null (boundedCanTry++boundedMustWait)
+          allSleepExcluded = not (null (boundedCanTry++boundedMustWait)) &&
+                             null (finalCanTry++finalMustWait)
+
+          -- given the 'canTry' and 'mustWait' sets, produce the next state.
+          --
+          -- First argument MUST be nonempty.
+          next [] _ = err "dporSched.next" "empty list of threads to try!"
+          next canTry' mustWait' =
+            let pcanTry = sortOn (Down . threadPr) canTry'
+                gcanTry = groupBy ((==) `on` threadPr) pcanTry
+                llen    = length (head gcanTry)
+                (i, g') = gennum llen g
+                nextTid = pcanTry !! (i `mod` llen)
+                rest    = [tid | (tid, j) <- zip pcanTry [0..], j /= i `mod` llen] ++ mustWait'
+            in (Just nextTid, (nextState rest) { schedSleep = ssleep', schedGenState = g', schedPriorities = priorities })
+      in case (finalCanTry, finalMustWait) of
+            ([], []) -> (Nothing, (nextState []) { schedIgnore = allSleepExcluded, schedBoundKill = allBoundExcluded })
+            ([], mustWait') -> next mustWait' []
+            (canTry', mustWait') -> next canTry' mustWait'
 
   -- The next scheduler state
   nextState rest = s
@@ -516,19 +747,45 @@ dporSched didYield willYield dependency killsDaemons ststep inBound trc prior th
     }
   nextDepState = let ds = schedDepState s in maybe ds (ststep ds) prior
 
-  -- Pick a new thread to run, not considering bounds. Choose the
+  -- The priority of a thread, defaulting to 0 (lowest) for unknown
+  -- threads.
+  threadPr t = M.findWithDefault 0 t (schedPriorities s)
+
+  -- Pick new threads to run, not considering bounds. Choose the
   -- current thread if available and it hasn't just yielded, otherwise
-  -- add all runnable threads.
-  initialise = tryDaemons . yieldsToEnd $ case prior of
+  -- add all runnable threads. The chosen threads are in two
+  -- categories: one of the @canTry@ threads is picked randomly; and
+  -- the @mustWait@ functions are added to the to-do set. If the
+  -- @canTry@ list is empty, a @mustWait@ is used.
+  (canTry, mustWait) = tryDaemons . yieldsToEnd $ case prior of
     Just (tid, act)
-      | not (didYield act) && tid `elem` tids -> [tid]
+      | not (didYield act) && tid `elem` tids && isSystematic -> [tid]
     _ -> tids'
 
   -- If one of the chosen actions will kill the computation, and there
   -- are daemon threads, try them instead.
+  --
+  -- This is necessary if the killing action is NOT dependent with
+  -- every other action, according to the dependency function. This
+  -- is, strictly speaking, wrong; an action that kills another thread
+  -- is definitely dependent with everything in that thread. HOWEVER,
+  -- implementing it that way leads to an explosion of schedules
+  -- tried. Really, all that needs to happen is for the
+  -- thread-that-would-be-killed to be executed fully ONCE, and then
+  -- the normal dependency mechanism will identify any other
+  -- backtracking points that should be tried. This is achieved by
+  -- adding every thread that would be killed to the to-do list.
+  -- Furthermore, these threads MUST be ahead of the killing thread,
+  -- or the killing thread will end up in the sleep set and so the
+  -- killing action not performed. This is, again, because of the lack
+  -- of the dependency messing things up in the name of performance.
+  --
+  -- See commits a056f54 and 8554ce9, and my 4th June comment in issue
+  -- #52.
   tryDaemons ts
-    | any doesKill ts = filter (not . doesKill) tids' ++ filter doesKill ts
-    | otherwise       = ts
+    | any doesKill ts = case partition doesKill tids' of
+        (kills, nokills) -> (nokills, kills)
+    | otherwise = (ts, [])
   doesKill t = killsDaemons nextDepState (t, action t) tids
 
   -- Restrict the possible decisions to those in the bound.

@@ -1,12 +1,10 @@
-{-# LANGUAGE CPP #-}
-
 -- |
 -- Module      : Test.DejaFu.SCT
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP
+-- Portability : portable
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
@@ -47,6 +45,8 @@ module Test.DejaFu.SCT
   , Bounds(..)
   , defaultBounds
   , noBounds
+  , cBacktrack
+  , cBound
 
   , sctBound
 
@@ -94,6 +94,17 @@ module Test.DejaFu.SCT
 
   , BacktrackStep(..)
   , BacktrackFunc
+
+  -- * Unsystematic and Incomplete Techniques
+
+  -- | These algorithms do not promise to visit every unique schedule,
+  -- or to avoid trying the same schedule twice. This greatly reduces
+  -- the memory requirements in testing complex systems. Randomness
+  -- drives everything. No partial-order reduction is done, but
+  -- schedule bounds are still available.
+
+  , unsystematicRandom
+  , unsystematicPCT
   ) where
 
 import Control.DeepSeq (NFData(..))
@@ -109,6 +120,8 @@ import Test.DPOR ( DPOR(..), dpor
                  , FairBound(..), defaultFairBound, fairBound, fairBacktrack
                  , LengthBound(..), defaultLengthBound, lenBound, lenBacktrack
                  )
+import qualified Test.DPOR.Random as Unsystematic
+import System.Random (RandomGen)
 
 import Test.DejaFu.Common
 import Test.DejaFu.Conc
@@ -267,16 +280,62 @@ sctBounded memtype bf backtrack conc =
        updateDepState
        (dependent  memtype)
        (dependent' memtype)
-#if MIN_VERSION_dpor(0,2,0)
-       -- dpor-0.2 knows about daemon threads.
        (\_ (t, l) _ -> t == initialThread && case l of WillStop -> True; _ -> False)
-#endif
        initialThread
        (>=initialThread)
        bf
        backtrack
        pruneCommits
        (\sched s -> runConcurrent sched memtype s conc)
+
+-------------------------------------------------------------------------------
+-- Unsystematic and Incomplete Techniques
+
+-- | Try random schedules up to some limit.
+unsystematicRandom :: (MonadRef r n, RandomGen g)
+  => Int
+  -- ^ Execution limit.
+  -> g
+  -- ^ Random number generator
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> BoundFunc ThreadId ThreadAction Lookahead
+  -- ^ Check if a prefix trace is within the bound.
+  -> Conc n r a
+  -> n [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
+unsystematicRandom lim gen memtype bf conc =
+  Unsystematic.unsystematicRandom lim
+                                  gen
+                                  (Just bf)
+                                  (\sched s -> runConcurrent sched memtype s conc)
+
+-- | Probabilistic concurrency testing (PCT). This is like random
+-- scheduling, but schedules threads by priority, with random
+-- priority-reassignment points during the execution. This is
+-- typically more effective at finding bugs than just random
+-- scheduling. This may be because, conceptually, PCT causes threads
+-- to get very \"out of sync\" with each other, whereas random
+-- scheduling will result in every thread progressing at roughly the
+-- same rate.
+--
+-- See /A Randomized Scheduler with Probabilistic Guarantees of
+-- Finding Bugs/, S. Burckhardt et al (2010).
+unsystematicPCT :: (MonadRef r n, RandomGen g)
+  => Int
+  -- ^ Execution limit.
+  -> g
+  -- ^ Random number generator
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> BoundFunc ThreadId ThreadAction Lookahead
+  -- ^ Check if a prefix trace is within the bound.
+  -> Conc n r a
+  -> n [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
+unsystematicPCT lim gen memtype bf conc =
+  Unsystematic.unsystematicPCT lim
+                               gen
+                               (Just bf)
+                               (\sched s -> runConcurrent sched memtype s conc)
 
 -------------------------------------------------------------------------------
 -- Post-processing
@@ -343,17 +402,12 @@ dependent memtype ds (t1, a1) (t2, a2) = case rewind a2 of
     isSTM _ = False
 
 -- | Variant of 'dependent' to handle 'Lookahead'.
+--
+-- Strictly speaking, there is a dependency between the @Stop@ of
+-- thread 0 and everything else, but dpor handles that more nicely
+-- through its \"daemon killing\" special case.
 dependent' :: MemType -> DepState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool
 dependent' memtype ds (t1, a1) (t2, l2) = case (a1, l2) of
-#if MIN_VERSION_dpor(0,2,0)
-  -- dpor-0.2 handles this case, woo.
-#else
-  -- Because Haskell threads are daemonised, when the initial thread
-  -- stops all child threads do too, this imposes a dependency.
-  (Stop, _)     | t1 == initialThread -> True
-  (_, WillStop) | t2 == initialThread -> True
-#endif
-
   -- Worst-case assumption: all IO is dependent.
   (LiftIO, WillLiftIO) -> True
 
@@ -442,17 +496,11 @@ initialDepState = DepState M.empty M.empty
 
 -- | Update the 'CRef' buffer state with the action that has just
 -- happened.
-#if MIN_VERSION_dpor(0,2,0)
 updateDepState :: DepState -> (ThreadId, ThreadAction) -> DepState
 updateDepState depstate (tid, act) = DepState
   { depCRState   = updateCRState       act $ depCRState   depstate
   , depMaskState = updateMaskState tid act $ depMaskState depstate
   }
-#else
-updateDepState :: DepState -> ThreadAction -> DepState
-updateDepState depstate act = depstate
-  { depCRState = updateCRState act $ depCRState depstate }
-#endif
 
 -- | Update the 'CRef' buffer state with the action that has just
 -- happened.

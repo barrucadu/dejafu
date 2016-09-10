@@ -39,59 +39,58 @@ module Test.HUnit.DejaFu
     testAuto
   , testDejafu
   , testDejafus
+  , testUnsystematicRandom
+  , testUnsystematicPCT
 
   , testAuto'
   , testDejafu'
   , testDejafus'
+  , testUnsystematicRandom'
+  , testUnsystematicPCT'
 
   -- ** @IO@
   , testAutoIO
   , testDejafuIO
   , testDejafusIO
+  , testUnsystematicRandomIO
+  , testUnsystematicPCTIO
 
   , testAutoIO'
   , testDejafuIO'
   , testDejafusIO'
+  , testUnsystematicRandomIO'
+  , testUnsystematicPCTIO'
 
   -- * Re-exports
   , Bounds(..)
   , MemType(..)
+
+  -- * Building blocks
+  , testPredicates
   ) where
 
 import Control.Monad.Catch (try)
 import Control.Monad.ST (runST)
 import Data.List (intercalate, intersperse)
+import System.Random (RandomGen)
 import Test.DejaFu
 import qualified Test.DejaFu.SCT as SCT
 import Test.HUnit (Assertable(..), Test(..), Testable(..), assertString)
 import Test.HUnit.Lang (HUnitFailure(..))
 
-#if MIN_VERSION_dejafu(0,4,0)
 import qualified Test.DejaFu.Conc as Conc
-#else
-import qualified Test.DejaFu.Deterministic as Conc
-#endif
 
 -- Can't put the necessary forall in the @Assertable Conc.ConcST t@
 -- instance :(
 import Unsafe.Coerce (unsafeCoerce)
 
-#if MIN_VERSION_dejafu(0,3,0)
 type Trc = Conc.Trace Conc.ThreadId Conc.ThreadAction Conc.Lookahead
-#else
-type Trc = Conc.Trace
-#endif
 
 sctBoundST :: MemType -> Bounds -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Trc)]
-sctBoundIO :: MemType -> Bounds -> Conc.ConcIO a -> IO [(Either Failure a, Trc)]
-
-#if MIN_VERSION_dejafu(0,4,0)
 sctBoundST memtype cb conc = runST (SCT.sctBound memtype cb conc)
+
+sctBoundIO :: MemType -> Bounds -> Conc.ConcIO a -> IO [(Either Failure a, Trc)]
 sctBoundIO = SCT.sctBound
-#else
-sctBoundST = SCT.sctBound
-sctBoundIO = SCT.sctBoundIO
-#endif
 
 --------------------------------------------------------------------------------
 -- Unit testing
@@ -203,6 +202,34 @@ testDejafus :: Show a
   -> Test
 testDejafus = testDejafus' defaultMemType defaultBounds
 
+-- | Variant of 'testDejafus' which uses performs incomplete testing
+-- using 'unsystematicRandom'.
+testUnsystematicRandom :: (Show a, RandomGen g)
+  => Int
+  -- ^ Execution limit.
+  -> g
+  -- ^ Random number generator
+  -> (forall t. Conc.ConcST t a)
+  -- ^ The computation to test
+  -> [(String, Predicate a)]
+  -- ^ The list of predicates (with names) to check
+  -> Test
+testUnsystematicRandom = testUnsystematicRandom' defaultMemType defaultBounds
+
+-- | Variant of 'testDejafus' which uses performs incomplete testing
+-- using 'unsystematicRandom'.
+testUnsystematicPCT :: (Show a, RandomGen g)
+  => Int
+  -- ^ Execution limit.
+  -> g
+  -- ^ Random number generator
+  -> (forall t. Conc.ConcST t a)
+  -- ^ The computation to test
+  -> [(String, Predicate a)]
+  -- ^ The list of predicates (with names) to check
+  -> Test
+testUnsystematicPCT = testUnsystematicPCT' defaultMemType defaultBounds
+
 -- | Variant of 'testDejafus' which takes a memory model and schedule
 -- bounds.
 testDejafus' :: Show a
@@ -215,7 +242,48 @@ testDejafus' :: Show a
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> Test
-testDejafus' = testst
+testDejafus' memty bs conc tests =
+  testPredicates tests (pure $ sctBoundST memty bs conc)
+
+-- | Variant of 'testUnsystematicRandom' which takes a memory model
+-- and schedule bounds.
+testUnsystematicRandom' :: (Show a, RandomGen g)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Bounds
+  -- ^ The schedule bounds
+  -> Int
+  -- ^ Execution limit.
+  -> g
+  -- ^ Random number generator
+  -> (forall t. Conc.ConcST t a)
+  -- ^ The computation to test
+  -> [(String, Predicate a)]
+  -- ^ The list of predicates (with names) to check
+  -> Test
+testUnsystematicRandom' memty bs lim gen conc tests =
+  testPredicates tests . pure $ runST $
+    SCT.unsystematicRandom lim gen memty (SCT.cBound bs) conc
+
+-- | Variant of 'testUnsystematicPCT' which takes a memory model and
+-- schedule bounds.
+testUnsystematicPCT' :: (Show a, RandomGen g)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Bounds
+  -- ^ The schedule bounds
+  -> Int
+  -- ^ Execution limit.
+  -> g
+  -- ^ Random number generator
+  -> (forall t. Conc.ConcST t a)
+  -- ^ The computation to test
+  -> [(String, Predicate a)]
+  -- ^ The list of predicates (with names) to check
+  -> Test
+testUnsystematicPCT' memty bs lim gen conc tests =
+  testPredicates tests . pure $ runST $
+    SCT.unsystematicPCT lim gen memty (SCT.cBound bs) conc
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
 testDejafuIO :: Show a => Conc.ConcIO a -> String -> Predicate a -> Test
@@ -229,38 +297,53 @@ testDejafuIO' memtype cb concio name p = testDejafusIO' memtype cb concio [(name
 testDejafusIO :: Show a => Conc.ConcIO a -> [(String, Predicate a)] -> Test
 testDejafusIO = testDejafusIO' defaultMemType defaultBounds
 
+-- | Variant of 'testUnsystematicRandom' for computations which do
+-- 'IO'.
+testUnsystematicRandomIO :: (Show a, RandomGen g) => Int -> g -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
+testUnsystematicRandomIO = testUnsystematicRandomIO' defaultMemType defaultBounds
+
+-- | Variant of 'testUnsystematicPCT' for computations which do 'IO'.
+testUnsystematicPCTIO :: (Show a, RandomGen g) => Int -> g -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
+testUnsystematicPCTIO = testUnsystematicPCTIO' defaultMemType defaultBounds
+
 -- | Variant of 'dejafus'' for computations which do 'IO'.
 testDejafusIO' :: Show a => MemType -> Bounds -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
-testDejafusIO' = testio
+testDejafusIO' memty bs conc tests =
+  testPredicates tests (sctBoundIO memty bs conc)
+
+-- | Variant of 'testUnsystematicRandom'' for computations which do
+-- 'IO'.
+testUnsystematicRandomIO' :: (Show a, RandomGen g) => MemType -> Bounds -> Int -> g -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
+testUnsystematicRandomIO' memty bs lim gen conc tests =
+  testPredicates tests $
+    SCT.unsystematicRandom lim gen memty (SCT.cBound bs) conc
+
+-- | Variant of 'testUnsystematicPCT'' for computations which do 'IO'.
+testUnsystematicPCTIO' :: (Show a, RandomGen g) => MemType -> Bounds -> Int -> g -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
+testUnsystematicPCTIO' memty bs lim gen conc tests =
+  testPredicates tests $
+    SCT.unsystematicPCT lim gen memty (SCT.cBound bs) conc
 
 --------------------------------------------------------------------------------
--- HUnit integration
+-- Building blocks
 
--- | Produce a HUnit 'Test' from a Deja Fu test.
-testst :: Show a => MemType -> Bounds -> (forall t. Conc.ConcST t a) -> [(String, Predicate a)] -> Test
-testst memtype cb conc tests = case map toTest tests of
-  [t] -> t
-  ts  -> TestList ts
-
-  where
-    toTest (name, p) = TestLabel name . TestCase $
-      assertString . showErr $ p traces
-
-    traces = sctBoundST memtype cb conc
-
--- | Produce a HUnit 'Test' from an IO-using Deja Fu test.
-testio :: Show a => MemType -> Bounds -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
-testio memtype cb concio tests = case map toTest tests of
+-- | Turn a collection of predicates into a test which will fail if
+-- any of the provided results don't pass.
+testPredicates :: Show a
+  => [(String, Predicate a)]
+  -- ^ Predicates to check.
+  -> IO [(Either Failure a,  Conc.Trace Conc.ThreadId Conc.ThreadAction Conc.Lookahead)]
+  -- ^ Results. These are in 'IO' because running an HUnit test is an
+  -- 'IO' action anyway, and so this avoids awkwardness that would
+  -- arise if it were pure.
+  -> Test
+testPredicates tests iotraces = case map toTest tests of
   [t] -> t
   ts  -> TestList ts
 
   where
     toTest (name, p) = TestLabel name . TestCase $ do
-      -- Sharing of traces probably not possible (without something
-      -- really unsafe) here, as 'test' doesn't allow side-effects
-      -- (eg, constructing an 'MVar' to share the traces after one
-      -- test computed them).
-      traces <- sctBoundIO memtype cb concio
+      traces <- iotraces
       assertString . showErr $ p traces
 
 --------------------------------------------------------------------------------

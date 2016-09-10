@@ -43,25 +43,33 @@ import Control.Monad
 import Control.Monad.Conc.Class
 
 -- test imports
-import Test.DejaFu (Bounds(..), Failure(..), MemType(..), defaultBounds, gives)
-import Test.Framework (Test)
+import System.Random (mkStdGen)
+import Test.DejaFu (Bounds(..), Failure(..), MemType(..), Predicate, defaultBounds, gives)
+import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
 import Test.HUnit.DejaFu
 
-tests :: [Test]
-tests = hUnitTestToTests $ test
-  [ testDejafu' SequentialConsistency
-                defaultBounds
-                deadlocks
-                "deadlocks"
-                (gives [Left Deadlock, Right ()])
+deadlockTest :: [(String, Predicate ())]
+deadlockTest = [("deadlocks", gives [Left Deadlock, Right ()])]
 
-  , testDejafu' SequentialConsistency
-                defaultBounds { boundPreemp = Just 3 }
-                nondeterministic
-                "nondeterministic"
-                (gives [Left Deadlock, Right 0, Right 1])
+nondetTest :: [(String, Predicate Int)]
+nondetTest = [("nondeterministic", gives [Left Deadlock, Right 0, Right 1])]
+
+tests :: [Test]
+tests =
+  [ testGroup "Systematic" . hUnitTestToTests $ test
+    [ testDejafus deadlocks deadlockTest
+    , testDejafus' SequentialConsistency defaultBounds { boundPreemp = Just 3 } nondeterministic nondetTest
+    ]
+  , testGroup "Random" . hUnitTestToTests $ test
+    [ testUnsystematicRandom 1000 (mkStdGen 0) deadlocks deadlockTest
+    , testUnsystematicRandom' SequentialConsistency defaultBounds { boundPreemp = Just 3 } 1000 (mkStdGen 0) nondeterministic nondetTest
+    ]
+  , testGroup "PCT" . hUnitTestToTests $ test
+    [ testUnsystematicPCT 1000 (mkStdGen 0) deadlocks deadlockTest
+    , testUnsystematicPCT' SequentialConsistency defaultBounds { boundPreemp = Just 3 } 1000 (mkStdGen 0) nondeterministic nondetTest
+    ]
   ]
 
 -- This exhibits a deadlock with no preemptions.

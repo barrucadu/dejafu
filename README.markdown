@@ -44,10 +44,10 @@ Packages
 | --- | ------- | -------------- | ------- |
 | async-dejafu [[docs][d:async]]  [[hackage][h:async]]  | 0.1.3.0 | Authors | Run MonadConc operations asynchronously and wait for their results. |
 | concurrency  [[docs][d:conc]]   [[hackage][h:conc]]   | 1.0.0.0 | Authors | Typeclasses, functions, and data types for concurrency and STM. |
-| dejafu       [[docs][d:dejafu]] [[hackage][h:dejafu]] | 0.4.0.0 | Testers | Systematic testing for Haskell concurrency. |
-| dpor         [[docs][d:dpor]]   [[hackage][h:dpor]]   | 0.2.0.0 | Me[1]   | A generic implementation of dynamic partial-order reduction (DPOR) for testing arbitrary models of concurrency. |
-| hunit-dejafu [[docs][d:hunit]]  [[hackage][h:hunit]]  | 0.3.0.2 | Testers | Deja Fu support for the HUnit test framework. |
-| tasty-dejafu [[docs][d:tasty]]  [[hackage][h:tasty]]  | 0.3.0.2 | Testers | Deja Fu support for the Tasty test framework. |
+| dejafu       [[docs][d:dejafu]] [[hackage][h:dejafu]] | 0.4.1.0 | Testers | Systematic testing for Haskell concurrency. |
+| dpor         [[docs][d:dpor]]   [[hackage][h:dpor]]   | 0.3.0.0 | Me[1]   | A generic implementation of dynamic partial-order reduction (DPOR) for testing arbitrary models of concurrency. |
+| hunit-dejafu [[docs][d:hunit]]  [[hackage][h:hunit]]  | 0.3.1.0 | Testers | Deja Fu support for the HUnit test framework. |
+| tasty-dejafu [[docs][d:tasty]]  [[hackage][h:tasty]]  | 0.3.1.0 | Testers | Deja Fu support for the Tasty test framework. |
 
 Each package has its own README in its subdirectory.
 
@@ -322,13 +322,13 @@ These libraries wouldn't be possible without prior research, which I
 mention in the documentation. Haddock comments get the full citation,
 whereas in-line comments just get the shortened name:
 
+- [PCT] *A Randomized Scheduler with Probabilistic Guarantees of
+  Finding Bugs*, S. Burckhardt et al (2010)
+  https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/paper-83.pdf
+
 - [BPOR] *Bounded partial-order reduction*, K. Coons, M. Musuvathi,
   and K. McKinley (2013)
   http://research.microsoft.com/pubs/202164/bpor-oopsla-2013.pdf
-
-- [RDPOR] *Dynamic Partial Order Reduction for Relaxed Memory Models*,
-  N. Zhang, M. Kusano, and C. Wang (2015)
-  http://www.faculty.ece.vt.edu/chaowang/pubDOC/ZhangKW15.pdf
 
 - [Empirical] *Concurrency Testing Using Schedule Bounding: an
   Empirical Study*, P. Thompson, A. Donaldson, and A. Betts (2014)
@@ -337,6 +337,10 @@ whereas in-line comments just get the shortened name:
 - [RMMVerification] *On the Verification of Programs on Relaxed Memory
   Models*, A. Linden (2014)
   https://orbi.ulg.ac.be/bitstream/2268/158670/1/thesis.pdf
+
+- [RDPOR] *Dynamic Partial Order Reduction for Relaxed Memory Models*,
+  N. Zhang, M. Kusano, and C. Wang (2015)
+  http://www.faculty.ece.vt.edu/chaowang/pubDOC/ZhangKW15.pdf
 
 There are also a couple of papers on dejafu itself:
 

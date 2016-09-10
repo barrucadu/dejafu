@@ -36,23 +36,34 @@ module Test.Tasty.DejaFu
     testAuto
   , testDejafu
   , testDejafus
+  , testUnsystematicRandom
+  , testUnsystematicPCT
 
   , testAuto'
   , testDejafu'
   , testDejafus'
+  , testUnsystematicRandom'
+  , testUnsystematicPCT'
 
   -- ** @IO@
   , testAutoIO
   , testDejafuIO
   , testDejafusIO
+  , testUnsystematicRandomIO
+  , testUnsystematicPCTIO
 
   , testAutoIO'
   , testDejafuIO'
   , testDejafusIO'
+  , testUnsystematicRandomIO'
+  , testUnsystematicPCTIO'
 
   -- * Re-exports
   , Bounds(..)
   , MemType(..)
+
+  -- * Building blocks
+  , testPredicates
   ) where
 
 import Control.Monad.ST (runST)
@@ -61,38 +72,25 @@ import Data.List (intercalate, intersperse)
 import Data.Proxy (Proxy(..))
 import Data.Tagged (Tagged(..))
 import Data.Typeable (Typeable)
+import System.Random (RandomGen)
 import Test.DejaFu
 import qualified Test.DejaFu.SCT as SCT
 import Test.Tasty (TestName, TestTree, testGroup)
 import Test.Tasty.Options (OptionDescription(..), IsOption(..), lookupOption)
 import Test.Tasty.Providers (IsTest(..), singleTest, testPassed, testFailed)
-
-#if MIN_VERSION_dejafu(0,4,0)
 import qualified Test.DejaFu.Conc as Conc
-#else
-import qualified Test.DejaFu.Deterministic as Conc
-#endif
 
 -- Can't put the necessary forall in the @IsTest ConcST t@
 -- instance :(
 import Unsafe.Coerce (unsafeCoerce)
 
-#if MIN_VERSION_dejafu(0,3,0)
 type Trc = Conc.Trace Conc.ThreadId Conc.ThreadAction Conc.Lookahead
-#else
-type Trc = Conc.Trace
-#endif
 
 sctBoundST :: MemType -> Bounds -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Trc)]
-sctBoundIO :: MemType -> Bounds -> Conc.ConcIO a -> IO [(Either Failure a, Trc)]
-
-#if MIN_VERSION_dejafu(0,4,0)
 sctBoundST memtype cb conc = runST (SCT.sctBound memtype cb conc)
+
+sctBoundIO :: MemType -> Bounds -> Conc.ConcIO a -> IO [(Either Failure a, Trc)]
 sctBoundIO = SCT.sctBound
-#else
-sctBoundST = SCT.sctBound
-sctBoundIO = SCT.sctBoundIO
-#endif
 
 --------------------------------------------------------------------------------
 -- Unit testing
@@ -106,7 +104,7 @@ instance Typeable t => IsTest (Conc.ConcST t (Maybe String)) where
     let sctBound' :: Conc.ConcST t (Maybe String) -> [(Either Failure (Maybe String), Trc)]
         sctBound' = unsafeCoerce $ sctBoundST memtype bounds
     let traces = sctBound' conc
-    run options (ConcTest traces assertableP) callback
+    run options (ConcTest (pure traces) assertableP) callback
 
 instance IsTest (Conc.ConcIO (Maybe String)) where
   testOptions = Tagged concOptions
@@ -115,7 +113,7 @@ instance IsTest (Conc.ConcIO (Maybe String)) where
     let memtype = lookupOption options
     let bounds  = lookupOption options
     let traces  = sctBoundIO memtype bounds conc
-    run options (ConcIOTest traces assertableP) callback
+    run options (ConcTest traces assertableP) callback
 
 concOptions :: [OptionDescription]
 concOptions =
@@ -149,7 +147,7 @@ instance IsOption MemType where
 
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
--- 
+--
 -- This uses the 'Conc' monad for testing, which is an instance of
 -- 'MonadConc'. If you need to test something which also uses
 -- 'MonadIO', use 'testAutoIO'.
@@ -223,6 +221,34 @@ testDejafus :: Show a
   -> TestTree
 testDejafus = testDejafus' defaultMemType defaultBounds
 
+-- | Variant of 'testDejafus' which uses performs incomplete testing
+-- using 'unsystematicRandom'.
+testUnsystematicRandom :: (Show a, RandomGen g)
+  => Int
+  -- ^ Execution limit.
+  -> g
+  -- ^ Random number generator
+  -> (forall t. Conc.ConcST t a)
+  -- ^ The computation to test
+  -> [(TestName, Predicate a)]
+  -- ^ The list of predicates (with names) to check
+  -> TestTree
+testUnsystematicRandom = testUnsystematicRandom' defaultMemType defaultBounds
+
+-- | Variant of 'testDejafus' which uses performs incomplete testing
+-- using 'unsystematicRandom'.
+testUnsystematicPCT :: (Show a, RandomGen g)
+  => Int
+  -- ^ Execution limit.
+  -> g
+  -- ^ Random number generator
+  -> (forall t. Conc.ConcST t a)
+  -- ^ The computation to test
+  -> [(TestName, Predicate a)]
+  -- ^ The list of predicates (with names) to check
+  -> TestTree
+testUnsystematicPCT = testUnsystematicPCT' defaultMemType defaultBounds
+
 -- | Variant of 'testDejafus' which takes a memory model and pre-emption
 -- bound.
 testDejafus' :: Show a
@@ -235,7 +261,48 @@ testDejafus' :: Show a
   -> [(TestName, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> TestTree
-testDejafus' = testst
+testDejafus' memty bs conc tests =
+  testPredicates tests (pure $ sctBoundST memty bs conc)
+
+-- | Variant of 'testUnsystematicRandom' which takes a memory model
+-- and schedule bounds.
+testUnsystematicRandom' :: (Show a, RandomGen g)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Bounds
+  -- ^ The schedule bounds
+  -> Int
+  -- ^ Execution limit.
+  -> g
+  -- ^ Random number generator
+  -> (forall t. Conc.ConcST t a)
+  -- ^ The computation to test
+  -> [(TestName, Predicate a)]
+  -- ^ The list of predicates (with names) to check
+  -> TestTree
+testUnsystematicRandom' memty bs lim gen conc tests =
+  testPredicates tests . pure $ runST $
+    SCT.unsystematicRandom lim gen memty (SCT.cBound bs) conc
+
+-- | Variant of 'testUnsystematicPCT' which takes a memory model and
+-- schedule bounds.
+testUnsystematicPCT' :: (Show a, RandomGen g)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Bounds
+  -- ^ The schedule bounds
+  -> Int
+  -- ^ Execution limit.
+  -> g
+  -- ^ Random number generator
+  -> (forall t. Conc.ConcST t a)
+  -- ^ The computation to test
+  -> [(TestName, Predicate a)]
+  -- ^ The list of predicates (with names) to check
+  -> TestTree
+testUnsystematicPCT' memty bs lim gen conc tests =
+  testPredicates tests . pure $ runST $
+    SCT.unsystematicPCT lim gen memty (SCT.cBound bs) conc
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
 testDejafuIO :: Show a => Conc.ConcIO a -> TestName -> Predicate a -> TestTree
@@ -249,60 +316,63 @@ testDejafuIO' memtype cb concio name p = testDejafusIO' memtype cb concio [(name
 testDejafusIO :: Show a => Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
 testDejafusIO = testDejafusIO' defaultMemType defaultBounds
 
+-- | Variant of 'testUnsystematicRandom' for computations which do
+-- 'IO'.
+testUnsystematicRandomIO :: (Show a, RandomGen g) => Int -> g -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
+testUnsystematicRandomIO = testUnsystematicRandomIO' defaultMemType defaultBounds
+
+-- | Variant of 'testUnsystematicPCT' for computations which do 'IO'.
+testUnsystematicPCTIO :: (Show a, RandomGen g) => Int -> g -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
+testUnsystematicPCTIO = testUnsystematicPCTIO' defaultMemType defaultBounds
+
 -- | Variant of 'dejafus'' for computations which do 'IO'.
 testDejafusIO' :: Show a => MemType -> Bounds -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
-testDejafusIO' = testio
+testDejafusIO' memty bs conc tests =
+  testPredicates tests (sctBoundIO memty bs conc)
+
+-- | Variant of 'testUnsystematicRandom'' for computations which do
+-- 'IO'.
+testUnsystematicRandomIO' :: (Show a, RandomGen g) => MemType -> Bounds -> Int -> g -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
+testUnsystematicRandomIO' memty bs lim gen conc tests =
+  testPredicates tests $
+    SCT.unsystematicRandom lim gen memty (SCT.cBound bs) conc
+
+-- | Variant of 'testUnsystematicPCT'' for computations which do 'IO'.
+testUnsystematicPCTIO' :: (Show a, RandomGen g) => MemType -> Bounds -> Int -> g -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
+testUnsystematicPCTIO' memty bs lim gen conc tests =
+  testPredicates tests $
+    SCT.unsystematicPCT lim gen memty (SCT.cBound bs) conc
 
 --------------------------------------------------------------------------------
--- Tasty integration
+-- Building blocks
 
 data ConcTest where
-  ConcTest   :: Show a => [(Either Failure a, Trc)] -> Predicate a -> ConcTest
-  deriving Typeable
-
-data ConcIOTest where
-  ConcIOTest :: Show a => IO [(Either Failure a, Trc)] -> Predicate a -> ConcIOTest
+  ConcTest   :: Show a => IO [(Either Failure a, Trc)] -> Predicate a -> ConcTest
   deriving Typeable
 
 instance IsTest ConcTest where
   testOptions = return []
 
-  run _ (ConcTest traces p) _ =
-    let err = showErr $ p traces
-     in return $ if null err then testPassed "" else testFailed err
-
-instance IsTest ConcIOTest where
-  testOptions = return []
-
-  run _ (ConcIOTest iotraces p) _ = do
+  run _ (ConcTest iotraces p) _ = do
     traces <- iotraces
     let err = showErr $ p traces
-    return $ if null err then testPassed "" else testFailed err
+    pure $ if null err then testPassed "" else testFailed err
 
--- | Produce a Tasty 'TestTree' from a Deja Fu test.
-testst :: Show a => MemType -> Bounds -> (forall t. Conc.ConcST t a) -> [(TestName, Predicate a)] -> TestTree
-testst memtype cb conc tests = case map toTest tests of
+-- | Turn a collection of predicates into a test which will fail if
+-- any of the provided results don't pass.
+testPredicates :: Show a
+  => [(TestName, Predicate a)]
+  -- ^ Predicates to check.
+  -> IO [(Either Failure a,  Conc.Trace Conc.ThreadId Conc.ThreadAction Conc.Lookahead)]
+  -- ^ Results. These are in 'IO' to make it easier to use for both
+  -- the 'ST' and 'IO' runners.
+  -> TestTree
+testPredicates tests iotraces = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts
 
   where
-    toTest (name, p) = singleTest name $ ConcTest traces p
-
-    traces = sctBoundST memtype cb conc
-
--- | Produce a Tasty 'Test' from an IO-using Deja Fu test.
-testio :: Show a => MemType -> Bounds -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
-testio memtype cb concio tests = case map toTest tests of
-  [t] -> t
-  ts  -> testGroup "Deja Fu Tests" ts
-
-  where
-    toTest (name, p) = singleTest name $ ConcIOTest traces p
-
-    -- As with HUnit, constructing a test is side-effect free, so
-    -- sharing of traces can't happen here.
-    traces = sctBoundIO memtype cb concio
-
+    toTest (name, p) = singleTest name $ ConcTest iotraces p
 -- | Convert a test result into an error message on failure (empty
 -- string on success).
 showErr :: Show a => Result a -> String

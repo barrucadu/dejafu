@@ -21,18 +21,29 @@ import Data.Functor (void)
 import Data.Maybe (fromJust, isNothing)
 
 -- test imports
+import Control.Monad.ST (runST)
 import Data.List (permutations)
-import Test.DejaFu (Predicate, Result(..), alwaysTrue2)
-import Test.Framework (Test)
+import Test.DejaFu (MemType(..), Predicate, Result(..), alwaysTrue2)
+import Test.DejaFu.SCT (defaultBounds, cBound, unsystematicRandom, unsystematicPCT)
+import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
-import Test.HUnit.DejaFu (testDejafu)
+import Test.HUnit.DejaFu (testDejafus, testUnsystematicRandom, testUnsystematicPCT)
+import System.Random (mkStdGen)
 
 import Examples.SearchParty.Impredicative
 
+predicates :: [(String, Predicate [Int])]
+predicates = [("concurrent filter", invPred checkResultLists)]
+
 tests :: [Test]
-tests = hUnitTestToTests $ test
-  [ testDejafu concFilter "concurrent filter" (invPred checkResultLists)
+tests =
+  [ testGroup "Systematic" . hUnitTestToTests . test $
+      testDejafus concFilter predicates
+  , testGroup "Random" . hUnitTestToTests . test $
+      testUnsystematicRandom 1000 (mkStdGen 0) concFilter predicates
+  , testGroup "PCT" . hUnitTestToTests . test $
+      testUnsystematicPCT 1000 (mkStdGen 0) concFilter predicates
   ]
 
 -- | Filter a list concurrently.

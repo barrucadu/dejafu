@@ -139,12 +139,12 @@ import Test.DPOR.Schedule
 -- threads without doing something as drastic as imposing a dependency
 -- between the program-terminating action and /everything/ else.
 dpor :: ( Ord    tid
-       , NFData tid
-       , NFData action
-       , NFData lookahead
-       , NFData s
-       , Monad  m
-       )
+        , NFData tid
+        , NFData action
+        , NFData lookahead
+        , NFData s
+        , Monad  m
+        )
   => (action    -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
@@ -172,68 +172,25 @@ dpor :: ( Ord    tid
   -- points.
   -> (DPOR tid action -> DPOR tid action)
   -- ^ Some post-processing to do after adding the new to-do points.
-  -> (DPORScheduler tid action lookahead s
-    -> SchedState tid action lookahead s
-    -> m (a, SchedState tid action lookahead s, Trace tid action lookahead))
+  -> (DPORScheduler tid action lookahead s ()
+    -> SchedState tid action lookahead s ()
+    -> m (a, SchedState tid action lookahead s (), Trace tid action lookahead))
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
   -> m [(a, Trace tid action lookahead)]
-dpor didYield
-     willYield
-     stinit
-     ststep
-     dependency1
-     dependency2
-     killsDaemons
-     initialTid
-     predicate
-     inBound
-     backtrack
-     transform
-     run
-  = go (initialState initialTid)
-
-  where
-    -- Repeatedly run the computation gathering all the results and
-    -- traces into a list until there are no schedules remaining to
-    -- try.
-    go dp = case nextPrefix dp of
-      Just (prefix, conservative, sleep, ()) -> do
-        (res, s, trace) <- run scheduler
-                              (initialSchedState stinit sleep prefix)
-
-        let bpoints = findBacktracks (schedBoundKill s) (schedBPoints s) trace
-        let newDPOR = addTrace conservative trace dp
-
-        if schedIgnore s
-        then go newDPOR
-        else ((res, trace):) <$> go (transform $ addBacktracks bpoints newDPOR)
-
-      Nothing -> pure []
-
-    -- Find the next schedule prefix.
-    nextPrefix = findSchedulePrefix predicate (const (0, ()))
-
-    -- The DPOR scheduler.
-    scheduler = dporSched didYield willYield dependency1 killsDaemons ststep inBound
-
-    -- Find the new backtracking steps.
-    findBacktracks = findBacktrackSteps stinit ststep dependency2 backtrack
-
-    -- Incorporate a trace into the DPOR tree.
-    addTrace = incorporateTrace stinit ststep dependency1
-
-    -- Incorporate the new backtracking steps into the DPOR tree.
-    addBacktracks = incorporateBacktrackSteps inBound
+dpor = runDPOR Nothing () genprior gennum genpch where
+  genprior _ _ _ g = (0, g)
+  gennum _ g = (0, g)
+  genpch _ g = (False, g)
 
 -- | A much simplified DPOR function: no state, no preference between
 -- threads, and no post-processing between iterations.
 simpleDPOR :: ( Ord    tid
-             , NFData tid
-             , NFData action
-             , NFData lookahead
-             , Monad  m
-             )
+              , NFData tid
+              , NFData action
+              , NFData lookahead
+              , Monad  m
+              )
   => (action    -> Bool)
   -- ^ Determine if a thread yielded.
   -> (lookahead -> Bool)
@@ -252,9 +209,9 @@ simpleDPOR :: ( Ord    tid
   -- ^ The backtracking function. Note that, for some bounding
   -- functions, this will need to add conservative backtracking
   -- points.
-  -> (DPORScheduler tid action lookahead ()
-    -> SchedState tid action lookahead ()
-    -> m (a, SchedState tid action lookahead (), Trace tid action lookahead))
+  -> (DPORScheduler tid action lookahead () ()
+    -> SchedState tid action lookahead () ()
+    -> m (a, SchedState tid action lookahead () (), Trace tid action lookahead))
   -- ^ The runner: given the scheduler and state, execute the
   -- computation under that scheduler.
   -> m [(a, Trace tid action lookahead)]
