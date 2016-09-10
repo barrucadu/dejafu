@@ -578,17 +578,31 @@ instance C => MonadConc (T m) where                             { \
                                                                  \
   _concMessage    = lift . _concMessage                        }
 
+-- | New threads inherit the reader state of their parent, but do not
+-- communicate results back.
 INSTANCE(ReaderT r, MonadConc m, id)
 
 INSTANCE(IdentityT, MonadConc m, id)
 
+-- | New threads inherit the writer state of their parent, but do not
+-- communicate results back.
 INSTANCE(WL.WriterT w, (MonadConc m, Monoid w), fst)
+-- | New threads inherit the writer state of their parent, but do not
+-- communicate results back.
 INSTANCE(WS.WriterT w, (MonadConc m, Monoid w), fst)
 
+-- | New threads inherit the state of their parent, but do not
+-- communicate results back.
 INSTANCE(SL.StateT s, MonadConc m, fst)
+-- | New threads inherit the state of their parent, but do not
+-- communicate results back.
 INSTANCE(SS.StateT s, MonadConc m, fst)
 
+-- | New threads inherit the states of their parent, but do not
+-- communicate results back.
 INSTANCE(RL.RWST r w s, (MonadConc m, Monoid w), (\(a,_,_) -> a))
+-- | New threads inherit the states of their parent, but do not
+-- communicate results back.
 INSTANCE(RS.RWST r w s, (MonadConc m, Monoid w), (\(a,_,_) -> a))
 
 #undef INSTANCE
