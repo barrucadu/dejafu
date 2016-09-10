@@ -38,7 +38,7 @@ description:
   This used to be part of dejafu, but with the dejafu-0.4.0.0 release,
   it was split out into its own package.
   .
-  == Why and not something else?
+  == Why this and not something else?
   .
   * Why not base: like lifted-base, concurrency uses typeclasses to
     make function types more generic. This automatically eliminates

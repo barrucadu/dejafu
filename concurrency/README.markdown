@@ -30,8 +30,8 @@ it was split out into its own package.
 The documentation of the latest developmental version is
 [available online][docs].
 
-Why and not something else?
----------------------------
+Why this and not something else?
+--------------------------------
 
 - **Why not base:** like lifted-base, concurrency uses typeclasses to
   make function types more generic. This automatically eliminates
