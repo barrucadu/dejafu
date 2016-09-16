@@ -22,8 +22,11 @@ matrix:
   - env: RESOLVER="lts-6"
     addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
   - env:
+    - RESOLVER="lts-7"
+    - SKIP_OLD_DEJAFU=1
+    addons: {apt: {packages: [ghc-8.0.1], sources: [hvr-ghc]}}
+  - env:
     - RESOLVER="nightly"
-    # dejafu-0.2 is not ghc-8 compatible.
     - SKIP_OLD_DEJAFU=1
     addons: {apt: {packages: [libgmp-dev]}}
 
