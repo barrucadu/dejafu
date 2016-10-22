@@ -39,6 +39,8 @@ if [[ "$RESOLVER" == "" ]]; then
   STACKOPTS="--no-terminal --install-ghc"
 fi
 
+stack $STACKOPTS setup
+
 # Test dejafu-0.2 compat of async/hunit/tasty-dejafu
 if [[ -z "$SKIP_OLD_DEJAFU" ]]; then
   sed 's:^- dejafu$::' stack.yaml > stack-old-dejafu.yaml
