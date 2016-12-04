@@ -86,9 +86,6 @@ module Test.DPOR
   , lenBound
   , lenBacktrack
 
-  -- * Random approaches
-  , module Test.DPOR.Random
-
   -- * Scheduling & execution traces
 
   -- | The partial-order reduction is driven by incorporating
@@ -108,7 +105,6 @@ import Data.List.NonEmpty (NonEmpty)
 import qualified Data.Map.Strict as M
 
 import Test.DPOR.Internal
-import Test.DPOR.Random
 import Test.DPOR.Schedule
 
 -------------------------------------------------------------------------------
