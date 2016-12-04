@@ -80,11 +80,11 @@ library
   exposed-modules:     Test.DejaFu
                      , Test.DejaFu.Conc
                      , Test.DejaFu.Common
+                     , Test.DejaFu.Schedule
                      , Test.DejaFu.SCT
                      , Test.DejaFu.STM
 
                      , Test.DPOR.Internal
-                     , Test.DPOR.Schedule
 
                      , Test.DejaFu.Conc.Internal
                      , Test.DejaFu.Conc.Internal.Common

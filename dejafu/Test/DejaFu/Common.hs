@@ -67,7 +67,7 @@ import Data.List (sort, nub, intercalate)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Set (Set)
 import qualified Data.Set as S
-import Test.DPOR.Schedule (Decision(..))
+import Test.DejaFu.Schedule (Decision(..))
 import Test.DPOR.Internal (Trace)
 
 -------------------------------------------------------------------------------

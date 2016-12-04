@@ -24,7 +24,7 @@ import qualified Data.Set as S
 import Data.Sequence (Seq, ViewL(..), (|>))
 import qualified Data.Sequence as Sq
 
-import Test.DPOR.Schedule (Decision(..), Scheduler, decisionOf, tidOf)
+import Test.DejaFu.Schedule (Decision(..), Scheduler, decisionOf, tidOf)
 
 -------------------------------------------------------------------------------
 -- * Dynamic partial-order reduction

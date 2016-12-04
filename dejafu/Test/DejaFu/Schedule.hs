@@ -1,5 +1,5 @@
 -- |
--- Module      : Test.DPOR.Schedule
+-- Module      : Test.DejaFu.Schedule
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
@@ -7,7 +7,7 @@
 -- Portability : portable
 --
 -- Scheduling for concurrent computations.
-module Test.DPOR.Schedule
+module Test.DejaFu.Schedule
   ( -- * Scheduling
     Scheduler
 

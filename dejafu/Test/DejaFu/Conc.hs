@@ -42,7 +42,7 @@ module Test.DejaFu.Conc
   , showFail
 
   -- * Scheduling
-  , module Test.DPOR.Schedule
+  , module Test.DejaFu.Schedule
   ) where
 
 import Control.Exception (MaskingState(..))
@@ -56,7 +56,7 @@ import Data.IORef (IORef)
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromJust)
 import Data.STRef (STRef)
-import Test.DPOR.Schedule
+import Test.DejaFu.Schedule
 
 import qualified Control.Monad.Conc.Class as C
 import Test.DejaFu.Common

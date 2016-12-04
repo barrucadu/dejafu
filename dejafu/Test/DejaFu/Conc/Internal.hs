@@ -22,12 +22,12 @@ import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty(..), fromList)
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
-import Test.DPOR.Schedule (Scheduler)
 
 import Test.DejaFu.Common
 import Test.DejaFu.Conc.Internal.Common
 import Test.DejaFu.Conc.Internal.Memory
 import Test.DejaFu.Conc.Internal.Threading
+import Test.DejaFu.Schedule
 import Test.DejaFu.STM (Result(..))
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
