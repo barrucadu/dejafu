@@ -23,28 +23,20 @@ module Test.DejaFu.SCT
   -- significantly. /Bounded/ partial-order reduction is a further
   -- optimisation, which only considers schedules within some bound.
   --
-  -- This module provides both a generic function for BPOR, and also a
-  -- pre-emption bounding BPOR runner, which is used by the
-  -- "Test.DejaFu" module.
-  --
-  -- See /Bounded partial-order reduction/, K. Coons, M. Musuvathi,
-  -- K. McKinley for more details.
-
-    sctBounded
-
-  -- * Combination Bounds
-
-  -- | Combination schedule bounding, where individual bounds are
-  -- enabled if they are set.
+  -- This module provides a combination pre-emption, fair, and length
+  -- bounding runner:
   --
   -- * Pre-emption + fair bounding is useful for programs which use
   --   loop/yield control flows but are otherwise terminating.
   --
   -- * Pre-emption, fair + length bounding is useful for
-  -- non-terminating programs, and used by the testing functionality
-  -- in @Test.DejaFu@.
+  --   non-terminating programs, and used by the testing functionality
+  --   in @Test.DejaFu@.
+  --
+  -- See /Bounded partial-order reduction/, K. Coons, M. Musuvathi,
+  -- K. McKinley for more details.
 
-  , Bounds(..)
+    Bounds(..)
   , defaultBounds
   , noBounds
 
@@ -64,8 +56,6 @@ module Test.DejaFu.SCT
   , PreemptionBound(..)
   , defaultPreemptionBound
   , sctPreBound
-  , pBound
-  , pBacktrack
 
   -- ** Fair Bounding
 
@@ -78,8 +68,6 @@ module Test.DejaFu.SCT
   , FairBound(..)
   , defaultFairBound
   , sctFairBound
-  , fBound
-  , fBacktrack
 
   -- ** Length Bounding
 
@@ -89,13 +77,6 @@ module Test.DejaFu.SCT
   , LengthBound(..)
   , defaultLengthBound
   , sctLengthBound
-  , lBound
-  , lBacktrack
-
-  -- * Backtracking
-
-  , BacktrackStep(..)
-  , BacktrackFunc
   ) where
 
 import Control.DeepSeq (NFData(..))
