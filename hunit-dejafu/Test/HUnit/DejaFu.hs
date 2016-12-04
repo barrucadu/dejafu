@@ -77,7 +77,11 @@ import qualified Test.DejaFu.Deterministic as Conc
 import Unsafe.Coerce (unsafeCoerce)
 
 #if MIN_VERSION_dejafu(0,3,0)
+#  if MIN_VERSION_dejafu(0,5,0)
+type Trc = Conc.Trace
+#  else
 type Trc = Conc.Trace Conc.ThreadId Conc.ThreadAction Conc.Lookahead
+#  endif
 #else
 type Trc = Conc.Trace
 #endif

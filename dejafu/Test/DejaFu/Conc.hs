@@ -176,11 +176,11 @@ instance Monad n => C.MonadConc (Conc n r) where
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 runConcurrent :: MonadRef r n
-              => Scheduler ThreadId ThreadAction Lookahead s
+              => Scheduler s
               -> MemType
               -> s
               -> Conc n r a
-              -> n (Either Failure a, s, Trace ThreadId ThreadAction Lookahead)
+              -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s (C conc) = do
   ref <- newRef Nothing
 
