@@ -23,11 +23,9 @@ matrix:
     addons: {apt: {packages: [libgmp-dev]}}
   - env:
     - RESOLVER="lts-7"
-    - SKIP_OLD_DEJAFU=1
     addons: {apt: {packages: [libgmp-dev]}}
   - env:
     - RESOLVER="nightly"
-    - SKIP_OLD_DEJAFU=1
     addons: {apt: {packages: [libgmp-dev]}}
 
 # Download and unpack the stack executable

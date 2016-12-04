@@ -2,32 +2,15 @@
 
 function testcmd()
 {
-  local name=$1
-  shift
-  local command=$*
-
-  echo "== ${name}"
-  if $command; then
-    echo
-  else
-    echo "== FAILED"
-    exit 1
-  fi
-}
-
-function testdejafu()
-{
-  local name=$1
+  local pkg=$1
   shift
   local stackopts=$*
 
-  echo "== $name"
-  if ! stack $stackopts build dejafu-tests; then
-    echo "== FAILED (build)"
-    exit 1
-  fi
-  if ! stack $stackopts exec dejafu-tests; then
-    echo "== FAILED (test)"
+  echo "== ${pkg}"
+  if stack $stackopts test $pkg; then
+    echo
+  else
+    echo "== FAILED"
     exit 1
   fi
 }
@@ -41,8 +24,21 @@ fi
 
 stack $STACKOPTS setup
 
-testdejafu "dejafu" $STACKOPTS
+# Make sure 'concurrency' builds.
+testcmd concurrency $STACKOPTS
 
+# Test 'dejafu'.
+echo "== dejafu"
+if ! stack $STACKOPTS build dejafu-tests; then
+  echo "== FAILED (build)"
+  exit 1
+fi
+if ! stack $STACKOPTS exec dejafu-tests; then
+  echo "== FAILED (test)"
+  exit 1
+fi
+
+# Test everything else.
 for pkg in hunit-dejafu tasty-dejafu async-dejafu; do
-  testcmd "${pkg}" stack $STACKOPTS test $pkg
+  testcmd $pkg $STACKOPTS
 done
