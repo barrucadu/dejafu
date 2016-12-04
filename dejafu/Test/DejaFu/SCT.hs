@@ -101,7 +101,6 @@ module Test.DejaFu.SCT
 import Control.DeepSeq (NFData(..))
 import Control.Monad.Ref (MonadRef)
 import Data.List (nub)
-import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.Maybe (isJust, fromJust)
 import qualified Data.Set as S
@@ -159,7 +158,7 @@ cBound (Bounds pb fb lb) =
 -- corresponding to enabled bound functions.
 --
 -- If no bounds are enabled, just backtrack to the given point.
-cBacktrack :: Bounds -> BacktrackFunc s
+cBacktrack :: Bounds -> BacktrackFunc
 cBacktrack (Bounds Nothing Nothing Nothing) bs i t = backtrackAt (const False) False bs i t
 cBacktrack (Bounds pb fb lb) bs i t = lBack . fBack $ pBack bs where
   pBack backs = if isJust pb then pBacktrack   backs i t else backs
@@ -200,7 +199,7 @@ pBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb
 -- the most recent transition before that point. This may result in
 -- the same state being reached multiple times, but is needed because
 -- of the artificial dependency imposed by the bound.
-pBacktrack :: BacktrackFunc s
+pBacktrack :: BacktrackFunc
 pBacktrack bs i tid =
   maybe id (\j' b -> backtrack True b j' tid) j $ backtrack False bs i tid
 
@@ -252,7 +251,7 @@ fBound (FairBound fb) ts (_, l) = maxYieldCountDiff ts l <= fb
 
 -- | Add a backtrack point. If the thread isn't runnable, or performs
 -- a release operation, add all runnable threads.
-fBacktrack :: BacktrackFunc s
+fBacktrack :: BacktrackFunc
 fBacktrack bs i t = backtrackAt check False bs i t where
   -- True if a release operation is performed.
   check b = Just True == (willRelease <$> M.lookup t (bcktRunnable b))
@@ -288,7 +287,7 @@ lBound (LengthBound lb) ts _ = length ts < lb
 
 -- | Add a backtrack point. If the thread isn't runnable, add all
 -- runnable threads.
-lBacktrack :: BacktrackFunc s
+lBacktrack :: BacktrackFunc
 lBacktrack = backtrackAt (const False) False
 
 -------------------------------------------------------------------------------
@@ -311,21 +310,21 @@ sctBounded :: MonadRef r n
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> BoundFunc
   -- ^ Check if a prefix trace is within the bound
-  -> BacktrackFunc DepState
+  -> BacktrackFunc
   -- ^ Add a new backtrack point, this takes the history of the
   -- execution so far, the index to insert the backtracking point, and
   -- the thread to backtrack to. This may insert more than one
   -- backtracking point.
   -> Conc n r a
   -> n [(Either Failure a, Trace)]
-sctBounded memtype bf backtrack conc = go (initialState initialThread) where
+sctBounded memtype bf backtrack conc = go initialState where
   -- Repeatedly run the computation gathering all the results and
   -- traces into a list until there are no schedules remaining to try.
   go dp = case nextPrefix dp of
     Just (prefix, conservative, sleep, ()) -> do
       (res, s, trace) <- runConcurrent scheduler
                                        memtype
-                                       (initialSchedState initialDepState sleep prefix)
+                                       (initialSchedState sleep prefix)
                                        conc
 
       let bpoints = findBacktracks (schedBoundKill s) (schedBPoints s) trace
@@ -341,19 +340,16 @@ sctBounded memtype bf backtrack conc = go (initialState initialThread) where
   nextPrefix = findSchedulePrefix (>=initialThread) (const (0, ()))
 
   -- The DPOR scheduler.
-  scheduler = dporSched didYield willYield (dependent memtype) killsDaemons updateDepState bf
+  scheduler = dporSched (dependent memtype) bf
 
   -- Find the new backtracking steps.
-  findBacktracks = findBacktrackSteps initialDepState updateDepState (dependent' memtype) backtrack
+  findBacktracks = findBacktrackSteps (dependent' memtype) backtrack
 
   -- Incorporate a trace into the DPOR tree.
-  addTrace = incorporateTrace initialDepState updateDepState (dependent memtype)
+  addTrace = incorporateTrace (dependent memtype)
 
   -- Incorporate the new backtracking steps into the DPOR tree.
   addBacktracks = incorporateBacktrackSteps bf
-
-  -- Check if an action kills daemon threads.
-  killsDaemons _ (t, l) _ = t == initialThread && case l of WillStop -> True; _ -> False
 
 -------------------------------------------------------------------------------
 -- Post-processing
@@ -491,118 +487,12 @@ dependentActions memtype ds a1 a2 = case (a1, a2) of
     same f = isJust (f a1) && f a1 == f a2
 
 -------------------------------------------------------------------------------
--- Dependency function state
-
-data DepState = DepState
-  { depCRState :: Map CRefId Bool
-  -- ^ Keep track of which @CRef@s have buffered writes.
-  , depMaskState :: Map ThreadId MaskingState
-  -- ^ Keep track of thread masking states. If a thread isn't present,
-  -- the masking state is assumed to be @Unmasked@. This nicely
-  -- provides compatibility with dpor-0.1, where the thread IDs are
-  -- not available.
-  }
-
-instance NFData DepState where
-  -- Cheats: 'MaskingState' has no 'NFData' instance.
-  rnf ds = rnf (depCRState ds, M.keys (depMaskState ds))
-
--- | Initial dependency state.
-initialDepState :: DepState
-initialDepState = DepState M.empty M.empty
-
--- | Update the 'CRef' buffer state with the action that has just
--- happened.
-updateDepState :: DepState -> (ThreadId, ThreadAction) -> DepState
-updateDepState depstate (tid, act) = DepState
-  { depCRState   = updateCRState       act $ depCRState   depstate
-  , depMaskState = updateMaskState tid act $ depMaskState depstate
-  }
-
--- | Update the 'CRef' buffer state with the action that has just
--- happened.
-updateCRState :: ThreadAction -> Map CRefId Bool -> Map CRefId Bool
-updateCRState (CommitRef _ r) = M.delete r
-updateCRState (WriteRef    r) = M.insert r True
-updateCRState ta
-  | isBarrier $ simplifyAction ta = const M.empty
-  | otherwise = id
-
--- | Update the thread masking state with the action that has just
--- happened.
-updateMaskState :: ThreadId -> ThreadAction -> Map ThreadId MaskingState -> Map ThreadId MaskingState
-updateMaskState tid (Fork tid2) = \masks -> case M.lookup tid masks of
-  -- A thread inherits the masking state of its parent.
-  Just ms -> M.insert tid2 ms masks
-  Nothing -> masks
-updateMaskState tid (SetMasking   _ ms) = M.insert tid ms
-updateMaskState tid (ResetMasking _ ms) = M.insert tid ms
-updateMaskState _ _ = id
-
--- | Check if a 'CRef' has a buffered write pending.
-isBuffered :: DepState -> CRefId -> Bool
-isBuffered depstate r = M.findWithDefault False r (depCRState depstate)
-
--- | Check if an exception can interrupt a thread (action).
-canInterrupt :: DepState -> ThreadId -> ThreadAction -> Bool
-canInterrupt depstate tid act
-  -- If masked interruptible, blocked actions can be interrupted.
-  | isMaskedInterruptible depstate tid = case act of
-    BlockedPutVar  _ -> True
-    BlockedReadVar _ -> True
-    BlockedTakeVar _ -> True
-    BlockedSTM     _ -> True
-    BlockedThrowTo _ -> True
-    _ -> False
-  -- If masked uninterruptible, nothing can be.
-  | isMaskedUninterruptible depstate tid = False
-  -- If no mask, anything can be.
-  | otherwise = True
-
--- | Check if an exception can interrupt a thread (lookahead).
-canInterruptL :: DepState -> ThreadId -> Lookahead -> Bool
-canInterruptL depstate tid lh
-  -- If masked interruptible, actions which can block may be
-  -- interrupted.
-  | isMaskedInterruptible depstate tid = case lh of
-    WillPutVar  _ -> True
-    WillReadVar _ -> True
-    WillTakeVar _ -> True
-    WillSTM       -> True
-    WillThrowTo _ -> True
-    _ -> False
-  -- If masked uninterruptible, nothing can be.
-  | isMaskedUninterruptible depstate tid = False
-  -- If no mask, anything can be.
-  | otherwise = True
-
--- | Check if a thread is masked interruptible.
-isMaskedInterruptible :: DepState -> ThreadId -> Bool
-isMaskedInterruptible depstate tid =
-  M.lookup tid (depMaskState depstate) == Just MaskedInterruptible
-
--- | Check if a thread is masked uninterruptible.
-isMaskedUninterruptible :: DepState -> ThreadId -> Bool
-isMaskedUninterruptible depstate tid =
-  M.lookup tid (depMaskState depstate) == Just MaskedUninterruptible
-
--------------------------------------------------------------------------------
 -- Utilities
 
 -- | Determine if an action is a commit or not.
 isCommitRef :: ThreadAction -> Bool
 isCommitRef (CommitRef _ _) = True
 isCommitRef _ = False
-
--- | Check if a thread yielded.
-didYield :: ThreadAction -> Bool
-didYield Yield = True
-didYield _ = False
-
--- | Check if a thread will yield.
-willYield :: Lookahead -> Bool
-willYield WillYield = True
-willYield _ = False
 
 -- | Extra threads created in a fork.
 forkTids :: ThreadAction -> [ThreadId]
