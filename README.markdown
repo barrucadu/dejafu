@@ -45,7 +45,6 @@ Packages
 | async-dejafu [[docs][d:async]]  [[hackage][h:async]]  | 0.1.3.0 | Authors | Run MonadConc operations asynchronously and wait for their results. |
 | concurrency  [[docs][d:conc]]   [[hackage][h:conc]]   | 1.0.0.0 | Authors | Typeclasses, functions, and data types for concurrency and STM. |
 | dejafu       [[docs][d:dejafu]] [[hackage][h:dejafu]] | 0.4.0.0 | Testers | Systematic testing for Haskell concurrency. |
-| dpor         [[docs][d:dpor]]   [[hackage][h:dpor]]   | 0.2.0.0 | Me[1]   | A generic implementation of dynamic partial-order reduction (DPOR) for testing arbitrary models of concurrency. |
 | hunit-dejafu [[docs][d:hunit]]  [[hackage][h:hunit]]  | 0.3.0.3 | Testers | Deja Fu support for the HUnit test framework. |
 | tasty-dejafu [[docs][d:tasty]]  [[hackage][h:tasty]]  | 0.3.0.2 | Testers | Deja Fu support for the Tasty test framework. |
 
@@ -55,19 +54,14 @@ There is also dejafu-tests, the test suite for dejafu. This is in a
 separate package due to Cabal being bad with test suite transitive
 dependencies.
 
-[1] Slightly tongue-in-cheek, but *dpor* is only really useful for
-people experimenting with concurrency testing.
-
 [d:conc]:   https://docs.barrucadu.co.uk/concurrency/
 [d:dejafu]: https://docs.barrucadu.co.uk/dejafu/
-[d:dpor]:   https://docs.barrucadu.co.uk/dpor/
 [d:async]:  https://docs.barrucadu.co.uk/async-dejafu/
 [d:hunit]:  https://docs.barrucadu.co.uk/hunit-dejafu/
 [d:tasty]:  https://docs.barrucadu.co.uk/tasty-dejafu/
 
 [h:conc]:   https://hackage.haskell.org/package/concurrency
 [h:dejafu]: https://hackage.haskell.org/package/dejafu
-[h:dpor]:   https://hackage.haskell.org/package/dpor
 [h:async]:  https://hackage.haskell.org/package/async-dejafu
 [h:hunit]:  https://hackage.haskell.org/package/hunit-dejafu
 [h:tasty]:  https://hackage.haskell.org/package/tasty-dejafu

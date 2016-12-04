@@ -1,12 +1,10 @@
-{-# LANGUAGE CPP #-}
-
 -- |
 -- Module      : Test.DejaFu.SCT
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP
+-- Portability : portable
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
@@ -267,10 +265,7 @@ sctBounded memtype bf backtrack conc =
        updateDepState
        (dependent  memtype)
        (dependent' memtype)
-#if MIN_VERSION_dpor(0,2,0)
-       -- dpor-0.2 knows about daemon threads.
        (\_ (t, l) _ -> t == initialThread && case l of WillStop -> True; _ -> False)
-#endif
        initialThread
        (>=initialThread)
        bf
@@ -343,17 +338,11 @@ dependent memtype ds (t1, a1) (t2, a2) = case rewind a2 of
     isSTM _ = False
 
 -- | Variant of 'dependent' to handle 'Lookahead'.
+--
+-- Termination of the initial thread is handled specially in the DPOR
+-- implementation.
 dependent' :: MemType -> DepState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool
 dependent' memtype ds (t1, a1) (t2, l2) = case (a1, l2) of
-#if MIN_VERSION_dpor(0,2,0)
-  -- dpor-0.2 handles this case, woo.
-#else
-  -- Because Haskell threads are daemonised, when the initial thread
-  -- stops all child threads do too, this imposes a dependency.
-  (Stop, _)     | t1 == initialThread -> True
-  (_, WillStop) | t2 == initialThread -> True
-#endif
-
   -- Worst-case assumption: all IO is dependent.
   (LiftIO, WillLiftIO) -> True
 
@@ -442,17 +431,11 @@ initialDepState = DepState M.empty M.empty
 
 -- | Update the 'CRef' buffer state with the action that has just
 -- happened.
-#if MIN_VERSION_dpor(0,2,0)
 updateDepState :: DepState -> (ThreadId, ThreadAction) -> DepState
 updateDepState depstate (tid, act) = DepState
   { depCRState   = updateCRState       act $ depCRState   depstate
   , depMaskState = updateMaskState tid act $ depMaskState depstate
   }
-#else
-updateDepState :: DepState -> ThreadAction -> DepState
-updateDepState depstate act = depstate
-  { depCRState = updateCRState act $ depCRState depstate }
-#endif
 
 -- | Update the 'CRef' buffer state with the action that has just
 -- happened.

@@ -5,7 +5,6 @@ packages:
 - concurrency
 - dejafu
 - dejafu-tests
-- dpor
 - hunit-dejafu
 - tasty-dejafu
 
