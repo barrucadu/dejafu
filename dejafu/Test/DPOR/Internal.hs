@@ -406,10 +406,6 @@ initialSchedState s sleep prefix = SchedState
 type BoundFunc tid action lookahead
   = [(Decision tid, action)] -> (Decision tid, lookahead) -> Bool
 
--- | The \"true\" bound, which allows everything.
-trueBound :: BoundFunc tid action lookahead
-trueBound _ _ = True
-
 -- | A backtracking step is a point in the execution where another
 -- decision needs to be made, in order to explore interesting new
 -- schedules. A backtracking /function/ takes the steps identified so

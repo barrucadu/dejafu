@@ -1,10 +1,12 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 -- |
 -- Module      : Test.DejaFu.SCT
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : portable
+-- Portability : GeneralizedNewtypeDeriving
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
@@ -62,8 +64,8 @@ module Test.DejaFu.SCT
   , PreemptionBound(..)
   , defaultPreemptionBound
   , sctPreBound
-  , pBacktrack
   , pBound
+  , pBacktrack
 
   -- ** Fair Bounding
 
@@ -76,8 +78,8 @@ module Test.DejaFu.SCT
   , FairBound(..)
   , defaultFairBound
   , sctFairBound
-  , fBacktrack
   , fBound
+  , fBacktrack
 
   -- ** Length Bounding
 
@@ -87,26 +89,23 @@ module Test.DejaFu.SCT
   , LengthBound(..)
   , defaultLengthBound
   , sctLengthBound
+  , lBound
+  , lBacktrack
 
   -- * Backtracking
 
-  , BacktrackStep(..)
-  , BacktrackFunc
+  , I.BacktrackStep(..)
+  , I.BacktrackFunc
   ) where
 
 import Control.DeepSeq (NFData(..))
 import Control.Monad.Ref (MonadRef)
+import Data.List (nub)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.Maybe (isJust, fromJust)
 import qualified Data.Set as S
-import Test.DPOR ( DPOR(..), dpor
-                 , BacktrackFunc, BacktrackStep(..), backtrackAt
-                 , BoundFunc, (&+&), trueBound
-                 , PreemptionBound(..), defaultPreemptionBound, preempBacktrack
-                 , FairBound(..), defaultFairBound, fairBound, fairBacktrack
-                 , LengthBound(..), defaultLengthBound, lenBound, lenBacktrack
-                 )
+import qualified Test.DPOR.Internal as I
 
 import Test.DejaFu.Common
 import Test.DejaFu.Conc
@@ -150,22 +149,35 @@ sctBound :: MonadRef r n
 sctBound memtype cb = sctBounded memtype (cBound cb) (cBacktrack cb)
 
 -- | Combination bound function
-cBound :: Bounds -> BoundFunc ThreadId ThreadAction Lookahead
-cBound (Bounds pb fb lb) = maybe trueBound pBound pb &+& maybe trueBound fBound fb &+& maybe trueBound lenBound lb
+cBound :: Bounds -> I.BoundFunc ThreadId ThreadAction Lookahead
+cBound (Bounds pb fb lb) =
+  maybe trueBound pBound pb &+&
+  maybe trueBound fBound fb &+&
+  maybe trueBound lBound lb
 
 -- | Combination backtracking function. Add all backtracking points
 -- corresponding to enabled bound functions.
 --
 -- If no bounds are enabled, just backtrack to the given point.
-cBacktrack :: Bounds -> BacktrackFunc ThreadId ThreadAction Lookahead s
-cBacktrack (Bounds Nothing Nothing Nothing) bs i t = backtrackAt (const False) False bs i t
+cBacktrack :: Bounds -> I.BacktrackFunc ThreadId ThreadAction Lookahead s
+cBacktrack (Bounds Nothing Nothing Nothing) bs i t = I.backtrackAt (const False) False bs i t
 cBacktrack (Bounds pb fb lb) bs i t = lBack . fBack $ pBack bs where
   pBack backs = if isJust pb then pBacktrack   backs i t else backs
   fBack backs = if isJust fb then fBacktrack   backs i t else backs
-  lBack backs = if isJust lb then lenBacktrack backs i t else backs
+  lBack backs = if isJust lb then lBacktrack backs i t else backs
 
 -------------------------------------------------------------------------------
 -- Pre-emption bounding
+
+newtype PreemptionBound = PreemptionBound Int
+  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | A sensible default preemption bound: 2.
+--
+-- See /Concurrency Testing Using Schedule Bounding: an Empirical Study/,
+-- P. Thomson, A. F. Donaldson, A. Betts for justification.
+defaultPreemptionBound :: PreemptionBound
+defaultPreemptionBound = 2
 
 -- | An SCT runner using a pre-emption bounding scheduler.
 sctPreBound :: MonadRef r n
@@ -179,21 +191,48 @@ sctPreBound :: MonadRef r n
   -> n [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
 sctPreBound memtype pb = sctBounded memtype (pBound pb) pBacktrack
 
+-- | Pre-emption bound function. This does not count pre-emptive
+-- context switches to a commit thread.
+pBound :: PreemptionBound -> I.BoundFunc ThreadId ThreadAction Lookahead
+pBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb
+
 -- | Add a backtrack point, and also conservatively add one prior to
 -- the most recent transition before that point. This may result in
 -- the same state being reached multiple times, but is needed because
 -- of the artificial dependency imposed by the bound.
-pBacktrack :: BacktrackFunc ThreadId ThreadAction Lookahead s
-pBacktrack = preempBacktrack isCommitRef
+pBacktrack :: I.BacktrackFunc ThreadId ThreadAction Lookahead s
+pBacktrack bs i tid =
+  maybe id (\j' b -> backtrack True b j' tid) j $ backtrack False bs i tid
 
--- | Pre-emption bound function. This is different to @preempBound@ in
--- that it does not count pre-emptive context switches to a commit
--- thread.
-pBound :: PreemptionBound -> BoundFunc ThreadId ThreadAction Lookahead
-pBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb
+  where
+    -- Index of the conservative point
+    j = goJ . reverse . pairs $ zip [0..i-1] bs where
+      goJ (((_,b1), (j',b2)):rest)
+        | I.bcktThreadid b1 /= I.bcktThreadid b2
+          && not (isCommitRef . snd $ I.bcktDecision b1)
+          && not (isCommitRef . snd $ I.bcktDecision b2) = Just j'
+        | otherwise = goJ rest
+      goJ [] = Nothing
+
+    -- List of adjacent pairs
+    {-# INLINE pairs #-}
+    pairs = zip <*> tail
+
+    -- Add a backtracking point.
+    backtrack = I.backtrackAt $ const False
 
 -------------------------------------------------------------------------------
 -- Fair bounding
+
+newtype FairBound = FairBound Int
+  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | A sensible default fair bound: 5.
+--
+-- This comes from playing around myself, but there is probably a
+-- better default.
+defaultFairBound :: FairBound
+defaultFairBound = 5
 
 -- | An SCT runner using a fair bounding scheduler.
 sctFairBound :: MonadRef r n
@@ -208,16 +247,28 @@ sctFairBound :: MonadRef r n
 sctFairBound memtype fb = sctBounded memtype (fBound fb) fBacktrack
 
 -- | Fair bound function
-fBound :: FairBound -> BoundFunc ThreadId ThreadAction Lookahead
-fBound = fairBound didYield willYield (\act -> case act of Fork t -> [t]; _ -> [])
+fBound :: FairBound -> I.BoundFunc ThreadId ThreadAction Lookahead
+fBound (FairBound fb) ts (_, l) = maxYieldCountDiff ts l <= fb
 
 -- | Add a backtrack point. If the thread isn't runnable, or performs
 -- a release operation, add all runnable threads.
-fBacktrack :: BacktrackFunc ThreadId ThreadAction Lookahead s
-fBacktrack = fairBacktrack willRelease
+fBacktrack :: I.BacktrackFunc ThreadId ThreadAction Lookahead s
+fBacktrack bs i t = I.backtrackAt check False bs i t where
+  -- True if a release operation is performed.
+  check b = Just True == (willRelease <$> M.lookup t (I.bcktRunnable b))
 
 -------------------------------------------------------------------------------
 -- Length bounding
+
+newtype LengthBound = LengthBound Int
+  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | A sensible default length bound: 250.
+--
+-- Based on the assumption that anything which executes for much
+-- longer (or even this long) will take ages to test.
+defaultLengthBound :: LengthBound
+defaultLengthBound = 250
 
 -- | An SCT runner using a length bounding scheduler.
 sctLengthBound :: MonadRef r n
@@ -229,7 +280,16 @@ sctLengthBound :: MonadRef r n
   -> Conc n r a
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
-sctLengthBound memtype lb = sctBounded memtype (lenBound lb) lenBacktrack
+sctLengthBound memtype lb = sctBounded memtype (lBound lb) lBacktrack
+
+-- | Length bound function
+lBound :: LengthBound -> I.BoundFunc tid action lookahead
+lBound (LengthBound lb) ts _ = length ts < lb
+
+-- | Add a backtrack point. If the thread isn't runnable, add all
+-- runnable threads.
+lBacktrack :: Ord tid => I.BacktrackFunc tid action lookahead s
+lBacktrack = I.backtrackAt (const False) False
 
 -------------------------------------------------------------------------------
 -- DPOR
@@ -249,29 +309,51 @@ sctLengthBound memtype lb = sctBounded memtype (lenBound lb) lenBacktrack
 sctBounded :: MonadRef r n
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> BoundFunc ThreadId ThreadAction Lookahead
+  -> I.BoundFunc ThreadId ThreadAction Lookahead
   -- ^ Check if a prefix trace is within the bound
-  -> BacktrackFunc ThreadId ThreadAction Lookahead DepState
+  -> I.BacktrackFunc ThreadId ThreadAction Lookahead DepState
   -- ^ Add a new backtrack point, this takes the history of the
   -- execution so far, the index to insert the backtracking point, and
   -- the thread to backtrack to. This may insert more than one
   -- backtracking point.
   -> Conc n r a
   -> n [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
-sctBounded memtype bf backtrack conc =
-  dpor didYield
-       willYield
-       initialDepState
-       updateDepState
-       (dependent  memtype)
-       (dependent' memtype)
-       (\_ (t, l) _ -> t == initialThread && case l of WillStop -> True; _ -> False)
-       initialThread
-       (>=initialThread)
-       bf
-       backtrack
-       pruneCommits
-       (\sched s -> runConcurrent sched memtype s conc)
+sctBounded memtype bf backtrack conc = go (I.initialState initialThread) where
+  -- Repeatedly run the computation gathering all the results and
+  -- traces into a list until there are no schedules remaining to try.
+  go dp = case nextPrefix dp of
+    Just (prefix, conservative, sleep, ()) -> do
+      (res, s, trace) <- runConcurrent scheduler
+                                       memtype
+                                       (I.initialSchedState initialDepState sleep prefix)
+                                       conc
+
+      let bpoints = findBacktracks (I.schedBoundKill s) (I.schedBPoints s) trace
+      let newDPOR = addTrace conservative trace dp
+
+      if I.schedIgnore s
+      then go newDPOR
+      else ((res, trace):) <$> go (pruneCommits $ addBacktracks bpoints newDPOR)
+
+    Nothing -> pure []
+
+  -- Find the next schedule prefix.
+  nextPrefix = I.findSchedulePrefix (>=initialThread) (const (0, ()))
+
+  -- The DPOR scheduler.
+  scheduler = I.dporSched didYield willYield (dependent memtype) killsDaemons updateDepState bf
+
+  -- Find the new backtracking steps.
+  findBacktracks = I.findBacktrackSteps initialDepState updateDepState (dependent' memtype) backtrack
+
+  -- Incorporate a trace into the DPOR tree.
+  addTrace = I.incorporateTrace initialDepState updateDepState (dependent memtype)
+
+  -- Incorporate the new backtracking steps into the DPOR tree.
+  addBacktracks = I.incorporateBacktrackSteps bf
+
+  -- Check if an action kills daemon threads.
+  killsDaemons _ (t, l) _ = t == initialThread && case l of WillStop -> True; _ -> False
 
 -------------------------------------------------------------------------------
 -- Post-processing
@@ -281,18 +363,18 @@ sctBounded memtype bf backtrack conc =
 --
 -- To get the benefit from this, do not execute commit actions from
 -- the todo set until there are no other choises.
-pruneCommits :: DPOR ThreadId ThreadAction -> DPOR ThreadId ThreadAction
+pruneCommits :: I.DPOR ThreadId ThreadAction -> I.DPOR ThreadId ThreadAction
 pruneCommits bpor
   | not onlycommits || not alldonesync = go bpor
-  | otherwise = go bpor { dporTodo = M.empty }
+  | otherwise = go bpor { I.dporTodo = M.empty }
 
   where
-    go b = b { dporDone = pruneCommits <$> dporDone bpor }
+    go b = b { I.dporDone = pruneCommits <$> I.dporDone bpor }
 
-    onlycommits = all (<initialThread) . M.keys $ dporTodo bpor
-    alldonesync = all barrier . M.elems $ dporDone bpor
+    onlycommits = all (<initialThread) . M.keys $ I.dporTodo bpor
+    alldonesync = all barrier . M.elems $ I.dporDone bpor
 
-    barrier = isBarrier . simplifyAction . fromJust . dporAction
+    barrier = isBarrier . simplifyAction . fromJust . I.dporAction
 
 -------------------------------------------------------------------------------
 -- Dependency function
@@ -521,3 +603,53 @@ didYield _ = False
 willYield :: Lookahead -> Bool
 willYield WillYield = True
 willYield _ = False
+
+-- | Extra threads created in a fork.
+forkTids :: ThreadAction -> [ThreadId]
+forkTids (Fork t) = [t]
+forkTids _ = []
+
+-- | Count the number of yields by a thread in a schedule prefix.
+yieldCount :: ThreadId
+  -- ^ The thread to count yields for.
+  -> [(Decision ThreadId, ThreadAction)]
+  -> Lookahead
+  -> Int
+yieldCount tid ts l = go initialThread ts where
+  go t ((Start    t', act):rest) = go' t t' act rest
+  go t ((SwitchTo t', act):rest) = go' t t' act rest
+  go t ((Continue,    act):rest) = go' t t  act rest
+  go t []
+    | t == tid && willYield l = 1
+    | otherwise = 0
+
+  go' t t' act rest
+    | t == tid && didYield act = 1 + go t' rest
+    | otherwise = go t' rest
+
+-- | Get the maximum difference between the yield counts of all
+-- threads in this schedule prefix.
+maxYieldCountDiff :: [(Decision ThreadId, ThreadAction)]
+  -> Lookahead
+  -> Int
+maxYieldCountDiff ts l = maximum yieldCountDiffs where
+  yieldsBy tid = yieldCount tid ts l
+  yieldCounts = [yieldsBy tid | tid <- nub $ allTids ts]
+  yieldCountDiffs = [y1 - y2 | y1 <- yieldCounts, y2 <- yieldCounts]
+
+  -- All the threads created during the lifetime of the system.
+  allTids ((_, act):rest) =
+    let tids' = forkTids act
+    in if null tids' then allTids rest else tids' ++ allTids rest
+  allTids [] = [initialThread]
+
+-- | The \"true\" bound, which allows everything.
+trueBound :: I.BoundFunc tid action lookahead
+trueBound _ _ = True
+
+-- | Combine two bounds into a larger bound, where both must be
+-- satisfied.
+(&+&) :: I.BoundFunc tid action lookahead
+      -> I.BoundFunc tid action lookahead
+      -> I.BoundFunc tid action lookahead
+(&+&) b1 b2 ts dl = b1 ts dl && b2 ts dl

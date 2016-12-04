@@ -83,7 +83,6 @@ library
                      , Test.DejaFu.SCT
                      , Test.DejaFu.STM
 
-                     , Test.DPOR
                      , Test.DPOR.Internal
                      , Test.DPOR.Schedule
 

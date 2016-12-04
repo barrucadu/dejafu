@@ -22,7 +22,7 @@ import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty(..), fromList)
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
-import Test.DPOR (Scheduler)
+import Test.DPOR.Schedule (Scheduler)
 
 import Test.DejaFu.Common
 import Test.DejaFu.Conc.Internal.Common
