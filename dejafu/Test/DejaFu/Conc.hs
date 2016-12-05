@@ -42,7 +42,7 @@ module Test.DejaFu.Conc
   , showFail
 
   -- * Scheduling
-  , module Test.DPOR.Schedule
+  , module Test.DejaFu.Schedule
   ) where
 
 import Control.Exception (MaskingState(..))
@@ -56,7 +56,7 @@ import Data.IORef (IORef)
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromJust)
 import Data.STRef (STRef)
-import Test.DPOR.Schedule
+import Test.DejaFu.Schedule
 
 import qualified Control.Monad.Conc.Class as C
 import Test.DejaFu.Common
@@ -176,11 +176,11 @@ instance Monad n => C.MonadConc (Conc n r) where
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 runConcurrent :: MonadRef r n
-              => Scheduler ThreadId ThreadAction Lookahead s
+              => Scheduler s
               -> MemType
               -> s
               -> Conc n r a
-              -> n (Either Failure a, s, Trace ThreadId ThreadAction Lookahead)
+              -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s (C conc) = do
   ref <- newRef Nothing
 

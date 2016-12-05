@@ -22,12 +22,12 @@ import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty(..), fromList)
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
-import Test.DPOR (Scheduler)
 
 import Test.DejaFu.Common
 import Test.DejaFu.Conc.Internal.Common
 import Test.DejaFu.Conc.Internal.Memory
 import Test.DejaFu.Conc.Internal.Threading
+import Test.DejaFu.Schedule
 import Test.DejaFu.STM (Result(..))
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
@@ -43,7 +43,7 @@ import Test.DejaFu.STM (Result(..))
 -- exposed to users of the library, this is just an internal gotcha to
 -- watch out for.
 runThreads :: MonadRef r n => (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
-           -> Scheduler ThreadId ThreadAction Lookahead g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, Trace ThreadId ThreadAction Lookahead)
+           -> Scheduler g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, Trace)
 runThreads runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer 2 where
   go idSource sofar prior g threads wb caps
     | isTerminated  = stop g

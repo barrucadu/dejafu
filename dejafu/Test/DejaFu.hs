@@ -386,14 +386,14 @@ data Result a = Result
   -- ^ Whether the test passed or not.
   , _casesChecked :: Int
   -- ^ The number of cases checked.
-  , _failures     :: [(Either Failure a, Trace ThreadId ThreadAction Lookahead)]
+  , _failures     :: [(Either Failure a, Trace)]
   -- ^ The failing cases, if any.
   , _failureMsg   :: String
   -- ^ A message to display on failure, if nonempty
   } deriving Show
 
 -- | A failed result, taking the given list of failures.
-defaultFail :: [(Either Failure a, Trace ThreadId ThreadAction Lookahead)] -> Result a
+defaultFail :: [(Either Failure a, Trace)] -> Result a
 defaultFail failures = Result False 0 failures ""
 
 -- | A passed result.
@@ -448,7 +448,7 @@ runTestM' memtype cb predicate conc = predicate <$> sctBound memtype cb conc
 
 -- | A @Predicate@ is a function which collapses a list of results
 -- into a 'Result'.
-type Predicate a = [(Either Failure a, Trace ThreadId ThreadAction Lookahead)] -> Result a
+type Predicate a = [(Either Failure a, Trace)] -> Result a
 
 -- | Reduce the list of failures in a @Predicate@ to one
 -- representative trace for each unique result.

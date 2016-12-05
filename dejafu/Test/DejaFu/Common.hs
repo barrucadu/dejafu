@@ -64,10 +64,10 @@ import Control.DeepSeq (NFData(..))
 import Control.Exception (MaskingState(..))
 import Data.Dynamic (Dynamic)
 import Data.List (sort, nub, intercalate)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Set (Set)
 import qualified Data.Set as S
-import Test.DPOR (Decision(..), Trace)
 
 -------------------------------------------------------------------------------
 -- Identifiers
@@ -621,10 +621,34 @@ instance NFData TAction where
 -------------------------------------------------------------------------------
 -- Traces
 
+-- | One of the outputs of the runner is a @Trace@, which is a log of
+-- decisions made, all the runnable threads and what they would do,
+-- and the action a thread took in its step.
+type Trace
+  = [(Decision, [(ThreadId, NonEmpty Lookahead)], ThreadAction)]
+
+-- | Scheduling decisions are based on the state of the running
+-- program, and so we can capture some of that state in recording what
+-- specific decision we made.
+data Decision =
+    Start ThreadId
+  -- ^ Start a new thread, because the last was blocked (or it's the
+  -- start of computation).
+  | Continue
+  -- ^ Continue running the last thread for another step.
+  | SwitchTo ThreadId
+  -- ^ Pre-empt the running thread, and switch to another.
+  deriving (Eq, Show)
+
+instance NFData Decision where
+  rnf (Start    tid) = rnf tid
+  rnf (SwitchTo tid) = rnf tid
+  rnf d = d `seq` ()
+
 -- | Pretty-print a trace, including a key of the thread IDs (not
 -- including thread 0). Each line of the key is indented by two
 -- spaces.
-showTrace :: Trace ThreadId ThreadAction Lookahead -> String
+showTrace :: Trace -> String
 showTrace trc = intercalate "\n" $ concatMap go trc : strkey where
   go (_,_,CommitRef _ _) = "C-"
   go (Start    (ThreadId _ i),_,_) = "S" ++ show i ++ "-"
@@ -648,8 +672,8 @@ showTrace trc = intercalate "\n" $ concatMap go trc : strkey where
 -- SO, we don't count a switch TO a commit thread as a
 -- preemption. HOWEVER, the switch FROM a commit thread counts as a
 -- preemption if it is not to the thread that the commit interrupted.
-preEmpCount :: [(Decision ThreadId, ThreadAction)]
-            -> (Decision ThreadId, Lookahead)
+preEmpCount :: [(Decision, ThreadAction)]
+            -> (Decision, Lookahead)
             -> Int
 preEmpCount ts (d, _) = go initialThread Nothing ts where
   go _ (Just Yield) ((SwitchTo t, a):rest) = go t (Just a) rest

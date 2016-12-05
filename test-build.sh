@@ -2,32 +2,15 @@
 
 function testcmd()
 {
-  local name=$1
-  shift
-  local command=$*
-
-  echo "== ${name}"
-  if $command; then
-    echo
-  else
-    echo "== FAILED"
-    exit 1
-  fi
-}
-
-function testdejafu()
-{
-  local name=$1
+  local pkg=$1
   shift
   local stackopts=$*
 
-  echo "== $name"
-  if ! stack $stackopts build dejafu-tests; then
-    echo "== FAILED (build)"
-    exit 1
-  fi
-  if ! stack $stackopts exec dejafu-tests; then
-    echo "== FAILED (test)"
+  echo "== ${pkg}"
+  if stack $stackopts test $pkg; then
+    echo
+  else
+    echo "== FAILED"
     exit 1
   fi
 }
@@ -41,30 +24,21 @@ fi
 
 stack $STACKOPTS setup
 
-# Test dejafu-0.2 compat of async/hunit/tasty-dejafu
-if [[ -z "$SKIP_OLD_DEJAFU" ]]; then
-  sed 's:^- dejafu$::' stack.yaml > stack-old-dejafu.yaml
-  sed -i 's/^extra-deps: \[\]/extra-deps: [ dejafu-0.2.0.0 ]/' stack-old-dejafu.yaml
+# Make sure 'concurrency' builds.
+testcmd concurrency $STACKOPTS
 
-  for pkg in hunit-dejafu tasty-dejafu; do
-    testcmd "${pkg} (dejafu-0.2)" stack $STACKOPTS --stack-yaml=stack-old-dejafu.yaml test $pkg
-  done
+# Test 'dejafu'.
+echo "== dejafu"
+if ! stack $STACKOPTS build dejafu-tests; then
+  echo "== FAILED (build)"
+  exit 1
+fi
+if ! stack $STACKOPTS exec dejafu-tests; then
+  echo "== FAILED (test)"
+  exit 1
 fi
 
-# Test dpor-0.1 compat of dejafu
-if [[ -z "$SKIP_OLD_DPOR" ]]; then
-  # Use 0.1.0.1 because it builds with ghc 8.
-  sed 's:^- dpor$::' stack.yaml > stack-old-dpor.yaml
-  sed -i 's/^extra-deps: \[\]/extra-deps: [ dpor-0.1.0.1 ]/' stack-old-dpor.yaml
-
-  testdejafu "dejafu (dpor-0.1)" $STACKOPTS --stack-yaml=stack-old-dpor.yaml
-fi
-
-# Test HEAD version of everything
-testcmd "dpor" stack $STACKOPTS test dpor
-
-testdejafu "dejafu" $STACKOPTS
-
+# Test everything else.
 for pkg in hunit-dejafu tasty-dejafu async-dejafu; do
-  testcmd "${pkg}" stack $STACKOPTS test $pkg
+  testcmd $pkg $STACKOPTS
 done
