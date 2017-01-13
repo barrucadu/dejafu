@@ -440,9 +440,11 @@ dependentActions memtype ds a1 a2 = case (a1, a2) of
   -- Unsynchronised reads and writes are always dependent, even under
   -- a relaxed memory model, as an unsynchronised write gives rise to
   -- a commit, which synchronises.
-  (UnsynchronisedRead  r1, UnsynchronisedWrite r2) -> r1 == r2
-  (UnsynchronisedWrite r1, UnsynchronisedRead  r2) -> r1 == r2
-  (UnsynchronisedWrite r1, UnsynchronisedWrite r2) -> r1 == r2
+  (UnsynchronisedRead          r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> a2 /= UnsynchronisedRead r1
+  (UnsynchronisedWrite         r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
+  (PartiallySynchronisedWrite  r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
+  (PartiallySynchronisedModify r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
+  (SynchronisedModify          r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
 
   -- Unsynchronised writes and synchronisation where the buffer is not
   -- empty.
