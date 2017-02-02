@@ -3,6 +3,7 @@
 module Cases.SingleThreaded where
 
 import Control.Exception (ArithException(..), ArrayException(..))
+import Control.Monad (void)
 import Test.DejaFu (Failure(..), gives, gives')
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
@@ -10,7 +11,7 @@ import Test.HUnit (test)
 import Test.HUnit.DejaFu (testDejafu)
 
 import Control.Concurrent.Classy
-import Control.Monad.STM.Class
+import Test.DejaFu.Conc (Conc, subconcurrency)
 
 import Utils
 
@@ -57,6 +58,12 @@ tests =
   , testGroup "Capabilities" . hUnitTestToTests $ test
     [ testDejafu capsGet "get" $ gives' [True]
     , testDejafu capsSet "set" $ gives' [True]
+    ]
+
+  , testGroup "Subconcurrency" . hUnitTestToTests $ test
+    [ testDejafu scDeadlock1 "deadlock1" $ gives' [Left Deadlock]
+    , testDejafu scDeadlock2 "deadlock2" $ gives' [(Left Deadlock, ())]
+    , testDejafu scSuccess   "success"   $ gives' [Right ()]
     ]
   ]
 
@@ -252,3 +259,22 @@ capsSet = do
   caps <- getNumCapabilities
   setNumCapabilities $ caps + 1
   (== caps + 1) <$> getNumCapabilities
+
+--------------------------------------------------------------------------------
+-- Subconcurrency
+
+-- | Subcomputation deadlocks.
+scDeadlock1 :: Monad n => Conc n r (Either Failure ())
+scDeadlock1 = subconcurrency (newEmptyMVar >>= readMVar)
+
+-- | Subcomputation deadlocks, and action after it still happens.
+scDeadlock2 :: Monad n => Conc n r (Either Failure (), ())
+scDeadlock2 = do
+  var <- newMVar ()
+  (,) <$> subconcurrency (putMVar var ()) <*> readMVar var
+
+-- | Subcomputation successfully completes.
+scSuccess :: Monad n => Conc n r (Either Failure ())
+scSuccess = do
+  var <- newMVar ()
+  subconcurrency (takeMVar var)

@@ -11,6 +11,7 @@ import Test.HUnit.DejaFu (testDejafu)
 
 import Control.Concurrent.Classy
 import Control.Monad.STM.Class
+import Test.DejaFu.Conc (Conc, subconcurrency)
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>), (<*>))
@@ -48,6 +49,13 @@ tests =
 
   , testGroup "Daemons" . hUnitTestToTests $ test
     [ testDejafu schedDaemon "schedule daemon" $ gives' [0,1]
+    ]
+
+  , testGroup "Subconcurrency" . hUnitTestToTests $ test
+    [ testDejafu scDeadlock1 "deadlock1" $ gives' [Left Deadlock, Right ()]
+    , testDejafu scDeadlock2 "deadlock2" $ gives' [(Left Deadlock, ()), (Right (), ())]
+    , testDejafu scSuccess   "success"   $ gives' [Right ()]
+    , testDejafu scIllegal   "illegal"   $ gives  [Left IllegalSubconcurrency]
     ]
   ]
 
@@ -207,3 +215,40 @@ schedDaemon = do
   x <- newCRef 0
   _ <- fork $ myThreadId >> writeCRef x 1
   readCRef x
+
+--------------------------------------------------------------------------------
+-- Subconcurrency
+
+-- | Subcomputation deadlocks sometimes.
+scDeadlock1 :: Monad n => Conc n r (Either Failure ())
+scDeadlock1 = do
+  var <- newEmptyMVar
+  subconcurrency $ do
+    void . fork $ putMVar var ()
+    putMVar var ()
+
+-- | Subcomputation deadlocks sometimes, and action after it still
+-- happens.
+scDeadlock2 :: Monad n => Conc n r (Either Failure (), ())
+scDeadlock2 = do
+  var <- newEmptyMVar
+  res <- subconcurrency $ do
+    void . fork $ putMVar var ()
+    putMVar var ()
+  (,) <$> pure res <*> readMVar var
+
+-- | Subcomputation successfully completes.
+scSuccess :: Monad n => Conc n r (Either Failure ())
+scSuccess = do
+  var <- newMVar ()
+  subconcurrency $ do
+    out <- newEmptyMVar
+    void . fork $ takeMVar var >>= putMVar out
+    takeMVar out
+
+-- | Illegal usage
+scIllegal :: Monad n => Conc n r ()
+scIllegal = do
+  var <- newEmptyMVar
+  void . fork $ readMVar var
+  void . subconcurrency $ pure ()

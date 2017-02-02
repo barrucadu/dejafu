@@ -50,12 +50,10 @@ import Control.Exception (MaskingState(..))
 import qualified Control.Monad.Base as Ba
 import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.IO.Class as IO
-import Control.Monad.Ref (MonadRef, newRef, readRef, writeRef)
+import Control.Monad.Ref (MonadRef,)
 import Control.Monad.ST (ST)
 import Data.Dynamic (toDyn)
 import Data.IORef (IORef)
-import qualified Data.Map.Strict as M
-import Data.Maybe (fromJust)
 import Data.STRef (STRef)
 import Test.DejaFu.Schedule
 
@@ -63,7 +61,6 @@ import qualified Control.Monad.Conc.Class as C
 import Test.DejaFu.Common
 import Test.DejaFu.Conc.Internal
 import Test.DejaFu.Conc.Internal.Common
-import Test.DejaFu.Conc.Internal.Threading
 import Test.DejaFu.STM
 
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
@@ -182,23 +179,9 @@ runConcurrent :: MonadRef r n
               -> s
               -> Conc n r a
               -> n (Either Failure a, s, Trace)
-runConcurrent sched memtype s (C conc) = do
-  ref <- newRef Nothing
-
-  let c = runCont conc (AStop . writeRef ref . Just . Right)
-  let threads = launch' Unmasked initialThread (const c) M.empty
-
-  (s', trace) <- runThreads runTransaction
-                           sched
-                           memtype
-                           s
-                           threads
-                           initialIdSource
-                           ref
-
-  out <- readRef ref
-
-  pure (fromJust out, s', reverse trace)
+runConcurrent sched memtype s ma = do
+  (res, s', trace) <- runConcurrency runTransaction sched memtype s (unC ma)
+  pure (res, s', reverse trace)
 
 -- | Run a concurrent computation and return its result.
 --
