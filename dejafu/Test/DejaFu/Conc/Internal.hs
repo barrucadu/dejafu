@@ -155,6 +155,7 @@ stepThread runstm memtype action idSource tid threads wb caps = case action of
   AReturn     c    -> stepReturn c
   AMessage    m c  -> stepMessage m c
   AStop       na   -> stepStop na
+  ASub        ma k -> stepSubconcurrency ma k
 
   where
     -- | Start a new thread, assigning it the next 'ThreadId'
@@ -370,6 +371,13 @@ stepThread runstm memtype action idSource tid threads wb caps = case action of
 
     -- | Kill the current thread.
     stepStop na = na >> simple (kill tid threads) Stop
+
+    -- | Run a subconcurrent computation.
+    stepSubconcurrency ma k
+      | tid /= initialThread = return (Left IllegalSubconcurrency)
+      | M.size threads > 1   = return (Left IllegalSubconcurrency)
+      -- todo: this case!
+      | otherwise = return (Left IllegalSubconcurrency)
 
     -- | Helper for actions which don't touch the 'IdSource' or
     -- 'WriteBuffer'

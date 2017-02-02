@@ -28,6 +28,7 @@ module Test.DejaFu.Conc
   , Failure(..)
   , MemType(..)
   , runConcurrent
+  , subconcurrency
 
   -- * Execution traces
   , Trace
@@ -198,3 +199,12 @@ runConcurrent sched memtype s (C conc) = do
   out <- readRef ref
 
   pure (fromJust out, s', reverse trace)
+
+-- | Run a concurrent computation and return its result.
+--
+-- This can only be called in the main thread, when no other threads
+-- exist. Calls to 'subconcurrency' cannot be nested. Violating either
+-- of these conditions will result in the computation failing with
+-- @IllegalSubconcurrency@.
+subconcurrency :: Conc n r a -> Conc n r (Either Failure a)
+subconcurrency ma = toConc (ASub (unC ma))

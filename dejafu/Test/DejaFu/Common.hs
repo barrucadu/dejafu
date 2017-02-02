@@ -272,6 +272,8 @@ data ThreadAction =
   -- ^ A '_concMessage' annotation was processed.
   | Stop
   -- ^ Cease execution and terminate.
+  | Subconcurrency
+  -- ^ Start executing an action with @subconcurrency@.
   deriving Show
 
 instance NFData ThreadAction where
@@ -401,6 +403,8 @@ data Lookahead =
   -- ^ Will process a _concMessage' annotation.
   | WillStop
   -- ^ Will cease execution and terminate.
+  | WillSubconcurrency
+  -- ^ Will execute an action with @subconcurrency@.
   deriving Show
 
 instance NFData Lookahead where
@@ -462,6 +466,7 @@ rewind LiftIO = Just WillLiftIO
 rewind Return = Just WillReturn
 rewind (Message m) = Just (WillMessage m)
 rewind Stop = Just WillStop
+rewind Subconcurrency = Just WillSubconcurrency
 
 -- | Check if an operation could enable another thread.
 willRelease :: Lookahead -> Bool
@@ -716,6 +721,9 @@ data Failure =
   -- ^ The computation became blocked indefinitely on @TVar@s.
   | UncaughtException
   -- ^ An uncaught exception bubbled to the top of the computation.
+  | IllegalSubconcurrency
+  -- ^ Calls to @subconcurrency@ were nested, or attempted when
+  -- multiple threads existed.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)
 
 instance NFData Failure where
@@ -723,11 +731,12 @@ instance NFData Failure where
 
 -- | Pretty-print a failure
 showFail :: Failure -> String
-showFail Abort             = "[abort]"
-showFail Deadlock          = "[deadlock]"
-showFail STMDeadlock       = "[stm-deadlock]"
-showFail InternalError     = "[internal-error]"
+showFail Abort = "[abort]"
+showFail Deadlock = "[deadlock]"
+showFail STMDeadlock = "[stm-deadlock]"
+showFail InternalError = "[internal-error]"
 showFail UncaughtException = "[exception]"
+showFail IllegalSubconcurrency = "[illegal-subconcurrency]"
 
 -------------------------------------------------------------------------------
 -- Memory Models

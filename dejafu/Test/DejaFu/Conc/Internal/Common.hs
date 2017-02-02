@@ -134,6 +134,8 @@ data Action n r s =
   | ACommit ThreadId CRefId
   | AStop (n ())
 
+  | forall a. ASub (M n r s a) (Either Failure a -> Action n r s)
+
 --------------------------------------------------------------------------------
 -- * Scheduling & Traces
 
@@ -170,3 +172,4 @@ lookahead = fromList . lookahead' where
   lookahead' (AYield k)              = WillYield : lookahead' k
   lookahead' (AReturn k)             = WillReturn : lookahead' k
   lookahead' (AStop _)               = [WillStop]
+  lookahead' (ASub _ _)              = [WillSubconcurrency]
