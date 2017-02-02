@@ -66,7 +66,7 @@ import Test.DejaFu.STM
 {-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
 {-# ANN module ("HLint: ignore Use const"    :: String) #-}
 
-newtype Conc n r a = C { unC :: M n r (STMLike n r) a } deriving (Functor, Applicative, Monad)
+newtype Conc n r a = C { unC :: M n r a } deriving (Functor, Applicative, Monad)
 
 -- | A 'MonadConc' implementation using @ST@, this should be preferred
 -- if you do not need 'liftIO'.
@@ -75,10 +75,10 @@ type ConcST t = Conc (ST t) (STRef t)
 -- | A 'MonadConc' implementation using @IO@.
 type ConcIO = Conc IO IORef
 
-toConc :: ((a -> Action n r (STMLike n r)) -> Action n r (STMLike n r)) -> Conc n r a
+toConc :: ((a -> Action n r) -> Action n r) -> Conc n r a
 toConc = C . cont
 
-wrap :: (M n r (STMLike n r) a -> M n r (STMLike n r) a) -> Conc n r a -> Conc n r a
+wrap :: (M n r a -> M n r a) -> Conc n r a -> Conc n r a
 wrap f = C . f . unC
 
 instance IO.MonadIO ConcIO where
@@ -180,7 +180,7 @@ runConcurrent :: MonadRef r n
               -> Conc n r a
               -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s ma = do
-  (res, s', trace) <- runConcurrency runTransaction sched memtype s (unC ma)
+  (res, s', trace) <- runConcurrency sched memtype s (unC ma)
   pure (res, s', reverse trace)
 
 -- | Run a concurrent computation and return its result.

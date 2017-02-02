@@ -28,7 +28,7 @@ import Test.DejaFu.Conc.Internal.Common
 import Test.DejaFu.Conc.Internal.Memory
 import Test.DejaFu.Conc.Internal.Threading
 import Test.DejaFu.Schedule
-import Test.DejaFu.STM (Result(..))
+import Test.DejaFu.STM (Result(..), runTransaction)
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 {-# ANN module ("HLint: ignore Use const"           :: String) #-}
@@ -41,20 +41,18 @@ import Test.DejaFu.STM (Result(..))
 -- final state of the scheduler, and an execution trace (in reverse
 -- order).
 runConcurrency :: MonadRef r n
-               => (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
-               -> Scheduler g
+               => Scheduler g
                -> MemType
                -> g
-               -> M n r s a
+               -> M n r a
                -> n (Either Failure a, g, Trace)
-runConcurrency runstm sched memtype g ma = do
+runConcurrency sched memtype g ma = do
   ref <- newRef Nothing
 
   let c = runCont ma (AStop . writeRef ref . Just . Right)
   let threads = launch' Unmasked initialThread (const c) M.empty
 
-  (g', trace) <- runThreads runstm
-                            sched
+  (g', trace) <- runThreads sched
                             memtype
                             g
                             threads
@@ -71,9 +69,9 @@ runConcurrency runstm sched memtype g ma = do
 -- efficient to prepend to a list than append. As this function isn't
 -- exposed to users of the library, this is just an internal gotcha to
 -- watch out for.
-runThreads :: MonadRef r n => (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
-           -> Scheduler g -> MemType -> g -> Threads n r s -> IdSource -> r (Maybe (Either Failure a)) -> n (g, Trace)
-runThreads runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer 2 where
+runThreads :: MonadRef r n
+           => Scheduler g -> MemType -> g -> Threads n r -> IdSource -> r (Maybe (Either Failure a)) -> n (g, Trace)
+runThreads sched memtype origg origthreads idsrc ref = go idsrc [] Nothing origg origthreads emptyBuffer 2 where
   go idSource sofar prior g threads wb caps
     | isTerminated  = stop g
     | isDeadlocked  = die g Deadlock
@@ -82,7 +80,7 @@ runThreads runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothin
     | isNonexistant = die g' InternalError
     | isBlocked     = die g' InternalError
     | otherwise = do
-      stepped <- stepThread runstm sched memtype g (_continuation $ fromJust thread) idSource chosen threads wb caps
+      stepped <- stepThread sched memtype g (_continuation $ fromJust thread) idSource chosen threads wb caps
       case stepped of
         Right (threads', idSource', act, wb', caps', mg') -> loop threads' idSource' act (fromMaybe g' mg') wb' caps'
 
@@ -138,29 +136,27 @@ runThreads runstm sched memtype origg origthreads idsrc ref = go idsrc [] Nothin
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
-stepThread :: forall n r s g. MonadRef r n
-  => (forall x. s x -> IdSource -> n (Result x, IdSource, TTrace))
-  -- ^ Run a 'MonadSTM' transaction atomically.
-  -> Scheduler g
+stepThread :: forall n r g. MonadRef r n
+  => Scheduler g
   -- ^ The scheduler.
   -> MemType
   -- ^ The memory model
   -> g
   -- ^ The scheduler state.
-  -> Action n r s
+  -> Action n r
   -- ^ Action to step
   -> IdSource
   -- ^ Source of fresh IDs
   -> ThreadId
   -- ^ ID of the current thread
-  -> Threads n r s
+  -> Threads n r
   -- ^ Current state of threads
   -> WriteBuffer r
   -- ^ @CRef@ write buffer
   -> Int
   -- ^ The number of capabilities
-  -> n (Either Failure (Threads n r s, IdSource, Either (ThreadAction, Trace) ThreadAction, WriteBuffer r, Int, Maybe g))
-stepThread runstm sched memtype g action idSource tid threads wb caps = case action of
+  -> n (Either Failure (Threads n r, IdSource, Either (ThreadAction, Trace) ThreadAction, WriteBuffer r, Int, Maybe g))
+stepThread sched memtype g action idSource tid threads wb caps = case action of
   AFork    n a b   -> stepFork        n a b
   AMyTId   c       -> stepMyTId       c
   AGetNumCapabilities   c -> stepGetNumCapabilities c
@@ -199,9 +195,9 @@ stepThread runstm sched memtype g action idSource tid threads wb caps = case act
     -- Explicit type signature needed for GHC 8. Looks like the
     -- impredicative polymorphism checks got stronger.
     stepFork :: String
-             -> ((forall b. M n r s b -> M n r s b) -> Action n r s)
-             -> (ThreadId -> Action n r s)
-             -> n (Either Failure (Threads n r s, IdSource, Either z ThreadAction, WriteBuffer r, Int, Maybe g))
+             -> ((forall b. M n r b -> M n r b) -> Action n r)
+             -> (ThreadId -> Action n r)
+             -> n (Either Failure (Threads n r, IdSource, Either z ThreadAction, WriteBuffer r, Int, Maybe g))
     stepFork n a b = return $ Right (goto (b newtid) tid threads', idSource', Right (Fork newtid), wb, caps, Nothing) where
       threads' = launch tid newtid a threads
       (idSource', newtid) = nextTId n idSource
@@ -308,7 +304,7 @@ stepThread runstm sched memtype g action idSource tid threads wb caps = case act
 
     -- | Run a STM transaction atomically.
     stepAtom stm c = synchronised $ do
-      (res, idSource', trace) <- runstm stm idSource
+      (res, idSource', trace) <- runTransaction stm idSource
       case res of
         Success _ written val ->
           let (threads', woken) = wake (OnTVar written) threads
@@ -362,9 +358,9 @@ stepThread runstm sched memtype g action idSource tid threads wb caps = case act
     -- Explicit type sig necessary for checking in the prescence of
     -- 'umask', sadly.
     stepMasking :: MaskingState
-                -> ((forall b. M n r s b -> M n r s b) -> M n r s a)
-                -> (a -> Action n r s)
-                -> n (Either Failure (Threads n r s, IdSource, Either z ThreadAction, WriteBuffer r, Int, Maybe g))
+                -> ((forall b. M n r b -> M n r b) -> M n r a)
+                -> (a -> Action n r)
+                -> n (Either Failure (Threads n r, IdSource, Either z ThreadAction, WriteBuffer r, Int, Maybe g))
     stepMasking m ma c = simple threads' $ SetMasking False m where
       a = runCont (ma umask) (AResetMask False False m' . c)
 
@@ -412,7 +408,7 @@ stepThread runstm sched memtype g action idSource tid threads wb caps = case act
     stepSubconcurrency ma c
       | M.size threads > 1 = return (Left IllegalSubconcurrency)
       | otherwise = do
-          (res, g', trace) <- runConcurrency runstm sched memtype g ma
+          (res, g', trace) <- runConcurrency sched memtype g ma
           return $ Right (goto (c res) tid threads, idSource, Left (Subconcurrency, trace), wb, caps, Just g')
 
     -- | Helper for actions which don't touch the 'IdSource' or
