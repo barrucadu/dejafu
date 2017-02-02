@@ -53,6 +53,7 @@ import qualified Control.Monad.IO.Class as IO
 import Control.Monad.Ref (MonadRef,)
 import Control.Monad.ST (ST)
 import Data.Dynamic (toDyn)
+import qualified Data.Foldable as F
 import Data.IORef (IORef)
 import Data.STRef (STRef)
 import Test.DejaFu.Schedule
@@ -181,7 +182,7 @@ runConcurrent :: MonadRef r n
               -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s ma = do
   (res, s', trace) <- runConcurrency sched memtype s (unC ma)
-  pure (res, s', reverse trace)
+  pure (res, s', F.toList trace)
 
 -- | Run a concurrent computation and return its result.
 --

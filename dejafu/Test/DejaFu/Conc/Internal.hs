@@ -17,11 +17,15 @@ module Test.DejaFu.Conc.Internal where
 
 import Control.Exception (MaskingState(..), toException)
 import Control.Monad.Ref (MonadRef, newRef, readRef, writeRef)
+import qualified Data.Foldable as F
 import Data.Functor (void)
 import Data.List (sort)
 import Data.List.NonEmpty (NonEmpty(..), fromList)
 import qualified Data.Map.Strict as M
-import Data.Maybe (fromJust, isJust, isNothing, listToMaybe)
+import Data.Maybe (fromJust, isJust, isNothing)
+import Data.Monoid ((<>))
+import Data.Sequence (Seq, (<|))
+import qualified Data.Sequence as Seq
 
 import Test.DejaFu.Common
 import Test.DejaFu.Conc.Internal.Common
@@ -36,16 +40,19 @@ import Test.DejaFu.STM (Result(..), runTransaction)
 --------------------------------------------------------------------------------
 -- * Execution
 
+-- | 'Trace' but as a sequence.
+type SeqTrace
+  = Seq (Decision, [(ThreadId, NonEmpty Lookahead)], ThreadAction)
+
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the
--- final state of the scheduler, and an execution trace (in reverse
--- order).
+-- final state of the scheduler, and an execution trace.
 runConcurrency :: MonadRef r n
                => Scheduler g
                -> MemType
                -> g
                -> M n r a
-               -> n (Either Failure a, g, Trace)
+               -> n (Either Failure a, g, SeqTrace)
 runConcurrency sched memtype g ma = do
   ref <- newRef Nothing
 
@@ -67,15 +74,12 @@ data Context n r g = Context
   }
 
 -- | Run a collection of threads, until there are no threads left.
---
--- Note: this returns the trace in reverse order, because it's more
--- efficient to prepend to a list than append. As this function isn't
--- exposed to users of the library, this is just an internal gotcha to
--- watch out for.
 runThreads :: MonadRef r n
-           => Scheduler g -> MemType -> r (Maybe (Either Failure a)) -> Context n r g -> n (Context n r g, Trace)
-runThreads sched memtype ref = go [] Nothing where
-  go sofar prior ctx
+           => Scheduler g -> MemType -> r (Maybe (Either Failure a)) -> Context n r g -> n (Context n r g, SeqTrace)
+runThreads sched memtype ref = go Seq.empty [] Nothing where
+  -- sofar is the 'SeqTrace', sofarSched is the @[(Decision,
+  -- ThreadAction)]@ trace the scheduler needs.
+  go sofar sofarSched prior ctx
     | isTerminated  = stop ctx
     | isDeadlocked  = die Deadlock ctx
     | isSTMLocked   = die STMDeadlock ctx
@@ -92,22 +96,23 @@ runThreads sched memtype ref = go [] Nothing where
         Left failure -> die failure $ ctx { cSchedState = g' }
 
     where
-      (choice, g')  = sched (map (\(d,_,a) -> (d,a)) $ reverse sofar) ((\p (_,_,a) -> (p,a)) <$> prior <*> listToMaybe sofar) (fromList $ map (\(t,l:|_) -> (t,l)) runnable') (cSchedState ctx)
+      (choice, g')  = sched sofarSched prior (fromList $ map (\(t,l:|_) -> (t,l)) runnable') (cSchedState ctx)
       chosen        = fromJust choice
       runnable'     = [(t, nextActions t) | t <- sort $ M.keys runnable]
       runnable      = M.filter (isNothing . _blocking) threadsc
       thread        = M.lookup chosen threadsc
-      threadsc      = addCommitThreads (cWriteBuf ctx) (cThreads ctx)
+      threadsc      = addCommitThreads (cWriteBuf ctx) threads
+      threads       = cThreads ctx
       isAborted     = isNothing choice
       isBlocked     = isJust . _blocking $ fromJust thread
       isNonexistant = isNothing thread
-      isTerminated  = initialThread `notElem` M.keys (cThreads ctx)
-      isDeadlocked  = M.null (M.filter (isNothing . _blocking) (cThreads ctx)) &&
-        (((~=  OnMVarFull  undefined) <$> M.lookup initialThread (cThreads ctx)) == Just True ||
-         ((~=  OnMVarEmpty undefined) <$> M.lookup initialThread (cThreads ctx)) == Just True ||
-         ((~=  OnMask      undefined) <$> M.lookup initialThread (cThreads ctx)) == Just True)
-      isSTMLocked = M.null (M.filter (isNothing . _blocking) (cThreads ctx)) &&
-        ((~=  OnTVar []) <$> M.lookup initialThread (cThreads ctx)) == Just True
+      isTerminated  = initialThread `notElem` M.keys threads
+      isDeadlocked  = M.null (M.filter (isNothing . _blocking) threads) &&
+        (((~=  OnMVarFull  undefined) <$> M.lookup initialThread threads) == Just True ||
+         ((~=  OnMVarEmpty undefined) <$> M.lookup initialThread threads) == Just True ||
+         ((~=  OnMask      undefined) <$> M.lookup initialThread threads) == Just True)
+      isSTMLocked = M.null (M.filter (isNothing . _blocking) threads) &&
+        ((~=  OnTVar []) <$> M.lookup initialThread threads) == Just True
 
       unblockWaitingOn tid = fmap unblock where
         unblock thrd = case _blocking thrd of
@@ -115,8 +120,8 @@ runThreads sched memtype ref = go [] Nothing where
           _ -> thrd
 
       decision
-        | Just chosen == prior = Continue
-        | prior `notElem` map (Just . fst) runnable' = Start chosen
+        | Just chosen == (fst <$> prior) = Continue
+        | (fst <$> prior) `notElem` map (Just . fst) runnable' = Start chosen
         | otherwise = SwitchTo chosen
 
       nextActions t = lookahead . _continuation . fromJust $ M.lookup t threadsc
@@ -125,14 +130,16 @@ runThreads sched memtype ref = go [] Nothing where
       die reason finalCtx = writeRef ref (Just $ Left reason) >> stop finalCtx
 
       loop trcOrAct ctx' =
-        let trc = case trcOrAct of
-              Left (act, acts) -> acts ++ [(decision, runnable', act)]
-              Right act -> [(decision, runnable', act)]
-            sofar' =  trc++sofar
+        let (act, trc) = case trcOrAct of
+              Left (a, as) -> (a, (decision, runnable', a) <| as)
+              Right a      -> (a, Seq.singleton (decision, runnable', a))
             threads' = if (interruptible <$> M.lookup chosen (cThreads ctx')) /= Just False
                        then unblockWaitingOn chosen (cThreads ctx')
                        else cThreads ctx'
-        in go sofar' (Just chosen) $ ctx' { cThreads = delCommitThreads threads' }
+            sofar' = sofar <> trc
+            sofarSched' = sofarSched <> map (\(d,_,a) -> (d,a)) (F.toList trc)
+            prior' = Just (chosen, act)
+        in go sofar' sofarSched' prior' $ ctx' { cThreads = delCommitThreads threads' }
 
 --------------------------------------------------------------------------------
 -- * Single-step execution
@@ -150,7 +157,7 @@ stepThread :: forall n r g. MonadRef r n
   -- ^ Action to step
   -> Context n r g
   -- ^ The execution context.
-  -> n (Either Failure (Context n r g, Either (ThreadAction, Trace) ThreadAction))
+  -> n (Either Failure (Context n r g, Either (ThreadAction, SeqTrace) ThreadAction))
 stepThread sched memtype tid action ctx = case action of
   AFork n a b -> stepFork n a b
   AMyTId c -> stepMyTId c
