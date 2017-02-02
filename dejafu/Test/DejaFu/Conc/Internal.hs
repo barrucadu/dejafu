@@ -410,8 +410,7 @@ stepThread runstm sched memtype g action idSource tid threads wb caps = case act
 
     -- | Run a subconcurrent computation.
     stepSubconcurrency ma c
-      | tid /= initialThread = return (Left IllegalSubconcurrency)
-      | M.size threads > 1   = return (Left IllegalSubconcurrency)
+      | M.size threads > 1 = return (Left IllegalSubconcurrency)
       | otherwise = do
           (res, g', trace) <- runConcurrency runstm sched memtype g ma
           return $ Right (goto (c res) tid threads, idSource, Left (Subconcurrency, trace), wb, caps, Just g')
