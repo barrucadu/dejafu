@@ -159,188 +159,150 @@ stepThread :: forall n r g. MonadRef r n
   -- ^ The execution context.
   -> n (Either Failure (Context n r g, Either (ThreadAction, SeqTrace) ThreadAction))
 stepThread sched memtype tid action ctx = case action of
-  AFork n a b -> stepFork n a b
-  AMyTId c -> stepMyTId c
-  AGetNumCapabilities c -> stepGetNumCapabilities c
-  ASetNumCapabilities i c -> stepSetNumCapabilities i c
-  AYield c -> stepYield c
-  ANewVar n c -> stepNewVar n c
-  APutVar var a c -> stepPutVar var a c
-  ATryPutVar var a c -> stepTryPutVar var a c
-  AReadVar var c -> stepReadVar var c
-  ATakeVar var c -> stepTakeVar var c
-  ATryTakeVar var c -> stepTryTakeVar var c
-  ANewRef n a c -> stepNewRef n a c
-  AReadRef ref c -> stepReadRef ref c
-  AReadRefCas ref c -> stepReadRefCas ref c
-  AModRef ref f c -> stepModRef ref f c
-  AModRefCas ref f c -> stepModRefCas ref f c
-  AWriteRef ref a c -> stepWriteRef ref a c
-  ACasRef ref tick a c -> stepCasRef ref tick a c
-  ACommit t c -> stepCommit t c
-  AAtom stm c -> stepAtom stm c
-  ALift na -> stepLift na
-  AThrow e -> stepThrow e
-  AThrowTo t e c -> stepThrowTo t e c
-  ACatching h ma c -> stepCatching h ma c
-  APopCatching a -> stepPopCatching a
-  AMasking m ma c -> stepMasking m ma c
-  AResetMask b1 b2 m c -> stepResetMask b1 b2 m c
-  AReturn c -> stepReturn c
-  AMessage m c  -> stepMessage m c
-  AStop na -> stepStop na
-  ASub ma k -> stepSubconcurrency ma k
+    -- start a new thread, assigning it the next 'ThreadId'
+    AFork n a b -> pure . Right $
+        let threads' = launch tid newtid a (cThreads ctx)
+            (idSource', newtid) = nextTId n (cIdSource ctx)
+        in (ctx { cThreads = goto (b newtid) tid threads', cIdSource = idSource' }, Right (Fork newtid))
 
-  where
-    -- | Start a new thread, assigning it the next 'ThreadId'
-    --
-    -- Explicit type signature needed for GHC 8. Looks like the
-    -- impredicative polymorphism checks got stronger.
-    stepFork :: String
-             -> ((forall b. M n r b -> M n r b) -> Action n r)
-             -> (ThreadId -> Action n r)
-             -> n (Either x (Context n r g, Either z ThreadAction))
-    stepFork n a b = return $ Right (ctx { cThreads = goto (b newtid) tid threads', cIdSource = idSource' }, Right (Fork newtid)) where
-      threads' = launch tid newtid a (cThreads ctx)
-      (idSource', newtid) = nextTId n (cIdSource ctx)
+    -- get the 'ThreadId' of the current thread
+    AMyTId c -> simple (goto (c tid) tid (cThreads ctx)) MyThreadId
 
-    -- | Get the 'ThreadId' of the current thread
-    stepMyTId c = simple (goto (c tid) tid (cThreads ctx)) MyThreadId
+    -- get the number of capabilities
+    AGetNumCapabilities c -> simple (goto (c (cCaps ctx)) tid (cThreads ctx)) $ GetNumCapabilities (cCaps ctx)
 
-    -- | Get the number of capabilities
-    stepGetNumCapabilities c = simple (goto (c (cCaps ctx)) tid (cThreads ctx)) $ GetNumCapabilities (cCaps ctx)
+    -- set the number of capabilities
+    ASetNumCapabilities i c -> pure . Right $
+      (ctx { cThreads = goto c tid (cThreads ctx), cCaps = i }, Right (SetNumCapabilities i))
 
-    -- | Set the number of capabilities
-    stepSetNumCapabilities i c = return $ Right (ctx { cThreads = goto c tid (cThreads ctx), cCaps = i }, Right (SetNumCapabilities i))
+    -- yield the current thread
+    AYield c -> simple (goto c tid (cThreads ctx)) Yield
 
-    -- | Yield the current thread
-    stepYield c = simple (goto c tid (cThreads ctx)) Yield
+    -- create a new @MVar@, using the next 'MVarId'.
+    ANewVar n c -> do
+      let (idSource', newmvid) = nextMVId n (cIdSource ctx)
+      ref <- newRef Nothing
+      let mvar = MVar newmvid ref
+      pure $ Right (ctx { cThreads = goto (c mvar) tid (cThreads ctx), cIdSource = idSource' }, Right (NewVar newmvid))
 
-    -- | Put a value into a @MVar@, blocking the thread until it's
-    -- empty.
-    stepPutVar cvar@(MVar cvid _) a c = synchronised $ do
+    -- put a value into a @MVar@, blocking the thread until it's empty.
+    APutVar cvar@(MVar cvid _) a c -> synchronised $ do
       (success, threads', woken) <- putIntoMVar cvar a c tid (cThreads ctx)
       simple threads' $ if success then PutVar cvid woken else BlockedPutVar cvid
 
-    -- | Try to put a value into a @MVar@, without blocking.
-    stepTryPutVar cvar@(MVar cvid _) a c = synchronised $ do
+    -- try to put a value into a @MVar@, without blocking.
+    ATryPutVar cvar@(MVar cvid _) a c -> synchronised $ do
       (success, threads', woken) <- tryPutIntoMVar cvar a c tid (cThreads ctx)
       simple threads' $ TryPutVar cvid success woken
 
-    -- | Get the value from a @MVar@, without emptying, blocking the
+    -- get the value from a @MVar@, without emptying, blocking the
     -- thread until it's full.
-    stepReadVar cvar@(MVar cvid _) c = synchronised $ do
+    AReadVar cvar@(MVar cvid _) c -> synchronised $ do
       (success, threads', _) <- readFromMVar cvar c tid (cThreads ctx)
       simple threads' $ if success then ReadVar cvid else BlockedReadVar cvid
 
-    -- | Take the value from a @MVar@, blocking the thread until it's
+    -- take the value from a @MVar@, blocking the thread until it's
     -- full.
-    stepTakeVar cvar@(MVar cvid _) c = synchronised $ do
+    ATakeVar cvar@(MVar cvid _) c -> synchronised $ do
       (success, threads', woken) <- takeFromMVar cvar c tid (cThreads ctx)
       simple threads' $ if success then TakeVar cvid woken else BlockedTakeVar cvid
 
-    -- | Try to take the value from a @MVar@, without blocking.
-    stepTryTakeVar cvar@(MVar cvid _) c = synchronised $ do
+    -- try to take the value from a @MVar@, without blocking.
+    ATryTakeVar cvar@(MVar cvid _) c -> synchronised $ do
       (success, threads', woken) <- tryTakeFromMVar cvar c tid (cThreads ctx)
       simple threads' $ TryTakeVar cvid success woken
 
-    -- | Read from a @CRef@.
-    stepReadRef cref@(CRef crid _) c = do
+    -- create a new @CRef@, using the next 'CRefId'.
+    ANewRef n a c -> do
+      let (idSource', newcrid) = nextCRId n (cIdSource ctx)
+      ref <- newRef (M.empty, 0, a)
+      let cref = CRef newcrid ref
+      pure $ Right (ctx { cThreads = goto (c cref) tid (cThreads ctx), cIdSource = idSource' }, Right (NewRef newcrid))
+
+    -- read from a @CRef@.
+    AReadRef cref@(CRef crid _) c -> do
       val <- readCRef cref tid
       simple (goto (c val) tid (cThreads ctx)) $ ReadRef crid
 
-    -- | Read from a @CRef@ for future compare-and-swap operations.
-    stepReadRefCas cref@(CRef crid _) c = do
+    -- read from a @CRef@ for future compare-and-swap operations.
+    AReadRefCas cref@(CRef crid _) c -> do
       tick <- readForTicket cref tid
       simple (goto (c tick) tid (cThreads ctx)) $ ReadRefCas crid
 
-    -- | Modify a @CRef@.
-    stepModRef cref@(CRef crid _) f c = synchronised $ do
+    -- modify a @CRef@.
+    AModRef cref@(CRef crid _) f c -> synchronised $ do
       (new, val) <- f <$> readCRef cref tid
       writeImmediate cref new
       simple (goto (c val) tid (cThreads ctx)) $ ModRef crid
 
-    -- | Modify a @CRef@ using a compare-and-swap.
-    stepModRefCas cref@(CRef crid _) f c = synchronised $ do
+    -- modify a @CRef@ using a compare-and-swap.
+    AModRefCas cref@(CRef crid _) f c -> synchronised $ do
       tick@(Ticket _ _ old) <- readForTicket cref tid
       let (new, val) = f old
       void $ casCRef cref tid tick new
       simple (goto (c val) tid (cThreads ctx)) $ ModRefCas crid
 
-    -- | Write to a @CRef@ without synchronising
-    stepWriteRef cref@(CRef crid _) a c = case memtype of
-      -- Write immediately.
+    -- write to a @CRef@ without synchronising.
+    AWriteRef cref@(CRef crid _) a c -> case memtype of
+      -- write immediately.
       SequentialConsistency -> do
         writeImmediate cref a
         simple (goto c tid (cThreads ctx)) $ WriteRef crid
-
-      -- Add to buffer using thread id.
+      -- add to buffer using thread id.
       TotalStoreOrder -> do
         wb' <- bufferWrite (cWriteBuf ctx) (tid, Nothing) cref a
-        return $ Right (ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Right (WriteRef crid))
-
-      -- Add to buffer using both thread id and cref id
+        pure $ Right (ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Right (WriteRef crid))
+      -- add to buffer using both thread id and cref id
       PartialStoreOrder -> do
         wb' <- bufferWrite (cWriteBuf ctx) (tid, Just crid) cref a
-        return $ Right (ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Right (WriteRef crid))
+        pure $ Right (ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Right (WriteRef crid))
 
-    -- | Perform a compare-and-swap on a @CRef@.
-    stepCasRef cref@(CRef crid _) tick a c = synchronised $ do
+    -- perform a compare-and-swap on a @CRef@.
+    ACasRef cref@(CRef crid _) tick a c -> synchronised $ do
       (suc, tick') <- casCRef cref tid tick a
       simple (goto (c (suc, tick')) tid (cThreads ctx)) $ CasRef crid suc
 
-    -- | Commit a @CRef@ write
-    stepCommit t c = do
+    -- commit a @CRef@ write
+    ACommit t c -> do
       wb' <- case memtype of
-        -- Shouldn't ever get here
+        -- shouldn't ever get here
         SequentialConsistency ->
           error "Attempting to commit under SequentialConsistency"
-
-        -- Commit using the thread id.
+        -- commit using the thread id.
         TotalStoreOrder -> commitWrite (cWriteBuf ctx) (t, Nothing)
-
-        -- Commit using the cref id.
+        -- commit using the cref id.
         PartialStoreOrder -> commitWrite (cWriteBuf ctx) (t, Just c)
+      pure $ Right (ctx { cWriteBuf = wb' }, Right (CommitRef t c))
 
-      return $ Right (ctx { cWriteBuf = wb' }, Right (CommitRef t c))
-
-    -- | Run a STM transaction atomically.
-    stepAtom stm c = synchronised $ do
+    -- run a STM transaction atomically.
+    AAtom stm c -> synchronised $ do
       (res, idSource', trace) <- runTransaction stm (cIdSource ctx)
       case res of
         Success _ written val ->
           let (threads', woken) = wake (OnTVar written) (cThreads ctx)
-          in return $ Right (ctx { cThreads = goto (c val) tid threads', cIdSource = idSource' }, Right (STM trace woken))
+          in pure $ Right (ctx { cThreads = goto (c val) tid threads', cIdSource = idSource' }, Right (STM trace woken))
         Retry touched ->
           let threads' = block (OnTVar touched) tid (cThreads ctx)
-          in return $ Right (ctx { cThreads = threads', cIdSource = idSource'}, Right (BlockedSTM trace))
+          in pure $ Right (ctx { cThreads = threads', cIdSource = idSource'}, Right (BlockedSTM trace))
         Exception e -> do
           res' <- stepThrow e
-          return $ case res' of
+          pure $ case res' of
             Right (ctx', _) -> Right (ctx' { cIdSource = idSource' }, Right Throw)
             Left err -> Left err
 
-    -- | Run a subcomputation in an exception-catching context.
-    stepCatching h ma c = simple threads' Catching where
-      a     = runCont ma      (APopCatching . c)
-      e exc = runCont (h exc) (APopCatching . c)
+    -- lift an action from the underlying monad into the @Conc@
+    -- computation.
+    ALift na -> do
+      a <- na
+      simple (goto a tid (cThreads ctx)) LiftIO
 
-      threads' = goto a tid (catching e tid (cThreads ctx))
-
-    -- | Pop the top exception handler from the thread's stack.
-    stepPopCatching a = simple threads' PopCatching where
-      threads' = goto a tid (uncatching tid (cThreads ctx))
-
-    -- | Throw an exception, and propagate it to the appropriate
+    -- throw an exception, and propagate it to the appropriate
     -- handler.
-    stepThrow e =
-      case propagate (toException e) tid (cThreads ctx) of
-        Just threads' -> simple threads' Throw
-        Nothing -> return $ Left UncaughtException
+    AThrow e -> stepThrow e
 
-    -- | Throw an exception to the target thread, and propagate it to
+    -- throw an exception to the target thread, and propagate it to
     -- the appropriate handler.
-    stepThrowTo t e c = synchronised $
+    AThrowTo t e c -> synchronised $
       let threads' = goto c tid (cThreads ctx)
           blocked  = block (OnMask t) tid (cThreads ctx)
       in case M.lookup t (cThreads ctx) of
@@ -348,76 +310,68 @@ stepThread sched memtype tid action ctx = case action of
              | interruptible thread -> case propagate (toException e) t threads' of
                Just threads'' -> simple threads'' $ ThrowTo t
                Nothing
-                 | t == initialThread -> return $ Left UncaughtException
+                 | t == initialThread -> pure $ Left UncaughtException
                  | otherwise -> simple (kill t threads') $ ThrowTo t
              | otherwise -> simple blocked $ BlockedThrowTo t
            Nothing -> simple threads' $ ThrowTo t
 
-    -- | Execute a subcomputation with a new masking state, and give
-    -- it a function to run a computation with the current masking
-    -- state.
-    --
-    -- Explicit type sig necessary for checking in the prescence of
-    -- 'umask', sadly.
-    stepMasking :: MaskingState
-                -> ((forall b. M n r b -> M n r b) -> M n r a)
-                -> (a -> Action n r)
-                -> n (Either x (Context n r g, Either z ThreadAction))
-    stepMasking m ma c = simple threads' $ SetMasking False m where
-      a = runCont (ma umask) (AResetMask False False m' . c)
+    -- run a subcomputation in an exception-catching context.
+    ACatching h ma c ->
+      let a        = runCont ma      (APopCatching . c)
+          e exc    = runCont (h exc) (APopCatching . c)
+          threads' = goto a tid (catching e tid (cThreads ctx))
+      in simple threads' Catching
 
-      m' = _masking . fromJust $ M.lookup tid (cThreads ctx)
-      umask mb = resetMask True m' >> mb >>= \b -> resetMask False m >> return b
-      resetMask typ ms = cont $ \k -> AResetMask typ True ms $ k ()
+    -- pop the top exception handler from the thread's stack.
+    APopCatching a ->
+      let threads' = goto a tid (uncatching tid (cThreads ctx))
+      in simple threads' PopCatching
 
-      threads' = goto a tid (mask m tid (cThreads ctx))
+    -- execute a subcomputation with a new masking state, and give it
+    -- a function to run a computation with the current masking state.
+    AMasking m ma c ->
+      let a = runCont (ma umask) (AResetMask False False m' . c)
+          m' = _masking . fromJust $ M.lookup tid (cThreads ctx)
+          umask mb = resetMask True m' >> mb >>= \b -> resetMask False m >> pure b
+          resetMask typ ms = cont $ \k -> AResetMask typ True ms $ k ()
+          threads' = goto a tid (mask m tid (cThreads ctx))
+      in simple threads' $ SetMasking False m
 
-    -- | Reset the masking thread of the state.
-    stepResetMask b1 b2 m c = simple threads' act where
-      act      = (if b1 then SetMasking else ResetMasking) b2 m
-      threads' = goto c tid (mask m tid (cThreads ctx))
 
-    -- | Create a new @MVar@, using the next 'MVarId'.
-    stepNewVar n c = do
-      let (idSource', newmvid) = nextMVId n (cIdSource ctx)
-      ref <- newRef Nothing
-      let mvar = MVar newmvid ref
-      return $ Right (ctx { cThreads = goto (c mvar) tid (cThreads ctx), cIdSource = idSource' }, Right (NewVar newmvid))
+    -- reset the masking thread of the state.
+    AResetMask b1 b2 m c ->
+      let act      = (if b1 then SetMasking else ResetMasking) b2 m
+          threads' = goto c tid (mask m tid (cThreads ctx))
+      in simple threads' act
 
-    -- | Create a new @CRef@, using the next 'CRefId'.
-    stepNewRef n a c = do
-      let (idSource', newcrid) = nextCRId n (cIdSource ctx)
-      ref <- newRef (M.empty, 0, a)
-      let cref = CRef newcrid ref
-      return $ Right (ctx { cThreads = goto (c cref) tid (cThreads ctx), cIdSource = idSource' }, Right (NewRef newcrid))
+    -- execute a 'return' or 'pure'.
+    AReturn c -> simple (goto c tid (cThreads ctx)) Return
 
-    -- | Lift an action from the underlying monad into the @Conc@
-    -- computation.
-    stepLift na = do
-      a <- na
-      simple (goto a tid (cThreads ctx)) LiftIO
+    -- add a message to the trace.
+    AMessage m c  -> simple (goto c tid (cThreads ctx)) (Message m)
 
-    -- | Execute a 'return' or 'pure'.
-    stepReturn c = simple (goto c tid (cThreads ctx)) Return
+    -- kill the current thread.
+    AStop na -> na >> simple (kill tid (cThreads ctx)) Stop
 
-    -- | Add a message to the trace.
-    stepMessage m c = simple (goto c tid (cThreads ctx)) (Message m)
-
-    -- | Kill the current thread.
-    stepStop na = na >> simple (kill tid (cThreads ctx)) Stop
-
-    -- | Run a subconcurrent computation.
-    stepSubconcurrency ma c
-      | M.size (cThreads ctx) > 1 = return (Left IllegalSubconcurrency)
-      | otherwise = do
+    -- run a subconcurrent computation.
+    ASub ma c
+      | M.size (cThreads ctx) > 1 -> pure (Left IllegalSubconcurrency)
+      | otherwise -> do
           (res, g', trace) <- runConcurrency sched memtype (cSchedState ctx) ma
-          return $ Right (ctx { cThreads = goto (c res) tid (cThreads ctx), cSchedState = g' }, Left (Subconcurrency, trace))
+          pure $ Right (ctx { cThreads = goto (c res) tid (cThreads ctx), cSchedState = g' }, Left (Subconcurrency, trace))
+  where
 
-    -- | Helper for actions which don't touch the 'IdSource' or
-    -- 'WriteBuffer'
-    simple threads' act = return $ Right (ctx { cThreads = threads' }, Right act)
+    -- this is not inline in the long @case@ above as it's needed by
+    -- @AAtom@, @AThrow@, and @AThrowTo@.
+    stepThrow e =
+      case propagate (toException e) tid (cThreads ctx) of
+        Just threads' -> simple threads' Throw
+        Nothing -> pure $ Left UncaughtException
 
-    -- | Helper for actions impose a write barrier.
+    -- helper for actions which only change the threads.
+    simple threads' act = pure $ Right (ctx { cThreads = threads' }, Right act)
+
+    -- helper for actions impose a write barrier.
     synchronised ma = do
       writeBarrier (cWriteBuf ctx)
       res <- ma
