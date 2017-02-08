@@ -18,7 +18,7 @@ import Data.List (foldl', intercalate, partition, sortBy)
 import Data.List.NonEmpty (NonEmpty(..), toList)
 import Data.Ord (Down(..), comparing)
 import Data.Map.Strict (Map)
-import Data.Maybe (fromJust, isJust, isNothing, mapMaybe)
+import Data.Maybe (catMaybes, fromJust, isJust, isNothing)
 import qualified Data.Map.Strict as M
 import Data.Set (Set)
 import qualified Data.Set as S
@@ -277,13 +277,21 @@ findBacktrackSteps dependency backtrack boundKill bcktrck = go initialDepState S
                  , let is = idxs' u n v tagged
                  , not $ null is]
 
-        idxs' u n v = mapMaybe go' where
-          go' (i, b)
+        idxs' u n v = catMaybes . go' True where
+          go' final ((i,b):rest)
+            -- Don't cross subconcurrency boundaries
+            | isSubC final b = []
             -- If this is the final action in the trace and the
             -- execution was killed due to nothing being within bounds
             -- (@killsEarly == True@) assume worst-case dependency.
-            | bcktThreadid b == v && (killsEarly || isDependent b) = Just i
-            | otherwise = Nothing
+            | bcktThreadid b == v && (killsEarly || isDependent b) = Just i : go' False rest
+            | otherwise = go' False rest
+          go' _ [] = []
+
+          isSubC final b = case bcktDecision b of
+            (_, Stop) -> not final && bcktThreadid b == initialThread
+            (_, Subconcurrency) -> bcktThreadid b == initialThread
+            _ -> False
 
           isDependent b = dependency (bcktState b) (bcktThreadid b, snd $ bcktDecision b) (u, n)
     in foldl' (\b (i, u) -> backtrack b i u) bs idxs
