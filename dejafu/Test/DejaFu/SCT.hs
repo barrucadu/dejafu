@@ -79,9 +79,8 @@ module Test.DejaFu.SCT
   , sctLengthBound
   ) where
 
-import Control.DeepSeq (NFData(..))
 import Control.Monad.Ref (MonadRef)
-import Data.List (nub)
+import Data.List (foldl')
 import qualified Data.Map.Strict as M
 import Data.Maybe (isJust, fromJust)
 import qualified Data.Set as S
@@ -140,17 +139,16 @@ cBound (Bounds pb fb lb) =
 --
 -- If no bounds are enabled, just backtrack to the given point.
 cBacktrack :: Bounds -> BacktrackFunc
-cBacktrack (Bounds Nothing Nothing Nothing) bs i t = backtrackAt (const False) False bs i t
-cBacktrack (Bounds pb fb lb) bs i t = lBack . fBack $ pBack bs where
-  pBack backs = if isJust pb then pBacktrack   backs i t else backs
-  fBack backs = if isJust fb then fBacktrack   backs i t else backs
-  lBack backs = if isJust lb then lBacktrack backs i t else backs
+cBacktrack (Bounds (Just _) _ _) = pBacktrack
+cBacktrack (Bounds _ (Just _) _) = fBacktrack
+cBacktrack (Bounds _ _ (Just _)) = lBacktrack
+cBacktrack _ = backtrackAt (\_ _ -> False)
 
 -------------------------------------------------------------------------------
 -- Pre-emption bounding
 
 newtype PreemptionBound = PreemptionBound Int
-  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
 -- | A sensible default preemption bound: 2.
 --
@@ -181,31 +179,26 @@ pBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb
 -- the same state being reached multiple times, but is needed because
 -- of the artificial dependency imposed by the bound.
 pBacktrack :: BacktrackFunc
-pBacktrack bs i tid =
-  maybe id (\j' b -> backtrack True b j' tid) j $ backtrack False bs i tid
+pBacktrack bs = backtrackAt (\_ _ -> False) bs . concatMap addConservative where
+  addConservative o@(i, _, tid) = o : case conservative i of
+    Just j  -> [(j, True, tid)]
+    Nothing -> []
 
-  where
-    -- Index of the conservative point
-    j = goJ . reverse . pairs $ zip [0..i-1] bs where
-      goJ (((_,b1), (j',b2)):rest)
-        | bcktThreadid b1 /= bcktThreadid b2
-          && not (isCommitRef . snd $ bcktDecision b1)
-          && not (isCommitRef . snd $ bcktDecision b2) = Just j'
-        | otherwise = goJ rest
-      goJ [] = Nothing
-
-    -- List of adjacent pairs
-    {-# INLINE pairs #-}
-    pairs = zip <*> tail
-
-    -- Add a backtracking point.
-    backtrack = backtrackAt $ const False
+  -- index of conservative point
+  conservative i = go (reverse (take (i-1) bs)) (i-1) where
+    go _ (-1) = Nothing
+    go (b1:rest@(b2:_)) j
+      | bcktThreadid b1 /= bcktThreadid b2
+        && not (isCommitRef $ bcktAction b1)
+        && not (isCommitRef $ bcktAction b2) = Just j
+      | otherwise = go rest (j-1)
+    go _ _ = Nothing
 
 -------------------------------------------------------------------------------
 -- Fair bounding
 
 newtype FairBound = FairBound Int
-  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
 -- | A sensible default fair bound: 5.
 --
@@ -233,15 +226,15 @@ fBound (FairBound fb) ts (_, l) = maxYieldCountDiff ts l <= fb
 -- | Add a backtrack point. If the thread isn't runnable, or performs
 -- a release operation, add all runnable threads.
 fBacktrack :: BacktrackFunc
-fBacktrack bs i t = backtrackAt check False bs i t where
+fBacktrack = backtrackAt check where
   -- True if a release operation is performed.
-  check b = Just True == (willRelease <$> M.lookup t (bcktRunnable b))
+  check t b = Just True == (willRelease <$> M.lookup t (bcktRunnable b))
 
 -------------------------------------------------------------------------------
 -- Length bounding
 
 newtype LengthBound = LengthBound Int
-  deriving (NFData, Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
 -- | A sensible default length bound: 250.
 --
@@ -269,7 +262,7 @@ lBound (LengthBound lb) ts _ = length ts < lb
 -- | Add a backtrack point. If the thread isn't runnable, add all
 -- runnable threads.
 lBacktrack :: BacktrackFunc
-lBacktrack = backtrackAt (const False) False
+lBacktrack = backtrackAt (\_ _ -> False)
 
 -------------------------------------------------------------------------------
 -- DPOR
@@ -313,7 +306,7 @@ sctBounded memtype bf backtrack conc = go initialState where
 
       if schedIgnore s
       then go newDPOR
-      else ((res, trace):) <$> go (pruneCommits $ addBacktracks bpoints newDPOR)
+      else ((res, trace):) <$> go (addBacktracks bpoints newDPOR)
 
     Nothing -> pure []
 
@@ -333,31 +326,10 @@ sctBounded memtype bf backtrack conc = go initialState where
   addBacktracks = incorporateBacktrackSteps bf
 
 -------------------------------------------------------------------------------
--- Post-processing
-
--- | Remove commits from the todo sets where every other action will
--- result in a write barrier (and so a commit) occurring.
---
--- To get the benefit from this, do not execute commit actions from
--- the todo set until there are no other choises.
-pruneCommits :: DPOR -> DPOR
-pruneCommits bpor
-  | not onlycommits || not alldonesync = go bpor
-  | otherwise = go bpor { dporTodo = M.empty }
-
-  where
-    go b = b { dporDone = pruneCommits <$> dporDone bpor }
-
-    onlycommits = all (<initialThread) . M.keys $ dporTodo bpor
-    alldonesync = all barrier . M.elems $ dporDone bpor
-
-    barrier = isBarrier . simplifyAction . fromJust . dporAction
-
--------------------------------------------------------------------------------
 -- Dependency function
 
 -- | Check if an action is dependent on another.
-dependent :: MemType -> DepState -> (ThreadId, ThreadAction) -> (ThreadId, ThreadAction) -> Bool
+dependent :: MemType -> DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
 -- This is basically the same as 'dependent'', but can make use of the
 -- additional information in a 'ThreadAction' to make different
 -- decisions in a few cases:
@@ -381,14 +353,14 @@ dependent :: MemType -> DepState -> (ThreadId, ThreadAction) -> (ThreadId, Threa
 --  - Dependency of STM transactions can be /greatly/ improved here,
 --    as the 'Lookahead' does not know which @TVar@s will be touched,
 --    and so has to assume all transactions are dependent.
-dependent _ _ (_, SetNumCapabilities a) (_, GetNumCapabilities b) = a /= b
-dependent _ ds (_, ThrowTo t) (t2, a) = t == t2 && canInterrupt ds t2 a
-dependent memtype ds (t1, a1) (t2, a2) = case rewind a2 of
+dependent _ _ _ (SetNumCapabilities a) _ (GetNumCapabilities b) = a /= b
+dependent _ ds _ (ThrowTo t) t2 a = t == t2 && canInterrupt ds t2 a
+dependent memtype ds t1 a1 t2 a2 = case rewind a2 of
   Just l2
     | isSTM a1 && isSTM a2
       -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
     | not (isBlock a1 && isBarrier (simplifyLookahead l2)) ->
-      dependent' memtype ds (t1, a1) (t2, l2)
+      dependent' memtype ds t1 a1 t2 l2
   _ -> dependentActions memtype ds (simplifyAction a1) (simplifyAction a2)
 
   where
@@ -400,8 +372,8 @@ dependent memtype ds (t1, a1) (t2, a2) = case rewind a2 of
 --
 -- Termination of the initial thread is handled specially in the DPOR
 -- implementation.
-dependent' :: MemType -> DepState -> (ThreadId, ThreadAction) -> (ThreadId, Lookahead) -> Bool
-dependent' memtype ds (t1, a1) (t2, l2) = case (a1, l2) of
+dependent' :: MemType -> DepState -> ThreadId -> ThreadAction -> ThreadId -> Lookahead -> Bool
+dependent' memtype ds t1 a1 t2 l2 = case (a1, l2) of
   -- Worst-case assumption: all IO is dependent.
   (LiftIO, WillLiftIO) -> True
 
@@ -496,6 +468,7 @@ yieldCount tid ts l = go initialThread ts where
     | t == tid && willYield l = 1
     | otherwise = 0
 
+  {-# INLINE go' #-}
   go' t t' act rest
     | t == tid && didYield act = 1 + go t' rest
     | otherwise = go t' rest
@@ -505,10 +478,14 @@ yieldCount tid ts l = go initialThread ts where
 maxYieldCountDiff :: [(Decision, ThreadAction)]
   -> Lookahead
   -> Int
-maxYieldCountDiff ts l = maximum yieldCountDiffs where
-  yieldsBy tid = yieldCount tid ts l
-  yieldCounts = [yieldsBy tid | tid <- nub $ allTids ts]
-  yieldCountDiffs = [y1 - y2 | y1 <- yieldCounts, y2 <- yieldCounts]
+maxYieldCountDiff ts l = go 0 yieldCounts where
+  go m (yc:ycs) =
+    let m' = m `max` foldl' (go' yc) 0 ycs
+    in go m' ycs
+  go m [] = m
+  go' yc0 m yc = m `max` abs (yc0 - yc)
+
+  yieldCounts = [yieldCount t ts l | t <- allTids ts]
 
   -- All the threads created during the lifetime of the system.
   allTids ((_, act):rest) =

@@ -60,7 +60,6 @@ module Test.DejaFu.Common
   , MemType(..)
   ) where
 
-import Control.DeepSeq (NFData(..))
 import Control.Exception (MaskingState(..))
 import Data.Dynamic (Dynamic)
 import Data.List (sort, nub, intercalate)
@@ -83,9 +82,6 @@ instance Show ThreadId where
   show (ThreadId (Just n) _) = n
   show (ThreadId Nothing  i) = show i
 
-instance NFData ThreadId where
-  rnf (ThreadId n i) = rnf (n, i)
-
 -- | Every @CRef@ has a unique identifier.
 data CRefId = CRefId (Maybe String) Int
   deriving Eq
@@ -96,9 +92,6 @@ instance Ord CRefId where
 instance Show CRefId where
   show (CRefId (Just n) _) = n
   show (CRefId Nothing  i) = show i
-
-instance NFData CRefId where
-  rnf (CRefId n i) = rnf (n, i)
 
 -- | Every @MVar@ has a unique identifier.
 data MVarId = MVarId (Maybe String) Int
@@ -111,9 +104,6 @@ instance Show MVarId where
   show (MVarId (Just n) _) = n
   show (MVarId Nothing  i) = show i
 
-instance NFData MVarId where
-  rnf (MVarId n i) = rnf (n, i)
-
 -- | Every @TVar@ has a unique identifier.
 data TVarId = TVarId (Maybe String) Int
   deriving Eq
@@ -124,9 +114,6 @@ instance Ord TVarId where
 instance Show TVarId where
   show (TVarId (Just n) _) = n
   show (TVarId Nothing  i) = show i
-
-instance NFData TVarId where
-  rnf (TVarId n i) = rnf (n, i)
 
 -- | The ID of the initial thread.
 initialThread :: ThreadId
@@ -276,36 +263,6 @@ data ThreadAction =
   -- ^ Start executing an action with @subconcurrency@.
   deriving Show
 
-instance NFData ThreadAction where
-  rnf (Fork t) = rnf t
-  rnf (GetNumCapabilities i) = rnf i
-  rnf (SetNumCapabilities i) = rnf i
-  rnf (NewVar c) = rnf c
-  rnf (PutVar c ts) = rnf (c, ts)
-  rnf (BlockedPutVar c) = rnf c
-  rnf (TryPutVar c b ts) = rnf (c, b, ts)
-  rnf (ReadVar c) = rnf c
-  rnf (BlockedReadVar c) = rnf c
-  rnf (TakeVar c ts) = rnf (c, ts)
-  rnf (BlockedTakeVar c) = rnf c
-  rnf (TryTakeVar c b ts) = rnf (c, b, ts)
-  rnf (NewRef c) = rnf c
-  rnf (ReadRef c) = rnf c
-  rnf (ReadRefCas c) = rnf c
-  rnf (ModRef c) = rnf c
-  rnf (ModRefCas c) = rnf c
-  rnf (WriteRef c) = rnf c
-  rnf (CasRef c b) = rnf (c, b)
-  rnf (CommitRef t c) = rnf (t, c)
-  rnf (STM s ts) = rnf (s, ts)
-  rnf (BlockedSTM s) = rnf s
-  rnf (ThrowTo t) = rnf t
-  rnf (BlockedThrowTo t) = rnf t
-  rnf (SetMasking b m) = b `seq` m `seq` ()
-  rnf (ResetMasking b m) = b `seq` m `seq` ()
-  rnf (Message m) = m `seq` ()
-  rnf a = a `seq` ()
-
 -- | Check if a @ThreadAction@ immediately blocks.
 isBlock :: ThreadAction -> Bool
 isBlock (BlockedThrowTo  _) = True
@@ -407,26 +364,6 @@ data Lookahead =
   -- ^ Will execute an action with @subconcurrency@.
   deriving Show
 
-instance NFData Lookahead where
-  rnf (WillSetNumCapabilities i) = rnf i
-  rnf (WillPutVar c) = rnf c
-  rnf (WillTryPutVar c) = rnf c
-  rnf (WillReadVar c) = rnf c
-  rnf (WillTakeVar c) = rnf c
-  rnf (WillTryTakeVar c) = rnf c
-  rnf (WillReadRef c) = rnf c
-  rnf (WillReadRefCas c) = rnf c
-  rnf (WillModRef c) = rnf c
-  rnf (WillModRefCas c) = rnf c
-  rnf (WillWriteRef c) = rnf c
-  rnf (WillCasRef c) = rnf c
-  rnf (WillCommitRef t c) = rnf (t, c)
-  rnf (WillThrowTo t) = rnf t
-  rnf (WillSetMasking b m) = b `seq` m `seq` ()
-  rnf (WillResetMasking b m) = b `seq` m `seq` ()
-  rnf (WillMessage m) = m `seq` ()
-  rnf l = l `seq` ()
-
 -- | Convert a 'ThreadAction' into a 'Lookahead': \"rewind\" what has
 -- happened. 'Killed' has no 'Lookahead' counterpart.
 rewind :: ThreadAction -> Maybe Lookahead
@@ -512,17 +449,6 @@ data ActionType =
   -- ^ Some other action which does require cross-thread
   -- communication.
   deriving (Eq, Show)
-
-instance NFData ActionType where
-  rnf (UnsynchronisedRead  r) = rnf r
-  rnf (UnsynchronisedWrite r) = rnf r
-  rnf (PartiallySynchronisedCommit r) = rnf r
-  rnf (PartiallySynchronisedWrite  r) = rnf r
-  rnf (PartiallySynchronisedModify  r) = rnf r
-  rnf (SynchronisedModify  r) = rnf r
-  rnf (SynchronisedRead    c) = rnf c
-  rnf (SynchronisedWrite   c) = rnf c
-  rnf a = a `seq` ()
 
 -- | Check if an action imposes a write barrier.
 isBarrier :: ActionType -> Bool
@@ -616,13 +542,6 @@ data TAction =
   -- ^ Terminate successfully and commit effects.
   deriving (Eq, Show)
 
-instance NFData TAction where
-  rnf (TRead  v) = rnf v
-  rnf (TWrite v) = rnf v
-  rnf (TCatch  s m) = rnf (s, m)
-  rnf (TOrElse s m) = rnf (s, m)
-  rnf a = a `seq` ()
-
 -------------------------------------------------------------------------------
 -- Traces
 
@@ -644,11 +563,6 @@ data Decision =
   | SwitchTo ThreadId
   -- ^ Pre-empt the running thread, and switch to another.
   deriving (Eq, Show)
-
-instance NFData Decision where
-  rnf (Start    tid) = rnf tid
-  rnf (SwitchTo tid) = rnf tid
-  rnf d = d `seq` ()
 
 -- | Pretty-print a trace, including a key of the thread IDs (not
 -- including thread 0). Each line of the key is indented by two
@@ -680,15 +594,15 @@ showTrace trc = intercalate "\n" $ concatMap go trc : strkey where
 preEmpCount :: [(Decision, ThreadAction)]
             -> (Decision, Lookahead)
             -> Int
-preEmpCount ts (d, _) = go initialThread Nothing ts where
-  go _ (Just Yield) ((SwitchTo t, a):rest) = go t (Just a) rest
-  go tid prior ((SwitchTo t, a):rest)
+preEmpCount (x:xs) (d, _) = go initialThread x xs where
+  go _ (_, Yield) (r@(SwitchTo t, _):rest) = go t r rest
+  go tid prior (r@(SwitchTo t, _):rest)
     | isCommitThread t = go tid prior (skip rest)
-    | otherwise = 1 + go t (Just a) rest
-  go _   _ ((Start t,  a):rest) = go t   (Just a) rest
-  go tid _ ((Continue, a):rest) = go tid (Just a) rest
+    | otherwise = 1 + go t r rest
+  go _   _ (r@(Start t,  _):rest) = go t   r rest
+  go tid _ (r@(Continue, _):rest) = go tid r rest
   go _ prior [] = case (prior, d) of
-    (Just Yield, SwitchTo _) -> 0
+    ((_, Yield), SwitchTo _) -> 0
     (_, SwitchTo _) -> 1
     _ -> 0
 
@@ -699,6 +613,7 @@ preEmpCount ts (d, _) = go initialThread Nothing ts where
   skip = dropWhile (not . isContextSwitch . fst)
   isContextSwitch Continue = False
   isContextSwitch _ = True
+preEmpCount [] _ = 0
 
 -------------------------------------------------------------------------------
 -- Failures
@@ -725,9 +640,6 @@ data Failure =
   -- ^ Calls to @subconcurrency@ were nested, or attempted when
   -- multiple threads existed.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)
-
-instance NFData Failure where
-  rnf f = f `seq` ()
 
 -- | Pretty-print a failure
 showFail :: Failure -> String
@@ -759,9 +671,6 @@ data MemType =
   -- are not necessarily committed in the same order that they are
   -- created.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)
-
-instance NFData MemType where
-  rnf m = m `seq` ()
 
 -------------------------------------------------------------------------------
 -- Utilities
