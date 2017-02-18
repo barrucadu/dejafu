@@ -240,7 +240,6 @@ module Test.DejaFu
   ) where
 
 import Control.Arrow (first)
-import Control.DeepSeq (NFData(..))
 import Control.Monad (when, unless)
 import Control.Monad.Ref (MonadRef)
 import Control.Monad.ST (runST)
@@ -399,9 +398,6 @@ defaultFail failures = Result False 0 failures ""
 -- | A passed result.
 defaultPass :: Result a
 defaultPass = Result True 0 [] ""
-
-instance NFData a => NFData (Result a) where
-  rnf r = rnf (_pass r, _casesChecked r, _failures r, _failureMsg r)
 
 instance Functor Result where
   fmap f r = r { _failures = map (first $ fmap f) $ _failures r }

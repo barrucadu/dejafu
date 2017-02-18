@@ -18,6 +18,7 @@ import Data.Dynamic (Dynamic)
 import Data.Map.Strict (Map)
 import Data.List.NonEmpty (NonEmpty, fromList)
 import Test.DejaFu.Common
+import Test.DejaFu.STM (STMLike)
 
 {-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
 
@@ -32,16 +33,16 @@ import Test.DejaFu.Common
 -- current expression of threads and exception handlers very difficult
 -- (perhaps even not possible without significant reworking), so I
 -- abandoned the attempt.
-newtype M n r s a = M { runM :: (a -> Action n r s) -> Action n r s }
+newtype M n r a = M { runM :: (a -> Action n r) -> Action n r }
 
-instance Functor (M n r s) where
+instance Functor (M n r) where
     fmap f m = M $ \ c -> runM m (c . f)
 
-instance Applicative (M n r s) where
+instance Applicative (M n r) where
     pure x  = M $ \c -> AReturn $ c x
     f <*> v = M $ \c -> runM f (\g -> runM v (c . g))
 
-instance Monad (M n r s) where
+instance Monad (M n r) where
     return  = pure
     m >>= k = M $ \c -> runM m (\x -> runM (k x) c)
 
@@ -82,11 +83,11 @@ data Ticket a = Ticket
   }
 
 -- | Construct a continuation-passing operation from a function.
-cont :: ((a -> Action n r s) -> Action n r s) -> M n r s a
+cont :: ((a -> Action n r) -> Action n r) -> M n r a
 cont = M
 
 -- | Run a CPS computation with the given final computation.
-runCont :: M n r s a -> (a -> Action n r s) -> Action n r s
+runCont :: M n r a -> (a -> Action n r) -> Action n r
 runCont = runM
 
 --------------------------------------------------------------------------------
@@ -96,49 +97,51 @@ runCont = runM
 -- only occur as a result of an action, and they cover (most of) the
 -- primitives of the concurrency. 'spawn' is absent as it is
 -- implemented in terms of 'newEmptyMVar', 'fork', and 'putMVar'.
-data Action n r s =
-    AFork  String ((forall b. M n r s b -> M n r s b) -> Action n r s) (ThreadId -> Action n r s)
-  | AMyTId (ThreadId -> Action n r s)
+data Action n r =
+    AFork  String ((forall b. M n r b -> M n r b) -> Action n r) (ThreadId -> Action n r)
+  | AMyTId (ThreadId -> Action n r)
 
-  | AGetNumCapabilities (Int -> Action n r s)
-  | ASetNumCapabilities Int (Action n r s)
+  | AGetNumCapabilities (Int -> Action n r)
+  | ASetNumCapabilities Int (Action n r)
 
-  | forall a. ANewVar String (MVar r a -> Action n r s)
-  | forall a. APutVar     (MVar r a) a (Action n r s)
-  | forall a. ATryPutVar  (MVar r a) a (Bool -> Action n r s)
-  | forall a. AReadVar    (MVar r a) (a -> Action n r s)
-  | forall a. ATakeVar    (MVar r a) (a -> Action n r s)
-  | forall a. ATryTakeVar (MVar r a) (Maybe a -> Action n r s)
+  | forall a. ANewVar String (MVar r a -> Action n r)
+  | forall a. APutVar     (MVar r a) a (Action n r)
+  | forall a. ATryPutVar  (MVar r a) a (Bool -> Action n r)
+  | forall a. AReadVar    (MVar r a) (a -> Action n r)
+  | forall a. ATakeVar    (MVar r a) (a -> Action n r)
+  | forall a. ATryTakeVar (MVar r a) (Maybe a -> Action n r)
 
-  | forall a.   ANewRef String a (CRef r a -> Action n r s)
-  | forall a.   AReadRef    (CRef r a) (a -> Action n r s)
-  | forall a.   AReadRefCas (CRef r a) (Ticket a -> Action n r s)
-  | forall a b. AModRef     (CRef r a) (a -> (a, b)) (b -> Action n r s)
-  | forall a b. AModRefCas  (CRef r a) (a -> (a, b)) (b -> Action n r s)
-  | forall a.   AWriteRef   (CRef r a) a (Action n r s)
-  | forall a.   ACasRef     (CRef r a) (Ticket a) a ((Bool, Ticket a) -> Action n r s)
+  | forall a.   ANewRef String a (CRef r a -> Action n r)
+  | forall a.   AReadRef    (CRef r a) (a -> Action n r)
+  | forall a.   AReadRefCas (CRef r a) (Ticket a -> Action n r)
+  | forall a b. AModRef     (CRef r a) (a -> (a, b)) (b -> Action n r)
+  | forall a b. AModRefCas  (CRef r a) (a -> (a, b)) (b -> Action n r)
+  | forall a.   AWriteRef   (CRef r a) a (Action n r)
+  | forall a.   ACasRef     (CRef r a) (Ticket a) a ((Bool, Ticket a) -> Action n r)
 
   | forall e.   Exception e => AThrow e
-  | forall e.   Exception e => AThrowTo ThreadId e (Action n r s)
-  | forall a e. Exception e => ACatching (e -> M n r s a) (M n r s a) (a -> Action n r s)
-  | APopCatching (Action n r s)
-  | forall a. AMasking MaskingState ((forall b. M n r s b -> M n r s b) -> M n r s a) (a -> Action n r s)
-  | AResetMask Bool Bool MaskingState (Action n r s)
+  | forall e.   Exception e => AThrowTo ThreadId e (Action n r)
+  | forall a e. Exception e => ACatching (e -> M n r a) (M n r a) (a -> Action n r)
+  | APopCatching (Action n r)
+  | forall a. AMasking MaskingState ((forall b. M n r b -> M n r b) -> M n r a) (a -> Action n r)
+  | AResetMask Bool Bool MaskingState (Action n r)
 
-  | AMessage    Dynamic (Action n r s)
+  | AMessage    Dynamic (Action n r)
 
-  | forall a. AAtom (s a) (a -> Action n r s)
-  | ALift (n (Action n r s))
-  | AYield  (Action n r s)
-  | AReturn (Action n r s)
+  | forall a. AAtom (STMLike n r a) (a -> Action n r)
+  | ALift (n (Action n r))
+  | AYield  (Action n r)
+  | AReturn (Action n r)
   | ACommit ThreadId CRefId
   | AStop (n ())
+
+  | forall a. ASub (M n r a) (Either Failure a -> Action n r)
 
 --------------------------------------------------------------------------------
 -- * Scheduling & Traces
 
 -- | Look as far ahead in the given continuation as possible.
-lookahead :: Action n r s -> NonEmpty Lookahead
+lookahead :: Action n r -> NonEmpty Lookahead
 lookahead = fromList . lookahead' where
   lookahead' (AFork _ _ _)           = [WillFork]
   lookahead' (AMyTId _)              = [WillMyThreadId]
@@ -170,3 +173,4 @@ lookahead = fromList . lookahead' where
   lookahead' (AYield k)              = WillYield : lookahead' k
   lookahead' (AReturn k)             = WillReturn : lookahead' k
   lookahead' (AStop _)               = [WillStop]
+  lookahead' (ASub _ _)              = [WillSubconcurrency]
