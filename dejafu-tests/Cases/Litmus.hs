@@ -5,13 +5,13 @@ module Cases.Litmus where
 import Control.Monad (replicateM)
 import Control.Monad.ST (runST)
 import Data.List (nub, sort)
-import Test.DejaFu (MemType(..), defaultBounds, gives')
+import Test.DejaFu (MemType(..), defaultWay, gives')
 import Test.DejaFu.Conc (ConcST)
-import Test.DejaFu.SCT (sctBound)
+import Test.DejaFu.SCT (runSCT)
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
-import Test.HUnit.DejaFu (testDejafu')
+import Test.HUnit.DejaFu (testDejafuWay)
 
 import Control.Monad.Conc.Class
 
@@ -60,9 +60,9 @@ tests =
 
 litmusTest :: (Eq a, Show a) => String -> (forall t. ConcST t a) -> [a] -> [a] -> [a] -> Test
 litmusTest name act sq tso pso = testGroup name . hUnitTestToTests $ test
-  [ testDejafu' SequentialConsistency defaultBounds act "SQ"  (gives' sq)
-  , testDejafu' TotalStoreOrder       defaultBounds act "TSO" (gives' tso)
-  , testDejafu' PartialStoreOrder     defaultBounds act "PSO" (gives' pso)
+  [ testDejafuWay defaultWay SequentialConsistency act "SQ"  (gives' sq)
+  , testDejafuWay defaultWay TotalStoreOrder       act "TSO" (gives' tso)
+  , testDejafuWay defaultWay PartialStoreOrder     act "PSO" (gives' pso)
   ]
 
 -- | Run a litmus test against the three different memory models, and
@@ -81,7 +81,7 @@ compareTest act = do
 
   where
     results memtype = show . nub . sort . map (\(Right a,_) -> a) $
-      runST (sctBound memtype defaultBounds act)
+      runST (runSCT defaultWay memtype act)
 
     ioResults = show . nub . sort <$> replicateM 99999 act
 

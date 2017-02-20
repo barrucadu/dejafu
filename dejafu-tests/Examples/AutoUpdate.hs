@@ -43,7 +43,8 @@ import Control.Monad
 import Control.Monad.Conc.Class
 
 -- test imports
-import Test.DejaFu (Bounds(..), Failure(..), MemType(..), defaultBounds, gives)
+import System.Random (StdGen)
+import Test.DejaFu (Bounds(..), Failure(..), MemType(..), Way(..), defaultBounds, defaultWay, gives)
 import Test.Framework (Test)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
@@ -51,17 +52,17 @@ import Test.HUnit.DejaFu
 
 tests :: [Test]
 tests = hUnitTestToTests $ test
-  [ testDejafu' SequentialConsistency
-                defaultBounds
-                deadlocks
-                "deadlocks"
-                (gives [Left Deadlock, Right ()])
+  [ testDejafuWay defaultWay
+                  SequentialConsistency
+                  deadlocks
+                  "deadlocks"
+                  (gives [Left Deadlock, Right ()])
 
-  , testDejafu' SequentialConsistency
-                defaultBounds { boundPreemp = Just 3 }
-                nondeterministic
-                "nondeterministic"
-                (gives [Left Deadlock, Right 0, Right 1])
+  , testDejafuWay (Systematically defaultBounds { boundPreemp = Just 3 } :: Way StdGen)
+                  SequentialConsistency
+                  nondeterministic
+                  "nondeterministic"
+                  (gives [Left Deadlock, Right 0, Right 1])
   ]
 
 -- This exhibits a deadlock with no preemptions.
