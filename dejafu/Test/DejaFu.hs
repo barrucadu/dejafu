@@ -249,15 +249,15 @@ import Control.Monad.ST (runST)
 import Data.Function (on)
 import Data.List (intercalate, intersperse, minimumBy)
 import Data.Ord (comparing)
-import System.Random (RandomGen)
+import System.Random (RandomGen, StdGen)
 
 import Test.DejaFu.Common
 import Test.DejaFu.Conc
 import Test.DejaFu.SCT
 
--- | The default memory model: @TotalStoreOrder@
-defaultMemType :: MemType
-defaultMemType = TotalStoreOrder
+
+-------------------------------------------------------------------------------
+-- DejaFu
 
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
@@ -383,7 +383,9 @@ dejafusWayIO way memtype concio tests = do
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
--- * Test cases
+
+-------------------------------------------------------------------------------
+-- Test cases
 
 -- | The results of a test, including the number of cases checked to
 -- determine the final boolean outcome.
@@ -449,7 +451,9 @@ runTestWayM :: (MonadRef r n, RandomGen g)
 runTestWayM way memtype predicate conc =
   predicate <$> runSCT way memtype conc
 
--- * Predicates
+
+-------------------------------------------------------------------------------
+-- Predicates
 
 -- | A @Predicate@ is a function which collapses a list of results
 -- into a 'Result'.
@@ -606,7 +610,54 @@ gives expected results = go expected [] results $ defaultFail failures where
 gives' :: (Eq a, Show a) => [a] -> Predicate a
 gives' = gives . map Right
 
--- * Internal
+
+-------------------------------------------------------------------------------
+-- Defaults
+
+-- | A default way to execute concurrent programs: systematically
+-- using 'defaultBounds'.
+--
+-- The type parameter is constrained to 'StdGen', even though it is
+-- unused, to avoid ambiguity errors.
+defaultWay :: Way StdGen
+defaultWay = Systematically defaultBounds
+
+-- | The default memory model: @TotalStoreOrder@
+defaultMemType :: MemType
+defaultMemType = TotalStoreOrder
+
+-- | All bounds enabled, using their default values.
+defaultBounds :: Bounds
+defaultBounds = Bounds
+  { boundPreemp = Just defaultPreemptionBound
+  , boundFair   = Just defaultFairBound
+  , boundLength = Just defaultLengthBound
+  }
+
+-- | A sensible default preemption bound: 2.
+--
+-- See /Concurrency Testing Using Schedule Bounding: an Empirical Study/,
+-- P. Thomson, A. F. Donaldson, A. Betts for justification.
+defaultPreemptionBound :: PreemptionBound
+defaultPreemptionBound = 2
+
+-- | A sensible default fair bound: 5.
+--
+-- This comes from playing around myself, but there is probably a
+-- better default.
+defaultFairBound :: FairBound
+defaultFairBound = 5
+
+-- | A sensible default length bound: 250.
+--
+-- Based on the assumption that anything which executes for much
+-- longer (or even this long) will take ages to test.
+defaultLengthBound :: LengthBound
+defaultLengthBound = 250
+
+
+-------------------------------------------------------------------------------
+-- Utils
 
 -- | Run a test and print to stdout
 doTest :: Show a => String -> Result a -> IO Bool

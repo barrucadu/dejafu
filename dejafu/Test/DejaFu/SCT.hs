@@ -12,7 +12,6 @@
 module Test.DejaFu.SCT
   ( -- * Running Concurrent Programs
     Way(..)
-  , defaultWay
   , runSCT
   , resultsSet
 
@@ -43,9 +42,7 @@ module Test.DejaFu.SCT
   -- K. McKinley for more details.
 
   , Bounds(..)
-  , defaultBounds
   , noBounds
-
   , sctBound
 
   -- ** Pre-emption Bounding
@@ -58,7 +55,6 @@ module Test.DejaFu.SCT
   -- See the BPOR paper for more details.
 
   , PreemptionBound(..)
-  , defaultPreemptionBound
   , sctPreBound
 
   -- ** Fair Bounding
@@ -70,7 +66,6 @@ module Test.DejaFu.SCT
   -- See the BPOR paper for more details.
 
   , FairBound(..)
-  , defaultFairBound
   , sctFairBound
 
   -- ** Length Bounding
@@ -79,7 +74,6 @@ module Test.DejaFu.SCT
   -- terms of primitive actions) of an execution.
 
   , LengthBound(..)
-  , defaultLengthBound
   , sctLengthBound
 
   -- * Random Scheduling
@@ -100,7 +94,7 @@ import qualified Data.Map.Strict as M
 import Data.Maybe (isJust, fromJust)
 import Data.Set (Set)
 import qualified Data.Set as S
-import System.Random (RandomGen, StdGen)
+import System.Random (RandomGen)
 
 import Test.DejaFu.Common
 import Test.DejaFu.Conc
@@ -117,14 +111,6 @@ data Way g
   -- ^ Explore a fixed number of random executions, with the given
   -- PRNG.
   deriving (Eq, Ord, Read, Show)
-
--- | A default way to execute concurrent programs: systematically
--- using 'defaultBounds'.
---
--- The type parameter is constrained to 'StdGen', even though it is
--- unused, to avoid ambiguity errors.
-defaultWay :: Way StdGen
-defaultWay = Systematically defaultBounds
 
 -- | Explore possible executions of a concurrent program.
 --
@@ -163,17 +149,9 @@ data Bounds = Bounds
   , boundLength :: Maybe LengthBound
   } deriving (Eq, Ord, Read, Show)
 
--- | All bounds enabled, using their default values.
-defaultBounds :: Bounds
-defaultBounds = Bounds
-  { boundPreemp = Just defaultPreemptionBound
-  , boundFair   = Just defaultFairBound
-  , boundLength = Just defaultLengthBound
-  }
-
 -- | No bounds enabled. This forces the scheduler to just use
 -- partial-order reduction and sleep sets to prune the search
--- space. This will /ONLY/ work if your computation always terminated!
+-- space. This will /ONLY/ work if your computation always terminates!
 noBounds :: Bounds
 noBounds = Bounds
   { boundPreemp = Nothing
@@ -203,13 +181,6 @@ cBacktrack _ = backtrackAt (\_ _ -> False)
 
 newtype PreemptionBound = PreemptionBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
-
--- | A sensible default preemption bound: 2.
---
--- See /Concurrency Testing Using Schedule Bounding: an Empirical Study/,
--- P. Thomson, A. F. Donaldson, A. Betts for justification.
-defaultPreemptionBound :: PreemptionBound
-defaultPreemptionBound = 2
 
 -- | An SCT runner using a pre-emption bounding scheduler.
 sctPreBound :: MonadRef r n
@@ -254,13 +225,6 @@ pBacktrack bs = backtrackAt (\_ _ -> False) bs . concatMap addConservative where
 newtype FairBound = FairBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
--- | A sensible default fair bound: 5.
---
--- This comes from playing around myself, but there is probably a
--- better default.
-defaultFairBound :: FairBound
-defaultFairBound = 5
-
 -- | An SCT runner using a fair bounding scheduler.
 sctFairBound :: MonadRef r n
   => MemType
@@ -289,13 +253,6 @@ fBacktrack = backtrackAt check where
 
 newtype LengthBound = LengthBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
-
--- | A sensible default length bound: 250.
---
--- Based on the assumption that anything which executes for much
--- longer (or even this long) will take ages to test.
-defaultLengthBound :: LengthBound
-defaultLengthBound = 250
 
 -- | An SCT runner using a length bounding scheduler.
 sctLengthBound :: MonadRef r n
