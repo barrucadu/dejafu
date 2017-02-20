@@ -52,7 +52,6 @@ import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.IO.Class as IO
 import Control.Monad.Ref (MonadRef,)
 import Control.Monad.ST (ST)
-import Data.Dynamic (toDyn)
 import qualified Data.Foldable as F
 import Data.IORef (IORef)
 import Data.STRef (STRef)
@@ -153,10 +152,6 @@ instance Monad n => C.MonadConc (Conc n r) where
   -- ----------
 
   atomically = toConc . AAtom
-
-  -- ----------
-
-  _concMessage msg = toConc (\c -> AMessage (toDyn msg) (c ()))
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the

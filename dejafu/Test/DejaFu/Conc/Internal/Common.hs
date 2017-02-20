@@ -14,7 +14,6 @@
 module Test.DejaFu.Conc.Internal.Common where
 
 import Control.Exception (Exception, MaskingState(..))
-import Data.Dynamic (Dynamic)
 import Data.Map.Strict (Map)
 import Data.List.NonEmpty (NonEmpty, fromList)
 import Test.DejaFu.Common
@@ -126,8 +125,6 @@ data Action n r =
   | forall a. AMasking MaskingState ((forall b. M n r b -> M n r b) -> M n r a) (a -> Action n r)
   | AResetMask Bool Bool MaskingState (Action n r)
 
-  | AMessage    Dynamic (Action n r)
-
   | forall a. AAtom (STMLike n r a) (a -> Action n r)
   | ALift (n (Action n r))
   | AYield  (Action n r)
@@ -169,7 +166,6 @@ lookahead = fromList . lookahead' where
   lookahead' (AMasking ms _ _)       = [WillSetMasking False ms]
   lookahead' (AResetMask b1 b2 ms k) = (if b1 then WillSetMasking else WillResetMasking) b2 ms : lookahead' k
   lookahead' (ALift _)               = [WillLiftIO]
-  lookahead' (AMessage m k)          = WillMessage m : lookahead' k
   lookahead' (AYield k)              = WillYield : lookahead' k
   lookahead' (AReturn k)             = WillReturn : lookahead' k
   lookahead' (AStop _)               = [WillStop]

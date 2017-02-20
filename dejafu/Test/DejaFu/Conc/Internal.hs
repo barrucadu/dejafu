@@ -347,9 +347,6 @@ stepThread sched memtype tid action ctx = case action of
     -- execute a 'return' or 'pure'.
     AReturn c -> simple (goto c tid (cThreads ctx)) Return
 
-    -- add a message to the trace.
-    AMessage m c  -> simple (goto c tid (cThreads ctx)) (Message m)
-
     -- kill the current thread.
     AStop na -> na >> simple (kill tid (cThreads ctx)) Stop
 

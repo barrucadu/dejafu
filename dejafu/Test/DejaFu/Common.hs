@@ -61,7 +61,6 @@ module Test.DejaFu.Common
   ) where
 
 import Control.Exception (MaskingState(..))
-import Data.Dynamic (Dynamic)
 import Data.List (sort, nub, intercalate)
 import Data.List.NonEmpty (NonEmpty)
 import Data.Maybe (fromMaybe, mapMaybe)
@@ -255,8 +254,6 @@ data ThreadAction =
   -- 'ConcIO'.
   | Return
   -- ^ A 'return' or 'pure' action was executed.
-  | Message Dynamic
-  -- ^ A '_concMessage' annotation was processed.
   | Stop
   -- ^ Cease execution and terminate.
   | Subconcurrency
@@ -356,8 +353,6 @@ data Lookahead =
   -- 'ConcIO'.
   | WillReturn
   -- ^ Will execute a 'return' or 'pure' action.
-  | WillMessage Dynamic
-  -- ^ Will process a _concMessage' annotation.
   | WillStop
   -- ^ Will cease execution and terminate.
   | WillSubconcurrency
@@ -401,7 +396,6 @@ rewind (SetMasking b m) = Just (WillSetMasking b m)
 rewind (ResetMasking b m) = Just (WillResetMasking b m)
 rewind LiftIO = Just WillLiftIO
 rewind Return = Just WillReturn
-rewind (Message m) = Just (WillMessage m)
 rewind Stop = Just WillStop
 rewind Subconcurrency = Just WillSubconcurrency
 

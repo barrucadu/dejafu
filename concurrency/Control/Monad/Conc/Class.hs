@@ -346,14 +346,6 @@ class ( Applicative m, Monad m
   -- had raised it with 'throw'. This can interrupt a blocked action.
   throwTo :: Exception e => ThreadId m -> e -> m ()
 
-  -- | Does nothing.
-  --
-  -- During testing, records a message which shows up in the trace.
-  --
-  -- > _concMessage _ = pure ()
-  _concMessage :: Typeable a => a -> m ()
-  _concMessage _ = pure ()
-
 -------------------------------------------------------------------------------
 -- Utilities
 
@@ -535,7 +527,7 @@ instance MonadConc IO where
 -- Transformer instances
 
 #define INSTANCE(T,C,F)                                          \
-instance C => MonadConc (T m) where                             { \
+instance C => MonadConc (T m) where                            { \
   type STM      (T m) = STM m                                  ; \
   type MVar     (T m) = MVar m                                 ; \
   type CRef     (T m) = CRef m                                 ; \
@@ -574,9 +566,7 @@ instance C => MonadConc (T m) where                             { \
   casCRef r t        = lift . casCRef r t                      ; \
   modifyCRefCAS r    = lift . modifyCRefCAS r                  ; \
   atomically         = lift . atomically                       ; \
-  readTVarConc       = lift . readTVarConc                     ; \
-                                                                 \
-  _concMessage    = lift . _concMessage                        }
+  readTVarConc       = lift . readTVarConc                     }
 
 -- | New threads inherit the reader state of their parent, but do not
 -- communicate results back.
