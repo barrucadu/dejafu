@@ -4,17 +4,25 @@ module Examples.Logger where
 
 import Control.Concurrent.Classy
 import Data.Functor (void)
+import System.Random (mkStdGen)
 import Test.DejaFu hiding (MemType(..))
-import Test.Framework (Test)
+import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
 import Test.HUnit.DejaFu
 
 tests :: [Test]
-tests = hUnitTestToTests $ test
-  [ testDejafu raceyLogger "allowed" validResult
-  , testDejafu raceyLogger "correct occurs" isGood
-  , testDejafu raceyLogger "bug exists" isBad
+tests =
+  [ testGroup "Systematic" . hUnitTestToTests $ test
+    [ testDejafu raceyLogger "allowed" validResult
+    , testDejafu raceyLogger "correct occurs" isGood
+    , testDejafu raceyLogger "bug exists" isBad
+    ]
+  , testGroup "Random" . hUnitTestToTests $ test
+    [ testDejafuWay (Randomly (mkStdGen 0) 100) defaultMemType raceyLogger "allowed (randomly)" validResult
+    , testDejafuWay (Randomly (mkStdGen 0) 100) defaultMemType raceyLogger "correct occurs (randomly)" isGood
+    , testDejafuWay (Randomly (mkStdGen 0) 100) defaultMemType raceyLogger "bug exists (randomly)" isBad
+    ]
   ]
 
 --------------------------------------------------------------------------------

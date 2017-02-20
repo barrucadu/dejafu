@@ -1,63 +1,65 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Cases.MultiThreaded where
 
 import Control.Monad (void)
-import Test.DejaFu (Failure(..), gives, gives')
+import System.Random (mkStdGen)
+import Test.DejaFu (Failure(..), Predicate, Way(..), defaultBounds, defaultMemType, gives, gives')
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
-import Test.HUnit.DejaFu (testDejafu)
+import Test.HUnit.DejaFu (testDejafuWay)
 
 import Control.Concurrent.Classy
 import Control.Monad.STM.Class
-import Test.DejaFu.Conc (Conc, subconcurrency)
+import Test.DejaFu.Conc (Conc, ConcST, subconcurrency)
 
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative ((<$>), (<*>))
-#endif
+data T where
+  T :: Show a => String -> (forall t. ConcST t a) -> Predicate a -> T
 
 tests :: [Test]
 tests =
-  [ testGroup "Threading" . hUnitTestToTests $ test
-    [ testDejafu threadId1    "child thread ID"  $ gives' [True]
-    , testDejafu threadId2    "parent thread ID" $ gives' [True]
-    , testDejafu threadNoWait "no wait" $ gives' [Nothing, Just ()]
+    [ testGroup "Threading" . tg $
+      [ T "child thread ID"  threadId1    $ gives' [True]
+      , T "parent thread ID" threadId2    $ gives' [True]
+      , T "no wait"          threadNoWait $ gives' [Nothing, Just ()]
+      ]
+    , testGroup "MVar" . tg $
+      [ T "deadlock" cvarLock $ gives  [Left Deadlock, Right 0]
+      , T "race"     cvarRace $ gives' [0,1]
+      ]
+    , testGroup "CRef" . tg $
+      [ T "race" crefRace $ gives' [0,1]
+      ]
+    , testGroup "STM" . tg $
+      [ T "atomicity"   stmAtomic     $ gives' [0,2]
+      , T "left retry"  stmLeftRetry  $ gives' [()]
+      , T "right retry" stmRightRetry $ gives' [()]
+      , T "issue 55"    stmIssue55    $ gives' [True]
+      ]
+    , testGroup "Killing Threads" . tg $
+      [ T "no masking" threadKill      $ gives  [Left Deadlock, Right ()]
+      , T "masked"     threadKillMask  $ gives' [()]
+      , T "unmasked"   threadKillUmask $ gives  [Left Deadlock, Right ()]
+      ]
+    , testGroup "Daemons" . tg $
+      [ T "schedule daemon" schedDaemon $ gives' [0,1]
+      ]
+    , testGroup "Subconcurrency" . tg $
+      [ T "deadlock1" scDeadlock1 $ gives' [Left Deadlock, Right ()]
+      , T "deadlock2" scDeadlock2 $ gives' [(Left Deadlock, ()), (Right (), ())]
+      , T "success"   scSuccess   $ gives' [Right ()]
+      , T "illegal"   scIllegal   $ gives  [Left IllegalSubconcurrency]
+      ]
     ]
+  where
+    tg ts =
+      let useWay way = map (\(T n c p) -> testDejafuWay way defaultMemType c n p) ts
+      in [ testGroup "Systematic" . hUnitTestToTests . test . useWay $ Systematically defaultBounds
+         , testGroup "Random"     . hUnitTestToTests . test . useWay $ Randomly (mkStdGen 0) 100
+         ]
 
-  , testGroup "MVar" . hUnitTestToTests $ test
-    [ testDejafu cvarLock "deadlock" $ gives [Left Deadlock, Right 0]
-    , testDejafu cvarRace "race"     $ gives' [0,1]
-    ]
-
-  , testGroup "CRef" . hUnitTestToTests $ test
-    [ testDejafu crefRace "race" $ gives' [0,1]
-    ]
-
-  , testGroup "STM" . hUnitTestToTests $ test
-    [ testDejafu stmAtomic     "atomicity"   $ gives' [0,2]
-    , testDejafu stmLeftRetry  "left retry"  $ gives' [()]
-    , testDejafu stmRightRetry "right retry" $ gives' [()]
-    , testDejafu stmIssue55    "issue 55"    $ gives' [True]
-    ]
-
-  , testGroup "Killing Threads" . hUnitTestToTests $ test
-    [ testDejafu threadKill      "no masking" $ gives  [Left Deadlock, Right ()]
-    , testDejafu threadKillMask  "masked"     $ gives' [()]
-    , testDejafu threadKillUmask "unmasked"   $ gives  [Left Deadlock, Right ()]
-    ]
-
-  , testGroup "Daemons" . hUnitTestToTests $ test
-    [ testDejafu schedDaemon "schedule daemon" $ gives' [0,1]
-    ]
-
-  , testGroup "Subconcurrency" . hUnitTestToTests $ test
-    [ testDejafu scDeadlock1 "deadlock1" $ gives' [Left Deadlock, Right ()]
-    , testDejafu scDeadlock2 "deadlock2" $ gives' [(Left Deadlock, ()), (Right (), ())]
-    , testDejafu scSuccess   "success"   $ gives' [Right ()]
-    , testDejafu scIllegal   "illegal"   $ gives  [Left IllegalSubconcurrency]
-    ]
-  ]
 
 --------------------------------------------------------------------------------
 -- Threading

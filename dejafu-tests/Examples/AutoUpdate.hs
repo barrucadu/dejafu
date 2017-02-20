@@ -43,26 +43,41 @@ import Control.Monad
 import Control.Monad.Conc.Class
 
 -- test imports
-import System.Random (StdGen)
+import System.Random (StdGen, mkStdGen)
 import Test.DejaFu (Bounds(..), Failure(..), MemType(..), Way(..), defaultBounds, defaultWay, gives)
-import Test.Framework (Test)
+import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
 import Test.HUnit.DejaFu
 
 tests :: [Test]
-tests = hUnitTestToTests $ test
-  [ testDejafuWay defaultWay
-                  SequentialConsistency
-                  deadlocks
-                  "deadlocks"
-                  (gives [Left Deadlock, Right ()])
+tests =
+  [ testGroup "Systematic" . hUnitTestToTests $ test
+    [ testDejafuWay defaultWay
+                    SequentialConsistency
+                    deadlocks
+                    "deadlocks"
+                    (gives [Left Deadlock, Right ()])
 
-  , testDejafuWay (Systematically defaultBounds { boundPreemp = Just 3 } :: Way StdGen)
-                  SequentialConsistency
-                  nondeterministic
-                  "nondeterministic"
-                  (gives [Left Deadlock, Right 0, Right 1])
+    , testDejafuWay (Systematically defaultBounds { boundPreemp = Just 3 } :: Way StdGen)
+                    SequentialConsistency
+                    nondeterministic
+                    "nondeterministic (systematic)"
+                    (gives [Left Deadlock, Right 0, Right 1])
+    ]
+  , testGroup "Random" . hUnitTestToTests $ test
+    [ testDejafuWay (Randomly (mkStdGen 0) 100)
+                    SequentialConsistency
+                    deadlocks
+                    "deadlocks (random)"
+                    (gives [Left Deadlock, Right ()])
+
+    , testDejafuWay (Randomly (mkStdGen 0) 100)
+                    SequentialConsistency
+                    nondeterministic
+                    "nondeterministic (random)"
+                    (gives [Left Deadlock, Right 0, Right 1])
+    ]
   ]
 
 -- This exhibits a deadlock with no preemptions.
