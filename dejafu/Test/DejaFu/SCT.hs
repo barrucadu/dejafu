@@ -301,7 +301,7 @@ sctBound memtype cb conc = go initialState where
   -- Repeatedly run the computation gathering all the results and
   -- traces into a list until there are no schedules remaining to try.
   go dp = case nextPrefix dp of
-    Just (prefix, conservative, sleep, ()) -> do
+    Just (prefix, conservative, sleep) -> do
       (res, s, trace) <- runConcurrent scheduler
                                        memtype
                                        (initialDPORSchedState sleep prefix)
@@ -317,7 +317,7 @@ sctBound memtype cb conc = go initialState where
     Nothing -> pure []
 
   -- Find the next schedule prefix.
-  nextPrefix = findSchedulePrefix (>=initialThread) (const (0, ()))
+  nextPrefix = findSchedulePrefix (>=initialThread)
 
   -- The DPOR scheduler.
   scheduler = dporSched (dependent memtype) (cBound cb)

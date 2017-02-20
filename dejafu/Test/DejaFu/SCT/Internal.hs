@@ -18,7 +18,7 @@ import qualified Data.Foldable as F
 import Data.List (intercalate, nubBy, partition, sortOn)
 import Data.List.NonEmpty (NonEmpty(..), toList)
 import Data.Map.Strict (Map)
-import Data.Maybe (catMaybes, fromJust, isNothing)
+import Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe)
 import qualified Data.Map.Strict as M
 import Data.Set (Set)
 import qualified Data.Set as S
@@ -101,37 +101,23 @@ findSchedulePrefix
   -- rather than any which fail it. This allows a very basic way of
   -- domain-specific prioritisation between otherwise equal choices,
   -- which may be useful in some cases.
-  -> (Int -> (Int, g))
-  -- ^ List indexing function, used to select which schedule to
-  -- return. Takes the length of the list, and returns an index and
-  -- some generator state. The index returned MUST be in range!
   -> DPOR
-  -> Maybe ([ThreadId], Bool, Map ThreadId ThreadAction, g)
-findSchedulePrefix predicate idx dpor0
-  | null allPrefixes = Nothing
-  | otherwise = let (i, g)       = idx (length allPrefixes)
-                    (ts, c, slp) = allPrefixes !! i
-                in Just (ts, c, slp, g)
-  where
-    allPrefixes = go dpor0
+  -> Maybe ([ThreadId], Bool, Map ThreadId ThreadAction)
+findSchedulePrefix predicate = listToMaybe . go where
+  go dpor =
+    let prefixes = here dpor : map go' (M.toList $ dporDone dpor)
+    in case concatPartition (\(t:_,_,_) -> predicate t) prefixes of
+         ([], choices) -> choices
+         (choices, _)  -> choices
 
-    go dpor =
-          -- All the possible prefix traces from this point, with
-          -- updated DPOR subtrees if taken from the done list.
-      let prefixes = here dpor : map go' (M.toList $ dporDone dpor)
-      in case concatPartition (\(t:_,_,_) -> predicate t) prefixes of
-           ([], choices) -> choices
-           (choices, _)  -> choices
+  go' (tid, dpor) = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> go dpor
 
-    go' (tid, dpor) = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> go dpor
+  -- Prefix traces terminating with a to-do decision at this point.
+  here dpor = [([t], c, sleeps dpor) | (t, c) <- M.toList $ dporTodo dpor]
 
-    -- Prefix traces terminating with a to-do decision at this point.
-    here dpor = [([t], c, sleeps dpor) | (t, c) <- M.toList $ dporTodo dpor]
-
-    -- The new sleep set is the union of the sleep set of the node
-    -- we're branching from, plus all the decisions we've already
-    -- explored.
-    sleeps dpor = dporSleep dpor `M.union` dporTaken dpor
+  -- The new sleep set is the union of the sleep set of the node we're
+  -- branching from, plus all the decisions we've already explored.
+  sleeps dpor = dporSleep dpor `M.union` dporTaken dpor
 
 -- | Add a new trace to the tree, creating a new subtree branching off
 -- at the point where the \"to-do\" decision was made.
