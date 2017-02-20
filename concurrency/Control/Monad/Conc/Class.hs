@@ -114,6 +114,7 @@ class ( Applicative m, Monad m
       , putMVar
       , tryPutMVar
       , readMVar
+      , tryReadMVar
       , takeMVar
       , tryTakeMVar
       , (newCRef | newCRefN)
@@ -251,9 +252,15 @@ class ( Applicative m, Monad m
   tryPutMVar :: MVar m a -> a -> m Bool
 
   -- | Block until a value is present in the @MVar@, and then return
-  -- it. As with 'readMVar', this does not \"remove\" the value,
-  -- multiple reads are possible.
+  -- it. This does not \"remove\" the value, multiple reads are
+  -- possible.
   readMVar :: MVar m a -> m a
+
+  -- | Attempt to read a value from a @MVar@ non-blockingly, returning
+  -- a 'Just' (and emptying the @MVar@) if there is something there,
+  -- otherwise returning 'Nothing'. As with 'readMVar', this does not
+  -- \"remove\" the value.
+  tryReadMVar :: MVar m a -> m (Maybe a)
 
   -- | Take a value from a @MVar@. This \"empties\" the @MVar@,
   -- allowing a new value to be put in. This will block if there is no
@@ -501,6 +508,7 @@ instance MonadConc IO where
   getNumCapabilities = IO.getNumCapabilities
   setNumCapabilities = IO.setNumCapabilities
   readMVar           = IO.readMVar
+  tryReadMVar        = IO.tryReadMVar
   myThreadId         = IO.myThreadId
   yield              = IO.yield
   threadDelay        = IO.threadDelay
@@ -550,6 +558,7 @@ instance C => MonadConc (T m) where                            { \
   newEmptyMVar       = lift newEmptyMVar                       ; \
   newEmptyMVarN      = lift . newEmptyMVarN                    ; \
   readMVar           = lift . readMVar                         ; \
+  tryReadMVar        = lift . tryReadMVar                      ; \
   putMVar v          = lift . putMVar v                        ; \
   tryPutMVar v       = lift . tryPutMVar v                     ; \
   takeMVar           = lift . takeMVar                         ; \

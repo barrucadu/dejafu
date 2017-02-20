@@ -198,6 +198,8 @@ data ThreadAction =
   -- ^ Try to put into a 'MVar', possibly waking up some threads.
   | ReadVar MVarId
   -- ^ Read from a 'MVar'.
+  | TryReadVar MVarId Bool
+  -- ^ Try to read from a 'MVar'.
   | BlockedReadVar MVarId
   -- ^ Get blocked on a read.
   | TakeVar MVarId [ThreadId]
@@ -308,6 +310,8 @@ data Lookahead =
   -- ^ Will try to put into a 'MVar', possibly waking up some threads.
   | WillReadVar MVarId
   -- ^ Will read from a 'MVar'.
+  | WillTryReadVar MVarId
+  -- ^ Will try to read from a 'MVar'.
   | WillTakeVar MVarId
   -- ^ Will take from a 'MVar', possibly waking up some threads.
   | WillTryTakeVar MVarId
@@ -373,6 +377,7 @@ rewind (BlockedPutVar c) = Just (WillPutVar c)
 rewind (TryPutVar c _ _) = Just (WillTryPutVar c)
 rewind (ReadVar c) = Just (WillReadVar c)
 rewind (BlockedReadVar c) = Just (WillReadVar c)
+rewind (TryReadVar c _) = Just (WillTryReadVar c)
 rewind (TakeVar c _) = Just (WillTakeVar c)
 rewind (BlockedTakeVar c) = Just (WillTakeVar c)
 rewind (TryTakeVar c _ _) = Just (WillTryTakeVar c)
@@ -405,7 +410,6 @@ willRelease WillFork = True
 willRelease WillYield = True
 willRelease (WillPutVar _) = True
 willRelease (WillTryPutVar _) = True
-willRelease (WillReadVar _) = True
 willRelease (WillTakeVar _) = True
 willRelease (WillTryTakeVar _) = True
 willRelease WillSTM = True
@@ -492,6 +496,7 @@ simplifyLookahead :: Lookahead -> ActionType
 simplifyLookahead (WillPutVar c)     = SynchronisedWrite c
 simplifyLookahead (WillTryPutVar c)  = SynchronisedWrite c
 simplifyLookahead (WillReadVar c)    = SynchronisedRead c
+simplifyLookahead (WillTryReadVar c)  = SynchronisedRead c
 simplifyLookahead (WillTakeVar c)    = SynchronisedRead c
 simplifyLookahead (WillTryTakeVar c) = SynchronisedRead c
 simplifyLookahead (WillReadRef r)     = UnsynchronisedRead r

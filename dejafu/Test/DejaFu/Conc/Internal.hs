@@ -201,6 +201,12 @@ stepThread sched memtype tid action ctx = case action of
       (success, threads', _) <- readFromMVar cvar c tid (cThreads ctx)
       simple threads' $ if success then ReadVar cvid else BlockedReadVar cvid
 
+    -- try to get the value from a @MVar@, without emptying, without
+    -- blocking.
+    ATryReadVar cvar@(MVar cvid _) c -> synchronised $ do
+      (success, threads', _) <- tryReadFromMVar cvar c tid (cThreads ctx)
+      simple threads' $ TryReadVar cvid success
+
     -- take the value from a @MVar@, blocking the thread until it's
     -- full.
     ATakeVar cvar@(MVar cvid _) c -> synchronised $ do

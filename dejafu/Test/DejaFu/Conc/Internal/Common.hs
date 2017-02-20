@@ -107,6 +107,7 @@ data Action n r =
   | forall a. APutVar     (MVar r a) a (Action n r)
   | forall a. ATryPutVar  (MVar r a) a (Bool -> Action n r)
   | forall a. AReadVar    (MVar r a) (a -> Action n r)
+  | forall a. ATryReadVar (MVar r a) (Maybe a -> Action n r)
   | forall a. ATakeVar    (MVar r a) (a -> Action n r)
   | forall a. ATryTakeVar (MVar r a) (Maybe a -> Action n r)
 
@@ -148,6 +149,7 @@ lookahead = fromList . lookahead' where
   lookahead' (APutVar (MVar c _) _ k)    = WillPutVar c : lookahead' k
   lookahead' (ATryPutVar (MVar c _) _ _) = [WillTryPutVar c]
   lookahead' (AReadVar (MVar c _) _)     = [WillReadVar c]
+  lookahead' (ATryReadVar (MVar c _) _)  = [WillTryReadVar c]
   lookahead' (ATakeVar (MVar c _) _)     = [WillTakeVar c]
   lookahead' (ATryTakeVar (MVar c _) _)  = [WillTryTakeVar c]
   lookahead' (ANewRef _ _ _)         = [WillNewRef]

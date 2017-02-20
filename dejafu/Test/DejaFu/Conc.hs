@@ -143,6 +143,7 @@ instance Monad n => C.MonadConc (Conc n r) where
   takeMVar var   = toConc (ATakeVar var)
 
   tryPutMVar  var a = toConc (ATryPutVar  var a)
+  tryReadMVar var   = toConc (ATryReadVar var)
   tryTakeMVar var   = toConc (ATryTakeVar var)
 
   -- ----------

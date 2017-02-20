@@ -4,6 +4,7 @@ module Cases.SingleThreaded where
 
 import Control.Exception (ArithException(..), ArrayException(..))
 import Control.Monad (void)
+import Data.Maybe (isNothing)
 import Test.DejaFu (Failure(..), gives, gives')
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
@@ -24,6 +25,7 @@ tests =
   [ testGroup "MVar" . hUnitTestToTests $ test
     [ testDejafu emptyMVarTake "empty take" $ gives' [True]
     , testDejafu emptyMVarPut  "empty put"  $ gives' [()]
+    , testDejafu emptyMVarRead "empty read" $ gives' [True]
     , testDejafu fullMVarPut   "full put"   $ gives' [True]
     , testDejafu fullMVarTake  "full take"  $ gives' [True]
     , testDejafu fullMVarRead  "full read"  $ gives' [True]
@@ -83,6 +85,12 @@ emptyMVarPut :: MonadConc m => m ()
 emptyMVarPut = do
   var <- newEmptyMVar
   putMVar var ()
+
+-- | An empty @MVar@ cannot be read from.
+emptyMVarRead :: MonadConc m => m Bool
+emptyMVarRead = do
+  var <- newEmptyMVar
+  isNothing <$> tryReadMVar var
 
 -- | A full @MVar@ cannot be put into.
 fullMVarPut :: MonadConc m => m Bool

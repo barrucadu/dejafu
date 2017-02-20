@@ -157,6 +157,11 @@ readFromMVar :: MonadRef r n => MVar r a -> (a -> Action n r)
             -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
 readFromMVar cvar c = seeMVar False True cvar (c . fromJust)
 
+-- | Try to read from a @MVar@, not blocking if empty.
+tryReadFromMVar :: MonadRef r n => MVar r a -> (Maybe a -> Action n r)
+                -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
+tryReadFromMVar = seeMVar False False
+
 -- | Take from a @MVar@, blocking if empty.
 takeFromMVar :: MonadRef r n => MVar r a -> (a -> Action n r)
              -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
