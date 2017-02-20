@@ -22,7 +22,7 @@ import Data.Maybe (catMaybes, fromJust, isNothing)
 import qualified Data.Map.Strict as M
 import Data.Set (Set)
 import qualified Data.Set as S
-import Data.Sequence (Seq, ViewL(..), (|>))
+import Data.Sequence (Seq, (|>))
 import qualified Data.Sequence as Sq
 import System.Random (RandomGen, randomR)
 

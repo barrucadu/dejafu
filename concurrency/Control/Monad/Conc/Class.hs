@@ -70,7 +70,6 @@ import qualified Control.Monad.Catch as Ca
 import Control.Monad.STM.Class (MonadSTM, TVar, readTVar)
 import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
 import Data.Proxy (Proxy(..))
-import Data.Typeable (Typeable)
 
 -- for the 'IO' instance
 import qualified Control.Concurrent as IO
