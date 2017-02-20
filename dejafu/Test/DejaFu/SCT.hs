@@ -10,7 +10,12 @@
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
-  ( -- * Bounded Partial-order Reduction
+  ( -- * Running Concurrent Programs
+    Way(..)
+  , runSCT
+  , resultsSet
+
+  -- * Bounded Partial-order Reduction
 
   -- | We can characterise the state of a concurrent computation by
   -- considering the ordering of dependent events. This is a partial
@@ -36,7 +41,7 @@ module Test.DejaFu.SCT
   -- See /Bounded partial-order reduction/, K. Coons, M. Musuvathi,
   -- K. McKinley for more details.
 
-    Bounds(..)
+  , Bounds(..)
   , defaultBounds
   , noBounds
 
@@ -92,6 +97,7 @@ import Control.Monad.Ref (MonadRef)
 import Data.List (foldl')
 import qualified Data.Map.Strict as M
 import Data.Maybe (isJust, fromJust)
+import Data.Set (Set)
 import qualified Data.Set as S
 import System.Random (RandomGen)
 
@@ -100,13 +106,53 @@ import Test.DejaFu.Conc
 import Test.DejaFu.SCT.Internal
 
 -------------------------------------------------------------------------------
+-- Running Concurrent Programs
+
+-- | How to explore the possible executions of a concurrent program.
+data Way g
+  = Systematically Bounds
+  -- ^ Systematically explore all executions within the bounds.
+  | Randomly g Int
+  -- ^ Explore a fixed number of random executions, with the given
+  -- PRNG.
+  deriving (Eq, Ord, Read, Show)
+
+-- | Explore possible executions of a concurrent program.
+--
+-- * If the 'Way' is @Systematically@, 'sctBound' is used.
+--
+-- * If the 'Way' is @Randomly@, 'sctRandom' is used.
+runSCT :: (MonadRef r n, RandomGen g)
+  => Way g
+  -- ^ How to run the concurrent program.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Conc n r a
+  -- ^ The computation to run many times.
+  -> n [(Either Failure a, Trace)]
+runSCT (Systematically cb) memtype = sctBound memtype cb
+runSCT (Randomly g lim)    memtype = sctRandom memtype g lim
+
+-- | Return the set of results of a concurrent program.
+resultsSet :: (MonadRef r n, RandomGen g, Ord a)
+  => Way g
+  -- ^ How to run the concurrent program.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Conc n r a
+  -- ^ The computation to run many times.
+  -> n (Set (Either Failure a))
+resultsSet way memtype conc =
+  S.fromList . map fst <$> runSCT way memtype conc
+
+-------------------------------------------------------------------------------
 -- Combined Bounds
 
 data Bounds = Bounds
   { boundPreemp :: Maybe PreemptionBound
   , boundFair   :: Maybe FairBound
   , boundLength :: Maybe LengthBound
-  }
+  } deriving (Eq, Ord, Read, Show)
 
 -- | All bounds enabled, using their default values.
 defaultBounds :: Bounds
