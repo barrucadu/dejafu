@@ -93,12 +93,15 @@ module Test.DejaFu
 
   -- * Testing with different settings
 
-  , autocheck'
-  , autocheckIO'
-  , dejafu'
-  , dejafus'
-  , dejafuIO'
-  , dejafusIO'
+  , Way(..)
+  , defaultWay
+
+  , autocheckWay
+  , autocheckWayIO
+  , dejafuWay
+  , dejafuWayIO
+  , dejafusWay
+  , dejafusWayIO
 
   -- ** Memory Models
 
@@ -133,7 +136,7 @@ module Test.DejaFu
   --
   -- We can see this by testing with different memory models:
   --
-  -- > > autocheck' SequentialConsistency example2
+  -- > > autocheckWay defaultWay SequentialConsistency example2
   -- > [pass] Never Deadlocks (checked: 6)
   -- > [pass] No Exceptions (checked: 6)
   -- > [fail] Consistent Result (checked: 5)
@@ -145,7 +148,7 @@ module Test.DejaFu
   -- >         ...
   -- > False
   --
-  -- > > autocheck' TotalStoreOrder example2
+  -- > > autocheckWay defaultWay TotalStoreOrder example2
   -- > [pass] Never Deadlocks (checked: 303)
   -- > [pass] No Exceptions (checked: 303)
   -- > [fail] Consistent Result (checked: 302)
@@ -202,9 +205,9 @@ module Test.DejaFu
   , Result(..)
   , Failure(..)
   , runTest
-  , runTest'
+  , runTestWay
   , runTestM
-  , runTestM'
+  , runTestWayM
 
   -- * Predicates
 
@@ -246,6 +249,7 @@ import Control.Monad.ST (runST)
 import Data.Function (on)
 import Data.List (intercalate, intersperse, minimumBy)
 import Data.Ord (comparing)
+import System.Random (RandomGen)
 
 import Test.DejaFu.Common
 import Test.DejaFu.Conc
@@ -265,10 +269,10 @@ autocheck :: (Eq a, Show a)
   => (forall t. ConcST t a)
   -- ^ The computation to test
   -> IO Bool
-autocheck = autocheck' defaultMemType defaultBounds
+autocheck = autocheckWay defaultWay defaultMemType
 
--- | Variant of 'autocheck' which takes a memor model and schedule
--- bounds.
+-- | Variant of 'autocheck' which takes a way to run the program and a
+-- memory model.
 --
 -- Schedule bounding is used to filter the large number of possible
 -- schedules, and can be iteratively increased for further coverage
@@ -280,26 +284,28 @@ autocheck = autocheck' defaultMemType defaultBounds
 --
 -- __Warning:__ Using largers bounds will almost certainly
 -- significantly increase the time taken to test!
-autocheck' :: (Eq a, Show a)
-  => MemType
+autocheckWay :: (Eq a, Show a, RandomGen g)
+  => Way g
+  -- ^ How to run the concurrent program.
+  -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Bounds
-  -- ^ The schedule bounds
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> IO Bool
-autocheck' memtype cb conc = dejafus' memtype cb conc autocheckCases
+autocheckWay way memtype conc =
+  dejafusWay way memtype conc autocheckCases
 
 -- | Variant of 'autocheck' for computations which do 'IO'.
 autocheckIO :: (Eq a, Show a) => ConcIO a -> IO Bool
-autocheckIO = autocheckIO' defaultMemType defaultBounds
+autocheckIO = autocheckWayIO defaultWay defaultMemType
 
--- | Variant of 'autocheck'' for computations which do 'IO'.
-autocheckIO' :: (Eq a, Show a) => MemType -> Bounds -> ConcIO a -> IO Bool
-autocheckIO' memtype cb concio = dejafusIO' memtype cb concio autocheckCases
+-- | Variant of 'autocheckWay' for computations which do 'IO'.
+autocheckWayIO :: (Eq a, Show a, RandomGen g) => Way g -> MemType -> ConcIO a -> IO Bool
+autocheckWayIO way memtype concio =
+  dejafusWayIO way memtype concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
-autocheckCases :: (Eq a, Show a) => [(String, Predicate a)]
+autocheckCases :: Eq a => [(String, Predicate a)]
 autocheckCases =
   [ ("Never Deadlocks",   representative deadlocksNever)
   , ("No Exceptions",     representative exceptionsNever)
@@ -314,21 +320,21 @@ dejafu :: Show a
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
   -> IO Bool
-dejafu = dejafu' defaultMemType defaultBounds
+dejafu = dejafuWay defaultWay defaultMemType
 
--- | Variant of 'dejafu'' which takes a memory model and schedule
--- bounds.
-dejafu' :: Show a
-  => MemType
+-- | Variant of 'dejafu' which takes a way to run the program and a
+-- memory model.
+dejafuWay :: (Show a, RandomGen g)
+  => Way g
+  -- ^ How to run the concurrent program.
+  -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Bounds
-  -- ^ The schedule bounds
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
   -> IO Bool
-dejafu' memtype cb conc test = dejafus' memtype cb conc [test]
+dejafuWay way memtype conc test = dejafusWay way memtype conc [test]
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
@@ -338,41 +344,42 @@ dejafus :: Show a
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> IO Bool
-dejafus = dejafus' defaultMemType defaultBounds
+dejafus = dejafusWay defaultWay defaultMemType
 
--- | Variant of 'dejafus' which takes a memory model and schedule
--- bounds.
-dejafus' :: Show a
-  => MemType
+-- | Variant of 'dejafus' which takes a way to run the program and a
+-- memory model.
+dejafusWay :: (Show a, RandomGen g)
+  => Way g
+  -- ^ How to run the concurrent program.
+  -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Bounds
-  -- ^ The schedule bounds.
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> IO Bool
-dejafus' memtype cb conc tests = do
-  let traces = runST (sctBound memtype cb conc)
+dejafusWay way memtype conc tests = do
+  let traces = runST (runSCT way memtype conc)
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
 -- | Variant of 'dejafu' for computations which do 'IO'.
 dejafuIO :: Show a => ConcIO a -> (String, Predicate a) -> IO Bool
-dejafuIO = dejafuIO' defaultMemType defaultBounds
+dejafuIO = dejafuWayIO defaultWay defaultMemType
 
--- | Variant of 'dejafu'' for computations which do 'IO'.
-dejafuIO' :: Show a => MemType -> Bounds -> ConcIO a -> (String, Predicate a) -> IO Bool
-dejafuIO' memtype cb concio test = dejafusIO' memtype cb concio [test]
+-- | Variant of 'dejafuWay' for computations which do 'IO'.
+dejafuWayIO :: (Show a, RandomGen g) => Way g -> MemType -> ConcIO a -> (String, Predicate a) -> IO Bool
+dejafuWayIO way memtype concio test =
+  dejafusWayIO way memtype concio [test]
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
 dejafusIO :: Show a => ConcIO a -> [(String, Predicate a)] -> IO Bool
-dejafusIO = dejafusIO' defaultMemType defaultBounds
+dejafusIO = dejafusWayIO defaultWay defaultMemType
 
--- | Variant of 'dejafus'' for computations which do 'IO'.
-dejafusIO' :: Show a => MemType -> Bounds -> ConcIO a -> [(String, Predicate a)] -> IO Bool
-dejafusIO' memtype cb concio tests = do
-  traces  <- sctBound memtype cb concio
+-- | Variant of 'dejafusWay' for computations which do 'IO'.
+dejafusWayIO :: (Show a, RandomGen g) => Way g -> MemType -> ConcIO a -> [(String, Predicate a)] -> IO Bool
+dejafusWayIO way memtype concio tests = do
+  traces  <- runSCT way memtype concio
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
   return $ and results
 
@@ -413,32 +420,34 @@ runTest ::
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Result a
-runTest test conc = runST (runTestM test conc)
+runTest test conc =
+  runST (runTestM test conc)
 
--- | Variant of 'runTest' which takes a memory model and schedule
--- bounds.
-runTest' ::
-    MemType
+-- | Variant of 'runTest' which takes a way to run the program and a
+-- memory model.
+runTestWay :: RandomGen g
+  => Way g
+  -- ^ How to run the concurrent program.
+  -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Bounds
-  -- ^ The schedule bounds.
   -> Predicate a
   -- ^ The predicate to check
   -> (forall t. ConcST t a)
   -- ^ The computation to test
   -> Result a
-runTest' memtype cb predicate conc =
-  runST (runTestM' memtype cb predicate conc)
+runTestWay way memtype predicate conc =
+  runST (runTestWayM way memtype predicate conc)
 
 -- | Monad-polymorphic variant of 'runTest'.
 runTestM :: MonadRef r n
          => Predicate a -> Conc n r a -> n (Result a)
-runTestM = runTestM' defaultMemType defaultBounds
+runTestM = runTestWayM defaultWay defaultMemType
 
 -- | Monad-polymorphic variant of 'runTest''.
-runTestM' :: MonadRef r n
-          => MemType -> Bounds -> Predicate a -> Conc n r a -> n (Result a)
-runTestM' memtype cb predicate conc = predicate <$> sctBound memtype cb conc
+runTestWayM :: (MonadRef r n, RandomGen g)
+            => Way g -> MemType -> Predicate a -> Conc n r a -> n (Result a)
+runTestWayM way memtype predicate conc =
+  predicate <$> runSCT way memtype conc
 
 -- * Predicates
 

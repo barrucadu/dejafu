@@ -12,6 +12,7 @@
 module Test.DejaFu.SCT
   ( -- * Running Concurrent Programs
     Way(..)
+  , defaultWay
   , runSCT
   , resultsSet
 
@@ -99,7 +100,7 @@ import qualified Data.Map.Strict as M
 import Data.Maybe (isJust, fromJust)
 import Data.Set (Set)
 import qualified Data.Set as S
-import System.Random (RandomGen)
+import System.Random (RandomGen, StdGen)
 
 import Test.DejaFu.Common
 import Test.DejaFu.Conc
@@ -116,6 +117,14 @@ data Way g
   -- ^ Explore a fixed number of random executions, with the given
   -- PRNG.
   deriving (Eq, Ord, Read, Show)
+
+-- | A default way to execute concurrent programs: systematically
+-- using 'defaultBounds'.
+--
+-- The type parameter is constrained to 'StdGen', even though it is
+-- unused, to avoid ambiguity errors.
+defaultWay :: Way StdGen
+defaultWay = Systematically defaultBounds
 
 -- | Explore possible executions of a concurrent program.
 --
