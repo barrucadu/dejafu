@@ -10,16 +10,17 @@ import Test.Framework (Test)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
 import Test.HUnit.DejaFu
+import System.Random (StdGen)
 
 tests :: [Test]
 tests = hUnitTestToTests $ test
-  [ testDejafu' defaultMemType bound (philosophers 3) "deadlocks" deadlocksSometimes
-  , testDejafu' defaultMemType bound (philosophers 3) "loops"     abortsSometimes
+  [ testDejafuWay way defaultMemType (philosophers 3) "deadlocks" deadlocksSometimes
+  , testDejafuWay way defaultMemType (philosophers 3) "loops"     abortsSometimes
   ]
 
 -- | Shorter execution length bound
-bound :: Bounds
-bound = defaultBounds { boundLength = Just 30 }
+way :: Way StdGen
+way = Systematically defaultBounds { boundLength = Just 30 }
 
 --------------------------------------------------------------------------------
 

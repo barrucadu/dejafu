@@ -24,6 +24,7 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Sequence (Seq, ViewL(..), (|>))
 import qualified Data.Sequence as Sq
+import System.Random (RandomGen, randomR)
 
 import Test.DejaFu.Common
 import Test.DejaFu.Schedule (Decision(..), Scheduler, decisionOf, tidOf)
@@ -304,7 +305,7 @@ incorporateBacktrackSteps bv = go Nothing [] where
 -- * DPOR scheduler
 
 -- | The scheduler state
-data SchedState = SchedState
+data DPORSchedState = DPORSchedState
   { schedSleep     :: Map ThreadId ThreadAction
   -- ^ The sleep set: decisions not to make until something dependent
   -- with them happens.
@@ -326,13 +327,13 @@ data SchedState = SchedState
   -- remove decisions from the sleep set.
   } deriving Show
 
--- | Initial scheduler state for a given prefix
-initialSchedState :: Map ThreadId ThreadAction
+-- | Initial DPOR scheduler state for a given prefix
+initialDPORSchedState :: Map ThreadId ThreadAction
   -- ^ The initial sleep set.
   -> [ThreadId]
   -- ^ The schedule prefix.
-  -> SchedState
-initialSchedState sleep prefix = SchedState
+  -> DPORSchedState
+initialDPORSchedState sleep prefix = DPORSchedState
   { schedSleep     = sleep
   , schedPrefix    = prefix
   , schedBPoints   = Sq.empty
@@ -419,7 +420,7 @@ dporSched
   -> BoundFunc
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
-  -> Scheduler SchedState
+  -> Scheduler DPORSchedState
 dporSched dependency inBound trc prior threads s = schedule where
   -- Pick a thread to run.
   schedule = case schedPrefix s of
@@ -502,6 +503,44 @@ dporSched dependency inBound trc prior threads s = schedule where
   -- The runnable threads as a normal list.
   threads' = toList threads
   tids'    = toList tids
+
+-------------------------------------------------------------------------------
+-- Weighted random scheduler
+
+-- | The scheduler state
+data RandSchedState g = RandSchedState
+  { schedWeights :: Map ThreadId Int
+  -- ^ The thread weights: used in determining which to run.
+  , schedGen     :: g
+  -- ^ The random number generator.
+  }
+
+-- | Initial weighted random scheduler state.
+initialRandSchedState :: g -> RandSchedState g
+initialRandSchedState = RandSchedState M.empty
+
+-- | Weighted random scheduler: assigns to each new thread a weight,
+-- and makes a weighted random choice out of the runnable threads at
+-- every step.
+randSched :: RandomGen g => Scheduler (RandSchedState g)
+randSched _ _ threads s = (pick choice enabled, RandSchedState weights' g'') where
+  -- Select a thread
+  pick idx ((x, f):xs)
+    | idx < f = Just x
+    | otherwise = pick (idx - f) xs
+  pick _ [] = Nothing
+  (choice, g'') = randomR (0, sum (map snd enabled) - 1) g'
+  enabled = M.toList $ M.filterWithKey (\tid _ -> tid `elem` tids) weights'
+
+  -- The weights, with any new threads added.
+  weights' = schedWeights s `M.union` M.fromList newWeights
+  (newWeights, g') = foldr assignWeight ([], schedGen s) $ filter (`M.notMember` schedWeights s) tids
+  assignWeight tid ~(ws, g0) =
+    let (w, g) = randomR (1, 50) g0
+    in ((tid, w):ws, g)
+
+  -- The runnable threads.
+  tids = map fst (toList threads)
 
 -------------------------------------------------------------------------------
 -- Dependency function state

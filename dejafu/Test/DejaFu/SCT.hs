@@ -10,7 +10,12 @@
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
-  ( -- * Bounded Partial-order Reduction
+  ( -- * Running Concurrent Programs
+    Way(..)
+  , runSCT
+  , resultsSet
+
+  -- * Bounded Partial-order Reduction
 
   -- | We can characterise the state of a concurrent computation by
   -- considering the ordering of dependent events. This is a partial
@@ -36,13 +41,9 @@ module Test.DejaFu.SCT
   -- See /Bounded partial-order reduction/, K. Coons, M. Musuvathi,
   -- K. McKinley for more details.
 
-    Bounds(..)
-  , defaultBounds
+  , Bounds(..)
   , noBounds
-
   , sctBound
-
-  -- * Individual Bounds
 
   -- ** Pre-emption Bounding
 
@@ -54,7 +55,6 @@ module Test.DejaFu.SCT
   -- See the BPOR paper for more details.
 
   , PreemptionBound(..)
-  , defaultPreemptionBound
   , sctPreBound
 
   -- ** Fair Bounding
@@ -66,7 +66,6 @@ module Test.DejaFu.SCT
   -- See the BPOR paper for more details.
 
   , FairBound(..)
-  , defaultFairBound
   , sctFairBound
 
   -- ** Length Bounding
@@ -75,19 +74,71 @@ module Test.DejaFu.SCT
   -- terms of primitive actions) of an execution.
 
   , LengthBound(..)
-  , defaultLengthBound
   , sctLengthBound
+
+  -- * Random Scheduling
+
+  -- | By greatly sacrificing completeness, testing of a large
+  -- concurrent system can be greatly sped-up. Counter-intuitively,
+  -- random scheduling has better bug-finding behaviour than just
+  -- executing a program \"for real\" many times. This is perhaps
+  -- because a random scheduler is more chaotic than the real
+  -- scheduler.
+
+  , sctRandom
   ) where
 
 import Control.Monad.Ref (MonadRef)
 import Data.List (foldl')
 import qualified Data.Map.Strict as M
 import Data.Maybe (isJust, fromJust)
+import Data.Set (Set)
 import qualified Data.Set as S
+import System.Random (RandomGen)
 
 import Test.DejaFu.Common
 import Test.DejaFu.Conc
 import Test.DejaFu.SCT.Internal
+
+-------------------------------------------------------------------------------
+-- Running Concurrent Programs
+
+-- | How to explore the possible executions of a concurrent program.
+data Way g
+  = Systematically Bounds
+  -- ^ Systematically explore all executions within the bounds.
+  | Randomly g Int
+  -- ^ Explore a fixed number of random executions, with the given
+  -- PRNG.
+  deriving (Eq, Ord, Read, Show)
+
+-- | Explore possible executions of a concurrent program.
+--
+-- * If the 'Way' is @Systematically@, 'sctBound' is used.
+--
+-- * If the 'Way' is @Randomly@, 'sctRandom' is used.
+runSCT :: (MonadRef r n, RandomGen g)
+  => Way g
+  -- ^ How to run the concurrent program.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Conc n r a
+  -- ^ The computation to run many times.
+  -> n [(Either Failure a, Trace)]
+runSCT (Systematically cb) memtype = sctBound memtype cb
+runSCT (Randomly g lim)    memtype = sctRandom memtype g lim
+
+-- | Return the set of results of a concurrent program.
+resultsSet :: (MonadRef r n, RandomGen g, Ord a)
+  => Way g
+  -- ^ How to run the concurrent program.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Conc n r a
+  -- ^ The computation to run many times.
+  -> n (Set (Either Failure a))
+resultsSet way memtype conc =
+  S.fromList . map fst <$> runSCT way memtype conc
 
 -------------------------------------------------------------------------------
 -- Combined Bounds
@@ -96,36 +147,17 @@ data Bounds = Bounds
   { boundPreemp :: Maybe PreemptionBound
   , boundFair   :: Maybe FairBound
   , boundLength :: Maybe LengthBound
-  }
-
--- | All bounds enabled, using their default values.
-defaultBounds :: Bounds
-defaultBounds = Bounds
-  { boundPreemp = Just defaultPreemptionBound
-  , boundFair   = Just defaultFairBound
-  , boundLength = Just defaultLengthBound
-  }
+  } deriving (Eq, Ord, Read, Show)
 
 -- | No bounds enabled. This forces the scheduler to just use
 -- partial-order reduction and sleep sets to prune the search
--- space. This will /ONLY/ work if your computation always terminated!
+-- space. This will /ONLY/ work if your computation always terminates!
 noBounds :: Bounds
 noBounds = Bounds
   { boundPreemp = Nothing
   , boundFair   = Nothing
   , boundLength = Nothing
   }
-
--- | An SCT runner using a bounded scheduler
-sctBound :: MonadRef r n
-  => MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Bounds
-  -- ^ The combined bounds.
-  -> Conc n r a
-  -- ^ The computation to run many times
-  -> n [(Either Failure a, Trace)]
-sctBound memtype cb = sctBounded memtype (cBound cb) (cBacktrack cb)
 
 -- | Combination bound function
 cBound :: Bounds -> BoundFunc
@@ -150,13 +182,6 @@ cBacktrack _ = backtrackAt (\_ _ -> False)
 newtype PreemptionBound = PreemptionBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
--- | A sensible default preemption bound: 2.
---
--- See /Concurrency Testing Using Schedule Bounding: an Empirical Study/,
--- P. Thomson, A. F. Donaldson, A. Betts for justification.
-defaultPreemptionBound :: PreemptionBound
-defaultPreemptionBound = 2
-
 -- | An SCT runner using a pre-emption bounding scheduler.
 sctPreBound :: MonadRef r n
   => MemType
@@ -167,7 +192,7 @@ sctPreBound :: MonadRef r n
   -> Conc n r a
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
-sctPreBound memtype pb = sctBounded memtype (pBound pb) pBacktrack
+sctPreBound memtype pb = sctBound memtype $ Bounds (Just pb) Nothing Nothing
 
 -- | Pre-emption bound function. This does not count pre-emptive
 -- context switches to a commit thread.
@@ -200,13 +225,6 @@ pBacktrack bs = backtrackAt (\_ _ -> False) bs . concatMap addConservative where
 newtype FairBound = FairBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
--- | A sensible default fair bound: 5.
---
--- This comes from playing around myself, but there is probably a
--- better default.
-defaultFairBound :: FairBound
-defaultFairBound = 5
-
 -- | An SCT runner using a fair bounding scheduler.
 sctFairBound :: MonadRef r n
   => MemType
@@ -217,7 +235,7 @@ sctFairBound :: MonadRef r n
   -> Conc n r a
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
-sctFairBound memtype fb = sctBounded memtype (fBound fb) fBacktrack
+sctFairBound memtype fb = sctBound memtype $ Bounds Nothing (Just fb) Nothing
 
 -- | Fair bound function
 fBound :: FairBound -> BoundFunc
@@ -236,13 +254,6 @@ fBacktrack = backtrackAt check where
 newtype LengthBound = LengthBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
--- | A sensible default length bound: 250.
---
--- Based on the assumption that anything which executes for much
--- longer (or even this long) will take ages to test.
-defaultLengthBound :: LengthBound
-defaultLengthBound = 250
-
 -- | An SCT runner using a length bounding scheduler.
 sctLengthBound :: MonadRef r n
   => MemType
@@ -253,7 +264,7 @@ sctLengthBound :: MonadRef r n
   -> Conc n r a
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
-sctLengthBound memtype lb = sctBounded memtype (lBound lb) lBacktrack
+sctLengthBound memtype lb = sctBound memtype $ Bounds Nothing Nothing (Just lb)
 
 -- | Length bound function
 lBound :: LengthBound -> BoundFunc
@@ -265,40 +276,35 @@ lBacktrack :: BacktrackFunc
 lBacktrack = backtrackAt (\_ _ -> False)
 
 -------------------------------------------------------------------------------
--- DPOR
+-- Systematic concurrency testing
 
 -- | SCT via BPOR.
 --
 -- Schedules are generated by running the computation with a
--- deterministic scheduler with some initial list of decisions, after
--- which the supplied function is called. At each step of execution,
--- possible-conflicting actions are looked for, if any are found,
--- \"backtracking points\" are added, to cause the events to happen in
--- a different order in a future execution.
+-- deterministic scheduler with some initial list of decisions. At
+-- each step of execution, possible-conflicting actions are looked
+-- for, if any are found, \"backtracking points\" are added, to cause
+-- the events to happen in a different order in a future execution.
 --
 -- Note that unlike with non-bounded partial-order reduction, this may
 -- do some redundant work as the introduction of a bound can make
 -- previously non-interfering events interfere with each other.
-sctBounded :: MonadRef r n
+sctBound :: MonadRef r n
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> BoundFunc
-  -- ^ Check if a prefix trace is within the bound
-  -> BacktrackFunc
-  -- ^ Add a new backtrack point, this takes the history of the
-  -- execution so far, the index to insert the backtracking point, and
-  -- the thread to backtrack to. This may insert more than one
-  -- backtracking point.
+  -> Bounds
+  -- ^ The combined bounds.
   -> Conc n r a
+  -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
-sctBounded memtype bf backtrack conc = go initialState where
+sctBound memtype cb conc = go initialState where
   -- Repeatedly run the computation gathering all the results and
   -- traces into a list until there are no schedules remaining to try.
   go dp = case nextPrefix dp of
     Just (prefix, conservative, sleep, ()) -> do
       (res, s, trace) <- runConcurrent scheduler
                                        memtype
-                                       (initialSchedState sleep prefix)
+                                       (initialDPORSchedState sleep prefix)
                                        conc
 
       let bpoints = findBacktracks (schedBoundKill s) (schedBPoints s) trace
@@ -314,16 +320,42 @@ sctBounded memtype bf backtrack conc = go initialState where
   nextPrefix = findSchedulePrefix (>=initialThread) (const (0, ()))
 
   -- The DPOR scheduler.
-  scheduler = dporSched (dependent memtype) bf
+  scheduler = dporSched (dependent memtype) (cBound cb)
 
   -- Find the new backtracking steps.
-  findBacktracks = findBacktrackSteps (dependent' memtype) backtrack
+  findBacktracks = findBacktrackSteps (dependent' memtype) (cBacktrack cb)
 
   -- Incorporate a trace into the DPOR tree.
   addTrace = incorporateTrace (dependent memtype)
 
   -- Incorporate the new backtracking steps into the DPOR tree.
-  addBacktracks = incorporateBacktrackSteps bf
+  addBacktracks = incorporateBacktrackSteps (cBound cb)
+
+-- | SCT via random scheduling.
+--
+-- Schedules are generated by assigning to each new thread a random
+-- weight. Threads are then scheduled by a weighted random selection.
+--
+-- This is not guaranteed to find all distinct results.
+sctRandom :: (MonadRef r n, RandomGen g)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> g
+  -- ^ The random number generator.
+  -> Int
+  -- ^ The number of executions to perform.
+  -> Conc n r a
+  -- ^ The computation to run many times.
+  -> n [(Either Failure a, Trace)]
+sctRandom memtype g0 lim0 conc = go g0 lim0 where
+  go _ 0 = pure []
+  go g n = do
+    (res, s, trace) <- runConcurrent randSched
+                                     memtype
+                                     (initialRandSchedState g)
+                                     conc
+
+    ((res, trace):) <$> go (schedGen s) (n-1)
 
 -------------------------------------------------------------------------------
 -- Dependency function
