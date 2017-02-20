@@ -258,7 +258,7 @@ data ThreadAction =
   -- ^ Cease execution and terminate.
   | Subconcurrency
   -- ^ Start executing an action with @subconcurrency@.
-  deriving Show
+  deriving (Eq, Show)
 
 -- | Check if a @ThreadAction@ immediately blocks.
 isBlock :: ThreadAction -> Bool
@@ -357,7 +357,7 @@ data Lookahead =
   -- ^ Will cease execution and terminate.
   | WillSubconcurrency
   -- ^ Will execute an action with @subconcurrency@.
-  deriving Show
+  deriving (Eq, Show)
 
 -- | Convert a 'ThreadAction' into a 'Lookahead': \"rewind\" what has
 -- happened. 'Killed' has no 'Lookahead' counterpart.
