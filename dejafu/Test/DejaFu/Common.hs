@@ -410,6 +410,7 @@ willRelease WillFork = True
 willRelease WillYield = True
 willRelease (WillPutMVar _) = True
 willRelease (WillTryPutMVar _) = True
+willRelease (WillReadMVar _) = True
 willRelease (WillTakeMVar _) = True
 willRelease (WillTryTakeMVar _) = True
 willRelease WillSTM = True
