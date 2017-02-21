@@ -556,8 +556,8 @@ updateDepState depstate tid act = DepState
 -- | Update the 'CRef' buffer state with the action that has just
 -- happened.
 updateCRState :: ThreadAction -> Map CRefId Bool -> Map CRefId Bool
-updateCRState (CommitRef _ r) = M.delete r
-updateCRState (WriteRef    r) = M.insert r True
+updateCRState (CommitCRef _ r) = M.delete r
+updateCRState (WriteCRef    r) = M.insert r True
 updateCRState ta
   | isBarrier $ simplifyAction ta = const M.empty
   | otherwise = id
@@ -582,11 +582,11 @@ canInterrupt :: DepState -> ThreadId -> ThreadAction -> Bool
 canInterrupt depstate tid act
   -- If masked interruptible, blocked actions can be interrupted.
   | isMaskedInterruptible depstate tid = case act of
-    BlockedPutVar  _ -> True
-    BlockedReadVar _ -> True
-    BlockedTakeVar _ -> True
-    BlockedSTM     _ -> True
-    BlockedThrowTo _ -> True
+    BlockedPutMVar  _ -> True
+    BlockedReadMVar _ -> True
+    BlockedTakeMVar _ -> True
+    BlockedSTM      _ -> True
+    BlockedThrowTo  _ -> True
     _ -> False
   -- If masked uninterruptible, nothing can be.
   | isMaskedUninterruptible depstate tid = False
@@ -599,11 +599,11 @@ canInterruptL depstate tid lh
   -- If masked interruptible, actions which can block may be
   -- interrupted.
   | isMaskedInterruptible depstate tid = case lh of
-    WillPutVar  _ -> True
-    WillReadVar _ -> True
-    WillTakeVar _ -> True
-    WillSTM       -> True
-    WillThrowTo _ -> True
+    WillPutMVar  _ -> True
+    WillReadMVar _ -> True
+    WillTakeMVar _ -> True
+    WillSTM        -> True
+    WillThrowTo  _ -> True
     _ -> False
   -- If masked uninterruptible, nothing can be.
   | isMaskedUninterruptible depstate tid = False

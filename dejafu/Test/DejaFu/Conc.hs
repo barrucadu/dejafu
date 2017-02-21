@@ -121,30 +121,30 @@ instance Monad n => C.MonadConc (Conc n r) where
 
   -- ----------
 
-  newCRefN n a = toConc (\c -> ANewRef n a c)
+  newCRefN n a = toConc (\c -> ANewCRef n a c)
 
-  readCRef   ref = toConc (AReadRef    ref)
-  readForCAS ref = toConc (AReadRefCas ref)
+  readCRef   ref = toConc (AReadCRef    ref)
+  readForCAS ref = toConc (AReadCRefCas ref)
 
   peekTicket' _ = _ticketVal
 
-  writeCRef ref      a = toConc (\c -> AWriteRef ref a (c ()))
-  casCRef   ref tick a = toConc (ACasRef ref tick a)
+  writeCRef ref      a = toConc (\c -> AWriteCRef ref a (c ()))
+  casCRef   ref tick a = toConc (ACasCRef ref tick a)
 
-  atomicModifyCRef ref f = toConc (AModRef    ref f)
-  modifyCRefCAS    ref f = toConc (AModRefCas ref f)
+  atomicModifyCRef ref f = toConc (AModCRef    ref f)
+  modifyCRefCAS    ref f = toConc (AModCRefCas ref f)
 
   -- ----------
 
-  newEmptyMVarN n = toConc (\c -> ANewVar n c)
+  newEmptyMVarN n = toConc (\c -> ANewMVar n c)
 
-  putMVar  var a = toConc (\c -> APutVar var a (c ()))
-  readMVar var   = toConc (AReadVar var)
-  takeMVar var   = toConc (ATakeVar var)
+  putMVar  var a = toConc (\c -> APutMVar var a (c ()))
+  readMVar var   = toConc (AReadMVar var)
+  takeMVar var   = toConc (ATakeMVar var)
 
-  tryPutMVar  var a = toConc (ATryPutVar  var a)
-  tryReadMVar var   = toConc (ATryReadVar var)
-  tryTakeMVar var   = toConc (ATryTakeVar var)
+  tryPutMVar  var a = toConc (ATryPutMVar  var a)
+  tryReadMVar var   = toConc (ATryReadMVar var)
+  tryTakeMVar var   = toConc (ATryTakeMVar var)
 
   -- ----------
 

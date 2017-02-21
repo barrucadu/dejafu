@@ -103,21 +103,21 @@ data Action n r =
   | AGetNumCapabilities (Int -> Action n r)
   | ASetNumCapabilities Int (Action n r)
 
-  | forall a. ANewVar String (MVar r a -> Action n r)
-  | forall a. APutVar     (MVar r a) a (Action n r)
-  | forall a. ATryPutVar  (MVar r a) a (Bool -> Action n r)
-  | forall a. AReadVar    (MVar r a) (a -> Action n r)
-  | forall a. ATryReadVar (MVar r a) (Maybe a -> Action n r)
-  | forall a. ATakeVar    (MVar r a) (a -> Action n r)
-  | forall a. ATryTakeVar (MVar r a) (Maybe a -> Action n r)
+  | forall a. ANewMVar String (MVar r a -> Action n r)
+  | forall a. APutMVar     (MVar r a) a (Action n r)
+  | forall a. ATryPutMVar  (MVar r a) a (Bool -> Action n r)
+  | forall a. AReadMVar    (MVar r a) (a -> Action n r)
+  | forall a. ATryReadMVar (MVar r a) (Maybe a -> Action n r)
+  | forall a. ATakeMVar    (MVar r a) (a -> Action n r)
+  | forall a. ATryTakeMVar (MVar r a) (Maybe a -> Action n r)
 
-  | forall a.   ANewRef String a (CRef r a -> Action n r)
-  | forall a.   AReadRef    (CRef r a) (a -> Action n r)
-  | forall a.   AReadRefCas (CRef r a) (Ticket a -> Action n r)
-  | forall a b. AModRef     (CRef r a) (a -> (a, b)) (b -> Action n r)
-  | forall a b. AModRefCas  (CRef r a) (a -> (a, b)) (b -> Action n r)
-  | forall a.   AWriteRef   (CRef r a) a (Action n r)
-  | forall a.   ACasRef     (CRef r a) (Ticket a) a ((Bool, Ticket a) -> Action n r)
+  | forall a.   ANewCRef String a (CRef r a -> Action n r)
+  | forall a.   AReadCRef    (CRef r a) (a -> Action n r)
+  | forall a.   AReadCRefCas (CRef r a) (Ticket a -> Action n r)
+  | forall a b. AModCRef     (CRef r a) (a -> (a, b)) (b -> Action n r)
+  | forall a b. AModCRefCas  (CRef r a) (a -> (a, b)) (b -> Action n r)
+  | forall a.   AWriteCRef   (CRef r a) a (Action n r)
+  | forall a.   ACasCRef     (CRef r a) (Ticket a) a ((Bool, Ticket a) -> Action n r)
 
   | forall e.   Exception e => AThrow e
   | forall e.   Exception e => AThrowTo ThreadId e (Action n r)
@@ -145,21 +145,21 @@ lookahead = fromList . lookahead' where
   lookahead' (AMyTId _)              = [WillMyThreadId]
   lookahead' (AGetNumCapabilities _) = [WillGetNumCapabilities]
   lookahead' (ASetNumCapabilities i k) = WillSetNumCapabilities i : lookahead' k
-  lookahead' (ANewVar _ _)           = [WillNewVar]
-  lookahead' (APutVar (MVar c _) _ k)    = WillPutVar c : lookahead' k
-  lookahead' (ATryPutVar (MVar c _) _ _) = [WillTryPutVar c]
-  lookahead' (AReadVar (MVar c _) _)     = [WillReadVar c]
-  lookahead' (ATryReadVar (MVar c _) _)  = [WillTryReadVar c]
-  lookahead' (ATakeVar (MVar c _) _)     = [WillTakeVar c]
-  lookahead' (ATryTakeVar (MVar c _) _)  = [WillTryTakeVar c]
-  lookahead' (ANewRef _ _ _)         = [WillNewRef]
-  lookahead' (AReadRef (CRef r _) _)     = [WillReadRef r]
-  lookahead' (AReadRefCas (CRef r _) _)  = [WillReadRefCas r]
-  lookahead' (AModRef (CRef r _) _ _)    = [WillModRef r]
-  lookahead' (AModRefCas (CRef r _) _ _) = [WillModRefCas r]
-  lookahead' (AWriteRef (CRef r _) _ k) = WillWriteRef r : lookahead' k
-  lookahead' (ACasRef (CRef r _) _ _ _) = [WillCasRef r]
-  lookahead' (ACommit t c)           = [WillCommitRef t c]
+  lookahead' (ANewMVar _ _)           = [WillNewMVar]
+  lookahead' (APutMVar (MVar c _) _ k)    = WillPutMVar c : lookahead' k
+  lookahead' (ATryPutMVar (MVar c _) _ _) = [WillTryPutMVar c]
+  lookahead' (AReadMVar (MVar c _) _)     = [WillReadMVar c]
+  lookahead' (ATryReadMVar (MVar c _) _)  = [WillTryReadMVar c]
+  lookahead' (ATakeMVar (MVar c _) _)     = [WillTakeMVar c]
+  lookahead' (ATryTakeMVar (MVar c _) _)  = [WillTryTakeMVar c]
+  lookahead' (ANewCRef _ _ _)         = [WillNewCRef]
+  lookahead' (AReadCRef (CRef r _) _)     = [WillReadCRef r]
+  lookahead' (AReadCRefCas (CRef r _) _)  = [WillReadCRefCas r]
+  lookahead' (AModCRef (CRef r _) _ _)    = [WillModCRef r]
+  lookahead' (AModCRefCas (CRef r _) _ _) = [WillModCRefCas r]
+  lookahead' (AWriteCRef (CRef r _) _ k) = WillWriteCRef r : lookahead' k
+  lookahead' (ACasCRef (CRef r _) _ _ _) = [WillCasCRef r]
+  lookahead' (ACommit t c)           = [WillCommitCRef t c]
   lookahead' (AAtom _ _)             = [WillSTM]
   lookahead' (AThrow _)              = [WillThrow]
   lookahead' (AThrowTo tid _ k)      = WillThrowTo tid : lookahead' k

@@ -179,94 +179,94 @@ stepThread sched memtype tid action ctx = case action of
     AYield c -> simple (goto c tid (cThreads ctx)) Yield
 
     -- create a new @MVar@, using the next 'MVarId'.
-    ANewVar n c -> do
+    ANewMVar n c -> do
       let (idSource', newmvid) = nextMVId n (cIdSource ctx)
       ref <- newRef Nothing
       let mvar = MVar newmvid ref
-      pure $ Right (ctx { cThreads = goto (c mvar) tid (cThreads ctx), cIdSource = idSource' }, Right (NewVar newmvid))
+      pure $ Right (ctx { cThreads = goto (c mvar) tid (cThreads ctx), cIdSource = idSource' }, Right (NewMVar newmvid))
 
     -- put a value into a @MVar@, blocking the thread until it's empty.
-    APutVar cvar@(MVar cvid _) a c -> synchronised $ do
+    APutMVar cvar@(MVar cvid _) a c -> synchronised $ do
       (success, threads', woken) <- putIntoMVar cvar a c tid (cThreads ctx)
-      simple threads' $ if success then PutVar cvid woken else BlockedPutVar cvid
+      simple threads' $ if success then PutMVar cvid woken else BlockedPutMVar cvid
 
     -- try to put a value into a @MVar@, without blocking.
-    ATryPutVar cvar@(MVar cvid _) a c -> synchronised $ do
+    ATryPutMVar cvar@(MVar cvid _) a c -> synchronised $ do
       (success, threads', woken) <- tryPutIntoMVar cvar a c tid (cThreads ctx)
-      simple threads' $ TryPutVar cvid success woken
+      simple threads' $ TryPutMVar cvid success woken
 
     -- get the value from a @MVar@, without emptying, blocking the
     -- thread until it's full.
-    AReadVar cvar@(MVar cvid _) c -> synchronised $ do
+    AReadMVar cvar@(MVar cvid _) c -> synchronised $ do
       (success, threads', _) <- readFromMVar cvar c tid (cThreads ctx)
-      simple threads' $ if success then ReadVar cvid else BlockedReadVar cvid
+      simple threads' $ if success then ReadMVar cvid else BlockedReadMVar cvid
 
     -- try to get the value from a @MVar@, without emptying, without
     -- blocking.
-    ATryReadVar cvar@(MVar cvid _) c -> synchronised $ do
+    ATryReadMVar cvar@(MVar cvid _) c -> synchronised $ do
       (success, threads', _) <- tryReadFromMVar cvar c tid (cThreads ctx)
-      simple threads' $ TryReadVar cvid success
+      simple threads' $ TryReadMVar cvid success
 
     -- take the value from a @MVar@, blocking the thread until it's
     -- full.
-    ATakeVar cvar@(MVar cvid _) c -> synchronised $ do
+    ATakeMVar cvar@(MVar cvid _) c -> synchronised $ do
       (success, threads', woken) <- takeFromMVar cvar c tid (cThreads ctx)
-      simple threads' $ if success then TakeVar cvid woken else BlockedTakeVar cvid
+      simple threads' $ if success then TakeMVar cvid woken else BlockedTakeMVar cvid
 
     -- try to take the value from a @MVar@, without blocking.
-    ATryTakeVar cvar@(MVar cvid _) c -> synchronised $ do
+    ATryTakeMVar cvar@(MVar cvid _) c -> synchronised $ do
       (success, threads', woken) <- tryTakeFromMVar cvar c tid (cThreads ctx)
-      simple threads' $ TryTakeVar cvid success woken
+      simple threads' $ TryTakeMVar cvid success woken
 
     -- create a new @CRef@, using the next 'CRefId'.
-    ANewRef n a c -> do
+    ANewCRef n a c -> do
       let (idSource', newcrid) = nextCRId n (cIdSource ctx)
       ref <- newRef (M.empty, 0, a)
       let cref = CRef newcrid ref
-      pure $ Right (ctx { cThreads = goto (c cref) tid (cThreads ctx), cIdSource = idSource' }, Right (NewRef newcrid))
+      pure $ Right (ctx { cThreads = goto (c cref) tid (cThreads ctx), cIdSource = idSource' }, Right (NewCRef newcrid))
 
     -- read from a @CRef@.
-    AReadRef cref@(CRef crid _) c -> do
+    AReadCRef cref@(CRef crid _) c -> do
       val <- readCRef cref tid
-      simple (goto (c val) tid (cThreads ctx)) $ ReadRef crid
+      simple (goto (c val) tid (cThreads ctx)) $ ReadCRef crid
 
     -- read from a @CRef@ for future compare-and-swap operations.
-    AReadRefCas cref@(CRef crid _) c -> do
+    AReadCRefCas cref@(CRef crid _) c -> do
       tick <- readForTicket cref tid
-      simple (goto (c tick) tid (cThreads ctx)) $ ReadRefCas crid
+      simple (goto (c tick) tid (cThreads ctx)) $ ReadCRefCas crid
 
     -- modify a @CRef@.
-    AModRef cref@(CRef crid _) f c -> synchronised $ do
+    AModCRef cref@(CRef crid _) f c -> synchronised $ do
       (new, val) <- f <$> readCRef cref tid
       writeImmediate cref new
-      simple (goto (c val) tid (cThreads ctx)) $ ModRef crid
+      simple (goto (c val) tid (cThreads ctx)) $ ModCRef crid
 
     -- modify a @CRef@ using a compare-and-swap.
-    AModRefCas cref@(CRef crid _) f c -> synchronised $ do
+    AModCRefCas cref@(CRef crid _) f c -> synchronised $ do
       tick@(Ticket _ _ old) <- readForTicket cref tid
       let (new, val) = f old
       void $ casCRef cref tid tick new
-      simple (goto (c val) tid (cThreads ctx)) $ ModRefCas crid
+      simple (goto (c val) tid (cThreads ctx)) $ ModCRefCas crid
 
     -- write to a @CRef@ without synchronising.
-    AWriteRef cref@(CRef crid _) a c -> case memtype of
+    AWriteCRef cref@(CRef crid _) a c -> case memtype of
       -- write immediately.
       SequentialConsistency -> do
         writeImmediate cref a
-        simple (goto c tid (cThreads ctx)) $ WriteRef crid
+        simple (goto c tid (cThreads ctx)) $ WriteCRef crid
       -- add to buffer using thread id.
       TotalStoreOrder -> do
         wb' <- bufferWrite (cWriteBuf ctx) (tid, Nothing) cref a
-        pure $ Right (ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Right (WriteRef crid))
+        pure $ Right (ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Right (WriteCRef crid))
       -- add to buffer using both thread id and cref id
       PartialStoreOrder -> do
         wb' <- bufferWrite (cWriteBuf ctx) (tid, Just crid) cref a
-        pure $ Right (ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Right (WriteRef crid))
+        pure $ Right (ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Right (WriteCRef crid))
 
     -- perform a compare-and-swap on a @CRef@.
-    ACasRef cref@(CRef crid _) tick a c -> synchronised $ do
+    ACasCRef cref@(CRef crid _) tick a c -> synchronised $ do
       (suc, tick') <- casCRef cref tid tick a
-      simple (goto (c (suc, tick')) tid (cThreads ctx)) $ CasRef crid suc
+      simple (goto (c (suc, tick')) tid (cThreads ctx)) $ CasCRef crid suc
 
     -- commit a @CRef@ write
     ACommit t c -> do
@@ -278,7 +278,7 @@ stepThread sched memtype tid action ctx = case action of
         TotalStoreOrder -> commitWrite (cWriteBuf ctx) (t, Nothing)
         -- commit using the cref id.
         PartialStoreOrder -> commitWrite (cWriteBuf ctx) (t, Just c)
-      pure $ Right (ctx { cWriteBuf = wb' }, Right (CommitRef t c))
+      pure $ Right (ctx { cWriteBuf = wb' }, Right (CommitCRef t c))
 
     -- run a STM transaction atomically.
     AAtom stm c -> synchronised $ do

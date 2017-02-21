@@ -478,7 +478,7 @@ dependentActions memtype ds a1 a2 = case (a1, a2) of
 
 -- | Determine if an action is a commit or not.
 isCommitRef :: ThreadAction -> Bool
-isCommitRef (CommitRef _ _) = True
+isCommitRef (CommitCRef _ _) = True
 isCommitRef _ = False
 
 -- | Extra threads created in a fork.

@@ -188,42 +188,42 @@ data ThreadAction =
   -- ^ Set the number of Haskell threads that can run simultaneously.
   | Yield
   -- ^ Yield the current thread.
-  | NewVar MVarId
+  | NewMVar MVarId
   -- ^ Create a new 'MVar'.
-  | PutVar MVarId [ThreadId]
+  | PutMVar MVarId [ThreadId]
   -- ^ Put into a 'MVar', possibly waking up some threads.
-  | BlockedPutVar MVarId
+  | BlockedPutMVar MVarId
   -- ^ Get blocked on a put.
-  | TryPutVar MVarId Bool [ThreadId]
+  | TryPutMVar MVarId Bool [ThreadId]
   -- ^ Try to put into a 'MVar', possibly waking up some threads.
-  | ReadVar MVarId
+  | ReadMVar MVarId
   -- ^ Read from a 'MVar'.
-  | TryReadVar MVarId Bool
+  | TryReadMVar MVarId Bool
   -- ^ Try to read from a 'MVar'.
-  | BlockedReadVar MVarId
+  | BlockedReadMVar MVarId
   -- ^ Get blocked on a read.
-  | TakeVar MVarId [ThreadId]
+  | TakeMVar MVarId [ThreadId]
   -- ^ Take from a 'MVar', possibly waking up some threads.
-  | BlockedTakeVar MVarId
+  | BlockedTakeMVar MVarId
   -- ^ Get blocked on a take.
-  | TryTakeVar MVarId Bool [ThreadId]
+  | TryTakeMVar MVarId Bool [ThreadId]
   -- ^ Try to take from a 'MVar', possibly waking up some threads.
-  | NewRef CRefId
+  | NewCRef CRefId
   -- ^ Create a new 'CRef'.
-  | ReadRef CRefId
+  | ReadCRef CRefId
   -- ^ Read from a 'CRef'.
-  | ReadRefCas CRefId
+  | ReadCRefCas CRefId
   -- ^ Read from a 'CRef' for a future compare-and-swap.
-  | ModRef CRefId
+  | ModCRef CRefId
   -- ^ Modify a 'CRef'.
-  | ModRefCas CRefId
+  | ModCRefCas CRefId
   -- ^ Modify a 'CRef' using a compare-and-swap.
-  | WriteRef CRefId
+  | WriteCRef CRefId
   -- ^ Write to a 'CRef' without synchronising.
-  | CasRef CRefId Bool
+  | CasCRef CRefId Bool
   -- ^ Attempt to to a 'CRef' using a compare-and-swap, synchronising
   -- it.
-  | CommitRef ThreadId CRefId
+  | CommitCRef ThreadId CRefId
   -- ^ Commit the last write to the given 'CRef' by the given thread,
   -- so that all threads can see the updated value.
   | STM TTrace [ThreadId]
@@ -265,9 +265,9 @@ data ThreadAction =
 -- | Check if a @ThreadAction@ immediately blocks.
 isBlock :: ThreadAction -> Bool
 isBlock (BlockedThrowTo  _) = True
-isBlock (BlockedTakeVar _) = True
-isBlock (BlockedReadVar _) = True
-isBlock (BlockedPutVar  _) = True
+isBlock (BlockedTakeMVar _) = True
+isBlock (BlockedReadMVar _) = True
+isBlock (BlockedPutMVar  _) = True
 isBlock (BlockedSTM _) = True
 isBlock _ = False
 
@@ -302,36 +302,36 @@ data Lookahead =
   -- simultaneously.
   | WillYield
   -- ^ Will yield the current thread.
-  | WillNewVar
+  | WillNewMVar
   -- ^ Will create a new 'MVar'.
-  | WillPutVar MVarId
+  | WillPutMVar MVarId
   -- ^ Will put into a 'MVar', possibly waking up some threads.
-  | WillTryPutVar MVarId
+  | WillTryPutMVar MVarId
   -- ^ Will try to put into a 'MVar', possibly waking up some threads.
-  | WillReadVar MVarId
+  | WillReadMVar MVarId
   -- ^ Will read from a 'MVar'.
-  | WillTryReadVar MVarId
+  | WillTryReadMVar MVarId
   -- ^ Will try to read from a 'MVar'.
-  | WillTakeVar MVarId
+  | WillTakeMVar MVarId
   -- ^ Will take from a 'MVar', possibly waking up some threads.
-  | WillTryTakeVar MVarId
+  | WillTryTakeMVar MVarId
   -- ^ Will try to take from a 'MVar', possibly waking up some threads.
-  | WillNewRef
+  | WillNewCRef
   -- ^ Will create a new 'CRef'.
-  | WillReadRef CRefId
+  | WillReadCRef CRefId
   -- ^ Will read from a 'CRef'.
-  | WillReadRefCas CRefId
+  | WillReadCRefCas CRefId
   -- ^ Will read from a 'CRef' for a future compare-and-swap.
-  | WillModRef CRefId
+  | WillModCRef CRefId
   -- ^ Will modify a 'CRef'.
-  | WillModRefCas CRefId
-  -- ^ Will nodify a 'CRef' using a compare-and-swap.
-  | WillWriteRef CRefId
+  | WillModCRefCas CRefId
+  -- ^ Will modify a 'CRef' using a compare-and-swap.
+  | WillWriteCRef CRefId
   -- ^ Will write to a 'CRef' without synchronising.
-  | WillCasRef CRefId
+  | WillCasCRef CRefId
   -- ^ Will attempt to to a 'CRef' using a compare-and-swap,
   -- synchronising it.
-  | WillCommitRef ThreadId CRefId
+  | WillCommitCRef ThreadId CRefId
   -- ^ Will commit the last write by the given thread to the 'CRef'.
   | WillSTM
   -- ^ Will execute an STM transaction, possibly waking up some
@@ -371,24 +371,24 @@ rewind MyThreadId = Just WillMyThreadId
 rewind (GetNumCapabilities _) = Just WillGetNumCapabilities
 rewind (SetNumCapabilities i) = Just (WillSetNumCapabilities i)
 rewind Yield = Just WillYield
-rewind (NewVar _) = Just WillNewVar
-rewind (PutVar c _) = Just (WillPutVar c)
-rewind (BlockedPutVar c) = Just (WillPutVar c)
-rewind (TryPutVar c _ _) = Just (WillTryPutVar c)
-rewind (ReadVar c) = Just (WillReadVar c)
-rewind (BlockedReadVar c) = Just (WillReadVar c)
-rewind (TryReadVar c _) = Just (WillTryReadVar c)
-rewind (TakeVar c _) = Just (WillTakeVar c)
-rewind (BlockedTakeVar c) = Just (WillTakeVar c)
-rewind (TryTakeVar c _ _) = Just (WillTryTakeVar c)
-rewind (NewRef _) = Just WillNewRef
-rewind (ReadRef c) = Just (WillReadRef c)
-rewind (ReadRefCas c) = Just (WillReadRefCas c)
-rewind (ModRef c) = Just (WillModRef c)
-rewind (ModRefCas c) = Just (WillModRefCas c)
-rewind (WriteRef c) = Just (WillWriteRef c)
-rewind (CasRef c _) = Just (WillCasRef c)
-rewind (CommitRef t c) = Just (WillCommitRef t c)
+rewind (NewMVar _) = Just WillNewMVar
+rewind (PutMVar c _) = Just (WillPutMVar c)
+rewind (BlockedPutMVar c) = Just (WillPutMVar c)
+rewind (TryPutMVar c _ _) = Just (WillTryPutMVar c)
+rewind (ReadMVar c) = Just (WillReadMVar c)
+rewind (BlockedReadMVar c) = Just (WillReadMVar c)
+rewind (TryReadMVar c _) = Just (WillTryReadMVar c)
+rewind (TakeMVar c _) = Just (WillTakeMVar c)
+rewind (BlockedTakeMVar c) = Just (WillTakeMVar c)
+rewind (TryTakeMVar c _ _) = Just (WillTryTakeMVar c)
+rewind (NewCRef _) = Just WillNewCRef
+rewind (ReadCRef c) = Just (WillReadCRef c)
+rewind (ReadCRefCas c) = Just (WillReadCRefCas c)
+rewind (ModCRef c) = Just (WillModCRef c)
+rewind (ModCRefCas c) = Just (WillModCRefCas c)
+rewind (WriteCRef c) = Just (WillWriteCRef c)
+rewind (CasCRef c _) = Just (WillCasCRef c)
+rewind (CommitCRef t c) = Just (WillCommitCRef t c)
 rewind (STM _ _) = Just WillSTM
 rewind (BlockedSTM _) = Just WillSTM
 rewind Catching = Just WillCatching
@@ -408,10 +408,10 @@ rewind Subconcurrency = Just WillSubconcurrency
 willRelease :: Lookahead -> Bool
 willRelease WillFork = True
 willRelease WillYield = True
-willRelease (WillPutVar _) = True
-willRelease (WillTryPutVar _) = True
-willRelease (WillTakeVar _) = True
-willRelease (WillTryTakeVar _) = True
+willRelease (WillPutMVar _) = True
+willRelease (WillTryPutMVar _) = True
+willRelease (WillTakeMVar _) = True
+willRelease (WillTryTakeMVar _) = True
 willRelease WillSTM = True
 willRelease WillThrow = True
 willRelease (WillSetMasking _ _) = True
@@ -493,19 +493,19 @@ simplifyAction = maybe UnsynchronisedOther simplifyLookahead . rewind
 
 -- | Variant of 'simplifyAction' that takes a 'Lookahead'.
 simplifyLookahead :: Lookahead -> ActionType
-simplifyLookahead (WillPutVar c)     = SynchronisedWrite c
-simplifyLookahead (WillTryPutVar c)  = SynchronisedWrite c
-simplifyLookahead (WillReadVar c)    = SynchronisedRead c
-simplifyLookahead (WillTryReadVar c)  = SynchronisedRead c
-simplifyLookahead (WillTakeVar c)    = SynchronisedRead c
-simplifyLookahead (WillTryTakeVar c) = SynchronisedRead c
-simplifyLookahead (WillReadRef r)     = UnsynchronisedRead r
-simplifyLookahead (WillReadRefCas r)  = UnsynchronisedRead r
-simplifyLookahead (WillModRef r)      = SynchronisedModify r
-simplifyLookahead (WillModRefCas r)   = PartiallySynchronisedModify r
-simplifyLookahead (WillWriteRef r)    = UnsynchronisedWrite r
-simplifyLookahead (WillCasRef r)      = PartiallySynchronisedWrite r
-simplifyLookahead (WillCommitRef _ r) = PartiallySynchronisedCommit r
+simplifyLookahead (WillPutMVar c)     = SynchronisedWrite c
+simplifyLookahead (WillTryPutMVar c)  = SynchronisedWrite c
+simplifyLookahead (WillReadMVar c)    = SynchronisedRead c
+simplifyLookahead (WillTryReadMVar c) = SynchronisedRead c
+simplifyLookahead (WillTakeMVar c)    = SynchronisedRead c
+simplifyLookahead (WillTryTakeMVar c)  = SynchronisedRead c
+simplifyLookahead (WillReadCRef r)     = UnsynchronisedRead r
+simplifyLookahead (WillReadCRefCas r)  = UnsynchronisedRead r
+simplifyLookahead (WillModCRef r)      = SynchronisedModify r
+simplifyLookahead (WillModCRefCas r)   = PartiallySynchronisedModify r
+simplifyLookahead (WillWriteCRef r)    = UnsynchronisedWrite r
+simplifyLookahead (WillCasCRef r)      = PartiallySynchronisedWrite r
+simplifyLookahead (WillCommitCRef _ r) = PartiallySynchronisedCommit r
 simplifyLookahead WillSTM         = SynchronisedOther
 simplifyLookahead (WillThrowTo _) = SynchronisedOther
 simplifyLookahead _ = UnsynchronisedOther
@@ -568,7 +568,7 @@ data Decision =
 -- spaces.
 showTrace :: Trace -> String
 showTrace trc = intercalate "\n" $ concatMap go trc : strkey where
-  go (_,_,CommitRef _ _) = "C-"
+  go (_,_,CommitCRef _ _) = "C-"
   go (Start    (ThreadId _ i),_,_) = "S" ++ show i ++ "-"
   go (SwitchTo (ThreadId _ i),_,_) = "P" ++ show i ++ "-"
   go (Continue,_,_) = "-"
