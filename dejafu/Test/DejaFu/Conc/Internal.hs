@@ -51,14 +51,15 @@ runConcurrency :: MonadRef r n
                => Scheduler g
                -> MemType
                -> g
+               -> Int
                -> M n r a
                -> n (Either Failure a, g, SeqTrace)
-runConcurrency sched memtype g ma = do
+runConcurrency sched memtype g caps ma = do
   ref <- newRef Nothing
 
   let c = runCont ma (AStop . writeRef ref . Just . Right)
   let threads = launch' Unmasked initialThread (const c) M.empty
-  let ctx = Context { cSchedState = g, cIdSource = initialIdSource, cThreads = threads, cWriteBuf = emptyBuffer, cCaps = 2 }
+  let ctx = Context { cSchedState = g, cIdSource = initialIdSource, cThreads = threads, cWriteBuf = emptyBuffer, cCaps = caps }
 
   (finalCtx, trace) <- runThreads sched memtype ref ctx
   out <- readRef ref
@@ -360,7 +361,7 @@ stepThread sched memtype tid action ctx = case action of
     ASub ma c
       | M.size (cThreads ctx) > 1 -> pure (Left IllegalSubconcurrency)
       | otherwise -> do
-          (res, g', trace) <- runConcurrency sched memtype (cSchedState ctx) ma
+          (res, g', trace) <- runConcurrency sched memtype (cSchedState ctx) (cCaps ctx) ma
           pure $ Right (ctx { cThreads = goto (c res) tid (cThreads ctx), cSchedState = g' }, Left (Subconcurrency, trace))
   where
 
