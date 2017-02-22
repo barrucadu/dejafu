@@ -471,6 +471,7 @@ dependentActions memtype ds a1 a2 = case (a1, a2) of
   _ -> False
 
   where
+    same :: Eq a => (ActionType -> Maybe a) -> Bool
     same f = isJust (f a1) && f a1 == f a2
 
 -------------------------------------------------------------------------------
