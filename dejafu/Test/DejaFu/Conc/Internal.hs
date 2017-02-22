@@ -362,7 +362,13 @@ stepThread sched memtype tid action ctx = case action of
       | M.size (cThreads ctx) > 1 -> pure (Left IllegalSubconcurrency)
       | otherwise -> do
           (res, g', trace) <- runConcurrency sched memtype (cSchedState ctx) (cCaps ctx) ma
-          pure $ Right (ctx { cThreads = goto (c res) tid (cThreads ctx), cSchedState = g' }, Left (Subconcurrency, trace))
+          pure $ Right (ctx { cThreads = goto (AStopSub (c res)) tid (cThreads ctx), cSchedState = g' }, Left (Subconcurrency, trace))
+
+    -- after the end of a subconcurrent computation. does nothing,
+    -- only exists so that: there is an entry in the trace for
+    -- returning to normal computation; and every item in the trace
+    -- corresponds to a scheduling point.
+    AStopSub c -> simple (goto c tid (cThreads ctx)) StopSubconcurrency
   where
 
     -- this is not inline in the long @case@ above as it's needed by

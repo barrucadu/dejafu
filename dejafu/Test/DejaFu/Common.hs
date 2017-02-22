@@ -260,6 +260,8 @@ data ThreadAction =
   -- ^ Cease execution and terminate.
   | Subconcurrency
   -- ^ Start executing an action with @subconcurrency@.
+  | StopSubconcurrency
+  -- ^ Stop executing an action with @subconcurrency@.
   deriving (Eq, Show)
 
 -- | Check if a @ThreadAction@ immediately blocks.
@@ -361,6 +363,8 @@ data Lookahead =
   -- ^ Will cease execution and terminate.
   | WillSubconcurrency
   -- ^ Will execute an action with @subconcurrency@.
+  | WillStopSubconcurrency
+  -- ^ Will stop executing an extion with @subconcurrency@.
   deriving (Eq, Show)
 
 -- | Convert a 'ThreadAction' into a 'Lookahead': \"rewind\" what has
@@ -403,6 +407,7 @@ rewind LiftIO = Just WillLiftIO
 rewind Return = Just WillReturn
 rewind Stop = Just WillStop
 rewind Subconcurrency = Just WillSubconcurrency
+rewind StopSubconcurrency = Just WillStopSubconcurrency
 
 -- | Check if an operation could enable another thread.
 willRelease :: Lookahead -> Bool

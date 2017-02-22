@@ -134,6 +134,7 @@ data Action n r =
   | AStop (n ())
 
   | forall a. ASub (M n r a) (Either Failure a -> Action n r)
+  | AStopSub (Action n r)
 
 --------------------------------------------------------------------------------
 -- * Scheduling & Traces
@@ -172,3 +173,4 @@ lookahead = fromList . lookahead' where
   lookahead' (AReturn k)             = WillReturn : lookahead' k
   lookahead' (AStop _)               = [WillStop]
   lookahead' (ASub _ _)              = [WillSubconcurrency]
+  lookahead' (AStopSub k)            = WillStopSubconcurrency : lookahead' k
