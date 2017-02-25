@@ -13,7 +13,9 @@ module Test.DejaFu.SCT
   ( -- * Running Concurrent Programs
     Way(..)
   , runSCT
+  , runSCT'
   , resultsSet
+  , resultsSet'
 
   -- * Bounded Partial-order Reduction
 
@@ -133,6 +135,16 @@ runSCT :: (MonadRef r n, RandomGen g)
 runSCT (Systematically cb) memtype = sctBound memtype cb
 runSCT (Randomly g lim)    memtype = sctRandom memtype g lim
 
+-- | A strict variant of 'runSCT'.
+--
+-- Demanding the result of this will force it to normal form, which
+-- may be more efficient in some situations.
+runSCT' :: (MonadRef r n, RandomGen g, NFData a)
+  => Way g -> MemType -> Conc n r a -> n [(Either Failure a, Trace)]
+runSCT' way memtype conc = do
+  res <- runSCT way memtype conc
+  rnf res `seq` pure res
+
 -- | Return the set of results of a concurrent program.
 resultsSet :: (MonadRef r n, RandomGen g, Ord a)
   => Way g
@@ -144,6 +156,16 @@ resultsSet :: (MonadRef r n, RandomGen g, Ord a)
   -> n (Set (Either Failure a))
 resultsSet way memtype conc =
   S.fromList . map fst <$> runSCT way memtype conc
+
+-- | A strict variant of 'resultsSet'.
+--
+-- Demanding the result of this will force it to normal form, which
+-- may be more efficient in some situations.
+resultsSet' :: (MonadRef r n, RandomGen g, Ord a, NFData a)
+  => Way g -> MemType -> Conc n r a -> n (Set (Either Failure a))
+resultsSet' way memtype conc = do
+  res <- resultsSet' way memtype conc
+  rnf res `seq` pure res
 
 -------------------------------------------------------------------------------
 -- Combined Bounds
