@@ -143,18 +143,28 @@ runThreads sched memtype ref = go Seq.empty [] Nothing where
 
       setupNext trcOrAct ctx' =
         let (act, trc) = case trcOrAct of
-              Left (a, as) -> (a, (decision, runnable', a) <| as)
-              Right a      -> (a, Seq.singleton (decision, runnable', a))
+              Single a    -> (a, Seq.singleton (decision, runnable', a))
+              SubC   as _ -> (Subconcurrency, (decision, runnable', Subconcurrency) <| as)
             threads' = if (interruptible <$> M.lookup chosen (cThreads ctx')) /= Just False
                        then unblockWaitingOn chosen (cThreads ctx')
                        else cThreads ctx'
             sofar' = sofar <> trc
             sofarSched' = sofarSched <> map (\(d,_,a) -> (d,a)) (F.toList trc)
-            prior' = Just (chosen, act)
+            prior' = case trcOrAct of
+              Single _ -> Just (chosen, act)
+              SubC _ finalD -> finalD
         in (sofar', sofarSched', prior', ctx' { cThreads = delCommitThreads threads' })
 
 --------------------------------------------------------------------------------
 -- * Single-step execution
+
+-- | What a thread did.
+data Act
+  = Single ThreadAction
+  -- ^ Just one action.
+  | SubC SeqTrace (Maybe (ThreadId, ThreadAction))
+  -- ^ Subconcurrency, with the given trace and final action.
+  deriving (Eq, Show)
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
@@ -169,13 +179,13 @@ stepThread :: forall n r g. MonadRef r n
   -- ^ Action to step
   -> Context n r g
   -- ^ The execution context.
-  -> n (Either Failure (Context n r g), Either (ThreadAction, SeqTrace) ThreadAction)
+  -> n (Either Failure (Context n r g), Act)
 stepThread sched memtype tid action ctx = case action of
     -- start a new thread, assigning it the next 'ThreadId'
     AFork n a b -> pure $
         let threads' = launch tid newtid a (cThreads ctx)
             (idSource', newtid) = nextTId n (cIdSource ctx)
-        in (Right ctx { cThreads = goto (b newtid) tid threads', cIdSource = idSource' }, Right (Fork newtid))
+        in (Right ctx { cThreads = goto (b newtid) tid threads', cIdSource = idSource' }, Single (Fork newtid))
 
     -- get the 'ThreadId' of the current thread
     AMyTId c -> simple (goto (c tid) tid (cThreads ctx)) MyThreadId
@@ -185,7 +195,7 @@ stepThread sched memtype tid action ctx = case action of
 
     -- set the number of capabilities
     ASetNumCapabilities i c -> pure
-      (Right ctx { cThreads = goto c tid (cThreads ctx), cCaps = i }, Right (SetNumCapabilities i))
+      (Right ctx { cThreads = goto c tid (cThreads ctx), cCaps = i }, Single (SetNumCapabilities i))
 
     -- yield the current thread
     AYield c -> simple (goto c tid (cThreads ctx)) Yield
@@ -195,7 +205,7 @@ stepThread sched memtype tid action ctx = case action of
       let (idSource', newmvid) = nextMVId n (cIdSource ctx)
       ref <- newRef Nothing
       let mvar = MVar newmvid ref
-      pure (Right ctx { cThreads = goto (c mvar) tid (cThreads ctx), cIdSource = idSource' }, Right (NewMVar newmvid))
+      pure (Right ctx { cThreads = goto (c mvar) tid (cThreads ctx), cIdSource = idSource' }, Single (NewMVar newmvid))
 
     -- put a value into a @MVar@, blocking the thread until it's empty.
     APutMVar cvar@(MVar cvid _) a c -> synchronised $ do
@@ -235,7 +245,7 @@ stepThread sched memtype tid action ctx = case action of
       let (idSource', newcrid) = nextCRId n (cIdSource ctx)
       ref <- newRef (M.empty, 0, a)
       let cref = CRef newcrid ref
-      pure (Right ctx { cThreads = goto (c cref) tid (cThreads ctx), cIdSource = idSource' }, Right (NewCRef newcrid))
+      pure (Right ctx { cThreads = goto (c cref) tid (cThreads ctx), cIdSource = idSource' }, Single (NewCRef newcrid))
 
     -- read from a @CRef@.
     AReadCRef cref@(CRef crid _) c -> do
@@ -269,11 +279,11 @@ stepThread sched memtype tid action ctx = case action of
       -- add to buffer using thread id.
       TotalStoreOrder -> do
         wb' <- bufferWrite (cWriteBuf ctx) (tid, Nothing) cref a
-        pure (Right ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Right (WriteCRef crid))
+        pure (Right ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Single (WriteCRef crid))
       -- add to buffer using both thread id and cref id
       PartialStoreOrder -> do
         wb' <- bufferWrite (cWriteBuf ctx) (tid, Just crid) cref a
-        pure (Right ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Right (WriteCRef crid))
+        pure (Right ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Single (WriteCRef crid))
 
     -- perform a compare-and-swap on a @CRef@.
     ACasCRef cref@(CRef crid _) tick a c -> synchronised $ do
@@ -290,7 +300,7 @@ stepThread sched memtype tid action ctx = case action of
         TotalStoreOrder -> commitWrite (cWriteBuf ctx) (t, Nothing)
         -- commit using the cref id.
         PartialStoreOrder -> commitWrite (cWriteBuf ctx) (t, Just c)
-      pure (Right ctx { cWriteBuf = wb' }, Right (CommitCRef t c))
+      pure (Right ctx { cWriteBuf = wb' }, Single (CommitCRef t c))
 
     -- run a STM transaction atomically.
     AAtom stm c -> synchronised $ do
@@ -298,16 +308,16 @@ stepThread sched memtype tid action ctx = case action of
       case res of
         Success _ written val ->
           let (threads', woken) = wake (OnTVar written) (cThreads ctx)
-          in pure (Right ctx { cThreads = goto (c val) tid threads', cIdSource = idSource' }, Right (STM trace woken))
+          in pure (Right ctx { cThreads = goto (c val) tid threads', cIdSource = idSource' }, Single (STM trace woken))
         Retry touched ->
           let threads' = block (OnTVar touched) tid (cThreads ctx)
-          in pure (Right ctx { cThreads = threads', cIdSource = idSource'}, Right (BlockedSTM trace))
+          in pure (Right ctx { cThreads = threads', cIdSource = idSource'}, Single (BlockedSTM trace))
         Exception e -> do
           let act = STM trace []
           res' <- stepThrow act e
           pure $ case res' of
-            (Right ctx', _) -> (Right ctx' { cIdSource = idSource' }, Right act)
-            (Left err, _) -> (Left err, Right act)
+            (Right ctx', _) -> (Right ctx' { cIdSource = idSource' }, Single act)
+            (Left err, _) -> (Left err, Single act)
 
     -- lift an action from the underlying monad into the @Conc@
     -- computation.
@@ -329,7 +339,7 @@ stepThread sched memtype tid action ctx = case action of
              | interruptible thread -> case propagate (toException e) t threads' of
                Just threads'' -> simple threads'' $ ThrowTo t
                Nothing
-                 | t == initialThread -> pure (Left UncaughtException, Right (ThrowTo t))
+                 | t == initialThread -> pure (Left UncaughtException, Single (ThrowTo t))
                  | otherwise -> simple (kill t threads') $ ThrowTo t
              | otherwise -> simple blocked $ BlockedThrowTo t
            Nothing -> simple threads' $ ThrowTo t
@@ -371,10 +381,10 @@ stepThread sched memtype tid action ctx = case action of
 
     -- run a subconcurrent computation.
     ASub ma c
-      | M.size (cThreads ctx) > 1 -> pure (Left IllegalSubconcurrency, Right Subconcurrency)
+      | M.size (cThreads ctx) > 1 -> pure (Left IllegalSubconcurrency, Single Subconcurrency)
       | otherwise -> do
-          (res, g', trace, _) <- runConcurrency sched memtype (cSchedState ctx) (cCaps ctx) ma
-          pure (Right ctx { cThreads = goto (AStopSub (c res)) tid (cThreads ctx), cSchedState = g' }, Left (Subconcurrency, trace))
+          (res, g', trace, finalDecision) <- runConcurrency sched memtype (cSchedState ctx) (cCaps ctx) ma
+          pure (Right ctx { cThreads = goto (AStopSub (c res)) tid (cThreads ctx), cSchedState = g' }, SubC trace finalDecision)
 
     -- after the end of a subconcurrent computation. does nothing,
     -- only exists so that: there is an entry in the trace for
@@ -388,10 +398,10 @@ stepThread sched memtype tid action ctx = case action of
     stepThrow act e =
       case propagate (toException e) tid (cThreads ctx) of
         Just threads' -> simple threads' act
-        Nothing -> pure (Left UncaughtException, Right act)
+        Nothing -> pure (Left UncaughtException, Single act)
 
     -- helper for actions which only change the threads.
-    simple threads' act = pure (Right ctx { cThreads = threads' }, Right act)
+    simple threads' act = pure (Right ctx { cThreads = threads' }, Single act)
 
     -- helper for actions impose a write barrier.
     synchronised ma = do
