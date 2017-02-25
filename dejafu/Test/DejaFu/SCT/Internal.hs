@@ -52,7 +52,7 @@ data DPOR = DPOR
   , dporAction   :: Maybe ThreadAction
   -- ^ What happened at this step. This will be 'Nothing' at the root,
   -- 'Just' everywhere else.
-  } deriving Show
+  } deriving (Eq, Show)
 
 -- | One step of the execution, including information for backtracking
 -- purposes. This backtracking information is used to generate new
@@ -71,7 +71,7 @@ data BacktrackStep = BacktrackStep
   -- alternatives were added conservatively due to the bound.
   , bcktState      :: DepState
   -- ^ Some domain-specific state at this point.
-  } deriving Show
+  } deriving (Eq, Show)
 
 -- | Initial DPOR state, given an initial thread ID. This initial
 -- thread should exist and be runnable at the start of execution.
@@ -311,7 +311,7 @@ data DPORSchedState = DPORSchedState
   , schedDepState  :: DepState
   -- ^ State used by the dependency function to determine when to
   -- remove decisions from the sleep set.
-  } deriving Show
+  } deriving (Eq, Show)
 
 -- | Initial DPOR scheduler state for a given prefix
 initialDPORSchedState :: Map ThreadId ThreadAction
@@ -499,7 +499,7 @@ data RandSchedState g = RandSchedState
   -- ^ The thread weights: used in determining which to run.
   , schedGen     :: g
   -- ^ The random number generator.
-  }
+  } deriving (Eq, Show)
 
 -- | Initial weighted random scheduler state.
 initialRandSchedState :: g -> RandSchedState g

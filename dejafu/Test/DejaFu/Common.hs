@@ -132,7 +132,7 @@ data IdSource = Id
   , _usedMVNames :: [String]
   , _usedTVNames :: [String]
   , _usedTNames  :: [String]
-  }
+  } deriving (Eq, Ord, Show)
 
 -- | Get the next free 'CRefId'.
 nextCRId :: String -> IdSource -> (IdSource, CRefId)
