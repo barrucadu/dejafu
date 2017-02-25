@@ -88,6 +88,7 @@ module Test.DejaFu.SCT
   , sctRandom
   ) where
 
+import Control.DeepSeq (NFData(..))
 import Control.Monad.Ref (MonadRef)
 import Data.List (foldl')
 import qualified Data.Map.Strict as M
@@ -111,6 +112,10 @@ data Way g
   -- ^ Explore a fixed number of random executions, with the given
   -- PRNG.
   deriving (Eq, Ord, Read, Show)
+
+instance NFData g => NFData (Way g) where
+  rnf (Systematically bs) = rnf bs
+  rnf (Randomly g n) = rnf (g, n)
 
 -- | Explore possible executions of a concurrent program.
 --
@@ -149,6 +154,12 @@ data Bounds = Bounds
   , boundLength :: Maybe LengthBound
   } deriving (Eq, Ord, Read, Show)
 
+instance NFData Bounds where
+  rnf bs = rnf ( boundPreemp bs
+               , boundFair   bs
+               , boundLength bs
+               )
+
 -- | No bounds enabled. This forces the scheduler to just use
 -- partial-order reduction and sleep sets to prune the search
 -- space. This will /ONLY/ work if your computation always terminates!
@@ -180,7 +191,7 @@ cBacktrack _ = backtrackAt (\_ _ -> False)
 -- Pre-emption bounding
 
 newtype PreemptionBound = PreemptionBound Int
-  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show, NFData)
 
 -- | An SCT runner using a pre-emption bounding scheduler.
 sctPreBound :: MonadRef r n
@@ -223,7 +234,7 @@ pBacktrack bs = backtrackAt (\_ _ -> False) bs . concatMap addConservative where
 -- Fair bounding
 
 newtype FairBound = FairBound Int
-  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show, NFData)
 
 -- | An SCT runner using a fair bounding scheduler.
 sctFairBound :: MonadRef r n
@@ -252,7 +263,7 @@ fBacktrack = backtrackAt check where
 -- Length bounding
 
 newtype LengthBound = LengthBound Int
-  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show, NFData)
 
 -- | An SCT runner using a length bounding scheduler.
 sctLengthBound :: MonadRef r n

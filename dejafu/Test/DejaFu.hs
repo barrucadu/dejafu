@@ -243,6 +243,7 @@ module Test.DejaFu
   ) where
 
 import Control.Arrow (first)
+import Control.DeepSeq (NFData(..))
 import Control.Monad (when, unless)
 import Control.Monad.Ref (MonadRef)
 import Control.Monad.ST (runST)
@@ -399,6 +400,13 @@ data Result a = Result
   , _failureMsg   :: String
   -- ^ A message to display on failure, if nonempty
   } deriving (Eq, Show)
+
+instance NFData a => NFData (Result a) where
+  rnf r = rnf ( _pass         r
+              , _casesChecked r
+              , _failures     r
+              , _failureMsg   r
+              )
 
 -- | A failed result, taking the given list of failures.
 defaultFail :: [(Either Failure a, Trace)] -> Result a

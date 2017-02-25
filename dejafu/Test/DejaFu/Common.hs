@@ -60,6 +60,7 @@ module Test.DejaFu.Common
   , MemType(..)
   ) where
 
+import Control.DeepSeq (NFData(..))
 import Control.Exception (MaskingState(..))
 import Data.List (sort, nub, intercalate)
 import Data.List.NonEmpty (NonEmpty)
@@ -81,6 +82,9 @@ instance Show ThreadId where
   show (ThreadId (Just n) _) = n
   show (ThreadId Nothing  i) = show i
 
+instance NFData ThreadId where
+  rnf (ThreadId n i) = rnf (n, i)
+
 -- | Every @CRef@ has a unique identifier.
 data CRefId = CRefId (Maybe String) Int
   deriving Eq
@@ -91,6 +95,9 @@ instance Ord CRefId where
 instance Show CRefId where
   show (CRefId (Just n) _) = n
   show (CRefId Nothing  i) = show i
+
+instance NFData CRefId where
+  rnf (CRefId n i) = rnf (n, i)
 
 -- | Every @MVar@ has a unique identifier.
 data MVarId = MVarId (Maybe String) Int
@@ -103,6 +110,9 @@ instance Show MVarId where
   show (MVarId (Just n) _) = n
   show (MVarId Nothing  i) = show i
 
+instance NFData MVarId where
+  rnf (MVarId n i) = rnf (n, i)
+
 -- | Every @TVar@ has a unique identifier.
 data TVarId = TVarId (Maybe String) Int
   deriving Eq
@@ -113,6 +123,9 @@ instance Ord TVarId where
 instance Show TVarId where
   show (TVarId (Just n) _) = n
   show (TVarId Nothing  i) = show i
+
+instance NFData TVarId where
+  rnf (TVarId n i) = rnf (n, i)
 
 -- | The ID of the initial thread.
 initialThread :: ThreadId
@@ -133,6 +146,17 @@ data IdSource = Id
   , _usedTVNames :: [String]
   , _usedTNames  :: [String]
   } deriving (Eq, Ord, Show)
+
+instance NFData IdSource where
+  rnf idsource = rnf ( _nextCRId idsource
+                     , _nextMVId idsource
+                     , _nextTVId idsource
+                     , _nextTId  idsource
+                     , _usedCRNames idsource
+                     , _usedMVNames idsource
+                     , _usedTVNames idsource
+                     , _usedTNames  idsource
+                     )
 
 -- | Get the next free 'CRefId'.
 nextCRId :: String -> IdSource -> (IdSource, CRefId)
@@ -264,6 +288,36 @@ data ThreadAction =
   -- ^ Stop executing an action with @subconcurrency@.
   deriving (Eq, Show)
 
+instance NFData ThreadAction where
+  rnf (Fork t) = rnf t
+  rnf (GetNumCapabilities c) = rnf c
+  rnf (SetNumCapabilities c) = rnf c
+  rnf (NewMVar m) = rnf m
+  rnf (PutMVar m ts) = rnf (m, ts)
+  rnf (BlockedPutMVar m) = rnf m
+  rnf (TryPutMVar m b ts) = rnf (m, b, ts)
+  rnf (ReadMVar m) = rnf m
+  rnf (TryReadMVar m b) = rnf (m, b)
+  rnf (BlockedReadMVar m) = rnf m
+  rnf (TakeMVar m ts) = rnf (m, ts)
+  rnf (BlockedTakeMVar m) = rnf m
+  rnf (TryTakeMVar m b ts) = rnf (m, b, ts)
+  rnf (NewCRef c) = rnf c
+  rnf (ReadCRef c) = rnf c
+  rnf (ReadCRefCas c) = rnf c
+  rnf (ModCRef c) = rnf c
+  rnf (ModCRefCas c) = rnf c
+  rnf (WriteCRef c) = rnf c
+  rnf (CasCRef c b) = rnf (c, b)
+  rnf (CommitCRef t c) = rnf (t, c)
+  rnf (STM tr ts) = rnf (tr, ts)
+  rnf (BlockedSTM tr) = rnf tr
+  rnf (ThrowTo t) = rnf t
+  rnf (BlockedThrowTo t) = rnf t
+  rnf (SetMasking b m) = b `seq` m `seq` ()
+  rnf (ResetMasking b m) = b `seq` m `seq` ()
+  rnf a = a `seq` ()
+
 -- | Check if a @ThreadAction@ immediately blocks.
 isBlock :: ThreadAction -> Bool
 isBlock (BlockedThrowTo  _) = True
@@ -367,6 +421,26 @@ data Lookahead =
   -- ^ Will stop executing an extion with @subconcurrency@.
   deriving (Eq, Show)
 
+instance NFData Lookahead where
+  rnf (WillSetNumCapabilities c) = rnf c
+  rnf (WillPutMVar m) = rnf m
+  rnf (WillTryPutMVar m) = rnf m
+  rnf (WillReadMVar m) = rnf m
+  rnf (WillTryReadMVar m) = rnf m
+  rnf (WillTakeMVar m) = rnf m
+  rnf (WillTryTakeMVar m) = rnf m
+  rnf (WillReadCRef c) = rnf c
+  rnf (WillReadCRefCas c) = rnf c
+  rnf (WillModCRef c) = rnf c
+  rnf (WillModCRefCas c) = rnf c
+  rnf (WillWriteCRef c) = rnf c
+  rnf (WillCasCRef c) = rnf c
+  rnf (WillCommitCRef t c) = rnf (t, c)
+  rnf (WillThrowTo t) = rnf t
+  rnf (WillSetMasking b m) = b `seq` m `seq` ()
+  rnf (WillResetMasking b m) = b `seq` m `seq` ()
+  rnf l = l `seq` ()
+
 -- | Convert a 'ThreadAction' into a 'Lookahead': \"rewind\" what has
 -- happened. 'Killed' has no 'Lookahead' counterpart.
 rewind :: ThreadAction -> Maybe Lookahead
@@ -453,6 +527,17 @@ data ActionType =
   -- ^ Some other action which does require cross-thread
   -- communication.
   deriving (Eq, Show)
+
+instance NFData ActionType where
+  rnf (UnsynchronisedRead c) = rnf c
+  rnf (UnsynchronisedWrite c) = rnf c
+  rnf (PartiallySynchronisedCommit c) = rnf c
+  rnf (PartiallySynchronisedWrite c) = rnf c
+  rnf (PartiallySynchronisedModify c) = rnf c
+  rnf (SynchronisedModify c) = rnf c
+  rnf (SynchronisedRead m) = rnf m
+  rnf (SynchronisedWrite m) = rnf m
+  rnf a = a `seq` ()
 
 -- | Check if an action imposes a write barrier.
 isBarrier :: ActionType -> Bool
@@ -547,6 +632,13 @@ data TAction =
   -- ^ Terminate successfully and commit effects.
   deriving (Eq, Show)
 
+instance NFData TAction where
+  rnf (TRead t) = rnf t
+  rnf (TWrite t) = rnf t
+  rnf (TOrElse tr mtr) = rnf (tr, mtr)
+  rnf (TCatch tr mtr) = rnf (tr, mtr)
+  rnf ta = ta `seq` ()
+
 -------------------------------------------------------------------------------
 -- Traces
 
@@ -568,6 +660,11 @@ data Decision =
   | SwitchTo ThreadId
   -- ^ Pre-empt the running thread, and switch to another.
   deriving (Eq, Show)
+
+instance NFData Decision where
+  rnf (Start t) = rnf t
+  rnf (SwitchTo t) = rnf t
+  rnf d = d `seq` ()
 
 -- | Pretty-print a trace, including a key of the thread IDs (not
 -- including thread 0). Each line of the key is indented by two
@@ -646,6 +743,9 @@ data Failure =
   -- multiple threads existed.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)
 
+instance NFData Failure where
+  rnf f = f `seq` ()
+
 -- | Pretty-print a failure
 showFail :: Failure -> String
 showFail Abort = "[abort]"
@@ -676,6 +776,9 @@ data MemType =
   -- are not necessarily committed in the same order that they are
   -- created.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)
+
+instance NFData MemType where
+  rnf m = m `seq` ()
 
 -------------------------------------------------------------------------------
 -- Utilities

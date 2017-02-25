@@ -15,6 +15,7 @@
 -- public interface of this library.
 module Test.DejaFu.STM.Internal where
 
+import Control.DeepSeq (NFData(..))
 import Control.Exception (Exception, SomeException, fromException, toException)
 import Control.Monad.Cont (Cont, runCont)
 import Control.Monad.Ref (MonadRef, newRef, readRef, writeRef)
@@ -70,6 +71,12 @@ data Result a =
   | Exception SomeException
   -- ^ The transaction aborted by throwing an exception.
   deriving Show
+
+-- | This only reduces a 'SomeException' to WHNF.
+instance NFData a => NFData (Result a) where
+  rnf (Success tr1 tr2 a) = rnf (tr1, tr2, a)
+  rnf (Retry tr) = rnf tr
+  rnf (Exception e) = e `seq` ()
 
 -- | Check if a 'Result' is a @Success@.
 isSTMSuccess :: Result a -> Bool

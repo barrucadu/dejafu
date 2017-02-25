@@ -11,6 +11,7 @@
 -- interface of this library.
 module Test.DejaFu.SCT.Internal where
 
+import Control.DeepSeq (NFData(..))
 import Control.Exception (MaskingState(..))
 import Data.Char (ord)
 import Data.Function (on)
@@ -54,6 +55,15 @@ data DPOR = DPOR
   -- 'Just' everywhere else.
   } deriving (Eq, Show)
 
+instance NFData DPOR where
+  rnf dpor = rnf ( dporRunnable dpor
+                 , dporTodo     dpor
+                 , dporDone     dpor
+                 , dporSleep    dpor
+                 , dporTaken    dpor
+                 , dporAction   dpor
+                 )
+
 -- | One step of the execution, including information for backtracking
 -- purposes. This backtracking information is used to generate new
 -- schedules.
@@ -72,6 +82,15 @@ data BacktrackStep = BacktrackStep
   , bcktState      :: DepState
   -- ^ Some domain-specific state at this point.
   } deriving (Eq, Show)
+
+instance NFData BacktrackStep where
+  rnf bs = rnf ( bcktThreadid   bs
+               , bcktDecision   bs
+               , bcktAction     bs
+               , bcktRunnable   bs
+               , bcktBacktracks bs
+               , bcktState      bs
+               )
 
 -- | Initial DPOR state, given an initial thread ID. This initial
 -- thread should exist and be runnable at the start of execution.
@@ -313,6 +332,15 @@ data DPORSchedState = DPORSchedState
   -- remove decisions from the sleep set.
   } deriving (Eq, Show)
 
+instance NFData DPORSchedState where
+  rnf s = rnf ( schedSleep     s
+              , schedPrefix    s
+              , schedBPoints   s
+              , schedIgnore    s
+              , schedBoundKill s
+              , schedDepState  s
+              )
+
 -- | Initial DPOR scheduler state for a given prefix
 initialDPORSchedState :: Map ThreadId ThreadAction
   -- ^ The initial sleep set.
@@ -501,6 +529,11 @@ data RandSchedState g = RandSchedState
   -- ^ The random number generator.
   } deriving (Eq, Show)
 
+instance NFData g => NFData (RandSchedState g) where
+  rnf s = rnf ( schedWeights s
+              , schedGen     s
+              )
+
 -- | Initial weighted random scheduler state.
 initialRandSchedState :: g -> RandSchedState g
 initialRandSchedState = RandSchedState M.empty
@@ -540,6 +573,11 @@ data DepState = DepState
   -- provides compatibility with dpor-0.1, where the thread IDs are
   -- not available.
   } deriving (Eq, Show)
+
+instance NFData DepState where
+  rnf depstate = rnf ( depCRState depstate
+                     , [(t, m `seq` ()) | (t, m) <- M.toList (depMaskState depstate)]
+                     )
 
 -- | Initial dependency state.
 initialDepState :: DepState
