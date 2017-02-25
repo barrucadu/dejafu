@@ -167,7 +167,7 @@ incorporateTrace dependency conservative trace dpor0 = grow initialDepState (ini
                    , dporTodo  = M.delete tid' (dporTodo dpor)
                    , dporDone  = done
                    }
-  grow _ _ [] dpor = dpor
+  grow _ _ [] _ = err "incorporateTrace" "trace exhausted without reading a to-do point!"
 
   -- Construct a new subtree corresponding to a trace suffix.
   subtree state tid sleep ((_, _, a):rest) =
