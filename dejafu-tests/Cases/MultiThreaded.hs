@@ -51,6 +51,7 @@ tests =
       , T "deadlock2" scDeadlock2 $ gives' [(Left Deadlock, ()), (Right (), ())]
       , T "success"   scSuccess   $ gives' [Right ()]
       , T "illegal"   scIllegal   $ gives  [Left IllegalSubconcurrency]
+      , T "issue 71"  scIssue71   $ gives' [()]
       ]
     ]
   where
@@ -254,3 +255,12 @@ scIllegal = do
   var <- newEmptyMVar
   void . fork $ readMVar var
   void . subconcurrency $ pure ()
+
+-- | Test case from issue 71. This won't fail if the bug is
+-- reintroduced, it will just hang.
+scIssue71 :: Monad n => Conc n r ()
+scIssue71 = do
+  let ma ||| mb = do { j1 <- spawn ma; j2 <- spawn mb; takeMVar j1; takeMVar j2; pure () }
+  s <- newEmptyMVar
+  _ <- subconcurrency (takeMVar s ||| pure ())
+  pure ()
