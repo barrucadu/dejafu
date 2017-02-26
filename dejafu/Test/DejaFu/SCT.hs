@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 -- |
@@ -6,7 +7,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : GeneralizedNewtypeDeriving
+-- Portability : GADTs, GeneralizedNewtypeDeriving
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
@@ -105,21 +106,20 @@ import           Test.DejaFu.SCT.Internal
 -------------------------------------------------------------------------------
 -- Running Concurrent Programs
 
--- | How to explore the possible executions of a concurrent program.
+-- | How to explore the possible executions of a concurrent program:
 --
--- @since 0.5.0.0
-data Way g
-  = Systematically Bounds
-  -- ^ Systematically explore all executions within the bounds.
-  | Randomly g Int
-  -- ^ Explore a fixed number of random executions, with the given
-  -- PRNG.
-  deriving (Eq, Ord, Read, Show)
+-- * Systematically explore all executions within the bounds; or
+--
+-- * Explore a fixed number of random executions, with the given PRNG.
+--
+-- @since unreleased
+data Way where
+  Systematically :: Bounds -> Way
+  Randomly :: RandomGen g => g -> Int -> Way
 
--- | @since 0.5.1.0
-instance NFData g => NFData (Way g) where
-  rnf (Systematically bs) = rnf bs
-  rnf (Randomly g n) = rnf (g, n)
+instance Show Way where
+  show (Systematically bs) = "Systematically (" ++ show bs ++ ")"
+  show (Randomly _ n)      = "Randomly <gen> " ++ show n
 
 -- | Explore possible executions of a concurrent program.
 --
@@ -127,9 +127,9 @@ instance NFData g => NFData (Way g) where
 --
 -- * If the 'Way' is @Randomly@, 'sctRandom' is used.
 --
--- @since 0.5.0.0
-runSCT :: (MonadRef r n, RandomGen g)
-  => Way g
+-- @since unreleased
+runSCT :: MonadRef r n
+  => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -144,18 +144,18 @@ runSCT (Randomly g lim)    memtype = sctRandom memtype g lim
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since 0.5.1.0
-runSCT' :: (MonadRef r n, RandomGen g, NFData a)
-  => Way g -> MemType -> Conc n r a -> n [(Either Failure a, Trace)]
+-- @since unreleased
+runSCT' :: (MonadRef r n, NFData a)
+  => Way -> MemType -> Conc n r a -> n [(Either Failure a, Trace)]
 runSCT' way memtype conc = do
   res <- runSCT way memtype conc
   rnf res `seq` pure res
 
 -- | Return the set of results of a concurrent program.
 --
--- @since 0.5.0.0
-resultsSet :: (MonadRef r n, RandomGen g, Ord a)
-  => Way g
+-- @since unreleased
+resultsSet :: (MonadRef r n, Ord a)
+  => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -170,9 +170,9 @@ resultsSet way memtype conc =
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since 0.5.1.0
-resultsSet' :: (MonadRef r n, RandomGen g, Ord a, NFData a)
-  => Way g -> MemType -> Conc n r a -> n (Set (Either Failure a))
+-- @since unreleased
+resultsSet' :: (MonadRef r n, Ord a, NFData a)
+  => Way -> MemType -> Conc n r a -> n (Set (Either Failure a))
 resultsSet' way memtype conc = do
   res <- resultsSet' way memtype conc
   rnf res `seq` pure res

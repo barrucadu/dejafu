@@ -10,6 +10,11 @@ This project is versioned according to the [Package Versioning Policy](https://p
 unreleased
 ----------
 
+### Test.DejaFu.SCT
+
+- `Way` is now a GADT, no longer taking a type parameter. This greatly improves type inference when
+  the `Systematically` constructor is used.
+
 ### Miscellaneous
 
 - There is now a changelog.

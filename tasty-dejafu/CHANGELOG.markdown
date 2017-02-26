@@ -10,6 +10,10 @@ This project is versioned according to the [Package Versioning Policy](https://p
 unreleased
 ----------
 
+### Test.Tasty.DejaFu
+
+- Due to changes in dejafu, the `Way` type no longer takes a parameter; it is now a GADT.
+
 ### Miscellaneous
 
 - There is now a changelog.

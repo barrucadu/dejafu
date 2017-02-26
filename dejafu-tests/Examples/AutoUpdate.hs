@@ -59,7 +59,7 @@ tests =
                     "deadlocks"
                     (gives [Left Deadlock, Right ()])
 
-    , testDejafuWay (Systematically defaultBounds { boundPreemp = Just 3 } :: Way StdGen)
+    , testDejafuWay (Systematically defaultBounds { boundPreemp = Just 3 })
                     SequentialConsistency
                     nondeterministic
                     "nondeterministic (systematic)"

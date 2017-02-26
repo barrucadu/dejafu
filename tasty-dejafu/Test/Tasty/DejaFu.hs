@@ -62,7 +62,7 @@ import           Data.List            (intercalate, intersperse)
 import           Data.Proxy           (Proxy(..))
 import           Data.Tagged          (Tagged(..))
 import           Data.Typeable        (Typeable)
-import           System.Random        (RandomGen, StdGen, mkStdGen)
+import           System.Random        (StdGen, mkStdGen)
 import           Test.DejaFu
 import qualified Test.DejaFu.Conc     as Conc
 import qualified Test.DejaFu.SCT      as SCT
@@ -76,10 +76,10 @@ import           Test.Tasty.Providers (IsTest(..), singleTest, testFailed,
 -- instance :(
 import           Unsafe.Coerce        (unsafeCoerce)
 
-runSCTst :: RandomGen g => Way g -> MemType -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Conc.Trace)]
+runSCTst :: Way -> MemType -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Conc.Trace)]
 runSCTst way memtype conc = runST (SCT.runSCT way memtype conc)
 
-runSCTio :: RandomGen g => Way g -> MemType -> Conc.ConcIO a -> IO [(Either Failure a, Conc.Trace)]
+runSCTio :: Way -> MemType -> Conc.ConcIO a -> IO [(Either Failure a, Conc.Trace)]
 runSCTio = SCT.runSCT
 
 --------------------------------------------------------------------------------
@@ -91,7 +91,7 @@ instance Typeable t => IsTest (Conc.ConcST t (Maybe String)) where
 
   run options conc callback = do
     let memtype = lookupOption options :: MemType
-    let way     = lookupOption options :: Way StdGen
+    let way     = lookupOption options :: Way
     let runSCTst' :: Conc.ConcST t (Maybe String) -> [(Either Failure (Maybe String), Conc.Trace)]
         runSCTst' = unsafeCoerce $ runSCTst way memtype
     let traces = runSCTst' conc
@@ -103,14 +103,14 @@ instance IsTest (Conc.ConcIO (Maybe String)) where
 
   run options conc callback = do
     let memtype = lookupOption options
-    let way     = lookupOption options :: Way StdGen
+    let way     = lookupOption options
     let traces  = runSCTio way memtype conc
     run options (ConcIOTest traces assertableP) callback
 
 concOptions :: [OptionDescription]
 concOptions =
   [ Option (Proxy :: Proxy MemType)
-  , Option (Proxy :: Proxy (Way StdGen))
+  , Option (Proxy :: Proxy Way)
   ]
 
 assertableP :: Predicate (Maybe String)
@@ -129,8 +129,8 @@ instance IsOption MemType where
   optionName = Tagged "memory-model"
   optionHelp = Tagged "The memory model to use. This should be one of \"sc\", \"tso\", or \"pso\"."
 
--- | @since 0.4.0.0
-instance IsOption (Way StdGen) where
+-- | @since unreleased
+instance IsOption Way where
   defaultValue = defaultWay
   parseValue = shortName . map toUpper where
     shortName "SYSTEMATICALLY" = Just (Systematically defaultBounds)
@@ -159,9 +159,9 @@ testAuto = testAutoWay defaultWay defaultMemType
 -- | Variant of 'testAuto' which tests a computation under a given
 -- execution way and memory model.
 --
--- @since 0.4.0.0
-testAutoWay :: (Eq a, Show a, RandomGen g)
-  => Way g
+-- @since unreleased
+testAutoWay :: (Eq a, Show a)
+  => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -178,9 +178,9 @@ testAutoIO = testAutoWayIO defaultWay defaultMemType
 
 -- | Variant of 'testAutoWay' for computations which do 'IO'.
 --
--- @since 0.4.0.0
-testAutoWayIO :: (Eq a, Show a, RandomGen g)
-  => Way g -> MemType -> Conc.ConcIO a -> TestTree
+-- @since unreleased
+testAutoWayIO :: (Eq a, Show a)
+  => Way -> MemType -> Conc.ConcIO a -> TestTree
 testAutoWayIO way memtype concio =
   testDejafusWayIO way memtype  concio autocheckCases
 
@@ -208,9 +208,9 @@ testDejafu = testDejafuWay defaultWay defaultMemType
 -- | Variant of 'testDejafu' which takes a way to execute the program
 -- and a memory model.
 --
--- @since 0.4.0.0
-testDejafuWay :: (Show a, RandomGen g)
-  => Way g
+-- @since unreleased
+testDejafuWay :: Show a
+  => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -240,9 +240,9 @@ testDejafus = testDejafusWay defaultWay defaultMemType
 -- | Variant of 'testDejafus' which takes a way to execute the program
 -- and a memory model.
 --
--- @since 0.4.0.0
-testDejafusWay :: (Show a, RandomGen g)
-  => Way g
+-- @since unreleased
+testDejafusWay :: Show a
+  => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -261,9 +261,9 @@ testDejafuIO = testDejafuWayIO defaultWay defaultMemType
 
 -- | Variant of 'testDejafuWay' for computations which do 'IO'.
 --
--- @since 0.4.0.0
-testDejafuWayIO :: (Show a, RandomGen g)
-  => Way g -> MemType -> Conc.ConcIO a -> TestName -> Predicate a -> TestTree
+-- @since unreleased
+testDejafuWayIO :: Show a
+  => Way -> MemType -> Conc.ConcIO a -> TestName -> Predicate a -> TestTree
 testDejafuWayIO way memtype concio name p =
   testDejafusWayIO way memtype concio [(name, p)]
 
@@ -275,9 +275,9 @@ testDejafusIO = testDejafusWayIO defaultWay defaultMemType
 
 -- | Variant of 'dejafusWay' for computations which do 'IO'.
 --
--- @since 0.4.0.0
-testDejafusWayIO :: (Show a, RandomGen g)
-  => Way g -> MemType -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
+-- @since unreleased
+testDejafusWayIO :: Show a
+  => Way -> MemType -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
 testDejafusWayIO = testio
 
 --------------------------------------------------------------------------------
@@ -307,8 +307,8 @@ instance IsTest ConcIOTest where
     pure (if null err then testPassed "" else testFailed err)
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu test.
-testst :: (Show a, RandomGen g)
-  => Way g -> MemType -> (forall t. Conc.ConcST t a) -> [(TestName, Predicate a)] -> TestTree
+testst :: Show a
+  => Way -> MemType -> (forall t. Conc.ConcST t a) -> [(TestName, Predicate a)] -> TestTree
 testst way memtype conc tests = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts
@@ -319,8 +319,8 @@ testst way memtype conc tests = case map toTest tests of
     traces = runSCTst way memtype conc
 
 -- | Produce a Tasty 'Test' from an IO-using Deja Fu test.
-testio :: (Show a, RandomGen g)
-  => Way g -> MemType -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
+testio :: Show a
+  => Way -> MemType -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
 testio way memtype concio tests = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts
