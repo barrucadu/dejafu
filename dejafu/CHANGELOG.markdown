@@ -10,6 +10,11 @@ This project is versioned according to the [Package Versioning Policy](https://p
 unreleased
 ----------
 
+### Test.DejaFu.Conc
+
+- The `Conc n r a` type is now `ConcT r n a`, and has been given a `MonadTrans` instance. Uses of
+  `lift` appear in the execution trace in the same way as `liftBase` and `liftIO`.
+
 ### Test.DejaFu.SCT
 
 - `Way` is now a GADT, no longer taking a type parameter. This greatly improves type inference when

@@ -482,14 +482,14 @@ runTestWay way memtype predicate conc =
 --
 -- @since 0.4.0.0
 runTestM :: MonadRef r n
-         => Predicate a -> Conc n r a -> n (Result a)
+         => Predicate a -> ConcT r n a -> n (Result a)
 runTestM = runTestWayM defaultWay defaultMemType
 
 -- | Monad-polymorphic variant of 'runTest''.
 --
 -- @since unreleased
 runTestWayM :: MonadRef r n
-            => Way -> MemType -> Predicate a -> Conc n r a -> n (Result a)
+            => Way -> MemType -> Predicate a -> ConcT r n a -> n (Result a)
 runTestWayM way memtype predicate conc =
   predicate <$> runSCT way memtype conc
 

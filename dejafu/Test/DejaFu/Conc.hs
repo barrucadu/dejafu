@@ -19,8 +19,8 @@
 -- out to the supplied scheduler after each step to determine which
 -- thread runs next.
 module Test.DejaFu.Conc
-  ( -- * The @Conc@ Monad
-    Conc
+  ( -- * The @ConcT@ monad transformer
+    ConcT
   , ConcST
   , ConcIO
 
@@ -53,6 +53,7 @@ import qualified Control.Monad.IO.Class           as IO
 import           Control.Monad.Ref                (MonadRef)
 import qualified Control.Monad.Ref                as Re
 import           Control.Monad.ST                 (ST)
+import           Control.Monad.Trans.Class        (MonadTrans(..))
 import qualified Data.Foldable                    as F
 import           Data.IORef                       (IORef)
 import           Data.STRef                       (STRef)
@@ -64,24 +65,24 @@ import           Test.DejaFu.Conc.Internal
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.STM
 
--- | @since 0.4.0.0
-newtype Conc n r a = C { unC :: M n r a } deriving (Functor, Applicative, Monad)
+-- | @since unreleased
+newtype ConcT r n a = C { unC :: M n r a } deriving (Functor, Applicative, Monad)
 
 -- | A 'MonadConc' implementation using @ST@, this should be preferred
 -- if you do not need 'liftIO'.
 --
 -- @since 0.4.0.0
-type ConcST t = Conc (ST t) (STRef t)
+type ConcST t = ConcT (STRef t) (ST t)
 
 -- | A 'MonadConc' implementation using @IO@.
 --
 -- @since 0.4.0.0
-type ConcIO = Conc IO IORef
+type ConcIO = ConcT IORef IO
 
-toConc :: ((a -> Action n r) -> Action n r) -> Conc n r a
+toConc :: ((a -> Action n r) -> Action n r) -> ConcT r n a
 toConc = C . cont
 
-wrap :: (M n r a -> M n r a) -> Conc n r a -> Conc n r a
+wrap :: (M n r a -> M n r a) -> ConcT r n a -> ConcT r n a
 wrap f = C . f . unC
 
 instance IO.MonadIO ConcIO where
@@ -90,8 +91,7 @@ instance IO.MonadIO ConcIO where
 instance Ba.MonadBase IO ConcIO where
   liftBase = IO.liftIO
 
--- | @since 0.5.1.3
-instance Re.MonadRef (CRef r) (Conc n r) where
+instance Re.MonadRef (CRef r) (ConcT r n) where
   newRef a = toConc (ANewCRef "" a)
 
   readRef ref = toConc (AReadCRef ref)
@@ -100,25 +100,28 @@ instance Re.MonadRef (CRef r) (Conc n r) where
 
   modifyRef ref f = toConc (AModCRef ref (\a -> (f a, ())))
 
-instance Re.MonadAtomicRef (CRef r) (Conc n r) where
+instance Re.MonadAtomicRef (CRef r) (ConcT r n) where
   atomicModifyRef ref f = toConc (AModCRef ref f)
 
-instance Ca.MonadCatch (Conc n r) where
+instance MonadTrans (ConcT r) where
+  lift ma = toConc (\c -> ALift (fmap c ma))
+
+instance Ca.MonadCatch (ConcT r n) where
   catch ma h = toConc (ACatching (unC . h) (unC ma))
 
-instance Ca.MonadThrow (Conc n r) where
+instance Ca.MonadThrow (ConcT r n) where
   throwM e = toConc (\_ -> AThrow e)
 
-instance Ca.MonadMask (Conc n r) where
+instance Ca.MonadMask (ConcT r n) where
   mask                mb = toConc (AMasking MaskedInterruptible   (\f -> unC $ mb $ wrap f))
   uninterruptibleMask mb = toConc (AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f))
 
-instance Monad n => C.MonadConc (Conc n r) where
-  type MVar     (Conc n r) = MVar r
-  type CRef     (Conc n r) = CRef r
-  type Ticket   (Conc n r) = Ticket
-  type STM      (Conc n r) = STMLike n r
-  type ThreadId (Conc n r) = ThreadId
+instance Monad n => C.MonadConc (ConcT r n) where
+  type MVar     (ConcT r n) = MVar r
+  type CRef     (ConcT r n) = CRef r
+  type Ticket   (ConcT r n) = Ticket
+  type STM      (ConcT r n) = STMLike n r
+  type ThreadId (ConcT r n) = ThreadId
 
   -- ----------
 
@@ -192,7 +195,7 @@ runConcurrent :: MonadRef r n
               => Scheduler s
               -> MemType
               -> s
-              -> Conc n r a
+              -> ConcT r n a
               -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s ma = do
   (res, s', trace, _) <- runConcurrency sched memtype s 2 (unC ma)
@@ -205,6 +208,6 @@ runConcurrent sched memtype s ma = do
 -- of these conditions will result in the computation failing with
 -- @IllegalSubconcurrency@.
 --
--- @since 0.5.0.0
-subconcurrency :: Conc n r a -> Conc n r (Either Failure a)
+-- @since unreleased
+subconcurrency :: ConcT r n a -> ConcT r n (Either Failure a)
 subconcurrency ma = toConc (ASub (unC ma))

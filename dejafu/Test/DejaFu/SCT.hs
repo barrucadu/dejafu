@@ -133,7 +133,7 @@ runSCT :: MonadRef r n
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Conc n r a
+  -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
 runSCT (Systematically cb) memtype = sctBound memtype cb
@@ -146,7 +146,7 @@ runSCT (Randomly g lim)    memtype = sctRandom memtype g lim
 --
 -- @since unreleased
 runSCT' :: (MonadRef r n, NFData a)
-  => Way -> MemType -> Conc n r a -> n [(Either Failure a, Trace)]
+  => Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
 runSCT' way memtype conc = do
   res <- runSCT way memtype conc
   rnf res `seq` pure res
@@ -159,7 +159,7 @@ resultsSet :: (MonadRef r n, Ord a)
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Conc n r a
+  -> ConcT r n a
   -- ^ The computation to run many times.
   -> n (Set (Either Failure a))
 resultsSet way memtype conc =
@@ -172,7 +172,7 @@ resultsSet way memtype conc =
 --
 -- @since unreleased
 resultsSet' :: (MonadRef r n, Ord a, NFData a)
-  => Way -> MemType -> Conc n r a -> n (Set (Either Failure a))
+  => Way -> MemType -> ConcT r n a -> n (Set (Either Failure a))
 resultsSet' way memtype conc = do
   res <- resultsSet' way memtype conc
   rnf res `seq` pure res
@@ -244,7 +244,7 @@ sctPreBound :: MonadRef r n
   -> PreemptionBound
   -- ^ The maximum number of pre-emptions to allow in a single
   -- execution
-  -> Conc n r a
+  -> ConcT r n a
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
 sctPreBound memtype pb = sctBound memtype $ Bounds (Just pb) Nothing Nothing
@@ -295,7 +295,7 @@ sctFairBound :: MonadRef r n
   -> FairBound
   -- ^ The maximum difference between the number of yield operations
   -- performed by different threads.
-  -> Conc n r a
+  -> ConcT r n a
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
 sctFairBound memtype fb = sctBound memtype $ Bounds Nothing (Just fb) Nothing
@@ -332,7 +332,7 @@ sctLengthBound :: MonadRef r n
   -> LengthBound
   -- ^ The maximum length of a schedule, in terms of primitive
   -- actions.
-  -> Conc n r a
+  -> ConcT r n a
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
 sctLengthBound memtype lb = sctBound memtype $ Bounds Nothing Nothing (Just lb)
@@ -367,7 +367,7 @@ sctBound :: MonadRef r n
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Bounds
   -- ^ The combined bounds.
-  -> Conc n r a
+  -> ConcT r n a
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
 sctBound memtype cb conc = go initialState where
@@ -416,7 +416,7 @@ sctRandom :: (MonadRef r n, RandomGen g)
   -- ^ The random number generator.
   -> Int
   -- ^ The number of executions to perform.
-  -> Conc n r a
+  -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
 sctRandom memtype g0 lim0 conc = go g0 lim0 where
