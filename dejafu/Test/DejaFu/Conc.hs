@@ -50,7 +50,8 @@ import Control.Exception (MaskingState(..))
 import qualified Control.Monad.Base as Ba
 import qualified Control.Monad.Catch as Ca
 import qualified Control.Monad.IO.Class as IO
-import Control.Monad.Ref (MonadRef,)
+import Control.Monad.Ref (MonadRef)
+import qualified Control.Monad.Ref as Re
 import Control.Monad.ST (ST)
 import qualified Data.Foldable as F
 import Data.IORef (IORef)
@@ -86,6 +87,18 @@ instance IO.MonadIO ConcIO where
 
 instance Ba.MonadBase IO ConcIO where
   liftBase = IO.liftIO
+
+instance Re.MonadRef (CRef r) (Conc n r) where
+  newRef a = toConc (\c -> ANewCRef "" a c)
+
+  readRef ref = toConc (AReadCRef ref)
+
+  writeRef ref a = toConc (\c -> AWriteCRef ref a (c ()))
+
+  modifyRef ref f = toConc (AModCRef ref (\a -> (f a, ())))
+
+instance Re.MonadAtomicRef (CRef r) (Conc n r) where
+  atomicModifyRef ref f = toConc (AModCRef ref f)
 
 instance Ca.MonadCatch (Conc n r) where
   catch ma h = toConc (ACatching (unC . h) (unC ma))
