@@ -305,8 +305,19 @@ Contributing
 
 Bug reports, pull requests, and comments are very welcome!
 
+The general idea (which I'm trying out as of Feb 2017) is
+that [master][] should always be at most a minor version ahead of what
+is released on hackage, there shouldn't be any backwards-incompatible
+changes. Backwards-incompatible changes go on the [next-major][]
+branch. This is to make it feasible to fix bugs without also
+introducing breaking changes, even if work on the next major version
+has already begun.
+
 Feel free to contact me on GitHub, through IRC (#haskell on freenode),
 or email (mike@barrucadu.co.uk).
+
+[master]:     https://github.com/barrucadu/dejafu/tree/master
+[next-major]: https://github.com/barrucadu/dejafu/tree/next-major
 
 
 Bibliography
