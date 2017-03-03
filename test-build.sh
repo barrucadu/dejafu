@@ -39,6 +39,6 @@ if ! stack $STACKOPTS exec dejafu-tests; then
 fi
 
 # Test everything else.
-for pkg in hunit-dejafu tasty-dejafu async-dejafu; do
+for pkg in hunit-dejafu tasty-dejafu; do
   testcmd $pkg $STACKOPTS
 done
