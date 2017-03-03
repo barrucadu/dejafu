@@ -31,9 +31,10 @@ Table of Contents
   - [Threads and MVars](#threads-and-mvars)
   - [Software Transactional Memory](#software-transactional-memory)
   - [Relaxed Memory and IORefs](#relaxed-memory-and-iorefs)
-  - [Program Testing](#program-testign)
+  - [Program Testing](#program-testing)
   - [Porting](#porting)
 - [Contributing](#contributing)
+  - [Code Coverage](#code-coverage)
 - [Bibliography](#bibliography)
 
 
@@ -314,6 +315,44 @@ or email (mike@barrucadu.co.uk).
 
 [master]:     https://github.com/barrucadu/dejafu/tree/master
 [next-major]: https://github.com/barrucadu/dejafu/tree/next-major
+
+### Code Coverage
+
+[`hpc`][hpc] can generate a coverage report from the execution of
+dejafu-tests:
+
+```
+$ stack build --coverage
+$ stack exec dejafu-tests
+$ stack hpc report --all dejafu-tests.tix
+```
+
+This will print some stats and generate an HTML coverage report:
+
+```
+$ stack hpc report --all dejafu-tests.tix
+Generating combined report
+ 52% expressions used (4052/7693)
+ 48% boolean coverage (63/129)
+      43% guards (46/106), 31 always True, 9 always False, 20 unevaluated
+      68% 'if' conditions (11/16), 2 always True, 3 unevaluated
+      85% qualifiers (6/7), 1 unevaluated
+ 61% alternatives used (392/635)
+ 80% local declarations used (210/261)
+ 26% top-level declarations used (280/1063)
+The combined report is available at /home/barrucadu/projects/dejafu/.stack-work/install/x86_64-linux/nightly-2016-06-20/8.0.1/hpc/combined/custom/hpc_index.html
+```
+
+The highlighted code in the HTML report emphasises branch coverage:
+
+- Red means a branch was evaluated as always false.
+- Green means a branch was evaluated as always true.
+- Yellow means an expression was never evaluated.
+
+See also the [stack coverage documentation][hpc-stack].
+
+[hpc]:       https://wiki.haskell.org/Haskell_program_coverage
+[hpc-stack]: https://docs.haskellstack.org/en/latest/coverage/
 
 
 Bibliography
