@@ -42,9 +42,8 @@ Packages
 
 |     | Version | Intended Users | Summary |
 | --- | ------- | -------------- | ------- |
-| async-dejafu [[docs][d:async]]  [[hackage][h:async]]  | 0.1.3.0 | Authors | Run MonadConc operations asynchronously and wait for their results. |
-| concurrency  [[docs][d:conc]]   [[hackage][h:conc]]   | 1.1.0.0 | Authors | Typeclasses, functions, and data types for concurrency and STM. |
-| dejafu       [[docs][d:dejafu]] [[hackage][h:dejafu]] | 0.5.1.1 | Testers | Systematic testing for Haskell concurrency. |
+| concurrency  [[docs][d:conc]]   [[hackage][h:conc]]   | 1.1.1.0 | Authors | Typeclasses, functions, and data types for concurrency and STM. |
+| dejafu       [[docs][d:dejafu]] [[hackage][h:dejafu]] | 0.5.1.2 | Testers | Systematic testing for Haskell concurrency. |
 | hunit-dejafu [[docs][d:hunit]]  [[hackage][h:hunit]]  | 0.4.0.0 | Testers | Deja Fu support for the HUnit test framework. |
 | tasty-dejafu [[docs][d:tasty]]  [[hackage][h:tasty]]  | 0.4.0.0 | Testers | Deja Fu support for the Tasty test framework. |
 
@@ -56,13 +55,11 @@ dependencies.
 
 [d:conc]:   https://docs.barrucadu.co.uk/concurrency/
 [d:dejafu]: https://docs.barrucadu.co.uk/dejafu/
-[d:async]:  https://docs.barrucadu.co.uk/async-dejafu/
 [d:hunit]:  https://docs.barrucadu.co.uk/hunit-dejafu/
 [d:tasty]:  https://docs.barrucadu.co.uk/tasty-dejafu/
 
 [h:conc]:   https://hackage.haskell.org/package/concurrency
 [h:dejafu]: https://hackage.haskell.org/package/dejafu
-[h:async]:  https://hackage.haskell.org/package/async-dejafu
 [h:hunit]:  https://hackage.haskell.org/package/hunit-dejafu
 [h:tasty]:  https://hackage.haskell.org/package/tasty-dejafu
 
@@ -71,9 +68,9 @@ Concurrent Programming
 ----------------------
 
 You should read [Parallel and Concurrent Programming in Haskell][parconc],
-by Simon Marlow. It's very good, and the API of the *async-dejafu* and
-*concurrency* packages is intentionally kept very similar to the
-standard packages, so all the knowledge transfers.
+by Simon Marlow. It's very good, and the API of the *concurrency*
+package is intentionally kept very similar to the *async*, *base*, and
+*stm* packages, so all the knowledge transfers.
 
 [parconc]: http://chimera.labs.oreilly.com/books/1230000000929/
 
@@ -81,9 +78,8 @@ standard packages, so all the knowledge transfers.
 
 The wonderful *[async][]* package by Simon Marlow greatly eases the
 difficulty of writing programs which merely need to perform some
-asynchronous IO. The *async-dejafu* package provides an almost-total
-reimplementation of *async*, using the abstractions provided by
-*concurrency*.
+asynchronous IO. The *concurrency* package includes an almost-total
+reimplementation of *async*.
 
 For example, assuming a suitable `getURL` function, to fetch the
 contents of two web pages at the same time:

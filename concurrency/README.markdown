@@ -20,6 +20,10 @@ A brief list of supported functionality:
 - Exceptions.
 - All of the data structures in Control.Concurrent.* and
   Control.Concurrent.STM.* have typeclass-abstracted equivalents.
+- A reimplementation of the [async][] package, providing a
+  higher-level interface over threads, allowing users to conveniently
+  run `MonadConc` operations asynchronously and wait for their
+  results.
 
 This is quite a rich set of functionality, although it is not
 complete. If there is something else you need, file an issue!
@@ -59,4 +63,5 @@ Feel free to contact me on GitHub, through IRC (#haskell on freenode),
 or email (mike@barrucadu.co.uk).
 
 [docs]:    https://docs.barrucadu.co.uk/concurrency/dejafu-0.4
+[async]:   https://hackage.haskell.org/package/async
 [parconc]: http://chimera.labs.oreilly.com/books/1230000000929

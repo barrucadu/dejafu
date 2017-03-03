@@ -20,6 +20,7 @@ executable dejafu-tests
   main-is:             Main.hs
 
   other-modules:       Cases
+                     , Cases.Async
                      , Cases.SingleThreaded
                      , Cases.MultiThreaded
                      , Cases.Litmus

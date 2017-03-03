@@ -2,11 +2,9 @@
 {-# LANGUAGE RankNTypes #-}
 
 -- | This module is a version of the
--- <https://hackage.haskell.org/package/async async> package using the
--- <https://hackage.haskell.org/package/dejafu dejafu> concurrency
--- abstraction. It provides a set of operations for running
--- @MonadConc@ operations asynchronously and waiting for their
--- results.
+-- <https://hackage.haskell.org/package/async async> package. It
+-- provides a set of operations for running @MonadConc@ operations
+-- asynchronously and waiting for their results.
 --
 -- For example, assuming a suitable @getURL@ function, we can fetch
 -- the contents of two web pages at the same time:
@@ -22,13 +20,13 @@
 --
 -- There are a few deviations from the regular async package:
 --
---   * 'asyncBound' and 'withAsyncBound' are missing as dejafu does
---   not support bound threads.
+--   * 'asyncBound' and 'withAsyncBound' are missing as @MonadConc@
+--   does not support bound threads.
 --
 --   * The @Alternative@ instance for 'Concurrently' uses @forever
 --   yield@ in the definition of @empty@, rather than @forever
 --   (threadDelay maxBound)@.
-module Control.Concurrent.Async
+module Control.Concurrent.Classy.Async
   ( -- * Asynchronous actions
     Async
 

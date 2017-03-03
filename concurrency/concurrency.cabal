@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                concurrency
-version:             1.1.0.0
+version:             1.1.1.0
 synopsis:            Typeclasses, functions, and data types for concurrency and STM.
 
 description:
@@ -31,6 +31,12 @@ description:
   .
   * All of the data structures in Control.Concurrent.* and
     Control.Concurrent.STM.* have typeclass-abstracted equivalents.
+  .
+  * A reimplementation of the
+    <https://hackage.haskell.org/package/async async> package,
+    providing a higher-level interface over threads, allowing users to
+    conveniently run @MonadConc@ operations asynchronously and wait
+    for their results.
   .
   This is quite a rich set of functionality, although it is not
   complete. If there is something else you need, file an issue!
@@ -78,13 +84,14 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      concurrency-1.1.0.0
+  tag:      concurrency-1.1.1.0
 
 library
   exposed-modules:     Control.Monad.Conc.Class
                      , Control.Monad.STM.Class
 
                      , Control.Concurrent.Classy
+                     , Control.Concurrent.Classy.Async
                      , Control.Concurrent.Classy.Chan
                      , Control.Concurrent.Classy.CRef
                      , Control.Concurrent.Classy.MVar

@@ -1,7 +1,6 @@
 flags: {}
 
 packages:
-- async-dejafu
 - concurrency
 - dejafu
 - dejafu-tests

@@ -1,22 +1,24 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase         #-}
 
-module Main where
+module Cases.Async where
 
 import Control.Applicative ((<|>))
-import Control.Concurrent.Async
+import Control.Concurrent.Classy.Async
 import Control.Exception (AsyncException(..), BlockedIndefinitelyOnMVar(..), Exception, SomeException(..), fromException)
 import Control.Monad (forever)
 import Control.Monad.Conc.Class
 import Data.Functor (void)
 import Data.Typeable (Typeable, cast)
-import Test.DejaFu hiding (MemType(..))
-import Test.HUnit (Test(..), runTestTT, test)
-import Test.HUnit.DejaFu
+import Test.Framework (Test, testGroup)
+import Test.Framework.Providers.HUnit (hUnitTestToTests)
+import Test.DejaFu (alwaysTrue, gives')
+import Test.HUnit (test)
+import Test.HUnit.DejaFu (testDejafu)
 
-main :: IO ()
-main = void . runTestTT $ TestList
-  [ TestLabel "async" $ test
+tests :: [Test]
+tests =
+  [ testGroup "async" . hUnitTestToTests $ test
     [ testDejafu async_wait        "async_wait"        $ alwaysTrue (==Right value)
     , testDejafu async_waitCatch   "async_waitCatch"   $ alwaysTrue (\case Right (Right v) -> v == value; _ -> False)
     , testDejafu async_exwait      "async_exwait"      $ alwaysTrue (==Right (Just TestException))
@@ -26,7 +28,7 @@ main = void . runTestTT $ TestList
     , testDejafu async_poll2       "async_poll2"       $ alwaysTrue (\case Right (Just (Right v)) -> v == value; _ -> False)
     ]
 
-  , TestLabel "withAsync" $ test
+  , testGroup "withAsync" . hUnitTestToTests $ test
     [ testDejafu withasync_waitCatch "withasync_waitCatch" $ alwaysTrue (\case Right (Right v) -> v == value; _ -> False)
     , testDejafu withasync_wait2     "withasync_wait2"     $ alwaysTrue (\case Right (Left (Just ThreadKilled)) -> True; _ -> False)
 
