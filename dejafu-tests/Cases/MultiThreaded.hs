@@ -33,7 +33,10 @@ tests =
       , T "race"     cvarRace $ gives' [0,1]
       ]
     , testGroup "CRef" . tg $
-      [ T "race" crefRace $ gives' [0,1]
+      [ T "race"        crefRace       $ gives' [0,1]
+      , T "cas modify"  crefCASModify  $ gives' [0,1]
+      , T "cas race"    crefCASRace    $ gives' [(True, 2), (False, 2)]
+      , T "cas tickets" crefCASTickets $ gives' [(True, False, 1), (False, True, 2)]
       ]
     , testGroup "STM" . tg $
       [ T "atomicity"   stmAtomic     $ gives' [0,2]
@@ -130,8 +133,6 @@ cvarRace = do
 
 --------------------------------------------------------------------------------
 -- @CRef@s
---
--- TODO: Tests on CAS operations
 
 -- | When racing two @writeCRef@s, one of them will win.
 crefRace :: MonadConc m => m Int
@@ -145,6 +146,36 @@ crefRace = do
   takeMVar j2
 
   readCRef x
+
+-- | Modify CAS works.
+crefCASModify :: MonadConc m => m Int
+crefCASModify = do
+  x <- newCRef (0::Int)
+  fork $ modifyCRefCAS x (\_ -> (1, ()))
+  readCRef x
+
+-- | CAS with two threads is racey.
+crefCASRace :: MonadConc m => m (Bool, Int)
+crefCASRace = do
+  x <- newCRef (0::Int)
+  t <- readForCAS x
+  j <- spawn $ casCRef x t 1
+  writeCRef x 2
+  b <- fst <$> readMVar j
+  v <- readCRef x
+  pure (b, v)
+
+-- | A ticket is only good for one CAS.
+crefCASTickets :: MonadConc m => m (Bool, Bool, Int)
+crefCASTickets = do
+  x  <- newCRef (0::Int)
+  t  <- readForCAS x
+  j1 <- spawn $ casCRef x t 1
+  j2 <- spawn $ casCRef x t 2
+  b1 <- fst <$> readMVar j1
+  b2 <- fst <$> readMVar j2
+  v  <- readCRef x
+  pure (b1, b2, v)
 
 --------------------------------------------------------------------------------
 -- STM
