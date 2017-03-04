@@ -3,6 +3,7 @@
 
 module Cases.MultiThreaded where
 
+import Control.Exception (ArithException(..))
 import Control.Monad (void)
 import System.Random (mkStdGen)
 import Test.DejaFu (Failure(..), Predicate, Way(..), defaultBounds, defaultMemType, gives, gives')
@@ -14,6 +15,8 @@ import Test.HUnit.DejaFu (testDejafuWay)
 import Control.Concurrent.Classy
 import Control.Monad.STM.Class
 import Test.DejaFu.Conc (Conc, ConcST, subconcurrency)
+
+import Utils
 
 data T where
   T :: Show a => String -> (forall t. ConcST t a) -> Predicate a -> T
@@ -42,6 +45,8 @@ tests =
       [ T "no masking" threadKill      $ gives  [Left Deadlock, Right ()]
       , T "masked"     threadKillMask  $ gives' [()]
       , T "unmasked"   threadKillUmask $ gives  [Left Deadlock, Right ()]
+      , T "throw to main (uncaught)" threadKillToMain1 $ gives  [Left UncaughtException]
+      , T "throw to main (caught)"   threadKillToMain2 $ gives' [()]
       ]
     , testGroup "Daemons" . tg $
       [ T "schedule daemon" schedDaemon $ gives' [0,1]
@@ -206,6 +211,22 @@ threadKillUmask = do
   readMVar x
   killThread tid
   readMVar y
+
+-- | Throw an exception to the main thread with 'throwTo', without a
+-- handler.
+threadKillToMain1 :: MonadConc m => m ()
+threadKillToMain1 = do
+  tid <- myThreadId
+  j <- spawn $ throwTo tid Overflow
+  readMVar j
+
+-- | Throw an exception to the main thread with 'throwTo', with a
+-- handler.
+threadKillToMain2 :: MonadConc m => m ()
+threadKillToMain2 = do
+  tid <- myThreadId
+  catchArithException (spawn (throwTo tid Overflow) >>= readMVar)
+                      (\_ -> pure ())
 
 -------------------------------------------------------------------------------
 -- Daemon threads

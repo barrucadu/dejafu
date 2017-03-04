@@ -55,6 +55,8 @@ tests =
     , testDejafu excEscape   "uncaught"     $ gives  [Left UncaughtException]
     , testDejafu excCatchAll "catch all"    $ gives' [(True, True)]
     , testDejafu excSTM      "from stm"     $ gives' [True]
+    , testDejafu excToMain1  "throw to main (uncaught)" $ gives  [Left UncaughtException]
+    , testDejafu excToMain2  "throw to main (caught)"   $ gives' [()]
     ]
 
   , testGroup "Capabilities" . hUnitTestToTests $ test
@@ -253,6 +255,20 @@ excSTM :: MonadConc m => m Bool
 excSTM = catchArithException
   (atomically $ throwSTM Overflow)
   (\_ -> return True)
+
+-- | Throw an exception to the main thread with 'throwTo', without a
+-- handler.
+excToMain1 :: MonadConc m => m ()
+excToMain1 = do
+  tid <- myThreadId
+  throwTo tid Overflow
+
+-- | Throw an exception to the main thread with 'throwTo', with a
+-- handler.
+excToMain2 :: MonadConc m => m ()
+excToMain2 = do
+  tid <- myThreadId
+  catchArithException (throwTo tid Overflow) (\_ -> pure ())
 
 --------------------------------------------------------------------------------
 -- Capabilities
