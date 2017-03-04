@@ -81,31 +81,27 @@ runThreads sched memtype ref = go Seq.empty [] Nothing where
   -- sofar is the 'SeqTrace', sofarSched is the @[(Decision,
   -- ThreadAction)]@ trace the scheduler needs.
   go sofar sofarSched prior ctx
-    | isTerminated  = stop prior ctx
-    | isDeadlocked  = die prior Deadlock ctx
-    | isSTMLocked   = die prior STMDeadlock ctx
-    | isAborted     = die prior Abort $ ctx { cSchedState = g' }
-    | isNonexistant = die prior InternalError $ ctx { cSchedState = g' }
-    | isBlocked     = die prior InternalError $ ctx { cSchedState = g' }
+    | isTerminated  = pure (ctx, sofar, prior)
+    | isDeadlocked  = die sofar prior Deadlock ctx
+    | isSTMLocked   = die sofar prior STMDeadlock ctx
+    | isAborted     = die sofar prior Abort $ ctx { cSchedState = g' }
+    | isNonexistant = die sofar prior InternalError $ ctx { cSchedState = g' }
+    | isBlocked     = die sofar prior InternalError $ ctx { cSchedState = g' }
     | otherwise = do
       stepped <- stepThread sched memtype chosen (_continuation $ fromJust thread) $ ctx { cSchedState = g' }
       case stepped of
         (Right ctx', actOrTrc) ->
-          let (sofar', sofarSched', prior', ctx'') = setupNext actOrTrc ctx'
-          in go sofar' sofarSched' prior' ctx''
-        (Left UncaughtException, actOrTrc)
-          | chosen == initialThread ->
-              let ctx' = ctx { cSchedState = g' }
-                  (_, _, prior', ctx'') = setupNext actOrTrc ctx'
-              in die prior' UncaughtException ctx''
-          | otherwise ->
-              let ctx' = ctx { cThreads = kill chosen threadsc, cSchedState = g' }
-                  (sofar', sofarSched', prior', ctx'') = setupNext actOrTrc ctx'
-              in go sofar' sofarSched' prior' ctx''
+          let (act, trc) = getActAndTrc actOrTrc
+              threads' = if (interruptible <$> M.lookup chosen (cThreads ctx')) /= Just False
+                         then unblockWaitingOn chosen (cThreads ctx')
+                         else cThreads ctx'
+              sofarSched' = sofarSched <> map (\(d,_,a) -> (d,a)) (F.toList trc)
+              ctx'' = ctx' { cThreads = delCommitThreads threads' }
+          in go (sofar <> trc) sofarSched' (getPrior actOrTrc) ctx''
         (Left failure, actOrTrc) ->
-          let ctx' = ctx { cSchedState = g' }
-              (_, _, prior', ctx'') = setupNext actOrTrc ctx'
-          in die prior' failure ctx''
+          let (_, trc) = getActAndTrc actOrTrc
+              ctx'     = ctx { cSchedState = g', cThreads = delCommitThreads threads }
+          in die (sofar <> trc) (getPrior actOrTrc) failure ctx'
 
     where
       (choice, g')  = sched sofarSched prior (fromList $ map (\(t,l:|_) -> (t,l)) runnable') (cSchedState ctx)
@@ -138,22 +134,15 @@ runThreads sched memtype ref = go Seq.empty [] Nothing where
 
       nextActions t = lookahead . _continuation . fromJust $ M.lookup t threadsc
 
-      stop finalDecision finalCtx = pure (finalCtx, sofar, finalDecision)
-      die finalDecision reason finalCtx = writeRef ref (Just $ Left reason) >> stop finalDecision finalCtx
+      die sofar' finalDecision reason finalCtx = do
+        writeRef ref (Just $ Left reason)
+        pure (finalCtx, sofar', finalDecision)
 
-      setupNext trcOrAct ctx' =
-        let (act, trc) = case trcOrAct of
-              Single a    -> (a, Seq.singleton (decision, runnable', a))
-              SubC   as _ -> (Subconcurrency, (decision, runnable', Subconcurrency) <| as)
-            threads' = if (interruptible <$> M.lookup chosen (cThreads ctx')) /= Just False
-                       then unblockWaitingOn chosen (cThreads ctx')
-                       else cThreads ctx'
-            sofar' = sofar <> trc
-            sofarSched' = sofarSched <> map (\(d,_,a) -> (d,a)) (F.toList trc)
-            prior' = case trcOrAct of
-              Single _ -> Just (chosen, act)
-              SubC _ finalD -> finalD
-        in (sofar', sofarSched', prior', ctx' { cThreads = delCommitThreads threads' })
+      getActAndTrc (Single a)    = (a, Seq.singleton (decision, runnable', a))
+      getActAndTrc (SubC   as _) = (Subconcurrency, (decision, runnable', Subconcurrency) <| as)
+
+      getPrior (Single a)      = Just (chosen, a)
+      getPrior (SubC _ finalD) = finalD
 
 --------------------------------------------------------------------------------
 -- * Single-step execution
