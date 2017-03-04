@@ -314,7 +314,7 @@ stepThread sched memtype tid action ctx = case action of
           in pure (Right ctx { cThreads = threads', cIdSource = idSource'}, Single (BlockedSTM trace))
         Exception e -> do
           let act = STM trace []
-          res' <- stepThrow act e
+          res' <- stepThrow tid (cThreads ctx) act e
           pure $ case res' of
             (Right ctx', _) -> (Right ctx' { cIdSource = idSource' }, Single act)
             (Left err, _) -> (Left err, Single act)
@@ -327,7 +327,7 @@ stepThread sched memtype tid action ctx = case action of
 
     -- throw an exception, and propagate it to the appropriate
     -- handler.
-    AThrow e -> stepThrow Throw e
+    AThrow e -> stepThrow tid (cThreads ctx) Throw e
 
     -- throw an exception to the target thread, and propagate it to
     -- the appropriate handler.
@@ -336,11 +336,7 @@ stepThread sched memtype tid action ctx = case action of
           blocked  = block (OnMask t) tid (cThreads ctx)
       in case M.lookup t (cThreads ctx) of
            Just thread
-             | interruptible thread -> case propagate (toException e) t threads' of
-               Just threads'' -> simple threads'' $ ThrowTo t
-               Nothing
-                 | t == initialThread -> pure (Left UncaughtException, Single (ThrowTo t))
-                 | otherwise -> simple (kill t threads') $ ThrowTo t
+             | interruptible thread -> stepThrow t threads' (ThrowTo t) e
              | otherwise -> simple blocked $ BlockedThrowTo t
            Nothing -> simple threads' $ ThrowTo t
 
@@ -395,10 +391,12 @@ stepThread sched memtype tid action ctx = case action of
 
     -- this is not inline in the long @case@ above as it's needed by
     -- @AAtom@, @AThrow@, and @AThrowTo@.
-    stepThrow act e =
-      case propagate (toException e) tid (cThreads ctx) of
-        Just threads' -> simple threads' act
-        Nothing -> pure (Left UncaughtException, Single act)
+    stepThrow t ts act e =
+      case propagate (toException e) t ts of
+        Just ts' -> simple ts' act
+        Nothing
+          | t == initialThread -> pure (Left UncaughtException, Single act)
+          | otherwise -> simple (kill t ts) act
 
     -- helper for actions which only change the threads.
     simple threads' act = pure (Right ctx { cThreads = threads' }, Single act)
