@@ -47,6 +47,7 @@ tests =
     , testGroup "Killing Threads" . tg $
       [ T "no masking" threadKill      $ gives  [Left Deadlock, Right ()]
       , T "masked"     threadKillMask  $ gives' [()]
+      , T "masked (uninterruptible)" threadKillUninterruptibleMask $ gives [Left Deadlock]
       , T "unmasked"   threadKillUmask $ gives  [Left Deadlock, Right ()]
       , T "throw to main (uncaught)" threadKillToMain1 $ gives  [Left UncaughtException]
       , T "throw to main (caught)"   threadKillToMain2 $ gives' [()]
@@ -232,6 +233,16 @@ threadKillMask = do
   readMVar x
   killThread tid
   readMVar y
+
+-- | Deadlock trying to throw an exception to an
+-- uninterruptibly-masked thread.
+threadKillUninterruptibleMask :: MonadConc m => m ()
+threadKillUninterruptibleMask = do
+  x <- newEmptyMVar
+  y <- newEmptyMVar
+  tid <- fork $ uninterruptibleMask $ \_ -> putMVar x () >> takeMVar y
+  readMVar x
+  killThread tid
 
 -- | Sometimes deadlock by killing a thread.
 threadKillUmask :: MonadConc m => m ()
