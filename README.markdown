@@ -35,6 +35,7 @@ Table of Contents
   - [Porting](#porting)
 - [Contributing](#contributing)
   - [Code Coverage](#code-coverage)
+  - [Performance](#performance)
 - [Bibliography](#bibliography)
 
 
@@ -330,7 +331,6 @@ $ stack hpc report --all dejafu-tests.tix
 This will print some stats and generate an HTML coverage report:
 
 ```
-$ stack hpc report --all dejafu-tests.tix
 Generating combined report
  52% expressions used (4052/7693)
  48% boolean coverage (63/129)
@@ -353,6 +353,44 @@ See also the [stack coverage documentation][hpc-stack].
 
 [hpc]:       https://wiki.haskell.org/Haskell_program_coverage
 [hpc-stack]: https://docs.haskellstack.org/en/latest/coverage/
+
+### Performance
+
+GHC can generate performance statistics from the execution of
+dejafu-tests:
+
+```
+$ stack build --profile
+$ stack exec  -- dejafu-tests +RTS -p
+$ less dejafu-tests.prof
+```
+
+This prints a detailed breakdown of where memory and time are being
+spent:
+
+```
+    Mon Mar 20 19:26 2017 Time and Allocation Profiling Report  (Final)
+
+       dejafu-tests +RTS -p -RTS
+
+    total time  =      105.94 secs   (105938 ticks @ 1000 us, 1 processor)
+    total alloc = 46,641,766,952 bytes  (excludes profiling overheads)
+
+COST CENTRE                           MODULE                     %time %alloc
+
+findBacktrackSteps.doBacktrack.idxs'  Test.DejaFu.SCT.Internal    21.9   12.0
+==                                    Test.DejaFu.Common          12.4    0.0
+yieldCount.go                         Test.DejaFu.SCT             12.1    0.0
+dependent'                            Test.DejaFu.SCT              5.1    0.0
+runThreads.go                         Test.DejaFu.Conc.Internal    2.7    4.1
+[...]
+```
+
+dejafu-tests is a good target for profiling, as it is a fairly
+representative use: a testsuite where results will be quickly
+summarised and printed. It may not be so useful for judging
+performance of programs which keep the test results around for a long
+time.
 
 
 Bibliography
