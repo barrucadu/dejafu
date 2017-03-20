@@ -6,7 +6,20 @@ packages:
 - dejafu-tests
 - hunit-dejafu
 - tasty-dejafu
+# My fork, until test-framework-hunit gets HUnit 1.6 support:
+# https://github.com/haskell/test-framework/pull/27
+- location:
+    git: git@github.com:barrucadu/test-framework
+    commit: 389ebf2e9c14a70ae52a8af187da1bf1a5502209
+  subdirs:
+  - hunit
+  extra-dep: true
 
-extra-deps: []
+extra-deps:
+- call-stack-0.1.0
+- HUnit-1.6.0.0
 
 resolver: nightly-2016-06-20
+
+nix:
+  packages: [git]
