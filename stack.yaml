@@ -9,7 +9,7 @@ packages:
 # My fork, until test-framework-hunit gets HUnit 1.6 support:
 # https://github.com/haskell/test-framework/pull/27
 - location:
-    git: git@github.com:barrucadu/test-framework
+    git: https://github.com/barrucadu/test-framework.git
     commit: 389ebf2e9c14a70ae52a8af187da1bf1a5502209
   subdirs:
   - hunit
