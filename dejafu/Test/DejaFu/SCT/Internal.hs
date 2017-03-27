@@ -19,7 +19,7 @@ import qualified Data.Foldable as F
 import Data.List (intercalate, nubBy, partition, sortOn)
 import Data.List.NonEmpty (NonEmpty(..), toList)
 import Data.Map.Strict (Map)
-import Data.Maybe (catMaybes, fromJust, isNothing, listToMaybe)
+import Data.Maybe (catMaybes, fromJust, isJust, isNothing, listToMaybe)
 import qualified Data.Map.Strict as M
 import Data.Set (Set)
 import qualified Data.Set as S
@@ -141,8 +141,8 @@ findSchedulePrefix predicate = listToMaybe . go where
 -- | Add a new trace to the tree, creating a new subtree branching off
 -- at the point where the \"to-do\" decision was made.
 incorporateTrace
-  :: (DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool)
-  -- ^ Dependency function
+  :: MemType
+  -- ^ Memory model
   -> Bool
   -- ^ Whether the \"to-do\" point which was used to create this new
   -- execution was conservative or not.
@@ -151,7 +151,7 @@ incorporateTrace
   -- and the action performed.
   -> DPOR
   -> DPOR
-incorporateTrace dependency conservative trace dpor0 = grow initialDepState (initialDPORThread dpor0) trace dpor0 where
+incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initialDPORThread dpor0) trace dpor0 where
   grow state tid trc@((d, _, a):rest) dpor =
     let tid'   = tidOf tid d
         state' = updateDepState state tid' a
@@ -172,7 +172,7 @@ incorporateTrace dependency conservative trace dpor0 = grow initialDepState (ini
   -- Construct a new subtree corresponding to a trace suffix.
   subtree state tid sleep ((_, _, a):rest) =
     let state' = updateDepState state tid a
-        sleep' = M.filterWithKey (\t a' -> not $ dependency state' tid a t a') sleep
+        sleep' = M.filterWithKey (\t a' -> not $ (dependent memtype) state' tid a t a') sleep
     in DPOR
         { dporRunnable = S.fromList $ case rest of
             ((_, runnable, _):_) -> map fst runnable
@@ -203,8 +203,8 @@ incorporateTrace dependency conservative trace dpor0 = grow initialDepState (ini
 -- runnable, a dependency is imposed between this final action and
 -- everything else.
 findBacktrackSteps
-  :: (DepState -> ThreadId -> ThreadAction -> ThreadId -> Lookahead -> Bool)
-  -- ^ Dependency function.
+  :: MemType
+  -- ^ Memory model.
   -> BacktrackFunc
   -- ^ Backtracking function. Given a list of backtracking points, and
   -- a thread to backtrack to at a specific point in that list, add
@@ -222,7 +222,7 @@ findBacktrackSteps
   -> Trace
   -- ^ The execution trace.
   -> [BacktrackStep]
-findBacktrackSteps dependency backtrack boundKill = go initialDepState S.empty initialThread [] . F.toList where
+findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty initialThread [] . F.toList where
   -- Walk through the traces one step at a time, building up a list of
   -- new backtracking points.
   go state allThreads tid bs ((e,i):is) ((d,_,a):ts) =
@@ -273,7 +273,7 @@ findBacktrackSteps dependency backtrack boundKill = go initialDepState S.empty i
             _ -> False
 
           {-# INLINE isDependent #-}
-          isDependent b = dependency (bcktState b) (bcktThreadid b) (bcktAction b) u n
+          isDependent b = dependent' memtype (bcktState b) (bcktThreadid b) (bcktAction b) u n
     in backtrack bs idxs
 
 -- | Add new backtracking points, if they have not already been
@@ -429,13 +429,13 @@ backtrackAt toAll bs0 = backtrackAt' . nubBy ((==) `on` fst') . sortOn fst' wher
 -- yielded. Furthermore, threads which /will/ yield are ignored in
 -- preference of those which will not.
 dporSched
-  :: (DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool)
-  -- ^ Dependency function.
+  :: MemType
+  -- ^ Memory model.
   -> BoundFunc
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
   -> Scheduler DPORSchedState
-dporSched dependency inBound trc prior threads s = schedule where
+dporSched memtype inBound trc prior threads s = schedule where
   -- Pick a thread to run.
   schedule = case schedPrefix s of
     -- If there is a decision available, make it
@@ -447,7 +447,7 @@ dporSched dependency inBound trc prior threads s = schedule where
     [] ->
       let choices  = restrictToBound initialise
           checkDep t a = case prior of
-            Just (tid, act) -> dependency (schedDepState s) tid act t a
+            Just (tid, act) -> dependent memtype (schedDepState s) tid act t a
             Nothing -> False
           ssleep'  = M.filterWithKey (\t a -> not $ checkDep t a) $ schedSleep s
           choices' = filter (`notElem` M.keys ssleep') choices
@@ -560,6 +560,123 @@ randSched _ _ threads s = (pick choice enabled, RandSchedState weights' g'') whe
 
   -- The runnable threads.
   tids = map fst (toList threads)
+
+-------------------------------------------------------------------------------
+-- Dependency function
+
+-- | Check if an action is dependent on another.
+dependent :: MemType -> DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
+-- This is basically the same as 'dependent'', but can make use of the
+-- additional information in a 'ThreadAction' to make different
+-- decisions in a few cases:
+--
+--  - @SetNumCapabilities@ and @GetNumCapabilities@ are NOT dependent
+--    IF the value read is the same as the value written. 'dependent''
+--    can not see the value read (as it hasn't happened yet!), and so
+--    is more pessimistic here.
+--
+--  - When masked interruptible, a thread can only be interrupted when
+--    actually blocked. 'dependent'' has to assume that all
+--    potentially-blocking operations can block, and so is more
+--    pessimistic in this case.
+--
+--  - The @isBlock@ / @isBarrier@ case in 'dependent'' is NOT a sound
+--    optimisation when dealing with a 'ThreadAction' that has been
+--    converted to a 'Lookahead'. I'm not entirely sure why, which
+--    makes me question whether the \"optimisation\" is sound as it
+--    is.
+--
+--  - Dependency of STM transactions can be /greatly/ improved here,
+--    as the 'Lookahead' does not know which @TVar@s will be touched,
+--    and so has to assume all transactions are dependent.
+dependent _ _ _ (SetNumCapabilities a) _ (GetNumCapabilities b) = a /= b
+dependent _ ds _ (ThrowTo t) t2 a = t == t2 && canInterrupt ds t2 a
+dependent memtype ds t1 a1 t2 a2 = case rewind a2 of
+  Just l2
+    | isSTM a1 && isSTM a2
+      -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
+    | not (isBlock a1 && isBarrier (simplifyLookahead l2)) ->
+      dependent' memtype ds t1 a1 t2 l2
+  _ -> dependentActions memtype ds (simplifyAction a1) (simplifyAction a2)
+
+  where
+    isSTM (STM _ _) = True
+    isSTM (BlockedSTM _) = True
+    isSTM _ = False
+
+-- | Variant of 'dependent' to handle 'Lookahead'.
+--
+-- Termination of the initial thread is handled specially in the DPOR
+-- implementation.
+dependent' :: MemType -> DepState -> ThreadId -> ThreadAction -> ThreadId -> Lookahead -> Bool
+dependent' memtype ds t1 a1 t2 l2 = case (a1, l2) of
+  -- Worst-case assumption: all IO is dependent.
+  (LiftIO, WillLiftIO) -> True
+
+  -- Throwing an exception is only dependent with actions in that
+  -- thread and if the actions can be interrupted. We can also
+  -- slightly improve on that by not considering interrupting the
+  -- normal termination of a thread: it doesn't make a difference.
+  (ThrowTo t, WillStop) | t == t2 -> False
+  (Stop, WillThrowTo t) | t == t1 -> False
+  (ThrowTo t, _)     -> t == t2 && canInterruptL ds t2 l2
+  (_, WillThrowTo t) -> t == t1 && canInterrupt  ds t1 a1
+
+  -- Another worst-case: assume all STM is dependent.
+  (STM _ _, WillSTM) -> True
+
+  -- This is a bit pessimistic: Set/Get are only dependent if the
+  -- value set is not the same as the value that will be got, but we
+  -- can't know that here. 'dependent' optimises this case.
+  (GetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
+  (SetNumCapabilities _, WillGetNumCapabilities)   -> True
+  (SetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
+
+  -- Don't impose a dependency if the other thread will immediately
+  -- block already. This is safe because a context switch will occur
+  -- anyway so there's no point pre-empting the action UNLESS the
+  -- pre-emption would possibly allow for a different relaxed memory
+  -- stage.
+  _ | isBlock a1 && isBarrier (simplifyLookahead l2) -> False
+    | otherwise -> dependentActions memtype ds (simplifyAction a1) (simplifyLookahead l2)
+
+-- | Check if two 'ActionType's are dependent. Note that this is not
+-- sufficient to know if two 'ThreadAction's are dependent, without
+-- being so great an over-approximation as to be useless!
+dependentActions :: MemType -> DepState -> ActionType -> ActionType -> Bool
+dependentActions memtype ds a1 a2 = case (a1, a2) of
+  -- Unsynchronised reads and writes are always dependent, even under
+  -- a relaxed memory model, as an unsynchronised write gives rise to
+  -- a commit, which synchronises.
+  (UnsynchronisedRead          r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> a2 /= UnsynchronisedRead r1
+  (UnsynchronisedWrite         r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
+  (PartiallySynchronisedWrite  r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
+  (PartiallySynchronisedModify r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
+  (SynchronisedModify          r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
+
+  -- Unsynchronised writes and synchronisation where the buffer is not
+  -- empty.
+  --
+  -- See [RMMVerification], lemma 5.25.
+  (UnsynchronisedWrite r1, _) | same crefOf && isCommit a2 r1 && isBuffered ds r1 -> False
+  (_, UnsynchronisedWrite r2) | same crefOf && isCommit a1 r2 && isBuffered ds r2 -> False
+
+  -- Unsynchronised reads where a memory barrier would flush a
+  -- buffered write
+  (UnsynchronisedRead r1, _) | isBarrier a2 -> isBuffered ds r1 && memtype /= SequentialConsistency
+  (_, UnsynchronisedRead r2) | isBarrier a1 -> isBuffered ds r2 && memtype /= SequentialConsistency
+
+  (_, _)
+    -- Two actions on the same CRef where at least one is synchronised
+    | same crefOf && (synchronises a1 (fromJust $ crefOf a1) || synchronises a2 (fromJust $ crefOf a2)) -> True
+    -- Two actions on the same MVar
+    | same mvarOf -> True
+
+  _ -> False
+
+  where
+    same :: Eq a => (ActionType -> Maybe a) -> Bool
+    same f = isJust (f a1) && f a1 == f a2
 
 -------------------------------------------------------------------------------
 -- Dependency function state
