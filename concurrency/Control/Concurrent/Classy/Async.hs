@@ -69,9 +69,9 @@ module Control.Concurrent.Classy.Async
   -- * Convenient utilities
   , race
   , race_
-  , concurrently
-  , mapConcurrently
-  , forConcurrently
+  , concurrently, concurrently_
+  , mapConcurrently, mapConcurrently_
+  , forConcurrently, forConcurrently_
   , Concurrently(..)
   ) where
 
@@ -507,6 +507,16 @@ concurrently left right = concurrently' left right (collect []) where
       Left ex -> throw ex
       Right r -> collect (r:xs) m
 
+-- | 'concurrently_' is 'concurrently' but ignores the return values.
+concurrently_ :: MonadConc m => m a -> m b -> m ()
+concurrently_ left right = concurrently' left right (collect 0) where
+  collect 2 _ = pure ()
+  collect i m = do
+    e <- takeMVar m
+    case e of
+      Left ex -> throw ex
+      Right _ -> collect (i+1::Int) m
+
 -- Run two things concurrently. Faster than the 'Async' version.
 concurrently' :: MonadConc m => m a -> m b
   -> (MVar m (Either SomeException (Either a b)) -> m r)
@@ -547,3 +557,13 @@ mapConcurrently f = runConcurrently . traverse (Concurrently . f)
 --
 forConcurrently :: (Traversable t, MonadConc m) => t a -> (a -> m b)-> m (t b)
 forConcurrently = flip mapConcurrently
+
+-- | 'mapConcurrently_' is 'mapConcurrently' with the return value
+-- discarded, just like 'mapM_'.
+mapConcurrently_ :: (Foldable f, MonadConc m) => (a -> m b) -> f a -> m ()
+mapConcurrently_ f = runConcurrently . foldMap (Concurrently . void . f)
+
+-- | 'forConcurrently_' is 'forConcurrently' with the return value
+-- discarded, just like 'forM_'.
+forConcurrently_ :: (Foldable f, MonadConc m) => f a -> (a -> m b) -> m ()
+forConcurrently_ = flip mapConcurrently_
