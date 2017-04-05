@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | This module is a version of the
@@ -84,8 +85,11 @@ import Control.Monad.Catch (finally, try, onException)
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
 import Data.Foldable (foldMap)
-import Data.Semigroup (Semigroup(..))
 import Data.Traversable
+
+#if MIN_VERSION_base(4,9,0)
+import Data.Semigroup (Semigroup(..))
+#endif
 
 -----------------------------------------------------------------------------------------
 -- Asynchronous and Concurrent Actions
@@ -141,8 +145,11 @@ instance MonadConc m => Alternative (Concurrently m) where
   Concurrently as <|> Concurrently bs =
     Concurrently $ either id id <$> race as bs
 
+#if MIN_VERSION_base(4,9,0)
+-- | Only defined for base >= 4.9.0.0
 instance (MonadConc m, Semigroup a) => Semigroup (Concurrently m a) where
   (<>) = liftA2 (<>)
+#endif
 
 instance (MonadConc m, Monoid a) => Monoid (Concurrently m a) where
   mempty = pure mempty
