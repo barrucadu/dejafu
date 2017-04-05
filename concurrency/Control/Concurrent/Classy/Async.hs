@@ -47,6 +47,7 @@ module Control.Concurrent.Classy.Async
   , poll, pollSTM
   , waitCatch, waitCatchSTM
   , cancel
+  , uninterruptibleCancel
   , cancelWith
   , asyncThreadId
 
@@ -180,15 +181,15 @@ asyncUnmaskUsing doFork action = do
 
 -- | Spawn an asynchronous action in a separate thread, and pass its
 -- @Async@ handle to the supplied function. When the function returns
--- or throws an exception, 'cancel' is called on the @Async@.
+-- or throws an exception, 'uninterruptibleCancel' is called on the @Async@.
 --
--- > withAsync action inner = bracket (async action) cancel inner
+-- > withAsync action inner = bracket (async action) uninterruptiblCancel inner
 --
 -- This is a useful variant of 'async' that ensures an @Async@ is
 -- never left running unintentionally.
 --
--- Since 'cancel' may block, 'withAsync' may also block; see 'cancel'
--- for details.
+-- Since 'uninterruptibleCancel' may block, 'withAsync' may also
+-- block; see 'uninterruptibleCancel' for details.
 withAsync :: MonadConc m => m a -> (Async m a -> m b) -> m b
 withAsync = withAsyncUsing fork
 
@@ -216,7 +217,7 @@ withAsyncUsing doFork action inner = do
 
   let a = Async tid (readTMVar var)
 
-  res <- inner a `catchAll` (\e -> cancel a >> throw e)
+  res <- inner a `catchAll` (\e -> uninterruptibleCancel a >> throw e)
   cancel a
 
   return res
@@ -230,7 +231,7 @@ withAsyncUnmaskUsing doFork action inner = do
 
   let a = Async tid (readTMVar var)
 
-  res <- inner a `catchAll` (\e -> cancel a >> throw e)
+  res <- inner a `catchAll` (\e -> uninterruptibleCancel a >> throw e)
   cancel a
 
   return res
@@ -295,6 +296,12 @@ waitCatchSTM (Async _ w) = w
 -- 'cancel' itself in 'async'.
 cancel :: MonadConc m => Async m a -> m ()
 cancel a@(Async tid _) = throwTo tid ThreadKilled <* waitCatch a
+
+-- | Cancel an asynchronous action.
+--
+-- This is a variant of 'cancel' but it is not interruptible.
+uninterruptibleCancel :: MonadConc m => Async m a -> m ()
+uninterruptibleCancel = uninterruptibleMask_ . cancel
 
 -- | Cancel an asynchronous action by throwing the supplied exception
 -- to it.
