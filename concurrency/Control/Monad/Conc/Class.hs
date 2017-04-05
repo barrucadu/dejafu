@@ -50,7 +50,9 @@ module Control.Monad.Conc.Class
   , throw
   , catch
   , mask
+  , Ca.mask_
   , uninterruptibleMask
+  , Ca.uninterruptibleMask_
 
   -- * Mutable State
   , newMVar
