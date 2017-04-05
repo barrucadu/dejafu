@@ -292,7 +292,7 @@ waitCatchSTM (Async _ w) = w
 -- 'cancel' can of course be obtained by wrapping 'cancel' itself in
 -- 'async'.
 cancel :: MonadConc m => Async m a -> m ()
-cancel (Async tid _) = throwTo tid ThreadKilled
+cancel a@(Async tid _) = throwTo tid ThreadKilled <* waitCatch a
 
 -- | Cancel an asynchronous action by throwing the supplied exception
 -- to it.
