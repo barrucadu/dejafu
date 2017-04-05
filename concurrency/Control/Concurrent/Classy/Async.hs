@@ -72,6 +72,7 @@ module Control.Concurrent.Classy.Async
   , concurrently, concurrently_
   , mapConcurrently, mapConcurrently_
   , forConcurrently, forConcurrently_
+  , replicateConcurrently, replicateConcurrently_
   , Concurrently(..)
   ) where
 
@@ -567,3 +568,12 @@ mapConcurrently_ f = runConcurrently . foldMap (Concurrently . void . f)
 -- discarded, just like 'forM_'.
 forConcurrently_ :: (Foldable f, MonadConc m) => f a -> (a -> m b) -> m ()
 forConcurrently_ = flip mapConcurrently_
+
+-- | Perform the action in the given number of threads.
+replicateConcurrently :: MonadConc m => Int -> m a -> m [a]
+replicateConcurrently i = runConcurrently . sequenceA . replicate i . Concurrently
+
+-- | 'replicateConcurrently_' is 'replicateConcurrently' with the
+-- return values discarded.
+replicateConcurrently_ :: MonadConc m => Int -> m a -> m ()
+replicateConcurrently_ i = void . replicateConcurrently i
