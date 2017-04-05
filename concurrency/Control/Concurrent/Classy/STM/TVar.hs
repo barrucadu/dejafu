@@ -32,18 +32,24 @@ import Data.Functor (void)
 -- * @TVar@s
 
 -- | Mutate the contents of a 'TVar'. This is non-strict.
+--
+-- @since 1.0.0.0
 modifyTVar :: MonadSTM stm => TVar stm a -> (a -> a) -> stm ()
 modifyTVar ctvar f = do
   a <- readTVar ctvar
   writeTVar ctvar $ f a
 
 -- | Mutate the contents of a 'TVar' strictly.
+--
+-- @since 1.0.0.0
 modifyTVar' :: MonadSTM stm => TVar stm a -> (a -> a) -> stm ()
 modifyTVar' ctvar f = do
   a <- readTVar ctvar
   writeTVar ctvar $! f a
 
 -- | Swap the contents of a 'TVar', returning the old value.
+--
+-- @since 1.0.0.0
 swapTVar :: MonadSTM stm => TVar stm a -> a -> stm a
 swapTVar ctvar a = do
   old <- readTVar ctvar
@@ -53,6 +59,8 @@ swapTVar ctvar a = do
 -- | Set the value of returned 'TVar' to @True@ after a given number
 -- of microseconds. The caveats associated with 'threadDelay' also
 -- apply.
+--
+-- @since 1.0.0.0
 registerDelay :: MonadConc m => Int -> m (TVar (STM m) Bool)
 registerDelay delay = do
   var <- atomically (newTVar False)

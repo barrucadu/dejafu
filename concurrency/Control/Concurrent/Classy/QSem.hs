@@ -27,19 +27,27 @@ import Control.Monad.Conc.Class (MonadConc)
 -- > bracket_ qaitQSem signalSSem (...)
 --
 -- is safe; it never loses a unit of the resource.
+--
+-- @since 1.0.0.0
 newtype QSem m = QSem (QSemN m)
 
 -- | Build a new 'QSem' with a supplied initial quantity. The initial
 -- quantity must be at least 0.
+--
+-- @since 1.0.0.0
 newQSem :: MonadConc m => Int -> m (QSem m)
 newQSem initial
   | initial < 0 = fail "newQSem: Initial quantity mus tbe non-negative."
   | otherwise   = QSem <$> newQSemN initial
 
 -- | Wait for a unit to become available.
+--
+-- @since 1.0.0.0
 waitQSem :: MonadConc m => QSem m -> m ()
 waitQSem (QSem qSemN) = waitQSemN qSemN 1
 
 -- | Signal that a unit of the 'QSem' is available.
+--
+-- @since 1.0.0.0
 signalQSem :: MonadConc m => QSem m -> m ()
 signalQSem (QSem qSemN) = signalQSemN qSemN 1

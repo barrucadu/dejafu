@@ -96,10 +96,14 @@ import Control.Monad.Conc.Class
 -- >readCRef ref >>= print
 --
 -- To avoid this problem, use 'modifyCRef'' instead.
+--
+-- @since 1.0.0.0
 modifyCRef :: MonadConc m => CRef m a -> (a -> a) -> m ()
 modifyCRef ref f = readCRef ref >>= writeCRef ref . f
 
 -- | Strict version of 'modifyCRef'
+--
+-- @since 1.0.0.0
 modifyCRef' :: MonadConc m => CRef m a -> (a -> a) -> m ()
 modifyCRef' ref f = do
   x <- readCRef ref
@@ -107,6 +111,8 @@ modifyCRef' ref f = do
 
 -- | Strict version of 'atomicModifyCRef'. This forces both the value
 -- stored in the @CRef@ as well as the value returned.
+--
+-- @since 1.0.0.0
 atomicModifyCRef' :: MonadConc m => CRef m a -> (a -> (a,b)) -> m b
 atomicModifyCRef' ref f = do
   b <- atomicModifyCRef ref $ \a -> case f a of

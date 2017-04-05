@@ -33,6 +33,8 @@ import Control.Monad.Conc.Class (MonadConc)
 
 -- | 'Chan' is an abstract type representing an unbounded FIFO
 -- channel.
+--
+-- @since 1.0.0.0
 data Chan m a
   = Chan (MVar m (Stream m a))
          (MVar m (Stream m a)) -- Invariant: the Stream a is always an empty MVar
@@ -42,6 +44,8 @@ type Stream m a = MVar m (ChItem m a)
 data ChItem m a = ChItem a (Stream m a)
 
 -- | Build and returns a new instance of 'Chan'.
+--
+-- @since 1.0.0.0
 newChan :: MonadConc m => m (Chan m a)
 newChan = do
   hole  <- newEmptyMVar
@@ -50,6 +54,8 @@ newChan = do
   pure (Chan readVar writeVar)
 
 -- | Write a value to a 'Chan'.
+--
+-- @since 1.0.0.0
 writeChan :: MonadConc m => Chan m a -> a -> m ()
 writeChan (Chan _ writeVar) val = do
   new_hole <- newEmptyMVar
@@ -59,6 +65,8 @@ writeChan (Chan _ writeVar) val = do
     putMVar writeVar new_hole
 
 -- | Read the next value from the 'Chan'.
+--
+-- @since 1.0.0.0
 readChan :: MonadConc m => Chan m a -> m a
 readChan (Chan readVar _) =  modifyMVarMasked readVar $ \read_end -> do
   (ChItem val new_read_end) <- readMVar read_end
@@ -68,6 +76,8 @@ readChan (Chan readVar _) =  modifyMVarMasked readVar $ \read_end -> do
 -- written to either channel from then on will be available from both.
 -- Hence this creates a kind of broadcast channel, where data written
 -- by anyone is seen by everyone else.
+--
+-- @since 1.0.0.0
 dupChan :: MonadConc m => Chan m a -> m (Chan m a)
 dupChan (Chan _ writeVar) = do
   hole       <- readMVar writeVar
@@ -75,5 +85,7 @@ dupChan (Chan _ writeVar) = do
   pure (Chan newReadVar writeVar)
 
 -- | Write an entire list of items to a 'Chan'.
+--
+-- @since 1.0.0.0
 writeList2Chan :: MonadConc m => Chan m a -> [a] -> m ()
 writeList2Chan = mapM_ . writeChan

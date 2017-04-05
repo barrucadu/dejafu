@@ -30,16 +30,22 @@ import Data.Maybe
 -- > bracket_ (waitQSemN n) (signalQSemN n) (...)
 --
 -- is safe; it never loses any of the resource.
+--
+-- @since 1.0.0.0
 newtype QSemN m = QSemN (MVar m (Int, [(Int, MVar m ())], [(Int, MVar m ())]))
 
 -- | Build a new 'QSemN' with a supplied initial quantity.
 --  The initial quantity must be at least 0.
+--
+-- @since 1.0.0.0
 newQSemN :: MonadConc m => Int -> m (QSemN m)
 newQSemN initial
   | initial < 0 = fail "newQSemN: Initial quantity must be non-negative"
   | otherwise   = QSemN <$> newMVar (initial, [], [])
 
 -- | Wait for the specified quantity to become available
+--
+-- @since 1.0.0.0
 waitQSemN :: MonadConc m => QSemN m -> Int -> m ()
 waitQSemN (QSemN m) sz = mask_ $ do
   (quantity, b1, b2) <- takeMVar m
@@ -64,6 +70,8 @@ waitQSemN (QSemN m) sz = mask_ $ do
       putMVar m r')
 
 -- | Signal that a given quantity is now available from the 'QSemN'.
+--
+-- @since 1.0.0.0
 signalQSemN :: MonadConc m => QSemN m -> Int -> m ()
 signalQSemN (QSemN m) sz = uninterruptibleMask_ $ do
   r  <- takeMVar m

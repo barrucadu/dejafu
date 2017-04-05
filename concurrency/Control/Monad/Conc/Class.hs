@@ -100,6 +100,8 @@ import qualified Control.Monad.Writer.Strict as WS
 --
 -- Every @MonadConc@ has an associated 'MonadSTM', transactions of
 -- which can be run atomically.
+--
+-- @since 1.0.0.0
 class ( Applicative m, Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -131,31 +133,43 @@ class ( Applicative m, Monad m
     #-}
 
   -- | The associated 'MonadSTM' for this class.
+  --
+  -- @since 1.0.0.0
   type STM m :: * -> *
 
   -- | The mutable reference type, like 'MVar's. This may contain one
   -- value at a time, attempting to read or take from an \"empty\"
   -- @MVar@ will block until it is full, and attempting to put to a
   -- \"full\" @MVar@ will block until it is empty.
+  --
+  -- @since 1.0.0.0
   type MVar m :: * -> *
 
   -- | The mutable non-blocking reference type. These may suffer from
   -- relaxed memory effects if functions outside the set @newCRef@,
   -- @readCRef@, @atomicModifyCRef@, and @atomicWriteCRef@ are used.
+  --
+  -- @since 1.0.0.0
   type CRef m :: * -> *
 
   -- | When performing compare-and-swap operations on @CRef@s, a
   -- @Ticket@ is a proof that a thread observed a specific previous
   -- value.
+  --
+  -- @since 1.0.0.0
   type Ticket m :: * -> *
 
   -- | An abstract handle to a thread.
+  --
+  -- @since 1.0.0.0
   type ThreadId m :: *
 
   -- | Fork a computation to happen concurrently. Communication may
   -- happen over @MVar@s.
   --
   -- > fork ma = forkWithUnmask (\_ -> ma)
+  --
+  -- @since 1.0.0.0
   fork :: m () -> m (ThreadId m)
   fork ma = forkWithUnmask (\_ -> ma)
 
@@ -164,6 +178,8 @@ class ( Applicative m, Monad m
   -- not be used within a 'mask' or 'uninterruptibleMask'.
   --
   -- > forkWithUnmask = forkWithUnmaskN ""
+  --
+  -- @since 1.0.0.0
   forkWithUnmask :: ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
   forkWithUnmask = forkWithUnmaskN ""
 
@@ -175,6 +191,8 @@ class ( Applicative m, Monad m
   -- numeric suffix, counting up from 1.
   --
   -- > forkWithUnmaskN _ = forkWithUnmask
+  --
+  -- @since 1.0.0.0
   forkWithUnmaskN :: String -> ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
   forkWithUnmaskN _ = forkWithUnmask
 
@@ -185,6 +203,8 @@ class ( Applicative m, Monad m
   -- total number of capabilities as returned by 'getNumCapabilities'.
   --
   -- > forkOn c ma = forkOnWithUnmask c (\_ -> ma)
+  --
+  -- @since 1.0.0.0
   forkOn :: Int -> m () -> m (ThreadId m)
   forkOn c ma = forkOnWithUnmask c (\_ -> ma)
 
@@ -192,6 +212,8 @@ class ( Applicative m, Monad m
   -- given CPU, as with 'forkOn'.
   --
   -- > forkOnWithUnmask = forkOnWithUnmaskN ""
+  --
+  -- @since 1.0.0.0
   forkOnWithUnmask :: Int -> ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
   forkOnWithUnmask = forkOnWithUnmaskN ""
 
@@ -199,20 +221,30 @@ class ( Applicative m, Monad m
   -- given CPU, as with 'forkOn'.
   --
   -- > forkOnWithUnmaskN _ = forkOnWithUnmask
+  --
+  -- @since 1.0.0.0
   forkOnWithUnmaskN :: String -> Int -> ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
   forkOnWithUnmaskN _ = forkOnWithUnmask
 
   -- | Get the number of Haskell threads that can run simultaneously.
+  --
+  -- @since 1.0.0.0
   getNumCapabilities :: m Int
 
   -- | Set the number of Haskell threads that can run simultaneously.
+  --
+  -- @since 1.0.0.0
   setNumCapabilities :: Int -> m ()
 
   -- | Get the @ThreadId@ of the current thread.
+  --
+  -- @since 1.0.0.0
   myThreadId :: m (ThreadId m)
 
   -- | Allows a context-switch to any other currently runnable thread
   -- (if any).
+  --
+  -- @since 1.0.0.0
   yield :: m ()
 
   -- | Yields the current thread, and optionally suspends the current
@@ -223,12 +255,16 @@ class ( Applicative m, Monad m
   -- will never continue to run earlier than specified.
   --
   -- > threadDelay _ = yield
+  --
+  -- @since 1.0.0.0
   threadDelay :: Int -> m ()
   threadDelay _ = yield
 
   -- | Create a new empty @MVar@.
   --
   -- > newEmptyMVar = newEmptyMVarN ""
+  --
+  -- @since 1.0.0.0
   newEmptyMVar :: m (MVar m a)
   newEmptyMVar = newEmptyMVarN ""
 
@@ -240,43 +276,59 @@ class ( Applicative m, Monad m
   -- numeric suffix, counting up from 1.
   --
   -- > newEmptyMVarN _ = newEmptyMVar
+  --
+  -- @since 1.0.0.0
   newEmptyMVarN :: String -> m (MVar m a)
   newEmptyMVarN _ = newEmptyMVar
 
   -- | Put a value into a @MVar@. If there is already a value there,
   -- this will block until that value has been taken, at which point
   -- the value will be stored.
+  --
+  -- @since 1.0.0.0
   putMVar :: MVar m a -> a -> m ()
 
   -- | Attempt to put a value in a @MVar@ non-blockingly, returning
   -- 'True' (and filling the @MVar@) if there was nothing there,
   -- otherwise returning 'False'.
+  --
+  -- @since 1.0.0.0
   tryPutMVar :: MVar m a -> a -> m Bool
 
   -- | Block until a value is present in the @MVar@, and then return
   -- it. This does not \"remove\" the value, multiple reads are
   -- possible.
+  --
+  -- @since 1.0.0.0
   readMVar :: MVar m a -> m a
 
   -- | Attempt to read a value from a @MVar@ non-blockingly, returning
   -- a 'Just' (and emptying the @MVar@) if there is something there,
   -- otherwise returning 'Nothing'. As with 'readMVar', this does not
   -- \"remove\" the value.
+  --
+  -- @since 1.1.0.0
   tryReadMVar :: MVar m a -> m (Maybe a)
 
   -- | Take a value from a @MVar@. This \"empties\" the @MVar@,
   -- allowing a new value to be put in. This will block if there is no
   -- value in the @MVar@ already, until one has been put.
+  --
+  -- @since 1.0.0.0
   takeMVar :: MVar m a -> m a
 
   -- | Attempt to take a value from a @MVar@ non-blockingly, returning
   -- a 'Just' (and emptying the @MVar@) if there was something there,
   -- otherwise returning 'Nothing'.
+  --
+  -- @since 1.0.0.0
   tryTakeMVar :: MVar m a -> m (Maybe a)
 
   -- | Create a new reference.
   --
   -- > newCRef = newCRefN ""
+  --
+  -- @since 1.0.0.0
   newCRef :: a -> m (CRef m a)
   newCRef = newCRefN ""
 
@@ -288,37 +340,51 @@ class ( Applicative m, Monad m
   -- numeric suffix, counting up from 1.
   --
   -- > newCRefN _ = newCRef
+  --
+  -- @since 1.0.0.0
   newCRefN :: String -> a -> m (CRef m a)
   newCRefN _ = newCRef
 
   -- | Read the current value stored in a reference.
   --
   -- > readCRef cref = readForCAS cref >>= peekTicket
+  --
+  -- @since 1.0.0.0
   readCRef :: CRef m a -> m a
   readCRef cref = readForCAS cref >>= peekTicket
 
   -- | Atomically modify the value stored in a reference. This imposes
   -- a full memory barrier.
+  --
+  -- @since 1.0.0.0
   atomicModifyCRef :: CRef m a -> (a -> (a, b)) -> m b
 
   -- | Write a new value into an @CRef@, without imposing a memory
   -- barrier. This means that relaxed memory effects can be observed.
+  --
+  -- @since 1.0.0.0
   writeCRef :: CRef m a -> a -> m ()
 
   -- | Replace the value stored in a reference, with the
   -- barrier-to-reordering property that 'atomicModifyCRef' has.
   --
   -- > atomicWriteCRef r a = atomicModifyCRef r $ const (a, ())
+  --
+  -- @since 1.0.0.0
   atomicWriteCRef :: CRef m a -> a -> m ()
   atomicWriteCRef r a = atomicModifyCRef r $ const (a, ())
 
   -- | Read the current value stored in a reference, returning a
   -- @Ticket@, for use in future compare-and-swap operations.
+  --
+  -- @since 1.0.0.0
   readForCAS :: CRef m a -> m (Ticket m a)
 
   -- | Extract the actual Haskell value from a @Ticket@.
   --
   -- The @proxy m@ is to determine the @m@ in the @Ticket@ type.
+  --
+  -- @since 1.0.0.0
   peekTicket' :: proxy m -> Ticket m a -> a
 
   -- | Perform a machine-level compare-and-swap (CAS) operation on a
@@ -326,32 +392,44 @@ class ( Applicative m, Monad m
   -- most current value in the @CRef@.
   --
   -- This is strict in the \"new\" value argument.
+  --
+  -- @since 1.0.0.0
   casCRef :: CRef m a -> Ticket m a -> a -> m (Bool, Ticket m a)
 
   -- | A replacement for 'atomicModifyCRef' using a compare-and-swap.
   --
   -- This is strict in the \"new\" value argument.
+  --
+  -- @since 1.0.0.0
   modifyCRefCAS :: CRef m a -> (a -> (a, b)) -> m b
 
   -- | A variant of 'modifyCRefCAS' which doesn't return a result.
   --
   -- > modifyCRefCAS_ cref f = modifyCRefCAS cref (\a -> (f a, ()))
+  --
+  -- @since 1.0.0.0
   modifyCRefCAS_ :: CRef m a -> (a -> a) -> m ()
   modifyCRefCAS_ cref f = modifyCRefCAS cref (\a -> (f a, ()))
 
   -- | Perform an STM transaction atomically.
+  --
+  -- @since 1.0.0.0
   atomically :: STM m a -> m a
 
   -- | Read the current value stored in a @TVar@. This may be
   -- implemented differently for speed.
   --
   -- > readTVarConc = atomically . readTVar
+  --
+  -- @since 1.0.0.0
   readTVarConc :: TVar (STM m) a -> m a
   readTVarConc = atomically . readTVar
 
   -- | Throw an exception to the target thread. This blocks until the
   -- exception is delivered, and it is just as if the target thread
   -- had raised it with 'throw'. This can interrupt a blocked action.
+  --
+  -- @since 1.0.0.0
   throwTo :: Exception e => ThreadId m -> e -> m ()
 
 -------------------------------------------------------------------------------
@@ -361,6 +439,8 @@ class ( Applicative m, Monad m
 
 -- | Create a concurrent computation for the provided action, and
 -- return a @MVar@ which can be used to query the result.
+--
+-- @since 1.0.0.0
 spawn :: MonadConc m => m a -> m (MVar m a)
 spawn ma = do
   cvar <- newEmptyMVar
@@ -373,6 +453,8 @@ spawn ma = do
 --
 -- This function is useful for informing the parent when a child
 -- terminates, for example.
+--
+-- @since 1.0.0.0
 forkFinally :: MonadConc m => m a -> (Either SomeException a -> m ()) -> m (ThreadId m)
 forkFinally action and_then =
   mask $ \restore ->
@@ -381,6 +463,8 @@ forkFinally action and_then =
 -- | Raise the 'ThreadKilled' exception in the target thread. Note
 -- that if the thread is prepared to catch this exception, it won't
 -- actually kill it.
+--
+-- @since 1.0.0.0
 killThread :: MonadConc m => ThreadId m -> m ()
 killThread tid = throwTo tid ThreadKilled
 
@@ -390,6 +474,8 @@ killThread tid = throwTo tid ThreadKilled
 -- If no name is given, the @ThreadId@ is used. If names conflict,
 -- successive threads with the same name are given a numeric suffix,
 -- counting up from 1.
+--
+-- @since 1.0.0.0
 forkN :: MonadConc m => String -> m () -> m (ThreadId m)
 forkN name ma = forkWithUnmaskN name (\_ -> ma)
 
@@ -399,16 +485,22 @@ forkN name ma = forkWithUnmaskN name (\_ -> ma)
 -- If no name is given, the @ThreadId@ is used. If names conflict,
 -- successive threads with the same name are given a numeric suffix,
 -- counting up from 1.
+--
+-- @since 1.0.0.0
 forkOnN :: MonadConc m => String -> Int -> m () -> m (ThreadId m)
 forkOnN name i ma = forkOnWithUnmaskN name i (\_ -> ma)
 
 -- Bound Threads
 
 -- | Provided for compatibility, always returns 'False'.
+--
+-- @since 1.0.0.0
 rtsSupportsBoundThreads :: Bool
 rtsSupportsBoundThreads = False
 
 -- | Provided for compatibility, always returns 'False'.
+--
+-- @since 1.0.0.0
 isCurrentThreadBound :: MonadConc m => m Bool
 isCurrentThreadBound = pure False
 
@@ -417,6 +509,8 @@ isCurrentThreadBound = pure False
 -- | Throw an exception. This will \"bubble up\" looking for an
 -- exception handler capable of dealing with it and, if one is not
 -- found, the thread is killed.
+--
+-- @since 1.0.0.0
 throw :: (MonadConc m, Exception e) => e -> m a
 throw = Ca.throwM
 
@@ -424,6 +518,8 @@ throw = Ca.throwM
 -- exceptions raised by 'throw', unlike the more general
 -- Control.Exception.catch function. If you need to be able to catch
 -- /all/ errors, you will have to use 'IO'.
+--
+-- @since 1.0.0.0
 catch :: (MonadConc m, Exception e) => m a -> (e -> m a) -> m a
 catch = Ca.catch
 
@@ -437,6 +533,8 @@ catch = Ca.catch
 -- prevailing masking state within the context of the masked
 -- computation. This function should not be used within an
 -- 'uninterruptibleMask'.
+--
+-- @since 1.0.0.0
 mask :: MonadConc m => ((forall a. m a -> m a) -> m b) -> m b
 mask = Ca.mask
 
@@ -450,12 +548,16 @@ mask = Ca.mask
 -- interruptible operation will only block for a short period of
 -- time. The supplied unmasking function should not be used within a
 -- 'mask'.
+--
+-- @since 1.0.0.0
 uninterruptibleMask :: MonadConc m => ((forall a. m a -> m a) -> m b) -> m b
 uninterruptibleMask = Ca.uninterruptibleMask
 
 -- Mutable Variables
 
 -- | Create a new @MVar@ containing a value.
+--
+-- @since 1.0.0.0
 newMVar :: MonadConc m => a -> m (MVar m a)
 newMVar a = do
   cvar <- newEmptyMVar
@@ -468,6 +570,8 @@ newMVar a = do
 -- If no name is given, a counter starting from 0 is used. If names
 -- conflict, successive @MVar@s with the same name are given a numeric
 -- suffix, counting up from 1.
+--
+-- @since 1.0.0.0
 newMVarN :: MonadConc m => String -> a -> m (MVar m a)
 newMVarN n a = do
   cvar <- newEmptyMVarN n
@@ -478,11 +582,15 @@ newMVarN n a = do
 --
 -- This doesn't do do any monadic computation, the @m@ appears in the
 -- result type to determine the @m@ in the @Ticket@ type.
+--
+-- @since 1.0.0.0
 peekTicket :: forall m a. MonadConc m => Ticket m a -> m a
 peekTicket t = pure $ peekTicket' (Proxy :: Proxy m) (t :: Ticket m a)
 
 -- | Compare-and-swap a value in a @CRef@, returning an indication of
 -- success and the new value.
+--
+-- @since 1.0.0.0
 cas :: MonadConc m => CRef m a -> a -> m (Bool, a)
 cas cref a = do
   tick         <- readForCAS cref
@@ -494,6 +602,7 @@ cas cref a = do
 -------------------------------------------------------------------------------
 -- Concrete instances
 
+-- | @since 1.0.0.0
 instance MonadConc IO where
   type STM      IO = IO.STM
   type MVar     IO = IO.MVar
@@ -580,29 +689,47 @@ instance C => MonadConc (T m) where                            { \
 
 -- | New threads inherit the reader state of their parent, but do not
 -- communicate results back.
+--
+-- @since 1.0.0.0
 INSTANCE(ReaderT r, MonadConc m, id)
 
+-- | @since 1.0.0.0
 INSTANCE(IdentityT, MonadConc m, id)
 
 -- | New threads inherit the writer state of their parent, but do not
 -- communicate results back.
+--
+-- @since 1.0.0.0
 INSTANCE(WL.WriterT w, (MonadConc m, Monoid w), fst)
+
 -- | New threads inherit the writer state of their parent, but do not
 -- communicate results back.
+--
+-- @since 1.0.0.0
 INSTANCE(WS.WriterT w, (MonadConc m, Monoid w), fst)
 
 -- | New threads inherit the state of their parent, but do not
 -- communicate results back.
+--
+-- @since 1.0.0.0
 INSTANCE(SL.StateT s, MonadConc m, fst)
+
 -- | New threads inherit the state of their parent, but do not
 -- communicate results back.
+--
+-- @since 1.0.0.0
 INSTANCE(SS.StateT s, MonadConc m, fst)
 
 -- | New threads inherit the states of their parent, but do not
 -- communicate results back.
+--
+-- @since 1.0.0.0
 INSTANCE(RL.RWST r w s, (MonadConc m, Monoid w), (\(a,_,_) -> a))
+
 -- | New threads inherit the states of their parent, but do not
 -- communicate results back.
+--
+-- @since 1.0.0.0
 INSTANCE(RS.RWST r w s, (MonadConc m, Monoid w), (\(a,_,_) -> a))
 
 #undef INSTANCE
@@ -611,6 +738,8 @@ INSTANCE(RS.RWST r w s, (MonadConc m, Monoid w), (\(a,_,_) -> a))
 
 -- | Given a function to remove the transformer-specific state, lift
 -- a function invocation.
+--
+-- @since 1.0.0.0
 liftedF :: (MonadTransControl t, MonadConc m)
   => (forall x. StT t x -> x)
   -> (m a -> m b)
@@ -620,6 +749,8 @@ liftedF unst f ma = liftWith $ \run -> f (unst <$> run ma)
 
 -- | Given a function to remove the transformer-specific state, lift
 -- a @fork(on)WithUnmask@ invocation.
+--
+-- @since 1.0.0.0
 liftedFork :: (MonadTransControl t, MonadConc m)
   => (forall x. StT t x -> x)
   -> (((forall x. m x -> m x) -> m a) -> m b)

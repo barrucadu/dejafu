@@ -52,6 +52,8 @@ import qualified Control.Monad.Writer.Strict as WS
 -- This class does not provide any way to run transactions, rather
 -- each 'MonadConc' has an associated @MonadSTM@ from which it can
 -- atomically run a transaction.
+--
+-- @since 1.0.0.0
 class Ca.MonadCatch stm => MonadSTM stm where
   {-# MINIMAL
         retry
@@ -64,23 +66,31 @@ class Ca.MonadCatch stm => MonadSTM stm where
   -- | The mutable reference type. These behave like 'TVar's, in that
   -- they always contain a value and updates are non-blocking and
   -- synchronised.
+  --
+  -- @since 1.0.0.0
   type TVar stm :: * -> *
 
   -- | Retry execution of this transaction because it has seen values
   -- in @TVar@s that it shouldn't have. This will result in the
   -- thread running the transaction being blocked until any @TVar@s
   -- referenced in it have been mutated.
+  --
+  -- @since 1.0.0.0
   retry :: stm a
 
   -- | Run the first transaction and, if it @retry@s, run the second
   -- instead. If the monad is an instance of
   -- 'Alternative'/'MonadPlus', 'orElse' should be the '(<|>)'/'mplus'
   -- function.
+  --
+  -- @since 1.0.0.0
   orElse :: stm a -> stm a -> stm a
 
   -- | Create a new @TVar@ containing the given value.
   --
   -- > newTVar = newTVarN ""
+  --
+  -- @since 1.0.0.0
   newTVar :: a -> stm (TVar stm a)
   newTVar = newTVarN ""
 
@@ -93,28 +103,41 @@ class Ca.MonadCatch stm => MonadSTM stm where
   -- a numeric suffix, counting up from 1.
   --
   -- > newTVarN _ = newTVar
+  --
+  -- @since 1.0.0.0
   newTVarN :: String -> a -> stm (TVar stm a)
   newTVarN _ = newTVar
 
   -- | Return the current value stored in a @TVar@.
+  --
+  -- @since 1.0.0.0
   readTVar :: TVar stm a -> stm a
 
   -- | Write the supplied value into the @TVar@.
+  --
+  -- @since 1.0.0.0
   writeTVar :: TVar stm a -> a -> stm ()
 
 -- | Check whether a condition is true and, if not, call @retry@.
+--
+-- @since 1.0.0.0
 check :: MonadSTM stm => Bool -> stm ()
 check b = unless b retry
 
 -- | Throw an exception. This aborts the transaction and propagates
 -- the exception.
+--
+-- @since 1.0.0.0
 throwSTM :: (MonadSTM stm, Exception e) => e -> stm a
 throwSTM = Ca.throwM
 
 -- | Handling exceptions from 'throwSTM'.
+--
+-- @since 1.0.0.0
 catchSTM :: (MonadSTM stm, Exception e) => stm a -> (e -> stm a) -> stm a
 catchSTM = Ca.catch
 
+-- | @since 1.0.0.0
 instance MonadSTM STM.STM where
   type TVar STM.STM = STM.TVar
 
@@ -138,17 +161,28 @@ instance C => MonadSTM (T stm) where { \
   readTVar    = lift . readTVar     ; \
   writeTVar v = lift . writeTVar v  }
 
+-- | @since 1.0.0.0
 INSTANCE(ReaderT r, MonadSTM stm, id)
 
+-- | @since 1.0.0.0
 INSTANCE(IdentityT, MonadSTM stm, id)
 
+-- | @since 1.0.0.0
 INSTANCE(WL.WriterT w, (MonadSTM stm, Monoid w), fst)
+
+-- | @since 1.0.0.0
 INSTANCE(WS.WriterT w, (MonadSTM stm, Monoid w), fst)
 
+-- | @since 1.0.0.0
 INSTANCE(SL.StateT s, MonadSTM stm, fst)
+
+-- | @since 1.0.0.0
 INSTANCE(SS.StateT s, MonadSTM stm, fst)
 
+-- | @since 1.0.0.0
 INSTANCE(RL.RWST r w s, (MonadSTM stm, Monoid w), (\(a,_,_) -> a))
+
+-- | @since 1.0.0.0
 INSTANCE(RS.RWST r w s, (MonadSTM stm, Monoid w), (\(a,_,_) -> a))
 
 #undef INSTANCE
@@ -157,6 +191,8 @@ INSTANCE(RS.RWST r w s, (MonadSTM stm, Monoid w), (\(a,_,_) -> a))
 
 -- | Given a function to remove the transformer-specific state, lift
 -- an @orElse@ invocation.
+--
+-- @since 1.0.0.0
 liftedOrElse :: (MonadTransControl t, MonadSTM stm)
   => (forall x. StT t x -> x)
   -> t stm a -> t stm a -> t stm a

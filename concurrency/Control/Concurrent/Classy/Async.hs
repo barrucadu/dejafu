@@ -102,14 +102,18 @@ import Data.Semigroup (Semigroup(..))
 -- Note that, unlike the \"async\" package, 'Async' here does not have
 -- an 'Ord' instance. This is because 'MonadConc' 'ThreadId's do not
 -- necessarily have one.
+--
+-- @since 1.1.1.0
 data Async m a = Async
   { asyncThreadId :: !(ThreadId m)
   , _asyncWait :: STM m (Either SomeException a)
   }
 
+-- | @since 1.1.1.0
 instance MonadConc m => Eq (Async m a) where
   Async t1 _ == Async t2 _ = t1 == t2
 
+-- | @since 1.1.1.0
 instance MonadConc m => Functor (Async m) where
   fmap f (Async t w) = Async t $ fmap f <$> w
 
@@ -128,17 +132,22 @@ instance MonadConc m => Functor (Async m) where
 -- >   <$> Concurrently (getURL "url1")
 -- >   <*> Concurrently (getURL "url2")
 -- >   <*> Concurrently (getURL "url3")
+--
+-- @since 1.1.1.0
 newtype Concurrently m a = Concurrently { runConcurrently :: m a }
 
+-- | @since 1.1.1.0
 instance MonadConc m => Functor (Concurrently m) where
   fmap f (Concurrently a) = Concurrently $ f <$> a
 
+-- | @since 1.1.1.0
 instance MonadConc m => Applicative (Concurrently m) where
   pure = Concurrently . return
 
   Concurrently fs <*> Concurrently as =
     Concurrently $ (\(f, a) -> f a) <$> concurrently fs as
 
+-- | @since 1.1.1.0
 instance MonadConc m => Alternative (Concurrently m) where
   empty = Concurrently $ forever yield
 
@@ -147,10 +156,13 @@ instance MonadConc m => Alternative (Concurrently m) where
 
 #if MIN_VERSION_base(4,9,0)
 -- | Only defined for base >= 4.9.0.0
+--
+-- @since 1.1.2.0
 instance (MonadConc m, Semigroup a) => Semigroup (Concurrently m a) where
   (<>) = liftA2 (<>)
 #endif
 
+-- | @since 1.1.2.0
 instance (MonadConc m, Monoid a) => Monoid (Concurrently m a) where
   mempty = pure mempty
   mappend = liftA2 mappend
@@ -159,18 +171,26 @@ instance (MonadConc m, Monoid a) => Monoid (Concurrently m a) where
 -- Spawning
 
 -- | Spawn an asynchronous action in a separate thread.
+--
+-- @since 1.1.1.0
 async :: MonadConc m => m a -> m (Async m a)
 async = asyncUsing fork
 
 -- | Like 'async' but using 'forkOn' internally.
+--
+-- @since 1.1.1.0
 asyncOn :: MonadConc m => Int -> m a -> m (Async m a)
 asyncOn = asyncUsing . forkOn
 
 -- | Like 'async' but using 'forkWithUnmask' internally.
+--
+-- @since 1.1.1.0
 asyncWithUnmask :: MonadConc m => ((forall b. m b -> m b) -> m a) -> m (Async m a)
 asyncWithUnmask = asyncUnmaskUsing forkWithUnmask
 
 -- | Like 'asyncOn' but using 'forkOnWithUnmask' internally.
+--
+-- @since 1.1.1.0
 asyncOnWithUnmask :: MonadConc m => Int -> ((forall b. m b -> m b) -> m a) -> m (Async m a)
 asyncOnWithUnmask i = asyncUnmaskUsing (forkOnWithUnmask i)
 
@@ -202,18 +222,26 @@ asyncUnmaskUsing doFork action = do
 --
 -- Since 'uninterruptibleCancel' may block, 'withAsync' may also
 -- block; see 'uninterruptibleCancel' for details.
+--
+-- @since 1.1.1.0
 withAsync :: MonadConc m => m a -> (Async m a -> m b) -> m b
 withAsync = withAsyncUsing fork
 
 -- | Like 'withAsync' but uses 'forkOn' internally.
+--
+-- @since 1.1.1.0
 withAsyncOn :: MonadConc m => Int -> m a -> (Async m a -> m b) -> m b
 withAsyncOn = withAsyncUsing . forkOn
 
 -- | Like 'withAsync' bit uses 'forkWithUnmask' internally.
+--
+-- @since 1.1.1.0
 withAsyncWithUnmask :: MonadConc m => ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
 withAsyncWithUnmask = withAsyncUnmaskUsing forkWithUnmask
 
 -- | Like 'withAsyncOn' bit uses 'forkOnWithUnmask' internally.
+--
+-- @since 1.1.1.0
 withAsyncOnWithUnmask :: MonadConc m => Int -> ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
 withAsyncOnWithUnmask i = withAsyncUnmaskUsing (forkOnWithUnmask i)
 
@@ -259,10 +287,14 @@ catchAll = catch
 -- exception is re-thrown by 'wait'.
 --
 -- > wait = atomically . waitSTM
+--
+-- @since 1.1.1.0
 wait :: MonadConc m => Async m a -> m a
 wait = atomically . waitSTM
 
 -- | A version of 'wait' that can be used inside a @MonadSTM@ transaction.
+--
+-- @since 1.1.1.0
 waitSTM :: MonadConc m => Async m a -> STM m a
 waitSTM a = do
  r <- waitCatchSTM a
@@ -274,22 +306,30 @@ waitSTM a = do
 -- exception @x@, or @Right a@ if it returned a value @a@.
 --
 -- > poll = atomically . pollSTM
+--
+-- @since 1.1.1.0
 poll :: MonadConc m => Async m a -> m (Maybe (Either SomeException a))
 poll = atomically . pollSTM
 
 -- | A version of 'poll' that can be used inside a @MonadSTM@ transaction.
+--
+-- @since 1.1.1.0
 pollSTM :: MonadConc m => Async m a -> STM m (Maybe (Either SomeException a))
 pollSTM (Async _ w) = (Just <$> w) `orElse` return Nothing
 
 -- | Wait for an asynchronous action to complete, and return either
 -- @Left e@ if the action raised an exception @e@, or @Right a@ if it
 -- returned a value @a@.
+--
+-- @since 1.1.1.0
 waitCatch :: MonadConc m => Async m a -> m (Either SomeException a)
 waitCatch = tryAgain . atomically . waitCatchSTM where
   -- See: https://github.com/simonmar/async/issues/14
   tryAgain f = f `catch` \BlockedIndefinitelyOnSTM -> f
 
 -- | A version of 'waitCatch' that can be used inside a @MonadSTM@ transaction.
+--
+-- @since 1.1.1.0
 waitCatchSTM :: MonadConc m => Async m a -> STM m (Either SomeException a)
 waitCatchSTM (Async _ w) = w
 
@@ -306,12 +346,16 @@ waitCatchSTM (Async _ w) = w
 --
 -- An asynchronous 'cancel' can of course be obtained by wrapping
 -- 'cancel' itself in 'async'.
+--
+-- @since 1.1.1.0
 cancel :: MonadConc m => Async m a -> m ()
 cancel a@(Async tid _) = throwTo tid ThreadKilled <* waitCatch a
 
 -- | Cancel an asynchronous action.
 --
 -- This is a variant of 'cancel' but it is not interruptible.
+--
+-- @since 1.1.2.0
 uninterruptibleCancel :: MonadConc m => Async m a -> m ()
 uninterruptibleCancel = uninterruptibleMask_ . cancel
 
@@ -322,6 +366,8 @@ uninterruptibleCancel = uninterruptibleMask_ . cancel
 --
 -- The notes about the synchronous nature of 'cancel' also apply to
 -- 'cancelWith'.
+--
+-- @since 1.1.1.0
 cancelWith :: (MonadConc m, Exception e) => Async m a -> e -> m ()
 cancelWith (Async tid _) = throwTo tid
 
@@ -335,11 +381,15 @@ cancelWith (Async tid _) = throwTo tid
 --
 -- If multiple 'Async's complete or have completed, then the value
 -- returned corresponds to the first completed 'Async' in the list.
+--
+-- @since 1.1.1.0
 waitAny :: MonadConc m => [Async m a] -> m (Async m a, a)
 waitAny = atomically . waitAnySTM
 
 -- | A version of 'waitAny' that can be used inside a @MonadSTM@
 -- transaction.
+--
+-- @since 1.1.1.0
 waitAnySTM :: MonadConc m => [Async m a] -> STM m (Async m a, a)
 waitAnySTM = foldr (orElse . (\a -> do r <- waitSTM a; return (a, r))) retry
 
@@ -349,43 +399,59 @@ waitAnySTM = foldr (orElse . (\a -> do r <- waitSTM a; return (a, r))) retry
 --
 -- If multiple 'Async's complete or have completed, then the value
 -- returned corresponds to the first completed 'Async' in the list.
+--
+-- @since 1.1.1.0
 waitAnyCatch :: MonadConc m => [Async m a] -> m (Async m a, Either SomeException a)
 waitAnyCatch = atomically . waitAnyCatchSTM
 
 -- | A version of 'waitAnyCatch' that can be used inside a @MonadSTM@
 -- transaction.
+--
+-- @since 1.1.1.0
 waitAnyCatchSTM :: MonadConc m => [Async m a] -> STM m (Async m a, Either SomeException a)
 waitAnyCatchSTM = foldr (orElse . (\a -> do r <- waitCatchSTM a; return (a, r))) retry
 
 -- | Like 'waitAny', but also cancels the other asynchronous
 -- operations as soon as one has completed.
+--
+-- @since 1.1.1.0
 waitAnyCancel :: MonadConc m => [Async m a] -> m (Async m a, a)
 waitAnyCancel asyncs = waitAny asyncs `finally` mapM_ cancel asyncs
 
 -- | Like 'waitAnyCatch', but also cancels the other asynchronous
 -- operations as soon as one has completed.
+--
+-- @since 1.1.1.0
 waitAnyCatchCancel :: MonadConc m => [Async m a] -> m (Async m a, Either SomeException a)
 waitAnyCatchCancel asyncs = waitAnyCatch asyncs `finally` mapM_ cancel asyncs
 
 -- | Wait for the first of two @Async@s to finish.  If the @Async@
 -- that finished first raised an exception, then the exception is
 -- re-thrown by 'waitEither'.
+--
+-- @since 1.1.1.0
 waitEither :: MonadConc m => Async m a -> Async m b -> m (Either a b)
 waitEither left right = atomically $ waitEitherSTM left right
 
 -- | A version of 'waitEither' that can be used inside a @MonadSTM@
 -- transaction.
+--
+-- @since 1.1.1.0
 waitEitherSTM :: MonadConc m => Async m a -> Async m b -> STM m (Either a b)
 waitEitherSTM left right =
   (Left <$> waitSTM left) `orElse` (Right <$> waitSTM right)
 
 -- | Wait for the first of two @Async@s to finish.
+--
+-- @since 1.1.1.0
 waitEitherCatch :: MonadConc m => Async m a -> Async m b
   -> m (Either (Either SomeException a) (Either SomeException b))
 waitEitherCatch left right = atomically $ waitEitherCatchSTM left right
 
 -- | A version of 'waitEitherCatch' that can be used inside a
 -- @MonadSTM@ transaction.
+--
+-- @since 1.1.1.0
 waitEitherCatchSTM :: MonadConc m => Async m a -> Async m b
   -> STM m (Either (Either SomeException a) (Either SomeException b))
 waitEitherCatchSTM left right =
@@ -393,34 +459,46 @@ waitEitherCatchSTM left right =
 
 -- | Like 'waitEither', but also 'cancel's both @Async@s before
 -- returning.
+--
+-- @since 1.1.1.0
 waitEitherCancel :: MonadConc m => Async m a -> Async m b -> m (Either a b)
 waitEitherCancel left right =
   waitEither left right `finally` (cancel left >> cancel right)
 
 -- | Like 'waitEitherCatch', but also 'cancel's both @Async@s before
 -- returning.
+--
+-- @since 1.1.1.0
 waitEitherCatchCancel :: MonadConc m => Async m a -> Async m b
   -> m (Either (Either SomeException a) (Either SomeException b))
 waitEitherCatchCancel left right =
   waitEitherCatch left right `finally` (cancel left >> cancel right)
 
 -- | Like 'waitEither', but the result is ignored.
+--
+-- @since 1.1.1.0
 waitEither_ :: MonadConc m => Async m a -> Async m b -> m ()
 waitEither_ left right = atomically $ waitEitherSTM_ left right
 
 -- | A version of 'waitEither_' that can be used inside a @MonadSTM@
 -- transaction.
+--
+-- @since 1.1.1.0
 waitEitherSTM_:: MonadConc m => Async m a -> Async m b -> STM m ()
 waitEitherSTM_ left right = void $ waitEitherSTM left right
 
 -- | Waits for both @Async@s to finish, but if either of them throws
 -- an exception before they have both finished, then the exception is
 -- re-thrown by 'waitBoth'.
+--
+-- @since 1.1.1.0
 waitBoth :: MonadConc m => Async m a -> Async m b -> m (a, b)
 waitBoth left right = atomically $ waitBothSTM left right
 
 -- | A version of 'waitBoth' that can be used inside a @MonadSTM@
 -- transaction.
+--
+-- @since 1.1.1.0
 waitBothSTM :: MonadConc m => Async m a -> Async m b -> STM m (a, b)
 waitBothSTM left right = do
   a <- waitSTM left `orElse` (waitSTM right >> retry)
@@ -435,6 +513,7 @@ waitBothSTM left right = do
 -- @Async@ raises an exception, that exception will be re-thrown in
 -- the current thread.
 --
+-- @since 1.1.1.0
 link :: MonadConc m => Async m a -> m ()
 link (Async _ w) = do
   me <- myThreadId
@@ -446,6 +525,8 @@ link (Async _ w) = do
 
 -- | Link two @Async@s together, such that if either raises an
 -- exception, the same exception is re-thrown in the other @Async@.
+--
+-- @since 1.1.1.0
 link2 :: MonadConc m => Async m a -> Async m b -> m ()
 link2 left@(Async tl _)  right@(Async tr _) =
   void $ forkRepeat $ do
@@ -479,6 +560,7 @@ forkRepeat action = mask $ \restore ->
 -- >   withAsync right $ \b ->
 -- >   waitEither a b
 --
+-- @since 1.1.1.0
 race :: MonadConc m => m a -> m b -> m (Either a b)
 race left right = concurrently' left right collect where
   collect m = do
@@ -493,6 +575,8 @@ race left right = concurrently' left right collect where
 -- >   withAsync left $ \a ->
 -- >   withAsync right $ \b ->
 -- >   waitEither_ a b
+--
+-- @since 1.1.1.0
 race_ :: MonadConc m => m a -> m b -> m ()
 race_ a b = void $ race a b
 
@@ -505,6 +589,8 @@ race_ a b = void $ race a b
 -- >   withAsync left $ \a ->
 -- >   withAsync right $ \b ->
 -- >   waitBoth a b
+--
+-- @since 1.1.1.0
 concurrently :: MonadConc m => m a -> m b -> m (a, b)
 concurrently left right = concurrently' left right (collect []) where
   collect [Left a, Right b] _ = return (a, b)
@@ -516,6 +602,8 @@ concurrently left right = concurrently' left right (collect []) where
       Right r -> collect (r:xs) m
 
 -- | 'concurrently_' is 'concurrently' but ignores the return values.
+--
+-- @since 1.1.2.0
 concurrently_ :: MonadConc m => m a -> m b -> m ()
 concurrently_ left right = concurrently' left right (collect 0) where
   collect 2 _ = pure ()
@@ -556,6 +644,7 @@ concurrently' left right collect = do
 --
 -- > pages <- mapConcurrently getURL ["url1", "url2", "url3"]
 --
+-- @since 1.1.1.0
 mapConcurrently :: (Traversable t, MonadConc m) => (a -> m b) -> t a -> m (t b)
 mapConcurrently f = runConcurrently . traverse (Concurrently . f)
 
@@ -563,24 +652,33 @@ mapConcurrently f = runConcurrently . traverse (Concurrently . f)
 --
 -- > pages <- forConcurrently ["url1", "url2", "url3"] $ \url -> getURL url
 --
+-- @since 1.1.1.0
 forConcurrently :: (Traversable t, MonadConc m) => t a -> (a -> m b)-> m (t b)
 forConcurrently = flip mapConcurrently
 
 -- | 'mapConcurrently_' is 'mapConcurrently' with the return value
 -- discarded, just like 'mapM_'.
+--
+-- @since 1.1.2.0
 mapConcurrently_ :: (Foldable f, MonadConc m) => (a -> m b) -> f a -> m ()
 mapConcurrently_ f = runConcurrently . foldMap (Concurrently . void . f)
 
 -- | 'forConcurrently_' is 'forConcurrently' with the return value
 -- discarded, just like 'forM_'.
+--
+-- @since 1.1.2.0
 forConcurrently_ :: (Foldable f, MonadConc m) => f a -> (a -> m b) -> m ()
 forConcurrently_ = flip mapConcurrently_
 
 -- | Perform the action in the given number of threads.
+--
+-- @since 1.1.2.0
 replicateConcurrently :: MonadConc m => Int -> m a -> m [a]
 replicateConcurrently i = runConcurrently . sequenceA . replicate i . Concurrently
 
 -- | 'replicateConcurrently_' is 'replicateConcurrently' with the
 -- return values discarded.
+--
+-- @since 1.1.2.0
 replicateConcurrently_ :: MonadConc m => Int -> m a -> m ()
 replicateConcurrently_ i = void . replicateConcurrently i

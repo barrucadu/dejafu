@@ -54,6 +54,8 @@ import Control.Monad.Conc.Class
 -- | Swap the contents of a @MVar@, and return the value taken. This
 -- function is atomic only if there are no other producers fro this
 -- @MVar@.
+--
+-- @since 1.0.0.0
 swapMVar :: MonadConc m => MVar m a -> a -> m a
 swapMVar cvar a = mask_ $ do
   old <- takeMVar cvar
@@ -61,6 +63,8 @@ swapMVar cvar a = mask_ $ do
   return old
 
 -- | Check if a @MVar@ is empty.
+--
+-- @since 1.0.0.0
 isEmptyMVar :: MonadConc m => MVar m a -> m Bool
 isEmptyMVar cvar = do
   val <- tryTakeMVar cvar
@@ -72,6 +76,8 @@ isEmptyMVar cvar = do
 -- finishing. This operation is exception-safe: it will replace the
 -- original contents of the @MVar@ if an exception is raised. However,
 -- it is only atomic if there are no other producers for this @MVar@.
+--
+-- @since 1.0.0.0
 {-# INLINE withMVar #-}
 withMVar :: MonadConc m => MVar m a -> (a -> m b) -> m b
 withMVar cvar f = mask $ \restore -> do
@@ -83,6 +89,8 @@ withMVar cvar f = mask $ \restore -> do
 
 -- | Like 'withMVar', but the @IO@ action in the second argument is
 -- executed with asynchronous exceptions masked.
+--
+-- @since 1.0.0.0
 {-# INLINE withMVarMasked #-}
 withMVarMasked :: MonadConc m => MVar m a -> (a -> m b) -> m b
 withMVarMasked cvar f = mask_ $ do
@@ -97,12 +105,16 @@ withMVarMasked cvar f = mask_ $ do
 -- the @MVar@ if an exception is raised during the operation. This
 -- function is only atomic if there are no other producers for this
 -- @MVar@.
+--
+-- @since 1.0.0.0
 {-# INLINE modifyMVar_ #-}
 modifyMVar_ :: MonadConc m => MVar m a -> (a -> m a) -> m ()
 modifyMVar_ cvar f = modifyMVar cvar $ fmap (\a -> (a,())) . f
 
 -- | A slight variation on 'modifyMVar_' that allows a value to be
 -- returned (@b@) in addition to the modified value of the @MVar@.
+--
+-- @since 1.0.0.0
 {-# INLINE modifyMVar #-}
 modifyMVar :: MonadConc m => MVar m a -> (a -> m (a, b)) -> m b
 modifyMVar cvar f = mask $ \restore -> do
@@ -113,12 +125,16 @@ modifyMVar cvar f = mask $ \restore -> do
 
 -- | Like 'modifyMVar_', but the @IO@ action in the second argument is
 -- executed with asynchronous exceptions masked.
+--
+-- @since 1.0.0.0
 {-# INLINE modifyMVarMasked_ #-}
 modifyMVarMasked_ :: MonadConc m => MVar m a -> (a -> m a) -> m ()
 modifyMVarMasked_ cvar f = modifyMVarMasked cvar $ fmap (\a -> (a,())) . f
 
 -- | Like 'modifyMVar', but the @IO@ action in the second argument is
 -- executed with asynchronous exceptions masked.
+--
+-- @since 1.0.0.0
 {-# INLINE modifyMVarMasked #-}
 modifyMVarMasked :: MonadConc m => MVar m a -> (a -> m (a, b)) -> m b
 modifyMVarMasked cvar f = mask_ $ do

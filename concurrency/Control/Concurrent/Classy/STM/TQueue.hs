@@ -39,10 +39,14 @@ module Control.Concurrent.Classy.STM.TQueue
 import Control.Monad.STM.Class
 
 -- | 'TQueue' is an abstract type representing an unbounded FIFO channel.
+--
+-- @since 1.0.0.0
 data TQueue stm a = TQueue (TVar stm [a])
                            (TVar stm [a])
 
 -- | Build and returns a new instance of 'TQueue'
+--
+-- @since 1.0.0.0
 newTQueue :: MonadSTM stm => stm (TQueue stm a)
 newTQueue = do
   readT  <- newTVar []
@@ -50,12 +54,16 @@ newTQueue = do
   pure (TQueue readT writeT)
 
 -- | Write a value to a 'TQueue'.
+--
+-- @since 1.0.0.0
 writeTQueue :: MonadSTM stm => TQueue stm a -> a -> stm ()
 writeTQueue (TQueue _ writeT) a = do
   listend <- readTVar writeT
   writeTVar writeT (a:listend)
 
 -- | Read the next value from the 'TQueue'.
+--
+-- @since 1.0.0.0
 readTQueue :: MonadSTM stm => TQueue stm a -> stm a
 readTQueue (TQueue readT writeT) = do
   xs <- readTVar readT
@@ -76,11 +84,15 @@ readTQueue (TQueue readT writeT) = do
 
 -- | A version of 'readTQueue' which does not retry. Instead it
 -- returns @Nothing@ if no value is available.
+--
+-- @since 1.0.0.0
 tryReadTQueue :: MonadSTM stm => TQueue stm a -> stm (Maybe a)
 tryReadTQueue c = (Just <$> readTQueue c) `orElse` pure Nothing
 
 -- | Get the next value from the @TQueue@ without removing it,
 -- retrying if the channel is empty.
+--
+-- @since 1.0.0.0
 peekTQueue :: MonadSTM stm => TQueue stm a -> stm a
 peekTQueue c = do
   x <- readTQueue c
@@ -89,6 +101,8 @@ peekTQueue c = do
 
 -- | A version of 'peekTQueue' which does not retry. Instead it
 -- returns @Nothing@ if no value is available.
+--
+-- @since 1.0.0.0
 tryPeekTQueue :: MonadSTM stm => TQueue stm a -> stm (Maybe a)
 tryPeekTQueue c = do
   m <- tryReadTQueue c
@@ -99,12 +113,16 @@ tryPeekTQueue c = do
       pure m
 
 -- |Put a data item back onto a channel, where it will be the next item read.
+--
+-- @since 1.0.0.0
 unGetTQueue :: MonadSTM stm => TQueue stm a -> a -> stm ()
 unGetTQueue (TQueue readT _) a = do
   xs <- readTVar readT
   writeTVar readT (a:xs)
 
 -- |Returns 'True' if the supplied 'TQueue' is empty.
+--
+-- @since 1.0.0.0
 isEmptyTQueue :: MonadSTM stm => TQueue stm a -> stm Bool
 isEmptyTQueue (TQueue readT writeT) = do
   xs <- readTVar readT

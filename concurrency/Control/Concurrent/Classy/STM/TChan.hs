@@ -36,6 +36,8 @@ import Control.Monad.STM.Class
 
 -- | 'TChan' is an abstract type representing an unbounded FIFO
 -- channel.
+--
+-- @since 1.0.0.0
 data TChan stm a = TChan (TVar stm (TVarList stm a))
                          (TVar stm (TVarList stm a))
 
@@ -43,6 +45,8 @@ type TVarList stm a = TVar stm (TList stm a)
 data TList stm a = TNil | TCons a (TVarList stm a)
 
 -- |Build and return a new instance of 'TChan'
+--
+-- @since 1.0.0.0
 newTChan :: MonadSTM stm => stm (TChan stm a)
 newTChan = do
   hole   <- newTVar TNil
@@ -53,6 +57,8 @@ newTChan = do
 -- | Create a write-only 'TChan'.  More precisely, 'readTChan' will 'retry'
 -- even after items have been written to the channel.  The only way to
 -- read a broadcast channel is to duplicate it with 'dupTChan'.
+--
+-- @since 1.0.0.0
 newBroadcastTChan :: MonadSTM stm => stm (TChan stm a)
 newBroadcastTChan = do
     hole   <- newTVar TNil
@@ -61,6 +67,8 @@ newBroadcastTChan = do
     pure (TChan readT writeT)
 
 -- | Write a value to a 'TChan'.
+--
+-- @since 1.0.0.0
 writeTChan :: MonadSTM stm => TChan stm a -> a -> stm ()
 writeTChan (TChan _ writeT) a = do
   listend  <- readTVar writeT
@@ -69,11 +77,15 @@ writeTChan (TChan _ writeT) a = do
   writeTVar writeT listend'
 
 -- | Read the next value from the 'TChan'.
+--
+-- @since 1.0.0.0
 readTChan :: MonadSTM stm => TChan stm a -> stm a
 readTChan tchan = tryReadTChan tchan >>= maybe retry pure
 
 -- | A version of 'readTChan' which does not retry. Instead it
 -- returns @Nothing@ if no value is available.
+--
+-- @since 1.0.0.0
 tryReadTChan :: MonadSTM stm => TChan stm a -> stm (Maybe a)
 tryReadTChan (TChan readT _) = do
   listhead <- readTVar readT
@@ -86,11 +98,15 @@ tryReadTChan (TChan readT _) = do
 
 -- | Get the next value from the 'TChan' without removing it,
 -- retrying if the channel is empty.
+--
+-- @since 1.0.0.0
 peekTChan :: MonadSTM stm => TChan stm a -> stm a
 peekTChan tchan = tryPeekTChan tchan >>= maybe retry pure
 
 -- | A version of 'peekTChan' which does not retry. Instead it
 -- returns @Nothing@ if no value is available.
+--
+-- @since 1.0.0.0
 tryPeekTChan :: MonadSTM stm => TChan stm a -> stm (Maybe a)
 tryPeekTChan (TChan readT _) = do
   listhead <- readTVar readT
@@ -103,6 +119,8 @@ tryPeekTChan (TChan readT _) = do
 -- either channel from then on will be available from both.  Hence
 -- this creates a kind of broadcast channel, where data written by
 -- anyone is seen by everyone else.
+--
+-- @since 1.0.0.0
 dupTChan :: MonadSTM stm => TChan stm a -> stm (TChan stm a)
 dupTChan (TChan _ writeT) = do
   hole   <- readTVar writeT
@@ -111,6 +129,8 @@ dupTChan (TChan _ writeT) = do
 
 -- | Put a data item back onto a channel, where it will be the next
 -- item read.
+--
+-- @since 1.0.0.0
 unGetTChan :: MonadSTM stm => TChan stm a -> a -> stm ()
 unGetTChan (TChan readT _) a = do
    listhead <- readTVar readT
@@ -118,6 +138,8 @@ unGetTChan (TChan readT _) a = do
    writeTVar readT head'
 
 -- | Returns 'True' if the supplied 'TChan' is empty.
+--
+-- @since 1.0.0.0
 isEmptyTChan :: MonadSTM stm => TChan stm a -> stm Bool
 isEmptyTChan (TChan readT _) = do
   listhead <- readTVar readT
@@ -128,6 +150,8 @@ isEmptyTChan (TChan readT _) = do
 
 -- | Clone a 'TChan': similar to 'dupTChan', but the cloned channel starts with the
 -- same content available as the original channel.
+--
+-- @since 1.0.0.0
 cloneTChan :: MonadSTM stm => TChan stm a -> stm (TChan stm a)
 cloneTChan (TChan readT writeT) = do
   readpos <- readTVar readT

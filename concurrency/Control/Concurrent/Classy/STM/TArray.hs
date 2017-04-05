@@ -28,8 +28,11 @@ import Control.Monad.STM.Class
 -- It is currently implemented as @Array ix (TVar stm e)@, but it may
 -- be replaced by a more efficient implementation in the future (the
 -- interface will remain the same, however).
+--
+-- @since 1.0.0.0
 newtype TArray stm i e = TArray (Array i (TVar stm e))
 
+-- | @since 1.0.0.0
 instance MonadSTM stm => MArray (TArray stm) e stm where
   getBounds (TArray a) = pure (bounds a)
 
