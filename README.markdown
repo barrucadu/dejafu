@@ -36,6 +36,7 @@ Table of Contents
 - [Contributing](#contributing)
   - [Code Coverage](#code-coverage)
   - [Performance](#performance)
+- [Release Notes / Change Logs](#release-notes--change-logs)
 - [Bibliography](#bibliography)
 
 
@@ -49,7 +50,7 @@ Packages
 | hunit-dejafu [[docs][d:hunit]]  [[hackage][h:hunit]]  | 0.4.0.1 | Testers | Deja Fu support for the HUnit test framework. |
 | tasty-dejafu [[docs][d:tasty]]  [[hackage][h:tasty]]  | 0.4.0.0 | Testers | Deja Fu support for the Tasty test framework. |
 
-Each package has its own README in its subdirectory.
+Each package has its own README and CHANGELOG in its subdirectory.
 
 There is also dejafu-tests, the test suite for dejafu. This is in a
 separate package due to Cabal being bad with test suite transitive
@@ -391,6 +392,49 @@ representative use: a testsuite where results will be quickly
 summarised and printed. It may not be so useful for judging
 performance of programs which keep the test results around for a long
 time.
+
+
+Release Notes / Change Logs
+---------------------------
+
+All projects in this repository are versioned according to
+the [Package Versioning Policy][pvp], the *de facto* standard Haskell
+versioning scheme.
+
+Each package has its own change log:
+
+- [concurrency/CHANGELOG](https://github.com/barrucadu/dejafu/blob/master/concurrency/CHANGELOG.markdown)
+- [dejafu/CHANGELOG](https://github.com/barrucadu/dejafu/blob/master/dejafu/CHANGELOG.markdown)
+- [hunit-dejafu/CHANGELOG](https://github.com/barrucadu/dejafu/blob/master/hunit-dejafu/CHANGELOG.markdown)
+- [tasty-dejafu/CHANGELOG](https://github.com/barrucadu/dejafu/blob/master/tasty-dejafu/CHANGELOG.markdown)
+
+Change logs should be fairly self-explanatory, the following
+information is present in each entry, in this order:
+
+1. Version number
+2. Release date
+3. Link to Hackage
+4. Name of git tag and link to it on GitHub
+5. (optional) A sequence of "$MODULE" sections, in alphabetical order,
+   detailing API changes.
+6. (optional) A single "Changed" section, detailing behavioural
+   changes.
+6. (optional) A single "Fixed" section, detailing bug fixes (which may
+   give rise to behavioural changes).
+7. (optional) A single "Miscellaneous" section, detailing anything
+   else of note.
+
+Changes to purely internal APIs are not included. Changes to internal
+APIs which are exposed through non-internal modules are detailed as if
+the change were made in the exposing module (eg, visible additions to
+Test.DejaFu.STM.Internal, such as a new typeclass instance, will show
+up as if they were added to Test.DejaFu.STM).
+
+Additions may be breaking changes as far as the PVP is concerned. For
+example, the addition of new data constructors, or new typeclass
+member functions.
+
+[pvp]: https://pvp.haskell.org/
 
 
 Bibliography

@@ -74,7 +74,7 @@ maintainer:          mike@barrucadu.co.uk
 -- copyright:           
 category:            Concurrency
 build-type:          Simple
--- extra-source-files:  
+extra-source-files:  CHANGELOG.markdown
 cabal-version:       >=1.10
 
 source-repository head
