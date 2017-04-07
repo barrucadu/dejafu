@@ -1,24 +1,10 @@
 Release Notes
 =============
 
+All notable changes to this project will be documented in this file.
+
 This project is versioned according to the [Package Versioning Policy](https://pvp.haskell.org), the
 *de facto* standard Haskell versioning scheme.
-
-- [0.5.1.3](#0.5.1.3) [2017-04-05]
-- [0.5.1.2](#0.5.1.2) [2017-03-04]
-- [0.5.1.1](#0.5.1.1) [2017-02-25]
-- [0.5.1.0](#0.5.1.0) [2017-02-25]
-- [0.5.0.2](#0.5.0.2) [2017-02-22]
-- [0.5.0.1](#0.5.0.1) [2017-02-21]
-- [0.5.0.0](#0.5.0.0) [2017-02-21]
-- [0.4.0.0](#0.4.0.0) [2016-09-10]
-- [0.3.2.1](#0.3.2.1) [2016-07-21]
-- [0.3.2.0](#0.3.2.0) [2016-06-06]
-- [0.3.1.1](#0.3.1.1) [2016-05-26]
-- [0.3.1.0](#0.3.1.0) [2016-05-02]
-- [0.3.0.0](#0.3.0.0) [2016-04-03]
-- [0.2.0.0](#0.2.0.0) [2015-12-01]
-- [0.1.0.0](#0.1.0.0) [2015-08-27]
 
 
 unreleased
@@ -32,27 +18,25 @@ unreleased
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.1.3
+0.5.1.3 [2017-04-05] (git tag: [dejafu-0.5.1.3][])
 -------
 
-- **Date:** 2017-04-05
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.5.1.3](https://hackage.haskell.org/package/dejafu-0.5.1.3)
-- **Git Tag:** [dejafu-0.5.1.3](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.1.3)
+https://hackage.haskell.org/package/dejafu-0.5.1.3
 
 ### Miscellaneous
 
 - The version range on the concurrency package has been changed to 1.1.*.
 
+[dejafu-0.5.1.3]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.1.3
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.1.2
+0.5.1.2 [2017-03-04] (git tag: [dejafu-0.5.1.2][])
 -------
 
-- **Date:** 2017-03-04
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.5.1.2](https://hackage.haskell.org/package/dejafu-0.5.1.2)
-- **Git Tag:** [dejafu-0.5.1.2](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.1.2)
+https://hackage.haskell.org/package/dejafu-0.5.1.2
 
 ### Test.DejaFu.Conc
 
@@ -67,16 +51,16 @@ unreleased
 
 - The maximum supported version of the concurrency package has been changed to 1.1.1.*.
 
+[dejafu-0.5.1.2]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.1.2
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.1.1
+0.5.1.1 [2017-02-25] (git tag: [dejafu-0.5.1.1][])
 -------
 
-- **Date:** 2017-02-25
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.5.1.1](https://hackage.haskell.org/package/dejafu-0.5.1.1)
-- **Git Tag:** [dejafu-0.5.1.1](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.1.1)
+https://hackage.haskell.org/package/dejafu-0.5.1.1
 
 ### Fixed
 
@@ -84,16 +68,16 @@ unreleased
   `subconcurrency` action.
 - SCT of subconcurrency no longer loops infinitely.
 
+[dejafu-0.5.1.1]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.1.1
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.1.0
+0.5.1.0 [2017-02-25] (git tag: [dejafu-0.5.1.0][])
 -------
 
-- **Date:** 2017-02-25
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.5.1.0](https://hackage.haskell.org/package/dejafu-0.5.1.0)
-- **Git Tag:** [dejafu-0.5.1.0](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.1.0)
+https://hackage.haskell.org/package/dejafu-0.5.1.0
 
 ### Test.DejaFu
 
@@ -115,18 +99,18 @@ unreleased
 
 - A new `NFData` instance for `Result`.
 
+[dejafu-0.5.1.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.1.0
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.0.2
+0.5.0.2 [2017-02-22] (git tag: [dejafu-0.5.0.2][])
 -------
 
-**This version was misnumbered! It should have caused a major version bump!**
+https://hackage.haskell.org/package/dejafu-0.5.0.2
 
-- **Date:** 2017-02-22
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.5.0.2](https://hackage.haskell.org/package/dejafu-0.5.0.2)
-- **Git Tag:** [dejafu-0.5.0.2](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.0.2)
+**This version was misnumbered! It should have caused a major version bump!**
 
 ### Test.DejaFu.Common
 
@@ -145,31 +129,31 @@ unreleased
 - Test.DejaFu.SCT now compiles with MonoLocalBinds enabled (implied by GADTs and TypeFamilies),
   which may be relevant to hackers.
 
+[dejafu-0.5.0.2]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.0.2
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.0.1
+0.5.0.1 [2017-02-21] (git tag: [dejafu-0.5.0.1][])
 -------
 
-- **Date:** 2017-02-21
-- **Hackage:** never pushed to hackage, whoops!
-- **Git Tag:** [dejafu-0.5.0.1](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.0.1)
+**This version was never pushed to hackage, whoops!**
 
 ### Fixed
 
 - `readMVar` is once again considered a "release action" for the purposes of fair-bounding.
 
+[dejafu-0.5.0.1]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.0.1
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.0.0
+0.5.0.0 [2017-02-21] (git tag: [dejafu-0.5.0.0][])
 -------
 
-- **Date:** 2017-02-21
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.5.0.0](https://hackage.haskell.org/package/dejafu-0.5.0.0)
-- **Git Tag:** [dejafu-0.5.0.0](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.0.0)
+https://hackage.haskell.org/package/dejafu-0.5.0.0
 
 ### Test.DejaFu
 
@@ -206,16 +190,16 @@ unreleased
   useful. There is no direct replacement, but I have no intent to update it, so the dpor package is
   now __deprecated__.
 
+[dejafu-0.5.0.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.5.0.0
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.4.0.0
+0.4.0.0 [2016-09-10] (git tag: [dejafu-0.4.0.0][])
 -------
 
-- **Date:** 2016-09-10
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.4.0.0](https://hackage.haskell.org/package/dejafu-0.4.0.0)
-- **Git Tag:** [dejafu-0.4.0.0](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.4.0.0)
+https://hackage.haskell.org/package/dejafu-0.4.0.0
 
 ### Test.DejaFu
 
@@ -253,34 +237,34 @@ unreleased
     - Many definitions from other modules have been moved to the new Test.DejaFu.Common module.
     - The Test.DejaFu.Deterministic module has been renamed to Test.DejaFu.Conc
 
+[dejafu-0.4.0.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.4.0.0
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.2.1
+0.3.2.1 [2016-07-21] (git tag: [dejafu-0.3.2.1][])
 -------
 
-- **Date:** 2016-07-21
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.3.2.1](https://hackage.haskell.org/package/dejafu-0.3.2.1)
-- **Git Tag:** [dejafu-0.3.2.1](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.3.2.1)
+https://hackage.haskell.org/package/dejafu-0.3.2.1
 
 ### Fixed
 
 - The implementation of the STM `orElse` for `STMLike` incorrectly handled some state
   non-associatively, leading to false deadlocks being reported in some cases.
 
+[dejafu-0.3.2.1]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.3.2.1
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.2.0
+0.3.2.0 [2016-06-06] (git tag: [dejafu-0.3.2.0][])
 -------
 
-**Builds with both dpor-0.1 and dpor-0.2, however some improvements require dpor-0.2.**
+https://hackage.haskell.org/package/dejafu-0.3.2.0
 
-- **Date:** 2016-06-06
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.3.2.0](https://hackage.haskell.org/package/dejafu-0.3.2.0)
-- **Git Tag:** [dejafu-0.3.2.0](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.3.2.0)
+**Builds with both dpor-0.1 and dpor-0.2, however some improvements require dpor-0.2.**
 
 ### Fixed
 
@@ -294,76 +278,78 @@ unreleased
 - Significantly improved dependency inference of STM transactions, greatly improving performance of
   testcases using STM.
 
+[dejafu-0.3.2.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.3.2.0
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.1.1
+0.3.1.1 [2016-05-26] (git tag: [dejafu-0.3.1.1][])
 -------
 
-- **Date:** 2016-05-26
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.3.1.1](https://hackage.haskell.org/package/dejafu-0.3.1.1)
-- **Git Tag:** [dejafu-0.3.1.1](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.3.1.1)
+https://hackage.haskell.org/package/dejafu-0.3.1.1
 
 ### Miscellaneous
 
 - Now supports GHC 8.
 
+[dejafu-0.3.1.1]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.3.1.1
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.1.0
+0.3.1.0 [2016-05-02] (git tag: [dejafu-0.3.1.0][])
 -------
 
-- **Date:** 2016-05-02
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.3.1.0](https://hackage.haskell.org/package/dejafu-0.3.1.0)
-- **Git Tag:** [dejafu-0.3.1.0](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.3.1.0)
+https://hackage.haskell.org/package/dejafu-0.3.1.0
 
 ### Fixed
 
 - Context switches around relaxed memory commit actions could cause the number of pre-emptions in an
   execution to be miscounted, leading to the pre-emption bounding being too lenient.
 
+[dejafu-0.3.1.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.3.1.0
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.0.0
+0.3.0.0 [2016-04-03] (git tag: [dejafu-0.3.0.0][])
 -------
+
+https://hackage.haskell.org/package/dejafu-0.3.0.0
 
 **The minimum supported version of GHC is now 7.10.**
 
-- **Date:** 2016-04-03
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.3.0.0](https://hackage.haskell.org/package/dejafu-0.3.0.0)
-- **Git Tag:** [dejafu-0.3.0.0](https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.3.0.0)
-
 I didn't write proper release notes, and this is so far back I don't really care to dig through the
 logs.
+
+[dejafu-0.3.0.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.3.0.0
 
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.2.0.0
+0.2.0.0 [2015-12-01] (git tag: [0.2.0.0][])
 -------
 
-- **Date:** 2015-12-01
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.2.0.0](https://hackage.haskell.org/package/dejafu-0.2.0.0)
-- **Git Tag:** [0.2.0.0](https://github.com/barrucadu/dejafu/releases/tag/0.2.0.0)
+https://hackage.haskell.org/package/dejafu-0.2.0.0
 
 I didn't write proper release notes, and this is so far back I don't really care to dig through the
 logs.
+
+[0.2.0.0]: https://github.com/barrucadu/dejafu/releases/tag/0.2.0.0
 
 
 ---------------------------------------------------------------------------------------------------
 
 
-0.1.0.0
+0.1.0.0 [2015-08-27] (git tag: [0.1.0.0][])
 -------
 
-- **Date:** 2015-08-27
-- **Hackage:** [https://hackage.haskell.org/package/dejafu-0.1.0.0](https://hackage.haskell.org/package/dejafu-0.1.0.0)
-- **Git Tag:** [0.1.0.0](https://github.com/barrucadu/dejafu/releases/tag/0.1.0.0)
+https://hackage.haskell.org/package/dejafu-0.1.0.0
 
 Initial release. Go read the API docs.
+
+[0.1.0.0]: https://github.com/barrucadu/dejafu/releases/tag/0.1.0.0

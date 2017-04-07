@@ -1,13 +1,10 @@
 Release Notes
 =============
 
+All notable changes to this project will be documented in this file.
+
 This project is versioned according to the [Package Versioning Policy](https://pvp.haskell.org), the
 *de facto* standard Haskell versioning scheme.
-
-- [1.1.2.0](#1.1.2.0) [2017-04-05]
-- [1.1.1.0](#1.1.1.0) [2017-03-04]
-- [1.1.0.0](#1.1.0.0) [2017-02-21]
-- [1.0.0.0](#1.0.0.0) [2016-09-10]
 
 
 unreleased
@@ -21,12 +18,10 @@ unreleased
 ---------------------------------------------------------------------------------------------------
 
 
-1.1.2.0
+1.1.2.0 [2017-04-05] (tag: [concurrency-1.1.2.0][])
 -------
 
-- **Date:** 2017-04-05
-- **Hackage:** [https://hackage.haskell.org/package/concurrency-1.1.2.0](https://hackage.haskell.org/package/concurrency-1.1.2.0)
-- **Git Tag:** [concurrency-1.1.2.0](https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.1.2.0)
+https://hackage.haskell.org/package/concurrency-1.1.2.0
 
 ### Control.Concurrent.Classy.Async
 
@@ -55,32 +50,32 @@ unreleased
 
 - Every definition, class, and instance now has a Haddock "@since" annotation.
 
+[concurrency-1.1.2.0]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.1.2.0
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-1.1.1.0
+1.1.1.0 [2017-03-04] (git tag: [concurrency-1.1.1.0][])
 -------
 
-- **Date:** 2017-03-04
-- **Hackage:** [https://hackage.haskell.org/package/concurrency-1.1.1.0](https://hackage.haskell.org/package/concurrency-1.1.1.0)
-- **Git Tag:** [concurrency-1.1.1.0](https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.1.1.0)
+https://hackage.haskell.org/package/concurrency-1.1.1.0
 
 ### Miscellaneous
 
 - The async-dejafu package has been pulled into this package as the Control.Concurrent.Classy.Async
   module. async-dejafu is now __deprecated__.
 
+[concurrency-1.1.1.0]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.1.1.0
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-1.1.0.0
+1.1.0.0 [2017-02-21] (git tag: [concurrency-1.1.0.0][])
 -------
 
-- **Date:** 2017-02-21
-- **Hackage:** [https://hackage.haskell.org/package/concurrency-1.1.0.0](https://hackage.haskell.org/package/concurrency-1.1.0.0)
-- **Git Tag:** [concurrency-1.1.0.0](https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.1.0.0)
+https://hackage.haskell.org/package/concurrency-1.1.0.0
 
 ### Control.Monad.Conc.Class
 
@@ -89,15 +84,17 @@ unreleased
 - The `MonadConc` class no longer defines `_concMessage`, there is no alternative provided, it is
   just gone.
 
+[concurrency-1.1.0.0]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.1.0.0
+
 
 ---------------------------------------------------------------------------------------------------
 
 
-1.0.0.0
+1.0.0.0 [2016-09-10] (git tag: [concurrency-1.0.0.0][])
 -------
 
-- **Date:** 2016-09-10
-- **Hackage:** [https://hackage.haskell.org/package/concurrency-1.0.0.0](https://hackage.haskell.org/package/concurrency-1.0.0.0)
-- **Git Tag:** [concurrency-1.0.0.0](https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.0.0.0)
+https://hackage.haskell.org/package/concurrency-1.0.0.0
 
 Initial release. Go read the API docs.
+
+[concurrency-1.0.0.0]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.0.0.0

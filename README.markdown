@@ -397,32 +397,17 @@ time.
 Release Notes / Change Logs
 ---------------------------
 
-All projects in this repository are versioned according to
-the [Package Versioning Policy][pvp], the *de facto* standard Haskell
-versioning scheme.
+All notable changes to projects in this repository will be documented
+in the change logs. Furthermore, these projects are versioned
+according to the [Package Versioning Policy][pvp], the *de facto*
+standard Haskell versioning scheme.
 
 Each package has its own change log:
 
-- [concurrency/CHANGELOG](https://github.com/barrucadu/dejafu/blob/master/concurrency/CHANGELOG.markdown)
-- [dejafu/CHANGELOG](https://github.com/barrucadu/dejafu/blob/master/dejafu/CHANGELOG.markdown)
-- [hunit-dejafu/CHANGELOG](https://github.com/barrucadu/dejafu/blob/master/hunit-dejafu/CHANGELOG.markdown)
-- [tasty-dejafu/CHANGELOG](https://github.com/barrucadu/dejafu/blob/master/tasty-dejafu/CHANGELOG.markdown)
-
-Change logs should be fairly self-explanatory, the following
-information is present in each entry, in this order:
-
-1. Version number
-2. Release date
-3. Link to Hackage
-4. Name of git tag and link to it on GitHub
-5. (optional) A sequence of "$MODULE" sections, in alphabetical order,
-   detailing API changes.
-6. (optional) A single "Changed" section, detailing behavioural
-   changes.
-6. (optional) A single "Fixed" section, detailing bug fixes (which may
-   give rise to behavioural changes).
-7. (optional) A single "Miscellaneous" section, detailing anything
-   else of note.
+- [concurrency/CHANGELOG.markdown](https://github.com/barrucadu/dejafu/blob/master/concurrency/CHANGELOG.markdown)
+- [dejafu/CHANGELOG.markdown](https://github.com/barrucadu/dejafu/blob/master/dejafu/CHANGELOG.markdown)
+- [hunit-dejafu/CHANGELOG.markdown](https://github.com/barrucadu/dejafu/blob/master/hunit-dejafu/CHANGELOG.markdown)
+- [tasty-dejafu/CHANGELOG.markdown](https://github.com/barrucadu/dejafu/blob/master/tasty-dejafu/CHANGELOG.markdown)
 
 Changes to purely internal APIs are not included. Changes to internal
 APIs which are exposed through non-internal modules are detailed as if
