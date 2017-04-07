@@ -50,6 +50,7 @@ module Control.Concurrent.Classy.MVar
 
 import Control.Monad.Catch (mask_, onException)
 import Control.Monad.Conc.Class
+import Data.Maybe (isJust)
 
 -- | Swap the contents of a @MVar@, and return the value taken. This
 -- function is atomic only if there are no other producers fro this
@@ -64,13 +65,14 @@ swapMVar cvar a = mask_ $ do
 
 -- | Check if a @MVar@ is empty.
 --
+-- The boolean value returned is just a snapshot of the state of the
+-- @MVar@, it may have been emptied (or filled) by the time you
+-- actually access it. Generally prefer 'tryPutMVar', 'tryTakeMVar',
+-- and 'tryReadMVar'.
+--
 -- @since 1.0.0.0
 isEmptyMVar :: MonadConc m => MVar m a -> m Bool
-isEmptyMVar cvar = do
-  val <- tryTakeMVar cvar
-  case val of
-    Just val' -> putMVar cvar val' >> pure True
-    Nothing   -> pure False
+isEmptyMVar = fmap isJust . tryReadMVar
 
 -- | Operate on the contents of a @MVar@, replacing the contents after
 -- finishing. This operation is exception-safe: it will replace the

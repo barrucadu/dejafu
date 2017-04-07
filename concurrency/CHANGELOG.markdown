@@ -10,6 +10,12 @@ This project is versioned according to the [Package Versioning Policy](https://p
 unreleased
 ----------
 
+### Changed
+
+- The `isEmptyMVar` function is now implemented using `tryReadMVar` instead of a combination of
+  `tryTakeMVar` and `putMVar`. It no longer modifies the contents of the `MVar` and can no longer
+  block.
+
 ### Miscellaneous
 
 - There is now a changelog.
