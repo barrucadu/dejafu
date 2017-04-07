@@ -19,8 +19,6 @@ import Data.List.NonEmpty (NonEmpty, fromList)
 import Test.DejaFu.Common
 import Test.DejaFu.STM (STMLike)
 
-{-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
-
 --------------------------------------------------------------------------------
 -- * The @Conc@ Monad
 

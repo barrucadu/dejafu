@@ -64,9 +64,6 @@ import Test.DejaFu.Conc.Internal
 import Test.DejaFu.Conc.Internal.Common
 import Test.DejaFu.STM
 
-{-# ANN module ("HLint: ignore Avoid lambda" :: String) #-}
-{-# ANN module ("HLint: ignore Use const"    :: String) #-}
-
 newtype Conc n r a = C { unC :: M n r a } deriving (Functor, Applicative, Monad)
 
 -- | A 'MonadConc' implementation using @ST@, this should be preferred
@@ -89,7 +86,7 @@ instance Ba.MonadBase IO ConcIO where
   liftBase = IO.liftIO
 
 instance Re.MonadRef (CRef r) (Conc n r) where
-  newRef a = toConc (\c -> ANewCRef "" a c)
+  newRef a = toConc (ANewCRef "" a)
 
   readRef ref = toConc (AReadCRef ref)
 
@@ -134,7 +131,7 @@ instance Monad n => C.MonadConc (Conc n r) where
 
   -- ----------
 
-  newCRefN n a = toConc (\c -> ANewCRef n a c)
+  newCRefN n a = toConc (ANewCRef n a)
 
   readCRef   ref = toConc (AReadCRef    ref)
   readForCAS ref = toConc (AReadCRefCas ref)
@@ -149,7 +146,7 @@ instance Monad n => C.MonadConc (Conc n r) where
 
   -- ----------
 
-  newEmptyMVarN n = toConc (\c -> ANewMVar n c)
+  newEmptyMVarN n = toConc (ANewMVar n)
 
   putMVar  var a = toConc (\c -> APutMVar var a (c ()))
   readMVar var   = toConc (AReadMVar var)

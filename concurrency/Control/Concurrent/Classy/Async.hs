@@ -142,7 +142,7 @@ instance MonadConc m => Functor (Concurrently m) where
 
 -- | @since 1.1.1.0
 instance MonadConc m => Applicative (Concurrently m) where
-  pure = Concurrently . return
+  pure = Concurrently . pure
 
   Concurrently fs <*> Concurrently as =
     Concurrently $ (\(f, a) -> f a) <$> concurrently fs as
@@ -199,8 +199,7 @@ asyncUsing :: MonadConc m => (m () -> m (ThreadId m)) -> m a -> m (Async m a)
 asyncUsing doFork action = do
   var <- atomically newEmptyTMVar
   tid <- mask $ \restore -> doFork $ try (restore action) >>= atomically . putTMVar var
-
-  return $ Async tid (readTMVar var)
+  pure (Async tid (readTMVar var))
 
 -- | Fork a thread with the given forking function and give it an
 -- action to unmask exceptions
@@ -208,8 +207,7 @@ asyncUnmaskUsing :: MonadConc m => (((forall b. m b -> m b) -> m ()) -> m (Threa
 asyncUnmaskUsing doFork action = do
   var <- atomically newEmptyTMVar
   tid <- doFork $ \restore -> try (action restore) >>= atomically . putTMVar var
-
-  return $ Async tid (readTMVar var)
+  pure (Async tid (readTMVar var))
 
 -- | Spawn an asynchronous action in a separate thread, and pass its
 -- @Async@ handle to the supplied function. When the function returns
@@ -245,36 +243,30 @@ withAsyncWithUnmask = withAsyncUnmaskUsing forkWithUnmask
 withAsyncOnWithUnmask :: MonadConc m => Int -> ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
 withAsyncOnWithUnmask i = withAsyncUnmaskUsing (forkOnWithUnmask i)
 
--- | Fork a thread with the given forking function and kill it when
--- the inner action completes.
---
--- The 'bracket' version appears to hang, even with just IO stuff and
--- using the normal async package. Curious.
+-- | Helper for 'withAsync' and 'withAsyncOn': fork a thread with the
+-- given forking function and kill it when the inner action completes.
 withAsyncUsing :: MonadConc m => (m () -> m (ThreadId m)) -> m a -> (Async m a -> m b) -> m b
 withAsyncUsing doFork action inner = do
   var <- atomically newEmptyTMVar
   tid <- mask $ \restore -> doFork $ try (restore action) >>= atomically . putTMVar var
+  withAsyncDo (Async tid (readTMVar var)) inner
 
-  let a = Async tid (readTMVar var)
-
-  res <- inner a `catchAll` (\e -> uninterruptibleCancel a >> throw e)
-  cancel a
-
-  return res
-
--- | Fork a thread with the given forking function, give it an action
--- to unmask exceptions, and kill it when the inner action completed.
+-- | Helper for 'withAsyncWithUnmask' and 'withAsyncOnWithUnmask':
+-- fork a thread with the given forking function, give it an action to
+-- unmask exceptions, and kill it when the inner action completed.
 withAsyncUnmaskUsing :: MonadConc m => (((forall x. m x -> m x) -> m ()) -> m (ThreadId m)) -> ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
 withAsyncUnmaskUsing doFork action inner = do
   var <- atomically newEmptyTMVar
   tid <- doFork $ \restore -> try (action restore) >>= atomically . putTMVar var
+  withAsyncDo (Async tid (readTMVar var)) inner
 
-  let a = Async tid (readTMVar var)
-
+-- | Helper for 'withAsyncUsing' and 'withAsyncUnmaskUsing': run the
+-- inner action and kill the async thread when done.
+withAsyncDo :: MonadConc m => Async m a -> (Async m a -> m b) -> m b
+withAsyncDo a inner = do
   res <- inner a `catchAll` (\e -> uninterruptibleCancel a >> throw e)
   cancel a
-
-  return res
+  pure res
 
 catchAll :: MonadConc m => m a -> (SomeException -> m a) -> m a
 catchAll = catch
@@ -298,7 +290,7 @@ wait = atomically . waitSTM
 waitSTM :: MonadConc m => Async m a -> STM m a
 waitSTM a = do
  r <- waitCatchSTM a
- either throwSTM return r
+ either throwSTM pure r
 
 -- | Check whether an 'Async' has completed yet. If it has not
 -- completed yet, then the result is @Nothing@, otherwise the result
@@ -315,7 +307,7 @@ poll = atomically . pollSTM
 --
 -- @since 1.1.1.0
 pollSTM :: MonadConc m => Async m a -> STM m (Maybe (Either SomeException a))
-pollSTM (Async _ w) = (Just <$> w) `orElse` return Nothing
+pollSTM (Async _ w) = (Just <$> w) `orElse` pure Nothing
 
 -- | Wait for an asynchronous action to complete, and return either
 -- @Left e@ if the action raised an exception @e@, or @Right a@ if it
@@ -391,7 +383,7 @@ waitAny = atomically . waitAnySTM
 --
 -- @since 1.1.1.0
 waitAnySTM :: MonadConc m => [Async m a] -> STM m (Async m a, a)
-waitAnySTM = foldr (orElse . (\a -> do r <- waitSTM a; return (a, r))) retry
+waitAnySTM = foldr (orElse . (\a -> do r <- waitSTM a; pure (a, r))) retry
 
 -- | Wait for any of the supplied asynchronous operations to complete.
 -- The value returned is a pair of the 'Async' that completed, and the
@@ -409,7 +401,7 @@ waitAnyCatch = atomically . waitAnyCatchSTM
 --
 -- @since 1.1.1.0
 waitAnyCatchSTM :: MonadConc m => [Async m a] -> STM m (Async m a, Either SomeException a)
-waitAnyCatchSTM = foldr (orElse . (\a -> do r <- waitCatchSTM a; return (a, r))) retry
+waitAnyCatchSTM = foldr (orElse . (\a -> do r <- waitCatchSTM a; pure (a, r))) retry
 
 -- | Like 'waitAny', but also cancels the other asynchronous
 -- operations as soon as one has completed.
@@ -503,7 +495,7 @@ waitBothSTM :: MonadConc m => Async m a -> Async m b -> STM m (a, b)
 waitBothSTM left right = do
   a <- waitSTM left `orElse` (waitSTM right >> retry)
   b <- waitSTM right
-  return (a, b)
+  pure (a, b)
 
 
 -------------------------------------------------------------------------------
@@ -521,7 +513,7 @@ link (Async _ w) = do
     r <- atomically w
     case r of
       Left e -> throwTo me e
-      _ -> return ()
+      _ -> pure ()
 
 -- | Link two @Async@s together, such that if either raises an
 -- exception, the same exception is re-thrown in the other @Async@.
@@ -534,7 +526,7 @@ link2 left@(Async tl _)  right@(Async tr _) =
     case r of
       Left  (Left e) -> throwTo tr e
       Right (Left e) -> throwTo tl e
-      _ -> return ()
+      _ -> pure ()
 
 -- | Fork a thread that runs the supplied action, and if it raises an
 -- exception, re-runs the action.  The thread terminates only when the
@@ -545,7 +537,7 @@ forkRepeat action = mask $ \restore ->
         r <- (try :: MonadConc m => m a -> m (Either SomeException a)) $ restore action
         case r of
           Left _ -> go
-          _      -> return ()
+          _      -> pure ()
   in fork go
 
 
@@ -567,7 +559,7 @@ race left right = concurrently' left right collect where
     e <- takeMVar m
     case e of
       Left ex -> throw ex
-      Right r -> return r
+      Right r -> pure r
 
 -- | Like 'race', but the result is ignored.
 --
@@ -593,8 +585,8 @@ race_ a b = void $ race a b
 -- @since 1.1.1.0
 concurrently :: MonadConc m => m a -> m b -> m (a, b)
 concurrently left right = concurrently' left right (collect []) where
-  collect [Left a, Right b] _ = return (a, b)
-  collect [Right b, Left a] _ = return (a, b)
+  collect [Left a, Right b] _ = pure (a, b)
+  collect [Right b, Left a] _ = pure (a, b)
   collect xs m = do
     e <- takeMVar m
     case e of
@@ -633,7 +625,7 @@ concurrently' left right collect = do
 
     stop
 
-    return r
+    pure r
 
 -- | Maps a @MonadConc@-performing function over any @Traversable@
 -- data type, performing all the @MonadConc@ actions concurrently, and

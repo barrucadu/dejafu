@@ -116,7 +116,7 @@ launch' :: MaskingState -> ThreadId -> ((forall b. M n r b -> M n r b) -> Action
 launch' ms tid a = M.insert tid thread where
   thread = Thread { _continuation = a umask, _blocking = Nothing, _handlers = [], _masking = ms }
 
-  umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False ms >> return b
+  umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False ms >> pure b
   resetMask typ m = cont $ \k -> AResetMask typ True m $ k ()
 
 -- | Kill a thread.

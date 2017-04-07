@@ -91,8 +91,6 @@ import qualified Control.Monad.State.Strict as SS
 import qualified Control.Monad.Writer.Lazy as WL
 import qualified Control.Monad.Writer.Strict as WS
 
-{-# ANN module ("HLint: ignore Use const" :: String) #-}
-
 -- | @MonadConc@ is an abstraction over GHC's typical concurrency
 -- abstraction. It captures the interface of concurrency monads in
 -- terms of how they can operate on shared state and in the presence
@@ -167,11 +165,11 @@ class ( Applicative m, Monad m
   -- | Fork a computation to happen concurrently. Communication may
   -- happen over @MVar@s.
   --
-  -- > fork ma = forkWithUnmask (\_ -> ma)
+  -- > fork ma = forkWithUnmask (const ma)
   --
   -- @since 1.0.0.0
   fork :: m () -> m (ThreadId m)
-  fork ma = forkWithUnmask (\_ -> ma)
+  fork ma = forkWithUnmask (const ma)
 
   -- | Like 'fork', but the child thread is passed a function that can
   -- be used to unmask asynchronous exceptions. This function should
@@ -202,11 +200,11 @@ class ( Applicative m, Monad m
   -- implementation dependent. The int is interpreted modulo to the
   -- total number of capabilities as returned by 'getNumCapabilities'.
   --
-  -- > forkOn c ma = forkOnWithUnmask c (\_ -> ma)
+  -- > forkOn c ma = forkOnWithUnmask c (const ma)
   --
   -- @since 1.0.0.0
   forkOn :: Int -> m () -> m (ThreadId m)
-  forkOn c ma = forkOnWithUnmask c (\_ -> ma)
+  forkOn c ma = forkOnWithUnmask c (const ma)
 
   -- | Like 'forkWithUnmask', but the child thread is pinned to the
   -- given CPU, as with 'forkOn'.
@@ -477,7 +475,7 @@ killThread tid = throwTo tid ThreadKilled
 --
 -- @since 1.0.0.0
 forkN :: MonadConc m => String -> m () -> m (ThreadId m)
-forkN name ma = forkWithUnmaskN name (\_ -> ma)
+forkN name ma = forkWithUnmaskN name (const ma)
 
 -- | Like 'forkOn', but the thread is given a name which may be used
 -- to present more useful debugging information.
@@ -488,7 +486,7 @@ forkN name ma = forkWithUnmaskN name (\_ -> ma)
 --
 -- @since 1.0.0.0
 forkOnN :: MonadConc m => String -> Int -> m () -> m (ThreadId m)
-forkOnN name i ma = forkOnWithUnmaskN name i (\_ -> ma)
+forkOnN name i ma = forkOnWithUnmaskN name i (const ma)
 
 -- Bound Threads
 

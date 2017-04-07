@@ -34,9 +34,6 @@ import Test.DejaFu.Conc.Internal.Threading
 import Test.DejaFu.Schedule
 import Test.DejaFu.STM (Result(..), runTransaction)
 
-{-# ANN module ("HLint: ignore Use record patterns" :: String) #-}
-{-# ANN module ("HLint: ignore Use const"           :: String) #-}
-
 --------------------------------------------------------------------------------
 -- * Execution
 
@@ -91,7 +88,7 @@ runThreads sched memtype ref = go Seq.empty [] Nothing where
       stepped <- stepThread sched memtype chosen (_continuation $ fromJust thread) $ ctx { cSchedState = g' }
       case stepped of
         (Right ctx', actOrTrc) ->
-          let (act, trc) = getActAndTrc actOrTrc
+          let (_, trc) = getActAndTrc actOrTrc
               threads' = if (interruptible <$> M.lookup chosen (cThreads ctx')) /= Just False
                          then unblockWaitingOn chosen (cThreads ctx')
                          else cThreads ctx'

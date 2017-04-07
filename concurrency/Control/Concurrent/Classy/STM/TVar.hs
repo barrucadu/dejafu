@@ -54,7 +54,7 @@ swapTVar :: MonadSTM stm => TVar stm a -> a -> stm a
 swapTVar ctvar a = do
   old <- readTVar ctvar
   writeTVar ctvar a
-  return old
+  pure old
 
 -- | Set the value of returned 'TVar' to @True@ after a given number
 -- of microseconds. The caveats associated with 'threadDelay' also

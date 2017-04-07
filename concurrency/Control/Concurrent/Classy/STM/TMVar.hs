@@ -57,7 +57,7 @@ newTMVarN :: MonadSTM stm => String -> a -> stm (TMVar stm a)
 newTMVarN n a = do
   let n' = if null n then "ctmvar" else "ctmvar-" ++ n
   ctvar <- newTVarN n' $ Just a
-  return $ TMVar ctvar
+  pure (TMVar ctvar)
 
 -- | Create a new empty 'TMVar'.
 --
@@ -75,7 +75,7 @@ newEmptyTMVarN :: MonadSTM stm => String -> stm (TMVar stm a)
 newEmptyTMVarN n = do
   let n' = if null n then "ctmvar" else "ctmvar-" ++ n
   ctvar <- newTVarN n' Nothing
-  return $ TMVar ctvar
+  pure (TMVar ctvar)
 
 -- | Take the contents of a 'TMVar', or 'retry' if it is empty.
 --
@@ -83,7 +83,7 @@ newEmptyTMVarN n = do
 takeTMVar :: MonadSTM stm => TMVar stm a -> stm a
 takeTMVar ctmvar = do
   taken <- tryTakeTMVar ctmvar
-  maybe retry return taken
+  maybe retry pure taken
 
 -- | Write to a 'TMVar', or 'retry' if it is full.
 --
@@ -99,7 +99,7 @@ putTMVar ctmvar a = do
 readTMVar :: MonadSTM stm => TMVar stm a -> stm a
 readTMVar ctmvar = do
   readed <- tryReadTMVar ctmvar
-  maybe retry return readed
+  maybe retry pure readed
 
 -- | Try to take the contents of a 'TMVar', returning 'Nothing' if it
 -- is empty.
@@ -109,7 +109,7 @@ tryTakeTMVar :: MonadSTM stm => TMVar stm a -> stm (Maybe a)
 tryTakeTMVar (TMVar ctvar) = do
   val <- readTVar ctvar
   when (isJust val) $ writeTVar ctvar Nothing
-  return val
+  pure val
 
 -- | Try to write to a 'TMVar', returning 'False' if it is full.
 --
@@ -118,7 +118,7 @@ tryPutTMVar :: MonadSTM stm => TMVar stm a -> a -> stm Bool
 tryPutTMVar (TMVar ctvar) a = do
   val <- readTVar ctvar
   when (isNothing val) $ writeTVar ctvar (Just a)
-  return $ isNothing val
+  pure (isNothing val)
 
 -- | Try to read from a 'TMVar' without emptying, returning 'Nothing'
 -- if it is empty.
@@ -141,4 +141,4 @@ swapTMVar :: MonadSTM stm => TMVar stm a -> a -> stm a
 swapTMVar ctmvar a = do
   val <- takeTMVar ctmvar
   putTMVar ctmvar a
-  return val
+  pure val

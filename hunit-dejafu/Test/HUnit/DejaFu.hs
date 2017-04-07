@@ -107,7 +107,7 @@ instance Assertable (Conc.ConcIO ()) where
 
 assertableP :: Predicate (Either HUnitFailure ())
 assertableP = alwaysTrue $ \r -> case r of
-  Right (Left (HUnitFailure {})) -> False
+  Right (Left HUnitFailure {}) -> False
   _ -> True
 
 --------------------------------------------------------------------------------

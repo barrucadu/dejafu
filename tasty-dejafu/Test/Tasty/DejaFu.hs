@@ -262,19 +262,19 @@ data ConcIOTest where
   deriving Typeable
 
 instance IsTest ConcTest where
-  testOptions = return []
+  testOptions = pure []
 
   run _ (ConcTest traces p) _ =
     let err = showErr $ p traces
-     in return $ if null err then testPassed "" else testFailed err
+     in pure (if null err then testPassed "" else testFailed err)
 
 instance IsTest ConcIOTest where
-  testOptions = return []
+  testOptions = pure []
 
   run _ (ConcIOTest iotraces p) _ = do
     traces <- iotraces
     let err = showErr $ p traces
-    return $ if null err then testPassed "" else testFailed err
+    pure (if null err then testPassed "" else testFailed err)
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu test.
 testst :: (Show a, RandomGen g)

@@ -113,7 +113,7 @@ peekTBQueue :: MonadSTM stm => TBQueue stm a -> stm a
 peekTBQueue c = do
   x <- readTBQueue c
   unGetTBQueue c x
-  return x
+  pure x
 
 -- | A version of 'peekTBQueue' which does not retry. Instead it
 -- returns @Nothing@ if no value is available.

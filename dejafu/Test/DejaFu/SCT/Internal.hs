@@ -172,7 +172,7 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
   -- Construct a new subtree corresponding to a trace suffix.
   subtree state tid sleep ((_, _, a):rest) =
     let state' = updateDepState state tid a
-        sleep' = M.filterWithKey (\t a' -> not $ (dependent memtype) state' tid a t a') sleep
+        sleep' = M.filterWithKey (\t a' -> not $ dependent memtype state' tid a t a') sleep
     in DPOR
         { dporRunnable = S.fromList $ case rest of
             ((_, runnable, _):_) -> map fst runnable

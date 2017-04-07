@@ -36,5 +36,3 @@ import Control.Concurrent.Classy.MVar
 import Control.Concurrent.Classy.STM
 import Control.Concurrent.Classy.QSem
 import Control.Concurrent.Classy.QSemN
-
-{-# ANN module ("HLint: ignore Use import/export shortcut" :: String) #-}

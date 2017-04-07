@@ -94,7 +94,6 @@ import Control.DeepSeq (NFData(..))
 import Control.Monad.Ref (MonadRef)
 import Data.List (foldl')
 import qualified Data.Map.Strict as M
-import Data.Maybe (fromJust)
 import Data.Set (Set)
 import qualified Data.Set as S
 import System.Random (RandomGen)

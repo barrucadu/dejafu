@@ -362,7 +362,7 @@ dejafusWay :: (Show a, RandomGen g)
 dejafusWay way memtype conc tests = do
   let traces = runST (runSCT way memtype conc)
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
-  return $ and results
+  pure (and results)
 
 -- | Variant of 'dejafu' for computations which do 'IO'.
 dejafuIO :: Show a => ConcIO a -> (String, Predicate a) -> IO Bool
@@ -382,7 +382,7 @@ dejafusWayIO :: (Show a, RandomGen g) => Way g -> MemType -> ConcIO a -> [(Strin
 dejafusWayIO way memtype concio tests = do
   traces  <- runSCT way memtype concio
   results <- mapM (\(name, test) -> doTest name $ test traces) tests
-  return $ and results
+  pure (and results)
 
 
 -------------------------------------------------------------------------------
@@ -687,7 +687,7 @@ doTest name result = do
     when (moreThan 5 failures) $
       putStrLn (indent "...")
 
-  return $ _pass result
+  pure (_pass result)
 
 -- | Check if a list is longer than some value, without needing to
 -- compute the entire length.

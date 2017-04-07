@@ -68,30 +68,30 @@ bufferWrite (WriteBuffer wb) k@(tid, _) cref@(CRef _ ref) new = do
   (locals, count, def) <- readRef ref
   writeRef ref (M.insert tid new locals, count, def)
 
-  return $ WriteBuffer buffer'
+  pure (WriteBuffer buffer')
 
 -- | Commit the write at the head of a buffer.
 commitWrite :: MonadRef r n => WriteBuffer r -> (ThreadId, Maybe CRefId) -> n (WriteBuffer r)
 commitWrite w@(WriteBuffer wb) k = case maybe EmptyL viewl $ M.lookup k wb of
   BufferedWrite _ cref a :< rest -> do
     writeImmediate cref a
-    return . WriteBuffer $ M.insert k rest wb
+    pure . WriteBuffer $ M.insert k rest wb
 
-  EmptyL -> return w
+  EmptyL -> pure w
 
 -- | Read from a @CRef@, returning a newer thread-local non-committed
 -- write if there is one.
 readCRef :: MonadRef r n => CRef r a -> ThreadId -> n a
 readCRef cref tid = do
   (val, _) <- readCRefPrim cref tid
-  return val
+  pure val
 
 -- | Read from a @CRef@, returning a @Ticket@ representing the current
 -- view of the thread.
 readForTicket :: MonadRef r n => CRef r a -> ThreadId -> n (Ticket a)
 readForTicket cref@(CRef crid _) tid = do
   (val, count) <- readCRefPrim cref tid
-  return $ Ticket crid count val
+  pure (Ticket crid count val)
 
 -- | Perform a compare-and-swap on a @CRef@ if the ticket is still
 -- valid. This is strict in the \"new\" value argument.
@@ -103,15 +103,15 @@ casCRef cref tid (Ticket _ cc _) !new = do
   then do
     writeImmediate cref new
     tick'' <- readForTicket cref tid
-    return (True, tick'')
-  else return (False, tick')
+    pure (True, tick'')
+  else pure (False, tick')
 
 -- | Read the local state of a @CRef@.
 readCRefPrim :: MonadRef r n => CRef r a -> ThreadId -> n (a, Integer)
 readCRefPrim (CRef _ ref) tid = do
   (vals, count, def) <- readRef ref
 
-  return (M.findWithDefault def tid vals, count)
+  pure (M.findWithDefault def tid vals, count)
 
 -- | Write and commit to a @CRef@ immediately, clearing the update map
 -- and incrementing the write count.
@@ -183,15 +183,15 @@ mutMVar blocking (MVar cvid ref) a c threadid threads = do
     Just _
       | blocking ->
         let threads' = block (OnMVarEmpty cvid) threadid threads
-        in return (False, threads', [])
+        in pure (False, threads', [])
 
       | otherwise ->
-        return (False, goto (c False) threadid threads, [])
+        pure (False, goto (c False) threadid threads, [])
 
     Nothing -> do
       writeRef ref $ Just a
       let (threads', woken) = wake (OnMVarFull cvid) threads
-      return (True, goto (c True) threadid threads', woken)
+      pure (True, goto (c True) threadid threads', woken)
 
 -- | Read a @MVar@, in either a blocking or nonblocking
 -- way.
@@ -205,12 +205,12 @@ seeMVar emptying blocking (MVar cvid ref) c threadid threads = do
     Just _ -> do
       when emptying $ writeRef ref Nothing
       let (threads', woken) = wake (OnMVarEmpty cvid) threads
-      return (True, goto (c val) threadid threads', woken)
+      pure (True, goto (c val) threadid threads', woken)
 
     Nothing
       | blocking ->
         let threads' = block (OnMVarFull cvid) threadid threads
-        in return (False, threads', [])
+        in pure (False, threads', [])
 
       | otherwise ->
-        return (False, goto (c Nothing) threadid threads, [])
+        pure (False, goto (c Nothing) threadid threads, [])

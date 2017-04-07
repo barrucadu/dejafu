@@ -60,7 +60,7 @@ swapMVar :: MonadConc m => MVar m a -> a -> m a
 swapMVar cvar a = mask_ $ do
   old <- takeMVar cvar
   putMVar cvar a
-  return old
+  pure old
 
 -- | Check if a @MVar@ is empty.
 --
@@ -69,8 +69,8 @@ isEmptyMVar :: MonadConc m => MVar m a -> m Bool
 isEmptyMVar cvar = do
   val <- tryTakeMVar cvar
   case val of
-    Just val' -> putMVar cvar val' >> return True
-    Nothing   -> return False
+    Just val' -> putMVar cvar val' >> pure True
+    Nothing   -> pure False
 
 -- | Operate on the contents of a @MVar@, replacing the contents after
 -- finishing. This operation is exception-safe: it will replace the
@@ -85,7 +85,7 @@ withMVar cvar f = mask $ \restore -> do
   out <- restore (f val) `onException` putMVar cvar val
   putMVar cvar val
 
-  return out
+  pure out
 
 -- | Like 'withMVar', but the @IO@ action in the second argument is
 -- executed with asynchronous exceptions masked.
@@ -98,7 +98,7 @@ withMVarMasked cvar f = mask_ $ do
   out <- f val `onException` putMVar cvar val
   putMVar cvar val
 
-  return out
+  pure out
 
 -- | An exception-safe wrapper for modifying the contents of a @MVar@.
 -- Like 'withMVar', 'modifyMVar' will replace the original contents of
@@ -121,7 +121,7 @@ modifyMVar cvar f = mask $ \restore -> do
   val <- takeMVar cvar
   (val', out) <- restore (f val) `onException` putMVar cvar val
   putMVar cvar val'
-  return out
+  pure out
 
 -- | Like 'modifyMVar_', but the @IO@ action in the second argument is
 -- executed with asynchronous exceptions masked.
@@ -141,4 +141,4 @@ modifyMVarMasked cvar f = mask_ $ do
   val <- takeMVar cvar
   (val', out) <- f val `onException` putMVar cvar val
   putMVar cvar val'
-  return out
+  pure out

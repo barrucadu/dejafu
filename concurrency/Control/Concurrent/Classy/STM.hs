@@ -24,5 +24,3 @@ import Control.Concurrent.Classy.STM.TChan
 import Control.Concurrent.Classy.STM.TQueue
 import Control.Concurrent.Classy.STM.TBQueue
 import Control.Concurrent.Classy.STM.TArray
-
-{-# ANN module ("HLint: ignore Use import/export shortcut" :: String) #-}

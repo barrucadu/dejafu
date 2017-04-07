@@ -125,7 +125,7 @@ dupTChan :: MonadSTM stm => TChan stm a -> stm (TChan stm a)
 dupTChan (TChan _ writeT) = do
   hole   <- readTVar writeT
   readT' <- newTVar hole
-  return (TChan readT' writeT)
+  pure (TChan readT' writeT)
 
 -- | Put a data item back onto a channel, where it will be the next
 -- item read.
