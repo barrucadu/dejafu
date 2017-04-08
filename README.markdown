@@ -34,7 +34,7 @@ Table of Contents
   - [Program Testing](#program-testing)
   - [Porting](#porting)
 - [Contributing](#contributing)
-  - [Code Coverage](#code-coverage)
+  - [Test Coverage](#test-coverage)
   - [Performance](#performance)
 - [Release Notes / Change Logs](#release-notes--change-logs)
 - [Bibliography](#bibliography)
@@ -318,7 +318,7 @@ or email (mike@barrucadu.co.uk).
 [master]:     https://github.com/barrucadu/dejafu/tree/master
 [next-major]: https://github.com/barrucadu/dejafu/tree/next-major
 
-### Code Coverage
+### Test Coverage
 
 [`hpc`][hpc] can generate a coverage report from the execution of
 dejafu-tests:
