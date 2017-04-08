@@ -116,18 +116,12 @@ initialState = DPOR
 -- to-do set. The intent is to put the system into a new state when
 -- executed with this initial sequence of scheduling decisions.
 findSchedulePrefix
-  :: (ThreadId -> Bool)
-  -- ^ Some partitioning function, applied to the to-do decisions. If
-  -- there is an identifier which passes the test, it will be used,
-  -- rather than any which fail it. This allows a very basic way of
-  -- domain-specific prioritisation between otherwise equal choices,
-  -- which may be useful in some cases.
-  -> DPOR
+  :: DPOR
   -> Maybe ([ThreadId], Bool, Map ThreadId ThreadAction)
-findSchedulePrefix predicate = listToMaybe . go where
+findSchedulePrefix = listToMaybe . go where
   go dpor =
     let prefixes = here dpor : map go' (M.toList $ dporDone dpor)
-    in case concatPartition (\(t:_,_,_) -> predicate t) prefixes of
+    in case concatPartition (\(t:_,_,_) -> t >= initialThread) prefixes of
          ([], choices) -> choices
          (choices, _)  -> choices
 

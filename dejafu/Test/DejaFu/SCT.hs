@@ -332,7 +332,7 @@ sctBound :: MonadRef r n
 sctBound memtype cb conc = go initialState where
   -- Repeatedly run the computation gathering all the results and
   -- traces into a list until there are no schedules remaining to try.
-  go dp = case nextPrefix dp of
+  go dp = case findSchedulePrefix dp of
     Just (prefix, conservative, sleep) -> do
       (res, s, trace) <- runConcurrent scheduler
                                        memtype
@@ -347,9 +347,6 @@ sctBound memtype cb conc = go initialState where
       else ((res, trace):) <$> go (addBacktracks bpoints newDPOR)
 
     Nothing -> pure []
-
-  -- Find the next schedule prefix.
-  nextPrefix = findSchedulePrefix (>=initialThread)
 
   -- The DPOR scheduler.
   scheduler = dporSched memtype (cBound cb)
