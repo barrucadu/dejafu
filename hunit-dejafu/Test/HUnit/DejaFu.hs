@@ -134,7 +134,7 @@ testAuto = testAutoWay defaultWay defaultMemType
 -- | Variant of 'testAuto' which tests a computation under a given
 -- execution way and memory model.
 --
--- @since unreleased
+-- @since 0.5.0.0
 testAutoWay :: (Eq a, Show a)
   => Way
   -- ^ How to execute the concurrent program.
@@ -154,7 +154,7 @@ testAutoIO = testAutoWayIO defaultWay defaultMemType
 
 -- | Variant of 'testAutoWay' for computations which do 'IO'.
 --
--- @since unreleased
+-- @since 0.5.0.0
 testAutoWayIO :: (Eq a, Show a)
   => Way -> MemType -> Conc.ConcIO a -> Test
 testAutoWayIO way memtype concio =
@@ -184,7 +184,7 @@ testDejafu = testDejafuWay defaultWay defaultMemType
 -- | Variant of 'testDejafu' which takes a way to execute the program
 -- and a memory model.
 --
--- @since unreleased
+-- @since 0.5.0.0
 testDejafuWay :: Show a
   => Way
   -- ^ How to execute the concurrent program.
@@ -216,7 +216,7 @@ testDejafus = testDejafusWay defaultWay defaultMemType
 -- | Variant of 'testDejafus' which takes a way to execute the program
 -- and a memory model.
 --
--- @since unreleased
+-- @since 0.5.0.0
 testDejafusWay :: Show a
   => Way
   -- ^ How to execute the concurrent program.
@@ -237,7 +237,7 @@ testDejafuIO = testDejafuWayIO defaultWay defaultMemType
 
 -- | Variant of 'testDejafuWay' for computations which do 'IO'.
 --
--- @since unreleased
+-- @since 0.5.0.0
 testDejafuWayIO :: Show a
   => Way -> MemType -> Conc.ConcIO a -> String -> Predicate a -> Test
 testDejafuWayIO way memtype concio name p =
@@ -251,7 +251,7 @@ testDejafusIO = testDejafusWayIO defaultWay defaultMemType
 
 -- | Variant of 'dejafusWay' for computations which do 'IO'.
 --
--- @since unreleased
+-- @since 0.5.0.0
 testDejafusWayIO :: Show a
   => Way -> MemType -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
 testDejafusWayIO = testio
