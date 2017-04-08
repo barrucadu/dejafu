@@ -40,6 +40,8 @@ https://hackage.haskell.org/package/dejafu-0.5.1.3
 
 https://hackage.haskell.org/package/dejafu-0.5.1.2
 
+**This version was misnumbered! It should have caused a minor version bump!**
+
 ### Test.DejaFu.Conc
 
 - New `MonadRef` and `MonadAtomicRef` instances for the `Conc` type using `CRef`.
