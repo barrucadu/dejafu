@@ -11,9 +11,6 @@ description:
   <https://hackage.haskell.org/package/HUnit HUnit>. This lets you
   easily incorporate concurrency testing into your existing test
   suites.
-  .
-  See the <https://github.com/barrucadu/dejafu README> for more
-  details.
 
 homepage:            https://github.com/barrucadu/dejafu
 license:             MIT
@@ -23,7 +20,7 @@ maintainer:          mike@barrucadu.co.uk
 -- copyright:           
 category:            Testing
 build-type:          Simple
-extra-source-files:  CHANGELOG.markdown
+extra-source-files:  README.markdown CHANGELOG.markdown
 cabal-version:       >=1.10
 
 source-repository head

@@ -18,43 +18,6 @@ description:
   <https://hackage.haskell.org/package/concurrency concurrency>
   package by enabling you to systematically and deterministically test
   your concurrent programs.
-  .
-  == Déjà Fu with 'IO':
-  .
-  The core assumption underlying Déjà Fu is that any apparent
-  nondeterminism arises purely from the scheduling behaviour. To put
-  it another way, a given computation, parametrised with a fixed set
-  of scheduling decisions, is deterministic.
-  .
-  Whilst this assumption may not hold in general when 'IO' is
-  involved, you should strive to produce test cases where it does.
-  .
-  == Memory Model
-  .
-  The testing functionality supports a few different memory models,
-  for computations which use non-synchronised `CRef` operations. The
-  supported models are:
-  .
-  * __Sequential Consistency:__ A program behaves as a simple
-    interleaving of the actions in different threads. When a CRef is
-    written to, that write is immediately visible to all threads.
-  .
-  * __Total Store Order (TSO):__ Each thread has a write buffer. A
-    thread sees its writes immediately, but other threads will only
-    see writes when they are committed, which may happen later. Writes
-    are committed in the same order that they are created.
-  .
-  * __Partial Store Order (PSO):__ Each CRef has a write buffer. A
-    thread sees its writes immediately, but other threads will only
-    see writes when they are committed, which may happen later. Writes
-    to different CRefs are not necessarily committed in the same order
-    that they are created.
-  .
-  If a testing function does not take the memory model as a parameter,
-  it uses TSO.
-  .
-  See the <https://github.com/barrucadu/dejafu README> for more
-  details.
 
 homepage:            https://github.com/barrucadu/dejafu
 license:             MIT
@@ -64,7 +27,7 @@ maintainer:          mike@barrucadu.co.uk
 -- copyright:           
 category:            Concurrency
 build-type:          Simple
-extra-source-files:  CHANGELOG.markdown
+extra-source-files:  README.markdown CHANGELOG.markdown
 cabal-version:       >=1.10
 
 source-repository head
