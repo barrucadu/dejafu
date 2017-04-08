@@ -287,7 +287,7 @@ autocheck = autocheckWay defaultWay defaultMemType
 -- __Warning:__ Using largers bounds will almost certainly
 -- significantly increase the time taken to test!
 --
--- @since unreleased
+-- @since 0.6.0.0
 autocheckWay :: (Eq a, Show a)
   => Way
   -- ^ How to run the concurrent program.
@@ -307,7 +307,7 @@ autocheckIO = autocheckWayIO defaultWay defaultMemType
 
 -- | Variant of 'autocheckWay' for computations which do 'IO'.
 --
--- @since unreleased
+-- @since 0.6.0.0
 autocheckWayIO :: (Eq a, Show a) => Way -> MemType -> ConcIO a -> IO Bool
 autocheckWayIO way memtype concio =
   dejafusWayIO way memtype concio autocheckCases
@@ -335,7 +335,7 @@ dejafu = dejafuWay defaultWay defaultMemType
 -- | Variant of 'dejafu' which takes a way to run the program and a
 -- memory model.
 --
--- @since unreleased
+-- @since 0.6.0.0
 dejafuWay :: Show a
   => Way
   -- ^ How to run the concurrent program.
@@ -363,7 +363,7 @@ dejafus = dejafusWay defaultWay defaultMemType
 -- | Variant of 'dejafus' which takes a way to run the program and a
 -- memory model.
 --
--- @since unreleased
+-- @since 0.6.0.0
 dejafusWay :: Show a
   => Way
   -- ^ How to run the concurrent program.
@@ -387,7 +387,7 @@ dejafuIO = dejafuWayIO defaultWay defaultMemType
 
 -- | Variant of 'dejafuWay' for computations which do 'IO'.
 --
--- @since unreleased
+-- @since 0.6.0.0
 dejafuWayIO :: Show a => Way -> MemType -> ConcIO a -> (String, Predicate a) -> IO Bool
 dejafuWayIO way memtype concio test =
   dejafusWayIO way memtype concio [test]
@@ -400,7 +400,7 @@ dejafusIO = dejafusWayIO defaultWay defaultMemType
 
 -- | Variant of 'dejafusWay' for computations which do 'IO'.
 --
--- @since unreleased
+-- @since 0.6.0.0
 dejafusWayIO :: Show a => Way -> MemType -> ConcIO a -> [(String, Predicate a)] -> IO Bool
 dejafusWayIO way memtype concio tests = do
   traces  <- runSCT way memtype concio
@@ -464,7 +464,7 @@ runTest test conc =
 -- | Variant of 'runTest' which takes a way to run the program and a
 -- memory model.
 --
--- @since unreleased
+-- @since 0.6.0.0
 runTestWay
   :: Way
   -- ^ How to run the concurrent program.
@@ -487,7 +487,7 @@ runTestM = runTestWayM defaultWay defaultMemType
 
 -- | Monad-polymorphic variant of 'runTest''.
 --
--- @since unreleased
+-- @since 0.6.0.0
 runTestWayM :: MonadRef r n
             => Way -> MemType -> Predicate a -> ConcT r n a -> n (Result a)
 runTestWayM way memtype predicate conc =
@@ -695,7 +695,7 @@ gives' = gives . map Right
 -- | A default way to execute concurrent programs: systematically
 -- using 'defaultBounds'.
 --
--- @since unreleased
+-- @since 0.6.0.0
 defaultWay :: Way
 defaultWay = Systematically defaultBounds
 

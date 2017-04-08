@@ -112,7 +112,7 @@ import           Test.DejaFu.SCT.Internal
 --
 -- * Explore a fixed number of random executions, with the given PRNG.
 --
--- @since unreleased
+-- @since 0.6.0.0
 data Way where
   Systematically :: Bounds -> Way
   Randomly :: RandomGen g => g -> Int -> Way
@@ -127,7 +127,7 @@ instance Show Way where
 --
 -- * If the 'Way' is @Randomly@, 'sctRandom' is used.
 --
--- @since unreleased
+-- @since 0.6.0.0
 runSCT :: MonadRef r n
   => Way
   -- ^ How to run the concurrent program.
@@ -144,7 +144,7 @@ runSCT (Randomly g lim)    memtype = sctRandom memtype g lim
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since unreleased
+-- @since 0.6.0.0
 runSCT' :: (MonadRef r n, NFData a)
   => Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
 runSCT' way memtype conc = do
@@ -153,7 +153,7 @@ runSCT' way memtype conc = do
 
 -- | Return the set of results of a concurrent program.
 --
--- @since unreleased
+-- @since 0.6.0.0
 resultsSet :: (MonadRef r n, Ord a)
   => Way
   -- ^ How to run the concurrent program.
@@ -170,7 +170,7 @@ resultsSet way memtype conc =
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since unreleased
+-- @since 0.6.0.0
 resultsSet' :: (MonadRef r n, Ord a, NFData a)
   => Way -> MemType -> ConcT r n a -> n (Set (Either Failure a))
 resultsSet' way memtype conc = do

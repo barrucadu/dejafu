@@ -7,24 +7,32 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+0.6.0.0 [2017-04-08] (git tag: [dejafu-0.6.0.0][])
+-------
+
+https://hackage.haskell.org/package/dejafu-0.6.0.0
 
 ### Test.DejaFu.Conc
 
 - The `Conc n r a` type is now `ConcT r n a`, and has been given a `MonadTrans` instance. Uses of
   `lift` appear in the execution trace in the same way as `liftBase` and `liftIO`.
+    - The `ConcIO` and `ConcST` aliases have been updated, so this should be an invisible change to
+      most users.
 
 ### Test.DejaFu.SCT
 
 - `Way` is now a GADT, no longer taking a type parameter. This greatly improves type inference when
   the `Systematically` constructor is used.
+    - The `NFData` instance for `Way` is now gone. The alternative was requiring that any
+      `RandomGen` used also implement `NFData`, which is *very* restrictive
 
 ### Miscellaneous
 
 - There is now a changelog.
 - Test.DejaFu.Common is now considered to form part of the public API of the library.
 - Every definition and instance now has a Haddock "@since" annotation.
+
+[dejafu-0.6.0.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.6.0.0
 
 
 ---------------------------------------------------------------------------------------------------

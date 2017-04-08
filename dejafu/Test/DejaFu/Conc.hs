@@ -65,7 +65,7 @@ import           Test.DejaFu.Conc.Internal
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.STM
 
--- | @since unreleased
+-- | @since 0.6.0.0
 newtype ConcT r n a = C { unC :: M n r a } deriving (Functor, Applicative, Monad)
 
 -- | A 'MonadConc' implementation using @ST@, this should be preferred
@@ -190,7 +190,7 @@ instance Monad n => C.MonadConc (ConcT r n) where
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 --
--- @since 0.5.0.0
+-- @since 0.6.0.0
 runConcurrent :: MonadRef r n
               => Scheduler s
               -> MemType
@@ -208,6 +208,6 @@ runConcurrent sched memtype s ma = do
 -- of these conditions will result in the computation failing with
 -- @IllegalSubconcurrency@.
 --
--- @since unreleased
+-- @since 0.6.0.0
 subconcurrency :: ConcT r n a -> ConcT r n (Either Failure a)
 subconcurrency ma = toConc (ASub (unC ma))
