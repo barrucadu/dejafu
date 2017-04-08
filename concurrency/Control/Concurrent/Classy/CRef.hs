@@ -80,7 +80,7 @@ module Control.Concurrent.Classy.CRef
   -- memory barrier.
   ) where
 
-import Control.Monad.Conc.Class
+import           Control.Monad.Conc.Class
 
 -- | Mutate the contents of a @CRef@.
 --

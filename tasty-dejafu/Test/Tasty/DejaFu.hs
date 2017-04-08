@@ -56,23 +56,25 @@ module Test.Tasty.DejaFu
   , MemType(..)
   ) where
 
-import Control.Monad.ST (runST)
-import Data.Char (toUpper)
-import Data.List (intercalate, intersperse)
-import Data.Proxy (Proxy(..))
-import Data.Tagged (Tagged(..))
-import Data.Typeable (Typeable)
-import System.Random (RandomGen, StdGen, mkStdGen)
-import Test.DejaFu
-import qualified Test.DejaFu.Conc as Conc
-import qualified Test.DejaFu.SCT as SCT
-import Test.Tasty (TestName, TestTree, testGroup)
-import Test.Tasty.Options (OptionDescription(..), IsOption(..), lookupOption)
-import Test.Tasty.Providers (IsTest(..), singleTest, testPassed, testFailed)
+import           Control.Monad.ST     (runST)
+import           Data.Char            (toUpper)
+import           Data.List            (intercalate, intersperse)
+import           Data.Proxy           (Proxy(..))
+import           Data.Tagged          (Tagged(..))
+import           Data.Typeable        (Typeable)
+import           System.Random        (RandomGen, StdGen, mkStdGen)
+import           Test.DejaFu
+import qualified Test.DejaFu.Conc     as Conc
+import qualified Test.DejaFu.SCT      as SCT
+import           Test.Tasty           (TestName, TestTree, testGroup)
+import           Test.Tasty.Options   (IsOption(..), OptionDescription(..),
+                                       lookupOption)
+import           Test.Tasty.Providers (IsTest(..), singleTest, testFailed,
+                                       testPassed)
 
 -- Can't put the necessary forall in the @IsTest ConcST t@
 -- instance :(
-import Unsafe.Coerce (unsafeCoerce)
+import           Unsafe.Coerce        (unsafeCoerce)
 
 runSCTst :: RandomGen g => Way g -> MemType -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Conc.Trace)]
 runSCTst way memtype conc = runST (SCT.runSCT way memtype conc)

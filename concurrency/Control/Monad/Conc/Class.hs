@@ -66,30 +66,32 @@ module Control.Monad.Conc.Class
   ) where
 
 -- for the class and utilities
-import Control.Exception (Exception, AsyncException(ThreadKilled), SomeException)
-import Control.Monad.Catch (MonadCatch, MonadThrow, MonadMask)
-import qualified Control.Monad.Catch as Ca
-import Control.Monad.STM.Class (MonadSTM, TVar, readTVar)
-import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
-import Data.Proxy (Proxy(..))
+import           Control.Exception            (AsyncException(ThreadKilled),
+                                               Exception, SomeException)
+import           Control.Monad.Catch          (MonadCatch, MonadMask,
+                                               MonadThrow)
+import qualified Control.Monad.Catch          as Ca
+import           Control.Monad.STM.Class      (MonadSTM, TVar, readTVar)
+import           Control.Monad.Trans.Control  (MonadTransControl, StT, liftWith)
+import           Data.Proxy                   (Proxy(..))
 
 -- for the 'IO' instance
-import qualified Control.Concurrent as IO
-import qualified Control.Concurrent.STM.TVar as IO
-import qualified Control.Monad.STM as IO
-import qualified Data.Atomics as IO
-import qualified Data.IORef as IO
+import qualified Control.Concurrent           as IO
+import qualified Control.Concurrent.STM.TVar  as IO
+import qualified Control.Monad.STM            as IO
+import qualified Data.Atomics                 as IO
+import qualified Data.IORef                   as IO
 
 -- for the transformer instances
-import Control.Monad.Reader (ReaderT)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Identity (IdentityT)
-import qualified Control.Monad.RWS.Lazy as RL
-import qualified Control.Monad.RWS.Strict as RS
-import qualified Control.Monad.State.Lazy as SL
-import qualified Control.Monad.State.Strict as SS
-import qualified Control.Monad.Writer.Lazy as WL
-import qualified Control.Monad.Writer.Strict as WS
+import           Control.Monad.Reader         (ReaderT)
+import qualified Control.Monad.RWS.Lazy       as RL
+import qualified Control.Monad.RWS.Strict     as RS
+import qualified Control.Monad.State.Lazy     as SL
+import qualified Control.Monad.State.Strict   as SS
+import           Control.Monad.Trans          (lift)
+import           Control.Monad.Trans.Identity (IdentityT)
+import qualified Control.Monad.Writer.Lazy    as WL
+import qualified Control.Monad.Writer.Strict  as WS
 
 -- | @MonadConc@ is an abstraction over GHC's typical concurrency
 -- abstraction. It captures the interface of concurrency monads in

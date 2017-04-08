@@ -36,7 +36,7 @@ module Control.Concurrent.Classy.STM.TQueue
   , isEmptyTQueue
   ) where
 
-import Control.Monad.STM.Class
+import           Control.Monad.STM.Class
 
 -- | 'TQueue' is an abstract type representing an unbounded FIFO channel.
 --

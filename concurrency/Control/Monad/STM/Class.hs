@@ -31,21 +31,21 @@ module Control.Monad.STM.Class
   , liftedOrElse
   ) where
 
-import Control.Exception (Exception)
-import Control.Monad (unless)
-import Control.Monad.Reader (ReaderT)
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Control (MonadTransControl, StT, liftWith)
-import Control.Monad.Trans.Identity (IdentityT)
+import           Control.Exception            (Exception)
+import           Control.Monad                (unless)
+import           Control.Monad.Reader         (ReaderT)
+import           Control.Monad.Trans          (lift)
+import           Control.Monad.Trans.Control  (MonadTransControl, StT, liftWith)
+import           Control.Monad.Trans.Identity (IdentityT)
 
-import qualified Control.Concurrent.STM as STM
-import qualified Control.Monad.Catch as Ca
-import qualified Control.Monad.RWS.Lazy as RL
-import qualified Control.Monad.RWS.Strict as RS
-import qualified Control.Monad.State.Lazy as SL
-import qualified Control.Monad.State.Strict as SS
-import qualified Control.Monad.Writer.Lazy as WL
-import qualified Control.Monad.Writer.Strict as WS
+import qualified Control.Concurrent.STM       as STM
+import qualified Control.Monad.Catch          as Ca
+import qualified Control.Monad.RWS.Lazy       as RL
+import qualified Control.Monad.RWS.Strict     as RS
+import qualified Control.Monad.State.Lazy     as SL
+import qualified Control.Monad.State.Strict   as SS
+import qualified Control.Monad.Writer.Lazy    as WL
+import qualified Control.Monad.Writer.Strict  as WS
 
 -- | @MonadSTM@ is an abstraction over 'STM'.
 --

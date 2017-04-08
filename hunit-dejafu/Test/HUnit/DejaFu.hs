@@ -59,19 +59,20 @@ module Test.HUnit.DejaFu
   , MemType(..)
   ) where
 
-import Control.Monad.Catch (try)
-import Control.Monad.ST (runST)
-import Data.List (intercalate, intersperse)
-import System.Random (RandomGen)
-import Test.HUnit (Assertable(..), Test(..), Testable(..), assertString)
-import Test.HUnit.Lang (HUnitFailure(..))
-import Test.DejaFu
-import qualified Test.DejaFu.Conc as Conc
-import qualified Test.DejaFu.SCT as SCT
+import           Control.Monad.Catch (try)
+import           Control.Monad.ST    (runST)
+import           Data.List           (intercalate, intersperse)
+import           System.Random       (RandomGen)
+import           Test.DejaFu
+import qualified Test.DejaFu.Conc    as Conc
+import qualified Test.DejaFu.SCT     as SCT
+import           Test.HUnit          (Assertable(..), Test(..), Testable(..),
+                                      assertString)
+import           Test.HUnit.Lang     (HUnitFailure(..))
 
 -- Can't put the necessary forall in the @Assertable Conc.ConcST t@
 -- instance :(
-import Unsafe.Coerce (unsafeCoerce)
+import           Unsafe.Coerce       (unsafeCoerce)
 
 runSCTst :: RandomGen g => Way g -> MemType -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Conc.Trace)]
 runSCTst way memtype conc = runST (SCT.runSCT way memtype conc)

@@ -1,5 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.Common
@@ -13,11 +13,11 @@
 -- 'MonadConc' implementations. This module is NOT considered to form
 module Test.DejaFu.Conc.Internal.Common where
 
-import Control.Exception (Exception, MaskingState(..))
-import Data.Map.Strict (Map)
-import Data.List.NonEmpty (NonEmpty, fromList)
-import Test.DejaFu.Common
-import Test.DejaFu.STM (STMLike)
+import           Control.Exception  (Exception, MaskingState(..))
+import           Data.List.NonEmpty (NonEmpty, fromList)
+import           Data.Map.Strict    (Map)
+import           Test.DejaFu.Common
+import           Test.DejaFu.STM    (STMLike)
 
 --------------------------------------------------------------------------------
 -- * The @Conc@ Monad

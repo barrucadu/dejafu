@@ -32,7 +32,7 @@ module Control.Concurrent.Classy.STM.TChan
   , isEmptyTChan
   ) where
 
-import Control.Monad.STM.Class
+import           Control.Monad.STM.Class
 
 -- | 'TChan' is an abstract type representing an unbounded FIFO
 -- channel.

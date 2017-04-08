@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
@@ -15,24 +15,28 @@
 -- interface of this library.
 module Test.DejaFu.Conc.Internal where
 
-import Control.Exception (MaskingState(..), toException)
-import Control.Monad.Ref (MonadRef, newRef, readRef, writeRef)
-import qualified Data.Foldable as F
-import Data.Functor (void)
-import Data.List (sort)
-import Data.List.NonEmpty (NonEmpty(..), fromList)
-import qualified Data.Map.Strict as M
-import Data.Maybe (fromJust, isJust, isNothing)
-import Data.Monoid ((<>))
-import Data.Sequence (Seq, (<|))
-import qualified Data.Sequence as Seq
+import           Control.Exception                   (MaskingState(..),
+                                                      toException)
+import           Control.Monad.Ref                   (MonadRef, newRef, readRef,
+                                                      writeRef)
+import qualified Data.Foldable                       as F
+import           Data.Functor                        (void)
+import           Data.List                           (sort)
+import           Data.List.NonEmpty                  (NonEmpty(..), fromList)
+import qualified Data.Map.Strict                     as M
+import           Data.Maybe                          (fromJust, isJust,
+                                                      isNothing)
+import           Data.Monoid                         ((<>))
+import           Data.Sequence                       (Seq, (<|))
+import qualified Data.Sequence                       as Seq
 
-import Test.DejaFu.Common
-import Test.DejaFu.Conc.Internal.Common
-import Test.DejaFu.Conc.Internal.Memory
-import Test.DejaFu.Conc.Internal.Threading
-import Test.DejaFu.Schedule
-import Test.DejaFu.STM (Result(..), runTransaction)
+import           Test.DejaFu.Common
+import           Test.DejaFu.Conc.Internal.Common
+import           Test.DejaFu.Conc.Internal.Memory
+import           Test.DejaFu.Conc.Internal.Threading
+import           Test.DejaFu.Schedule
+import           Test.DejaFu.STM                     (Result(..),
+                                                      runTransaction)
 
 --------------------------------------------------------------------------------
 -- * Execution

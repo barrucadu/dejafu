@@ -15,8 +15,8 @@ module Control.Concurrent.Classy.QSem
   , signalQSem
   ) where
 
-import Control.Concurrent.Classy.QSemN
-import Control.Monad.Conc.Class (MonadConc)
+import           Control.Concurrent.Classy.QSemN
+import           Control.Monad.Conc.Class        (MonadConc)
 
 -- | @QSem@ is a quantity semaphore in which the resource is acquired
 -- and released in units of one. It provides guaranteed FIFO ordering

@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- |
 -- Module      : Test.DejaFu.STM
@@ -26,17 +26,17 @@ module Test.DejaFu.STM
   , runTransaction
   ) where
 
-import Control.Monad (unless)
-import Control.Monad.Catch (MonadCatch(..), MonadThrow(..))
-import Control.Monad.Cont (cont)
-import Control.Monad.Ref (MonadRef)
-import Control.Monad.ST (ST)
-import Data.IORef (IORef)
-import Data.STRef (STRef)
+import           Control.Monad            (unless)
+import           Control.Monad.Catch      (MonadCatch(..), MonadThrow(..))
+import           Control.Monad.Cont       (cont)
+import           Control.Monad.Ref        (MonadRef)
+import           Control.Monad.ST         (ST)
+import           Data.IORef               (IORef)
+import           Data.STRef               (STRef)
 
-import qualified Control.Monad.STM.Class as C
-import Test.DejaFu.Common
-import Test.DejaFu.STM.Internal
+import qualified Control.Monad.STM.Class  as C
+import           Test.DejaFu.Common
+import           Test.DejaFu.STM.Internal
 
 newtype STMLike n r a = S { runSTM :: M n r a } deriving (Functor, Applicative, Monad)
 

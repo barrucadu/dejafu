@@ -1,5 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE GADTs        #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 -- |
@@ -23,18 +23,20 @@
 -- Memory Models/, N. Zhang, M. Kusano, and C. Wang (2015).
 module Test.DejaFu.Conc.Internal.Memory where
 
-import Control.Monad (when)
-import Control.Monad.Ref (MonadRef, readRef, writeRef)
-import Data.Map.Strict (Map)
-import Data.Maybe (isJust, fromJust)
-import Data.Monoid ((<>))
-import Data.Sequence (Seq, ViewL(..), (><), singleton, viewl)
+import           Control.Monad                       (when)
+import           Control.Monad.Ref                   (MonadRef, readRef,
+                                                      writeRef)
+import           Data.Map.Strict                     (Map)
+import           Data.Maybe                          (fromJust, isJust)
+import           Data.Monoid                         ((<>))
+import           Data.Sequence                       (Seq, ViewL(..), singleton,
+                                                      viewl, (><))
 
-import Test.DejaFu.Common
-import Test.DejaFu.Conc.Internal.Common
-import Test.DejaFu.Conc.Internal.Threading
+import           Test.DejaFu.Common
+import           Test.DejaFu.Conc.Internal.Common
+import           Test.DejaFu.Conc.Internal.Threading
 
-import qualified Data.Map.Strict as M
+import qualified Data.Map.Strict                     as M
 
 --------------------------------------------------------------------------------
 -- * Manipulating @CRef@s

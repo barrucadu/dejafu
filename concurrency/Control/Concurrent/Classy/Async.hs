@@ -77,18 +77,21 @@ module Control.Concurrent.Classy.Async
   , Concurrently(..)
   ) where
 
-import Control.Applicative
-import Control.Concurrent.Classy.STM.TMVar (newEmptyTMVar, putTMVar, readTMVar)
-import Control.Exception (AsyncException(ThreadKilled), BlockedIndefinitelyOnSTM(..), Exception, SomeException)
-import Control.Monad
-import Control.Monad.Catch (finally, try, onException)
-import Control.Monad.Conc.Class
-import Control.Monad.STM.Class
-import Data.Foldable (foldMap)
-import Data.Traversable
+import           Control.Applicative
+import           Control.Concurrent.Classy.STM.TMVar (newEmptyTMVar, putTMVar,
+                                                      readTMVar)
+import           Control.Exception                   (AsyncException(ThreadKilled),
+                                                      BlockedIndefinitelyOnSTM(..),
+                                                      Exception, SomeException)
+import           Control.Monad
+import           Control.Monad.Catch                 (finally, onException, try)
+import           Control.Monad.Conc.Class
+import           Control.Monad.STM.Class
+import           Data.Foldable                       (foldMap)
+import           Data.Traversable
 
 #if MIN_VERSION_base(4,9,0)
-import Data.Semigroup (Semigroup(..))
+import           Data.Semigroup                      (Semigroup(..))
 #endif
 
 -----------------------------------------------------------------------------------------

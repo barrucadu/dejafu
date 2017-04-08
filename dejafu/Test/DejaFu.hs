@@ -242,19 +242,19 @@ module Test.DejaFu
   , gives'
   ) where
 
-import Control.Arrow (first)
-import Control.DeepSeq (NFData(..))
-import Control.Monad (when, unless)
-import Control.Monad.Ref (MonadRef)
-import Control.Monad.ST (runST)
-import Data.Function (on)
-import Data.List (intercalate, intersperse, minimumBy)
-import Data.Ord (comparing)
-import System.Random (RandomGen, StdGen)
+import           Control.Arrow      (first)
+import           Control.DeepSeq    (NFData(..))
+import           Control.Monad      (unless, when)
+import           Control.Monad.Ref  (MonadRef)
+import           Control.Monad.ST   (runST)
+import           Data.Function      (on)
+import           Data.List          (intercalate, intersperse, minimumBy)
+import           Data.Ord           (comparing)
+import           System.Random      (RandomGen, StdGen)
 
-import Test.DejaFu.Common
-import Test.DejaFu.Conc
-import Test.DejaFu.SCT
+import           Test.DejaFu.Common
+import           Test.DejaFu.Conc
+import           Test.DejaFu.SCT
 
 
 -------------------------------------------------------------------------------

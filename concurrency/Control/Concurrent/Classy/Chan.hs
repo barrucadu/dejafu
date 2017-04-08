@@ -27,9 +27,9 @@ module Control.Concurrent.Classy.Chan
   , writeList2Chan
   ) where
 
-import Control.Concurrent.Classy.MVar
-import Control.Monad.Catch (mask_)
-import Control.Monad.Conc.Class (MonadConc)
+import           Control.Concurrent.Classy.MVar
+import           Control.Monad.Catch            (mask_)
+import           Control.Monad.Conc.Class       (MonadConc)
 
 -- | 'Chan' is an abstract type representing an unbounded FIFO
 -- channel.

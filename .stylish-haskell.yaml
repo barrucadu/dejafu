@@ -1,0 +1,62 @@
+# stylish-haskell configuration file
+# https://github.com/jaspervdj/stylish-haskell
+##########################
+
+steps:
+  # Import cleanup
+  - imports:
+      # Align the import names and import list throughout the entire
+      # file.
+      align: global
+
+      # Import list is aligned with end of import including 'as' and
+      # 'hiding' keywords.
+      #
+      #   > import qualified Data.List      as List (concat, foldl, foldr, head,
+      #   >                                          init, last, length)
+      list_align: after_alias
+
+      # Put as many import specs on same line as possible.
+      long_list_align: inline
+
+      # () is right after the module name:
+      #
+      #   > import Vector.Instances ()
+      empty_list_align: right_after
+
+      # Align import list on lines after the import under the start of
+      # the module name.
+      list_padding: module_name
+
+      # There is no space between classes and constructors and the
+      # list of it's members.
+      #
+      #   > import Data.Foldable (Foldable(fold, foldl, foldMap))
+      separate_lists: false
+
+  # Language pragmas
+  - language_pragmas:
+      # Vertical-spaced language pragmas, one per line.
+      style: vertical
+
+      # Brackets are not aligned together. There is only one space
+      # between actual import and closing bracket.
+      align: false
+
+      # Remove redundant language pragmas.
+      remove_redundant: true
+
+  # Remove trailing whitespace
+  - trailing_whitespace: {}
+
+# Maximum line length, used by some of the steps above.
+columns: 80
+
+# Convert newlines to LF ("\n").
+newline: lf
+
+# For some reason, stylish-haskell thinks I need these extensions
+# turning on in order to parse the code.
+language_extensions:
+  - MultiParamTypeClasses
+  - TemplateHaskell

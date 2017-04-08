@@ -29,10 +29,10 @@ module Control.Concurrent.Classy
   , module Control.Concurrent.Classy.QSemN
   ) where
 
-import Control.Monad.Conc.Class
-import Control.Concurrent.Classy.Chan
-import Control.Concurrent.Classy.CRef
-import Control.Concurrent.Classy.MVar
-import Control.Concurrent.Classy.STM
-import Control.Concurrent.Classy.QSem
-import Control.Concurrent.Classy.QSemN
+import           Control.Concurrent.Classy.Chan
+import           Control.Concurrent.Classy.CRef
+import           Control.Concurrent.Classy.MVar
+import           Control.Concurrent.Classy.QSem
+import           Control.Concurrent.Classy.QSemN
+import           Control.Concurrent.Classy.STM
+import           Control.Monad.Conc.Class

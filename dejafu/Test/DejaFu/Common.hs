@@ -60,13 +60,13 @@ module Test.DejaFu.Common
   , MemType(..)
   ) where
 
-import Control.DeepSeq (NFData(..))
-import Control.Exception (MaskingState(..))
-import Data.List (sort, nub, intercalate)
-import Data.List.NonEmpty (NonEmpty)
-import Data.Maybe (fromMaybe, mapMaybe)
-import Data.Set (Set)
-import qualified Data.Set as S
+import           Control.DeepSeq    (NFData(..))
+import           Control.Exception  (MaskingState(..))
+import           Data.List          (intercalate, nub, sort)
+import           Data.List.NonEmpty (NonEmpty)
+import           Data.Maybe         (fromMaybe, mapMaybe)
+import           Data.Set           (Set)
+import qualified Data.Set           as S
 
 -------------------------------------------------------------------------------
 -- Identifiers

@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 -- |
 -- Module      : Control.Concurrent.Classy.STM.
@@ -15,12 +16,12 @@
 -- an @Eq@ constraint.
 module Control.Concurrent.Classy.STM.TArray (TArray) where
 
-import Data.Array (Array, bounds)
-import Data.Array.Base (listArray, arrEleBottom, unsafeAt, MArray(..),
-                        IArray(numElements))
-import Data.Ix (rangeSize)
+import           Data.Array              (Array, bounds)
+import           Data.Array.Base         (IArray(numElements), MArray(..),
+                                          arrEleBottom, listArray, unsafeAt)
+import           Data.Ix                 (rangeSize)
 
-import Control.Monad.STM.Class
+import           Control.Monad.STM.Class
 
 -- | @TArray@ is a transactional array, supporting the usual 'MArray'
 -- interface for mutable arrays.

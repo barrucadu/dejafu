@@ -48,9 +48,9 @@ module Control.Concurrent.Classy.MVar
  , modifyMVarMasked
  ) where
 
-import Control.Monad.Catch (mask_, onException)
-import Control.Monad.Conc.Class
-import Data.Maybe (isJust)
+import           Control.Monad.Catch      (mask_, onException)
+import           Control.Monad.Conc.Class
+import           Data.Maybe               (isJust)
 
 -- | Swap the contents of a @MVar@, and return the value taken. This
 -- function is atomic only if there are no other producers fro this

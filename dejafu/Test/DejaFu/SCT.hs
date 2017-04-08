@@ -90,17 +90,17 @@ module Test.DejaFu.SCT
   , sctRandom
   ) where
 
-import Control.DeepSeq (NFData(..))
-import Control.Monad.Ref (MonadRef)
-import Data.List (foldl')
-import qualified Data.Map.Strict as M
-import Data.Set (Set)
-import qualified Data.Set as S
-import System.Random (RandomGen)
+import           Control.DeepSeq          (NFData(..))
+import           Control.Monad.Ref        (MonadRef)
+import           Data.List                (foldl')
+import qualified Data.Map.Strict          as M
+import           Data.Set                 (Set)
+import qualified Data.Set                 as S
+import           System.Random            (RandomGen)
 
-import Test.DejaFu.Common
-import Test.DejaFu.Conc
-import Test.DejaFu.SCT.Internal
+import           Test.DejaFu.Common
+import           Test.DejaFu.Conc
+import           Test.DejaFu.SCT.Internal
 
 -------------------------------------------------------------------------------
 -- Running Concurrent Programs

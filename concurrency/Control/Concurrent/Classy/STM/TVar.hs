@@ -25,9 +25,9 @@ module Control.Concurrent.Classy.STM.TVar
   , registerDelay
   ) where
 
-import Control.Monad.STM.Class
-import Control.Monad.Conc.Class
-import Data.Functor (void)
+import           Control.Monad.Conc.Class
+import           Control.Monad.STM.Class
+import           Data.Functor             (void)
 
 -- * @TVar@s
 

@@ -11,24 +11,26 @@
 -- interface of this library.
 module Test.DejaFu.SCT.Internal where
 
-import Control.DeepSeq (NFData(..))
-import Control.Exception (MaskingState(..))
-import Data.Char (ord)
-import Data.Function (on)
-import qualified Data.Foldable as F
-import Data.List (intercalate, nubBy, partition, sortOn)
-import Data.List.NonEmpty (NonEmpty(..), toList)
-import Data.Map.Strict (Map)
-import Data.Maybe (catMaybes, fromJust, isJust, isNothing, listToMaybe)
-import qualified Data.Map.Strict as M
-import Data.Set (Set)
-import qualified Data.Set as S
-import Data.Sequence (Seq, (|>))
-import qualified Data.Sequence as Sq
-import System.Random (RandomGen, randomR)
+import           Control.DeepSeq      (NFData(..))
+import           Control.Exception    (MaskingState(..))
+import           Data.Char            (ord)
+import qualified Data.Foldable        as F
+import           Data.Function        (on)
+import           Data.List            (intercalate, nubBy, partition, sortOn)
+import           Data.List.NonEmpty   (NonEmpty(..), toList)
+import           Data.Map.Strict      (Map)
+import qualified Data.Map.Strict      as M
+import           Data.Maybe           (catMaybes, fromJust, isJust, isNothing,
+                                       listToMaybe)
+import           Data.Sequence        (Seq, (|>))
+import qualified Data.Sequence        as Sq
+import           Data.Set             (Set)
+import qualified Data.Set             as S
+import           System.Random        (RandomGen, randomR)
 
-import Test.DejaFu.Common
-import Test.DejaFu.Schedule (Decision(..), Scheduler, decisionOf, tidOf)
+import           Test.DejaFu.Common
+import           Test.DejaFu.Schedule (Decision(..), Scheduler, decisionOf,
+                                       tidOf)
 
 -------------------------------------------------------------------------------
 -- * Dynamic partial-order reduction

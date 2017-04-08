@@ -16,10 +16,11 @@ module Control.Concurrent.Classy.QSemN
   , signalQSemN
   ) where
 
-import Control.Monad.Conc.Class (MonadConc)
-import Control.Concurrent.Classy.MVar
-import Control.Monad.Catch (mask_, onException, uninterruptibleMask_)
-import Data.Maybe
+import           Control.Concurrent.Classy.MVar
+import           Control.Monad.Catch            (mask_, onException,
+                                                 uninterruptibleMask_)
+import           Control.Monad.Conc.Class       (MonadConc)
+import           Data.Maybe
 
 -- | 'QSemN' is a quantity semaphore in which the resource is aqcuired
 -- and released in units of one. It provides guaranteed FIFO ordering

@@ -29,9 +29,9 @@ module Control.Concurrent.Classy.STM.TMVar
   , swapTMVar
   ) where
 
-import Control.Monad (liftM, when, unless)
-import Control.Monad.STM.Class
-import Data.Maybe (isJust, isNothing)
+import           Control.Monad           (liftM, unless, when)
+import           Control.Monad.STM.Class
+import           Data.Maybe              (isJust, isNothing)
 
 -- | A @TMVar@ is like an @MVar@ or a @mVar@, but using transactional
 -- memory. As transactions are atomic, this makes dealing with

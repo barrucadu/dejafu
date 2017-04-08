@@ -1,5 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.Threading
@@ -13,15 +13,16 @@
 -- form part of the public interface of this library.
 module Test.DejaFu.Conc.Internal.Threading where
 
-import Control.Exception (Exception, MaskingState(..), SomeException, fromException)
-import Data.List (intersect)
-import Data.Map.Strict (Map)
-import Data.Maybe (fromMaybe, isJust)
+import           Control.Exception                (Exception, MaskingState(..),
+                                                   SomeException, fromException)
+import           Data.List                        (intersect)
+import           Data.Map.Strict                  (Map)
+import           Data.Maybe                       (fromMaybe, isJust)
 
-import Test.DejaFu.Common
-import Test.DejaFu.Conc.Internal.Common
+import           Test.DejaFu.Common
+import           Test.DejaFu.Conc.Internal.Common
 
-import qualified Data.Map.Strict as M
+import qualified Data.Map.Strict                  as M
 
 --------------------------------------------------------------------------------
 -- * Threads

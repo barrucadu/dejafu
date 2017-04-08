@@ -33,7 +33,7 @@ module Control.Concurrent.Classy.STM.TBQueue
   , isFullTBQueue
   ) where
 
-import Control.Monad.STM.Class
+import           Control.Monad.STM.Class
 
 -- | 'TBQueue' is an abstract type representing a bounded FIFO
 -- channel.

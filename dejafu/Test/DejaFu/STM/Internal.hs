@@ -15,13 +15,14 @@
 -- public interface of this library.
 module Test.DejaFu.STM.Internal where
 
-import Control.DeepSeq (NFData(..))
-import Control.Exception (Exception, SomeException, fromException, toException)
-import Control.Monad.Cont (Cont, runCont)
-import Control.Monad.Ref (MonadRef, newRef, readRef, writeRef)
-import Data.List (nub)
+import           Control.DeepSeq    (NFData(..))
+import           Control.Exception  (Exception, SomeException, fromException,
+                                     toException)
+import           Control.Monad.Cont (Cont, runCont)
+import           Control.Monad.Ref  (MonadRef, newRef, readRef, writeRef)
+import           Data.List          (nub)
 
-import Test.DejaFu.Common
+import           Test.DejaFu.Common
 
 --------------------------------------------------------------------------------
 -- The @STMLike@ monad

@@ -1,9 +1,9 @@
-{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TypeSynonymInstances       #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 -- |
 -- Module      : Test.DejaFu.Conc
@@ -46,23 +46,23 @@ module Test.DejaFu.Conc
   , module Test.DejaFu.Schedule
   ) where
 
-import Control.Exception (MaskingState(..))
-import qualified Control.Monad.Base as Ba
-import qualified Control.Monad.Catch as Ca
-import qualified Control.Monad.IO.Class as IO
-import Control.Monad.Ref (MonadRef)
-import qualified Control.Monad.Ref as Re
-import Control.Monad.ST (ST)
-import qualified Data.Foldable as F
-import Data.IORef (IORef)
-import Data.STRef (STRef)
-import Test.DejaFu.Schedule
+import           Control.Exception                (MaskingState(..))
+import qualified Control.Monad.Base               as Ba
+import qualified Control.Monad.Catch              as Ca
+import qualified Control.Monad.IO.Class           as IO
+import           Control.Monad.Ref                (MonadRef)
+import qualified Control.Monad.Ref                as Re
+import           Control.Monad.ST                 (ST)
+import qualified Data.Foldable                    as F
+import           Data.IORef                       (IORef)
+import           Data.STRef                       (STRef)
+import           Test.DejaFu.Schedule
 
-import qualified Control.Monad.Conc.Class as C
-import Test.DejaFu.Common
-import Test.DejaFu.Conc.Internal
-import Test.DejaFu.Conc.Internal.Common
-import Test.DejaFu.STM
+import qualified Control.Monad.Conc.Class         as C
+import           Test.DejaFu.Common
+import           Test.DejaFu.Conc.Internal
+import           Test.DejaFu.Conc.Internal.Common
+import           Test.DejaFu.STM
 
 newtype Conc n r a = C { unC :: M n r a } deriving (Functor, Applicative, Monad)
 
