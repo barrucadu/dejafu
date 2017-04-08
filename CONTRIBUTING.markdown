@@ -119,3 +119,67 @@ use the "lint.sh" and "style.sh" scripts to run the tools for you.
 [brittany]:        https://github.com/lspitzner/brittany
 [stylish-haskell]: https://github.com/jaspervdj/stylish-haskell
 [hlint]:           https://github.com/ndmitchell/hlint
+
+
+Documenting your Changes
+------------------------
+
+**If a top-level definition is introduced or significantly changed**,
+whether it is exported or not, give it a descriptive comment:
+
+```haskell
+-- | Automatically test a computation. In particular, look for
+-- deadlocks, uncaught exceptions, and multiple return values.
+--
+-- This uses the 'Conc' monad for testing, which is an instance of
+-- 'MonadConc'. If you need to test something which also uses
+-- 'MonadIO', use 'autocheckIO'.
+autocheck :: (Eq a, Show a)
+  => (forall t. ConcST t a)
+  -- ^ The computation to test
+  -> IO Bool
+autocheck = autocheckWay defaultWay defaultMemType
+```
+
+*Tip:* consider commenting the function arguments. You can skip this
+if it's blindingly obvious.
+
+**If an exported definition is introduced or has its API changed**
+(behavioural changes don't count for this), it should be given a
+`@since` annotation which you can read as "*this definition has had
+its current API since version foo*":
+
+```haskell
+-- | Variant of 'dejafus' for computations which do 'IO'.
+--
+-- @since unreleased
+dejafusIO :: Show a => ConcIO a -> [(String, Predicate a)] -> IO Bool
+dejafusIO = dejafusWayIO defaultWay defaultMemType
+```
+
+*Tips:*
+
+- the API for a function is its type, the API for a type is its
+  constructors
+- moving a definition to a different module is an API change
+- version numbers will be filled in when a release is made, using
+  "@since unreleased" makes it easy to find the necessary places
+
+**If the change is visible to end-users** add an entry to the relevant
+change log in the "unreleased" section. if there is no "unreleased"
+section, make one:
+
+```
+unreleased
+----------
+
+### Test.DejaFu
+
+- All the functions which did take a `Bounds` now take a `Way` instead and support random scheduling
+  as well.
+```
+
+*Tip:* the change log is a summary of changes, but should still be
+intelligible to someone not familiar with the library internals. The
+above entry is bad by itself, but ok in context, as another entry in
+the 0.5.0.0 changes introduces the `Way` type.
