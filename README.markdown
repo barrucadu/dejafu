@@ -36,6 +36,7 @@ Table of Contents
 - [Contributing](#contributing)
   - [Test Coverage](#test-coverage)
   - [Performance](#performance)
+  - [Style](#style)
 - [Release Notes / Change Logs](#release-notes--change-logs)
 - [Bibliography](#bibliography)
 
@@ -392,6 +393,28 @@ representative use: a testsuite where results will be quickly
 summarised and printed. It may not be so useful for judging
 performance of programs which keep the test results around for a long
 time.
+
+### Style
+
+There isn't really a prescribed coding style. I've tried [hindent][]
+and [brittany][], and didn't like either, maybe I should make my own
+formatter. It's not quite the wild west though; keep these four rules
+in mind:
+
+1. Be consistent.
+2. Use [stylish-haskell][] to format import lists.
+3. Use [hlint][] (version 2 at least) and fix all lint messages,
+   unless you're *really really sure* there needs to be an exception.
+4. The dejafu-tests package really *is* the wild west, hlint and
+   stylish-haskell be damned!
+
+The .hlint.yaml and .stylish-haskell.yaml files are enough. You can
+use the "lint.sh" and "style.sh" scripts to run the tools for you.
+
+[hindent]:         https://github.com/commercialhaskell/hindent
+[brittany]:        https://github.com/lspitzner/brittany
+[stylish-haskell]: https://github.com/jaspervdj/stylish-haskell
+[hlint]:           https://github.com/ndmitchell/hlint
 
 
 Release Notes / Change Logs
