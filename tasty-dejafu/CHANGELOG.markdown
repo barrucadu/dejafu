@@ -7,8 +7,10 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+0.5.0.0 [2017-04-08] (git tag: [tasty-dejafu-0.5.0.0][])
+-------
+
+https://hackage.haskell.org/package/tasty-dejafu-0.5.0.0
 
 ### Test.Tasty.DejaFu
 
@@ -18,6 +20,9 @@ unreleased
 
 - There is now a changelog.
 - Every definition and instance now has a Haddock "@since" annotation.
+- Only dejafu 0.6 is supported.
+
+[tasty-dejafu-0.5.0.0]: https://github.com/barrucadu/dejafu/releases/tag/tasty-dejafu-0.5.0.0
 
 
 ---------------------------------------------------------------------------------------------------
