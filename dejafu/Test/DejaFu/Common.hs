@@ -6,9 +6,7 @@
 -- Stability   : experimental
 -- Portability : portable
 --
--- Common types and functions used throughout DejaFu. This module is
--- NOT considered to form part of the public interface of this
--- library.
+-- Common types and functions used throughout DejaFu.
 module Test.DejaFu.Common
   ( -- * Identifiers
     ThreadId(..)

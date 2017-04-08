@@ -13,6 +13,7 @@ unreleased
 ### Miscellaneous
 
 - There is now a changelog.
+- Test.DejaFu.Common is now considered to form part of the public API of the library.
 
 
 ---------------------------------------------------------------------------------------------------
