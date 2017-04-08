@@ -793,57 +793,6 @@ killsDaemons :: ThreadId -> Lookahead -> Bool
 killsDaemons t WillStop = t == initialThread
 killsDaemons _ _ = False
 
--- | Render a 'DPOR' value as a graph in GraphViz \"dot\" format.
-toDot :: (ThreadId -> String)
-  -- ^ Show a @tid@ - this should produce a string suitable for
-  -- use as a node identifier.
-  -> (ThreadAction -> String)
-  -- ^ Show a @action@.
-  -> DPOR
-  -> String
-toDot = toDotFiltered (\_ _ -> True)
-
--- | Render a 'DPOR' value as a graph in GraphViz \"dot\" format, with
--- a function to determine if a subtree should be included or not.
-toDotFiltered :: (ThreadId -> DPOR -> Bool)
-  -- ^ Subtree predicate.
-  -> (ThreadId -> String)
-  -> (ThreadAction -> String)
-  -> DPOR
-  -> String
-toDotFiltered check showTid showAct = digraph . go "L" where
-  digraph str = "digraph {\n" ++ str ++ "\n}"
-
-  go l b = unlines $ node l b : edges l b
-
-  -- Display a labelled node.
-  node n b = n ++ " [label=\"" ++ label b ++ "\"]"
-
-  -- Display the edges.
-  edges l b = [ edge l l' i ++ go l' b'
-              | (i, b') <- M.toList (dporDone b)
-              , check i b'
-              , let l' = l ++ tidId i
-              ]
-
-  -- A node label, summary of the DPOR state at that node.
-  label b = showLst id
-    [ maybe "Nothing" (("Just " ++) . showAct) $ dporAction b
-    , "Run:" ++ showLst showTid (S.toList $ dporRunnable b)
-    , "Tod:" ++ showLst showTid (M.keys   $ dporTodo     b)
-    , "Slp:" ++ showLst (\(t,a) -> "(" ++ showTid t ++ ", " ++ showAct a ++ ")")
-        (M.toList $ dporSleep b)
-    ]
-
-  -- Display a labelled edge
-  edge n1 n2 l = n1 ++ " -> " ++ n2 ++ " [label=\"" ++ showTid l ++ "\"]\n"
-
-  -- Show a list of values
-  showLst showf xs = "[" ++ intercalate ", " (map showf xs) ++ "]"
-
-  -- Generate a graphviz-friendly identifier from a tid.
-  tidId = concatMap (show . ord) . showTid
-
 -- | Internal errors.
 err :: String -> String -> a
 err func msg = error (func ++ ": (internal error) " ++ msg)
