@@ -59,6 +59,8 @@ newtype TVar r a = TVar (TVarId, r a)
 
 -- | The result of an STM transaction, along with which 'TVar's it
 -- touched whilst executing.
+--
+-- @since 0.1.0.0
 data Result a =
     Success [TVarId] [TVarId] a
   -- ^ The transaction completed successfully, reading the first list
@@ -72,6 +74,8 @@ data Result a =
   deriving Show
 
 -- | This only reduces a 'SomeException' to WHNF.
+--
+-- @since 0.5.1.0
 instance NFData a => NFData (Result a) where
   rnf (Success tr1 tr2 a) = rnf (tr1, tr2, a)
   rnf (Retry tr) = rnf tr

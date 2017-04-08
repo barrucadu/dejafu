@@ -48,6 +48,8 @@ import           Test.DejaFu.Common
 --
 -- It returns a thread to execute, or @Nothing@ if execution should
 -- abort here, and also a new state.
+--
+-- @since 0.5.0.0
 type Scheduler state
   = [(Decision, ThreadAction)]
   -> Maybe (ThreadId, ThreadAction)
@@ -60,6 +62,8 @@ type Scheduler state
 
 -- | Get the resultant thread identifier of a 'Decision', with a default case
 -- for 'Continue'.
+--
+-- @since 0.5.0.0
 tidOf :: ThreadId -> Decision -> ThreadId
 tidOf _ (Start t)    = t
 tidOf _ (SwitchTo t) = t
@@ -67,6 +71,8 @@ tidOf tid _          = tid
 
 -- | Get the 'Decision' that would have resulted in this thread identifier,
 -- given a prior thread (if any) and list of runnable threads.
+--
+-- @since 0.5.0.0
 decisionOf :: Foldable f
   => Maybe ThreadId
   -- ^ The prior thread.
@@ -86,6 +92,8 @@ decisionOf (Just prior) runnable chosen
 
 -- | A simple random scheduler which, at every step, picks a random
 -- thread to run.
+--
+-- @since 0.5.0.0
 randomSched :: RandomGen g => Scheduler g
 randomSched _ _ threads g = (Just $ threads' !! choice, g') where
   (choice, g') = randomR (0, length threads' - 1) g
@@ -93,6 +101,8 @@ randomSched _ _ threads g = (Just $ threads' !! choice, g') where
 
 -- | A round-robin scheduler which, at every step, schedules the
 -- thread with the next 'ThreadId'.
+--
+-- @since 0.5.0.0
 roundRobinSched :: Scheduler ()
 roundRobinSched _ Nothing ((tid,_):|_) _ = (Just tid, ())
 roundRobinSched _ (Just (prior, _)) threads _
@@ -108,11 +118,15 @@ roundRobinSched _ (Just (prior, _)) threads _
 -- | A random scheduler which doesn't preempt the running
 -- thread. That is, if the last thread scheduled is still runnable,
 -- run that, otherwise schedule randomly.
+--
+-- @since 0.5.0.0
 randomSchedNP :: RandomGen g => Scheduler g
 randomSchedNP = makeNonPreemptive randomSched
 
 -- | A round-robin scheduler which doesn't preempt the running
 -- thread.
+--
+-- @since 0.5.0.0
 roundRobinSchedNP :: Scheduler ()
 roundRobinSchedNP = makeNonPreemptive roundRobinSched
 
@@ -121,6 +135,8 @@ roundRobinSchedNP = makeNonPreemptive roundRobinSched
 
 -- | Turn a potentially preemptive scheduler into a non-preemptive
 -- one.
+--
+-- @since 0.5.0.0
 makeNonPreemptive :: Scheduler s -> Scheduler s
 makeNonPreemptive sched = newsched where
   newsched trc p@(Just (prior, _)) threads s

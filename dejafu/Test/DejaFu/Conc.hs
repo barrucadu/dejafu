@@ -64,13 +64,18 @@ import           Test.DejaFu.Conc.Internal
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.STM
 
+-- | @since 0.4.0.0
 newtype Conc n r a = C { unC :: M n r a } deriving (Functor, Applicative, Monad)
 
 -- | A 'MonadConc' implementation using @ST@, this should be preferred
 -- if you do not need 'liftIO'.
+--
+-- @since 0.4.0.0
 type ConcST t = Conc (ST t) (STRef t)
 
 -- | A 'MonadConc' implementation using @IO@.
+--
+-- @since 0.4.0.0
 type ConcIO = Conc IO IORef
 
 toConc :: ((a -> Action n r) -> Action n r) -> Conc n r a
@@ -85,6 +90,7 @@ instance IO.MonadIO ConcIO where
 instance Ba.MonadBase IO ConcIO where
   liftBase = IO.liftIO
 
+-- | @since 0.5.1.3
 instance Re.MonadRef (CRef r) (Conc n r) where
   newRef a = toConc (ANewCRef "" a)
 
@@ -180,6 +186,8 @@ instance Monad n => C.MonadConc (Conc n r) where
 -- attempts to (a) schedule a blocked thread, or (b) schedule a
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
+--
+-- @since 0.5.0.0
 runConcurrent :: MonadRef r n
               => Scheduler s
               -> MemType
@@ -196,5 +204,7 @@ runConcurrent sched memtype s ma = do
 -- exist. Calls to 'subconcurrency' cannot be nested. Violating either
 -- of these conditions will result in the computation failing with
 -- @IllegalSubconcurrency@.
+--
+-- @since 0.5.0.0
 subconcurrency :: Conc n r a -> Conc n r (Either Failure a)
 subconcurrency ma = toConc (ASub (unC ma))

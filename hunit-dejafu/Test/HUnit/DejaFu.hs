@@ -83,12 +83,15 @@ runSCTio = SCT.runSCT
 --------------------------------------------------------------------------------
 -- Unit testing
 
+-- | @since 0.3.0.0
 instance Testable (Conc.ConcST t ()) where
   test conc = TestCase (assert conc)
 
+-- | @since 0.3.0.0
 instance Testable (Conc.ConcIO ()) where
   test conc = TestCase (assert conc)
 
+-- | @since 0.3.0.0
 instance Assertable (Conc.ConcST t ()) where
   assert conc = do
     let traces = runSCTst' conc'
@@ -101,6 +104,7 @@ instance Assertable (Conc.ConcST t ()) where
       runSCTst' :: Conc.ConcST t (Either HUnitFailure ()) -> [(Either Failure (Either HUnitFailure ()), Conc.Trace)]
       runSCTst' = unsafeCoerce $ runSCTst defaultWay defaultMemType
 
+-- | @since 0.3.0.0
 instance Assertable (Conc.ConcIO ()) where
   assert conc = do
     traces <- runSCTio defaultWay defaultMemType (try conc)
@@ -120,6 +124,8 @@ assertableP = alwaysTrue $ \r -> case r of
 -- This uses the 'Conc' monad for testing, which is an instance of
 -- 'MonadConc'. If you need to test something which also uses
 -- 'MonadIO', use 'testAutoIO'.
+--
+-- @since 0.2.0.0
 testAuto :: (Eq a, Show a)
   => (forall t. Conc.ConcST t a)
   -- ^ The computation to test
@@ -128,6 +134,8 @@ testAuto = testAutoWay defaultWay defaultMemType
 
 -- | Variant of 'testAuto' which tests a computation under a given
 -- execution way and memory model.
+--
+-- @since 0.4.0.0
 testAutoWay :: (Eq a, Show a, RandomGen g)
   => Way g
   -- ^ How to execute the concurrent program.
@@ -140,10 +148,14 @@ testAutoWay way memtype conc =
   testDejafusWay way memtype conc autocheckCases
 
 -- | Variant of 'testAuto' for computations which do 'IO'.
+--
+-- @since 0.2.0.0
 testAutoIO :: (Eq a, Show a) => Conc.ConcIO a -> Test
 testAutoIO = testAutoWayIO defaultWay defaultMemType
 
 -- | Variant of 'testAutoWay' for computations which do 'IO'.
+--
+-- @since 0.4.0.0
 testAutoWayIO :: (Eq a, Show a, RandomGen g)
   => Way g -> MemType -> Conc.ConcIO a -> Test
 testAutoWayIO way memtype concio =
@@ -158,6 +170,8 @@ autocheckCases =
   ]
 
 -- | Check that a predicate holds.
+--
+-- @since 0.2.0.0
 testDejafu :: Show a
   => (forall t. Conc.ConcST t a)
   -- ^ The computation to test
@@ -170,6 +184,8 @@ testDejafu = testDejafuWay defaultWay defaultMemType
 
 -- | Variant of 'testDejafu' which takes a way to execute the program
 -- and a memory model.
+--
+-- @since 0.4.0.0
 testDejafuWay :: (Show a, RandomGen g)
   => Way g
   -- ^ How to execute the concurrent program.
@@ -188,6 +204,8 @@ testDejafuWay way memtype conc name p =
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test. This will share work between the predicates, rather than
 -- running the concurrent computation many times for each predicate.
+--
+-- @since 0.2.0.0
 testDejafus :: Show a
   => (forall t. Conc.ConcST t a)
   -- ^ The computation to test
@@ -198,6 +216,8 @@ testDejafus = testDejafusWay defaultWay defaultMemType
 
 -- | Variant of 'testDejafus' which takes a way to execute the program
 -- and a memory model.
+--
+-- @since 0.4.0.0
 testDejafusWay :: (Show a, RandomGen g)
   => Way g
   -- ^ How to execute the concurrent program.
@@ -211,20 +231,28 @@ testDejafusWay :: (Show a, RandomGen g)
 testDejafusWay = testst
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
+--
+-- @since 0.2.0.0
 testDejafuIO :: Show a => Conc.ConcIO a -> String -> Predicate a -> Test
 testDejafuIO = testDejafuWayIO defaultWay defaultMemType
 
 -- | Variant of 'testDejafuWay' for computations which do 'IO'.
+--
+-- @since 0.4.0.0
 testDejafuWayIO :: (Show a, RandomGen g)
   => Way g -> MemType -> Conc.ConcIO a -> String -> Predicate a -> Test
 testDejafuWayIO way memtype concio name p =
   testDejafusWayIO way memtype concio [(name, p)]
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
+--
+-- @since 0.2.0.0
 testDejafusIO :: Show a => Conc.ConcIO a -> [(String, Predicate a)] -> Test
 testDejafusIO = testDejafusWayIO defaultWay defaultMemType
 
 -- | Variant of 'dejafusWay' for computations which do 'IO'.
+--
+-- @since 0.4.0.0
 testDejafusWayIO :: (Show a, RandomGen g)
   => Way g -> MemType -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
 testDejafusWayIO = testio

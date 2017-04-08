@@ -13,6 +13,7 @@ unreleased
 ### Miscellaneous
 
 - There is now a changelog.
+- Every definition and instance now has a Haddock "@since" annotation.
 
 
 ---------------------------------------------------------------------------------------------------

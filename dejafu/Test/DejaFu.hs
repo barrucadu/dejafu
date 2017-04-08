@@ -266,6 +266,8 @@ import           Test.DejaFu.SCT
 -- This uses the 'Conc' monad for testing, which is an instance of
 -- 'MonadConc'. If you need to test something which also uses
 -- 'MonadIO', use 'autocheckIO'.
+--
+-- @since 0.1.0.0
 autocheck :: (Eq a, Show a)
   => (forall t. ConcST t a)
   -- ^ The computation to test
@@ -285,6 +287,8 @@ autocheck = autocheckWay defaultWay defaultMemType
 --
 -- __Warning:__ Using largers bounds will almost certainly
 -- significantly increase the time taken to test!
+--
+-- @since 0.5.0.0
 autocheckWay :: (Eq a, Show a, RandomGen g)
   => Way g
   -- ^ How to run the concurrent program.
@@ -297,10 +301,14 @@ autocheckWay way memtype conc =
   dejafusWay way memtype conc autocheckCases
 
 -- | Variant of 'autocheck' for computations which do 'IO'.
+--
+-- @since 0.2.0.0
 autocheckIO :: (Eq a, Show a) => ConcIO a -> IO Bool
 autocheckIO = autocheckWayIO defaultWay defaultMemType
 
 -- | Variant of 'autocheckWay' for computations which do 'IO'.
+--
+-- @since 0.5.0.0
 autocheckWayIO :: (Eq a, Show a, RandomGen g) => Way g -> MemType -> ConcIO a -> IO Bool
 autocheckWayIO way memtype concio =
   dejafusWayIO way memtype concio autocheckCases
@@ -315,6 +323,8 @@ autocheckCases =
 
 -- | Check a predicate and print the result to stdout, return 'True'
 -- if it passes.
+--
+-- @since 0.1.0.0
 dejafu :: Show a
   => (forall t. ConcST t a)
   -- ^ The computation to test
@@ -325,6 +335,8 @@ dejafu = dejafuWay defaultWay defaultMemType
 
 -- | Variant of 'dejafu' which takes a way to run the program and a
 -- memory model.
+--
+-- @since 0.5.0.0
 dejafuWay :: (Show a, RandomGen g)
   => Way g
   -- ^ How to run the concurrent program.
@@ -339,6 +351,8 @@ dejafuWay way memtype conc test = dejafusWay way memtype conc [test]
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
+--
+-- @since 0.1.0.0
 dejafus :: Show a
   => (forall t. ConcST t a)
   -- ^ The computation to test
@@ -349,6 +363,8 @@ dejafus = dejafusWay defaultWay defaultMemType
 
 -- | Variant of 'dejafus' which takes a way to run the program and a
 -- memory model.
+--
+-- @since 0.5.0.0
 dejafusWay :: (Show a, RandomGen g)
   => Way g
   -- ^ How to run the concurrent program.
@@ -365,19 +381,27 @@ dejafusWay way memtype conc tests = do
   pure (and results)
 
 -- | Variant of 'dejafu' for computations which do 'IO'.
+--
+-- @since 0.2.0.0
 dejafuIO :: Show a => ConcIO a -> (String, Predicate a) -> IO Bool
 dejafuIO = dejafuWayIO defaultWay defaultMemType
 
 -- | Variant of 'dejafuWay' for computations which do 'IO'.
+--
+-- @since 0.5.0.0
 dejafuWayIO :: (Show a, RandomGen g) => Way g -> MemType -> ConcIO a -> (String, Predicate a) -> IO Bool
 dejafuWayIO way memtype concio test =
   dejafusWayIO way memtype concio [test]
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
+--
+-- @since 0.2.0.0
 dejafusIO :: Show a => ConcIO a -> [(String, Predicate a)] -> IO Bool
 dejafusIO = dejafusWayIO defaultWay defaultMemType
 
 -- | Variant of 'dejafusWay' for computations which do 'IO'.
+--
+-- @since 0.5.0.0
 dejafusWayIO :: (Show a, RandomGen g) => Way g -> MemType -> ConcIO a -> [(String, Predicate a)] -> IO Bool
 dejafusWayIO way memtype concio tests = do
   traces  <- runSCT way memtype concio
@@ -390,6 +414,8 @@ dejafusWayIO way memtype concio tests = do
 
 -- | The results of a test, including the number of cases checked to
 -- determine the final boolean outcome.
+--
+-- @since 0.2.0.0
 data Result a = Result
   { _pass         :: Bool
   -- ^ Whether the test passed or not.
@@ -401,6 +427,7 @@ data Result a = Result
   -- ^ A message to display on failure, if nonempty
   } deriving (Eq, Show)
 
+-- | @since 0.5.1.0
 instance NFData a => NFData (Result a) where
   rnf r = rnf ( _pass         r
               , _casesChecked r
@@ -424,6 +451,8 @@ instance Foldable Result where
 
 -- | Run a predicate over all executions within the default schedule
 -- bounds.
+--
+-- @since 0.1.0.0
 runTest ::
     Predicate a
   -- ^ The predicate to check
@@ -435,6 +464,8 @@ runTest test conc =
 
 -- | Variant of 'runTest' which takes a way to run the program and a
 -- memory model.
+--
+-- @since 0.5.0.0
 runTestWay :: RandomGen g
   => Way g
   -- ^ How to run the concurrent program.
@@ -449,11 +480,15 @@ runTestWay way memtype predicate conc =
   runST (runTestWayM way memtype predicate conc)
 
 -- | Monad-polymorphic variant of 'runTest'.
+--
+-- @since 0.4.0.0
 runTestM :: MonadRef r n
          => Predicate a -> Conc n r a -> n (Result a)
 runTestM = runTestWayM defaultWay defaultMemType
 
 -- | Monad-polymorphic variant of 'runTest''.
+--
+-- @since 0.4.0.0
 runTestWayM :: (MonadRef r n, RandomGen g)
             => Way g -> MemType -> Predicate a -> Conc n r a -> n (Result a)
 runTestWayM way memtype predicate conc =
@@ -465,6 +500,8 @@ runTestWayM way memtype predicate conc =
 
 -- | A @Predicate@ is a function which collapses a list of results
 -- into a 'Result'.
+--
+-- @since 0.1.0.0
 type Predicate a = [(Either Failure a, Trace)] -> Result a
 
 -- | Reduce the list of failures in a @Predicate@ to one
@@ -473,6 +510,8 @@ type Predicate a = [(Either Failure a, Trace)] -> Result a
 -- This may throw away \"duplicate\" failures which have a unique
 -- cause but happen to manifest in the same way. However, it is
 -- convenient for filtering out true duplicates.
+--
+-- @since 0.2.0.0
 representative :: Eq a => Predicate a -> Predicate a
 representative p xs = result { _failures = choose . collect $ _failures result } where
   result  = p xs
@@ -491,48 +530,70 @@ representative p xs = result { _failures = choose . collect $ _failures result }
   insert' _ _ ([]:_) = undefined
 
 -- | Check that a computation never aborts.
+--
+-- @since 0.2.0.0
 abortsNever :: Predicate a
 abortsNever = alwaysTrue (not . either (==Abort) (const False))
 
 -- | Check that a computation always aborts.
+--
+-- @since 0.2.0.0
 abortsAlways :: Predicate a
 abortsAlways = alwaysTrue $ either (==Abort) (const False)
 
 -- | Check that a computation aborts at least once.
+--
+-- @since 0.2.0.0
 abortsSometimes :: Predicate a
 abortsSometimes = somewhereTrue $ either (==Abort) (const False)
 
 -- | Check that a computation never deadlocks.
+--
+-- @since 0.1.0.0
 deadlocksNever :: Predicate a
 deadlocksNever = alwaysTrue (not . either (`elem` [Deadlock, STMDeadlock]) (const False))
 
 -- | Check that a computation always deadlocks.
+--
+-- @since 0.1.0.0
 deadlocksAlways :: Predicate a
 deadlocksAlways = alwaysTrue $ either (`elem` [Deadlock, STMDeadlock]) (const False)
 
 -- | Check that a computation deadlocks at least once.
+--
+-- @since 0.1.0.0
 deadlocksSometimes :: Predicate a
 deadlocksSometimes = somewhereTrue $ either (`elem` [Deadlock, STMDeadlock]) (const False)
 
 -- | Check that a computation never fails with an uncaught exception.
+--
+-- @since 0.1.0.0
 exceptionsNever :: Predicate a
 exceptionsNever = alwaysTrue (not . either (==UncaughtException) (const False))
 
 -- | Check that a computation always fails with an uncaught exception.
+--
+-- @since 0.1.0.0
 exceptionsAlways :: Predicate a
 exceptionsAlways = alwaysTrue $ either (==UncaughtException) (const False)
 
 -- | Check that a computation fails with an uncaught exception at least once.
+--
+-- @since 0.1.0.0
 exceptionsSometimes :: Predicate a
 exceptionsSometimes = somewhereTrue $ either (==UncaughtException) (const False)
 
 -- | Check that the result of a computation is always the same. In
 -- particular this means either: (a) it always fails in the same way,
 -- or (b) it never fails and the values returned are all equal.
+--
+-- @since 0.1.0.0
 alwaysSame :: Eq a => Predicate a
 alwaysSame = representative $ alwaysTrue2 (==)
 
 -- | Check that the result of a computation is not always the same.
+--
+-- @since 0.1.0.0
 notAlwaysSame :: Eq a => Predicate a
 notAlwaysSame [x] = (defaultFail [x]) { _casesChecked = 1 }
 notAlwaysSame xs = go xs $ defaultFail [] where
@@ -546,6 +607,8 @@ notAlwaysSame xs = go xs $ defaultFail [] where
 
 -- | Check that the result of a unary boolean predicate is always
 -- true.
+--
+-- @since 0.1.0.0
 alwaysTrue :: (Either Failure a -> Bool) -> Predicate a
 alwaysTrue p xs = go xs $ (defaultFail failures) { _pass = True } where
   go (y:ys) res
@@ -561,6 +624,8 @@ alwaysTrue p xs = go xs $ (defaultFail failures) { _pass = True } where
 --
 -- If the predicate fails, /both/ (result,trace) tuples will be added
 -- to the failures list.
+--
+-- @since 0.1.0.0
 alwaysTrue2 :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
 alwaysTrue2 _ [_] = defaultPass { _casesChecked = 1 }
 alwaysTrue2 p xs = go xs $ defaultPass { _failures = failures } where
@@ -585,6 +650,8 @@ alwaysTrue2 p xs = go xs $ defaultPass { _failures = failures } where
 
 -- | Check that the result of a unary boolean predicate is true at
 -- least once.
+--
+-- @since 0.1.0.0
 somewhereTrue :: (Either Failure a -> Bool) -> Predicate a
 somewhereTrue p xs = go xs $ defaultFail failures where
   go (y:ys) res
@@ -596,6 +663,8 @@ somewhereTrue p xs = go xs $ defaultFail failures where
 
 -- | Predicate for when there is a known set of results where every
 -- result must be exhibited at least once.
+--
+-- @since 0.2.0.0
 gives :: (Eq a, Show a) => [Either Failure a] -> Predicate a
 gives expected results = go expected [] results $ defaultFail failures where
   go waitingFor alreadySeen ((x, _):xs) res
@@ -615,6 +684,8 @@ gives expected results = go expected [] results $ defaultFail failures where
   failures = filter (\(r, _) -> r `notElem` expected) results
 
 -- | Variant of 'gives' that doesn't allow for expected failures.
+--
+-- @since 0.2.0.0
 gives' :: (Eq a, Show a) => [a] -> Predicate a
 gives' = gives . map Right
 
@@ -627,14 +698,20 @@ gives' = gives . map Right
 --
 -- The type parameter is constrained to 'StdGen', even though it is
 -- unused, to avoid ambiguity errors.
+--
+-- @since 0.5.0.0
 defaultWay :: Way StdGen
 defaultWay = Systematically defaultBounds
 
 -- | The default memory model: @TotalStoreOrder@
+--
+-- @since 0.2.0.0
 defaultMemType :: MemType
 defaultMemType = TotalStoreOrder
 
 -- | All bounds enabled, using their default values.
+--
+-- @since 0.2.0.0
 defaultBounds :: Bounds
 defaultBounds = Bounds
   { boundPreemp = Just defaultPreemptionBound
@@ -646,6 +723,8 @@ defaultBounds = Bounds
 --
 -- See /Concurrency Testing Using Schedule Bounding: an Empirical Study/,
 -- P. Thomson, A. F. Donaldson, A. Betts for justification.
+--
+-- @since 0.2.0.0
 defaultPreemptionBound :: PreemptionBound
 defaultPreemptionBound = 2
 
@@ -653,6 +732,8 @@ defaultPreemptionBound = 2
 --
 -- This comes from playing around myself, but there is probably a
 -- better default.
+--
+-- @since 0.2.0.0
 defaultFairBound :: FairBound
 defaultFairBound = 5
 
@@ -660,6 +741,8 @@ defaultFairBound = 5
 --
 -- Based on the assumption that anything which executes for much
 -- longer (or even this long) will take ages to test.
+--
+-- @since 0.2.0.0
 defaultLengthBound :: LengthBound
 defaultLengthBound = 250
 

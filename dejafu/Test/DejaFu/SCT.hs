@@ -106,6 +106,8 @@ import           Test.DejaFu.SCT.Internal
 -- Running Concurrent Programs
 
 -- | How to explore the possible executions of a concurrent program.
+--
+-- @since 0.5.0.0
 data Way g
   = Systematically Bounds
   -- ^ Systematically explore all executions within the bounds.
@@ -114,6 +116,7 @@ data Way g
   -- PRNG.
   deriving (Eq, Ord, Read, Show)
 
+-- | @since 0.5.1.0
 instance NFData g => NFData (Way g) where
   rnf (Systematically bs) = rnf bs
   rnf (Randomly g n) = rnf (g, n)
@@ -123,6 +126,8 @@ instance NFData g => NFData (Way g) where
 -- * If the 'Way' is @Systematically@, 'sctBound' is used.
 --
 -- * If the 'Way' is @Randomly@, 'sctRandom' is used.
+--
+-- @since 0.5.0.0
 runSCT :: (MonadRef r n, RandomGen g)
   => Way g
   -- ^ How to run the concurrent program.
@@ -138,6 +143,8 @@ runSCT (Randomly g lim)    memtype = sctRandom memtype g lim
 --
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
+--
+-- @since 0.5.1.0
 runSCT' :: (MonadRef r n, RandomGen g, NFData a)
   => Way g -> MemType -> Conc n r a -> n [(Either Failure a, Trace)]
 runSCT' way memtype conc = do
@@ -145,6 +152,8 @@ runSCT' way memtype conc = do
   rnf res `seq` pure res
 
 -- | Return the set of results of a concurrent program.
+--
+-- @since 0.5.0.0
 resultsSet :: (MonadRef r n, RandomGen g, Ord a)
   => Way g
   -- ^ How to run the concurrent program.
@@ -160,6 +169,8 @@ resultsSet way memtype conc =
 --
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
+--
+-- @since 0.5.1.0
 resultsSet' :: (MonadRef r n, RandomGen g, Ord a, NFData a)
   => Way g -> MemType -> Conc n r a -> n (Set (Either Failure a))
 resultsSet' way memtype conc = do
@@ -169,12 +180,14 @@ resultsSet' way memtype conc = do
 -------------------------------------------------------------------------------
 -- Combined Bounds
 
+-- | @since 0.2.0.0
 data Bounds = Bounds
   { boundPreemp :: Maybe PreemptionBound
   , boundFair   :: Maybe FairBound
   , boundLength :: Maybe LengthBound
   } deriving (Eq, Ord, Read, Show)
 
+-- | @since 0.5.1.0
 instance NFData Bounds where
   rnf bs = rnf ( boundPreemp bs
                , boundFair   bs
@@ -184,6 +197,8 @@ instance NFData Bounds where
 -- | No bounds enabled. This forces the scheduler to just use
 -- partial-order reduction and sleep sets to prune the search
 -- space. This will /ONLY/ work if your computation always terminates!
+--
+-- @since 0.3.0.0
 noBounds :: Bounds
 noBounds = Bounds
   { boundPreemp = Nothing
@@ -211,10 +226,18 @@ cBacktrack _ = backtrackAt (\_ _ -> False)
 -------------------------------------------------------------------------------
 -- Pre-emption bounding
 
+-- | @since 0.2.0.0
 newtype PreemptionBound = PreemptionBound Int
-  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show, NFData)
+  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | @since 0.5.1.0
+instance NFData PreemptionBound where
+  -- not derived, so it can have a separate @since annotation
+  rnf (PreemptionBound i) = rnf i
 
 -- | An SCT runner using a pre-emption bounding scheduler.
+--
+-- @since 0.4.0.0
 sctPreBound :: MonadRef r n
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -254,10 +277,18 @@ pBacktrack bs = backtrackAt (\_ _ -> False) bs . concatMap addConservative where
 -------------------------------------------------------------------------------
 -- Fair bounding
 
+-- | @since 0.2.0.0
 newtype FairBound = FairBound Int
-  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show, NFData)
+  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | @since 0.5.1.0
+instance NFData FairBound where
+  -- not derived, so it can have a separate @since annotation
+  rnf (FairBound i) = rnf i
 
 -- | An SCT runner using a fair bounding scheduler.
+--
+-- @since 0.4.0.0
 sctFairBound :: MonadRef r n
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -283,10 +314,18 @@ fBacktrack = backtrackAt check where
 -------------------------------------------------------------------------------
 -- Length bounding
 
+-- | @since 0.2.0.0
 newtype LengthBound = LengthBound Int
-  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show, NFData)
+  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | @since 0.5.1.0
+instance NFData LengthBound where
+  -- not derived, so it can have a separate @since annotation
+  rnf (LengthBound i) = rnf i
 
 -- | An SCT runner using a length bounding scheduler.
+--
+-- @since 0.4.0.0
 sctLengthBound :: MonadRef r n
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -321,6 +360,8 @@ lBacktrack = backtrackAt (\_ _ -> False)
 -- Note that unlike with non-bounded partial-order reduction, this may
 -- do some redundant work as the introduction of a bound can make
 -- previously non-interfering events interfere with each other.
+--
+-- @since 0.5.0.0
 sctBound :: MonadRef r n
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -366,6 +407,8 @@ sctBound memtype cb conc = go initialState where
 -- weight. Threads are then scheduled by a weighted random selection.
 --
 -- This is not guaranteed to find all distinct results.
+--
+-- @since 0.5.0.0
 sctRandom :: (MonadRef r n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.

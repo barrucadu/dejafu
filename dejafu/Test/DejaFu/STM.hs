@@ -38,6 +38,7 @@ import qualified Control.Monad.STM.Class  as C
 import           Test.DejaFu.Common
 import           Test.DejaFu.STM.Internal
 
+-- | @since 0.3.0.0
 newtype STMLike n r a = S { runSTM :: M n r a } deriving (Functor, Applicative, Monad)
 
 -- | Create a new STM continuation.
@@ -50,6 +51,8 @@ toSTM = S . cont
 -- purely as references. This makes the types simpler, but means you
 -- can't really get an aggregate of them (if you ever wanted to for
 -- some reason).
+--
+-- @since 0.3.0.0
 type STMST t = STMLike (ST t) (STRef t)
 
 -- | A 'MonadSTM' implementation using @ST@, it encapsulates a single
@@ -58,6 +61,8 @@ type STMST t = STMLike (ST t) (STRef t)
 -- purely as references. This makes the types simpler, but means you
 -- can't really get an aggregate of them (if you ever wanted to for
 -- some reason).
+--
+-- @since 0.3.0.0
 type STMIO = STMLike IO IORef
 
 instance MonadThrow (STMLike n r) where
@@ -82,6 +87,8 @@ instance Monad n => C.MonadSTM (STMLike n r) where
 -- | Run a transaction, returning the result and new initial
 -- 'TVarId'. If the transaction ended by calling 'retry', any 'TVar'
 -- modifications are undone.
+--
+-- @since 0.4.0.0
 runTransaction :: MonadRef r n
                => STMLike n r a -> IdSource -> n (Result a, IdSource, TTrace)
 runTransaction ma tvid = do

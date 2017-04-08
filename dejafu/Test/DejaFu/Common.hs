@@ -70,6 +70,8 @@ import qualified Data.Set           as S
 -- Identifiers
 
 -- | Every live thread has a unique identitifer.
+--
+-- @since 0.4.0.0
 data ThreadId = ThreadId (Maybe String) Int
   deriving Eq
 
@@ -80,10 +82,13 @@ instance Show ThreadId where
   show (ThreadId (Just n) _) = n
   show (ThreadId Nothing  i) = show i
 
+-- | @since 0.5.1.0
 instance NFData ThreadId where
   rnf (ThreadId n i) = rnf (n, i)
 
 -- | Every @CRef@ has a unique identifier.
+--
+-- @since 0.4.0.0
 data CRefId = CRefId (Maybe String) Int
   deriving Eq
 
@@ -94,10 +99,13 @@ instance Show CRefId where
   show (CRefId (Just n) _) = n
   show (CRefId Nothing  i) = show i
 
+-- | @since 0.5.1.0
 instance NFData CRefId where
   rnf (CRefId n i) = rnf (n, i)
 
 -- | Every @MVar@ has a unique identifier.
+--
+-- @since 0.4.0.0
 data MVarId = MVarId (Maybe String) Int
   deriving Eq
 
@@ -108,10 +116,13 @@ instance Show MVarId where
   show (MVarId (Just n) _) = n
   show (MVarId Nothing  i) = show i
 
+-- | @since 0.5.1.0
 instance NFData MVarId where
   rnf (MVarId n i) = rnf (n, i)
 
 -- | Every @TVar@ has a unique identifier.
+--
+-- @since 0.4.0.0
 data TVarId = TVarId (Maybe String) Int
   deriving Eq
 
@@ -122,10 +133,13 @@ instance Show TVarId where
   show (TVarId (Just n) _) = n
   show (TVarId Nothing  i) = show i
 
+-- | @since 0.5.1.0
 instance NFData TVarId where
   rnf (TVarId n i) = rnf (n, i)
 
 -- | The ID of the initial thread.
+--
+-- @since 0.4.0.0
 initialThread :: ThreadId
 initialThread = ThreadId (Just "main") 0
 
@@ -134,6 +148,8 @@ initialThread = ThreadId (Just "main") 0
 
 -- | The number of ID parameters was getting a bit unwieldy, so this
 -- hides them all away.
+--
+-- @since 0.4.0.0
 data IdSource = Id
   { _nextCRId  :: Int
   , _nextMVId  :: Int
@@ -145,6 +161,7 @@ data IdSource = Id
   , _usedTNames  :: [String]
   } deriving (Eq, Ord, Show)
 
+-- | @since 0.5.1.0
 instance NFData IdSource where
   rnf idsource = rnf ( _nextCRId idsource
                      , _nextMVId idsource
@@ -157,6 +174,8 @@ instance NFData IdSource where
                      )
 
 -- | Get the next free 'CRefId'.
+--
+-- @since 0.4.0.0
 nextCRId :: String -> IdSource -> (IdSource, CRefId)
 nextCRId name idsource = (newIdSource, newCRId) where
   newIdSource = idsource { _nextCRId = newId, _usedCRNames = newUsed }
@@ -165,6 +184,8 @@ nextCRId name idsource = (newIdSource, newCRId) where
   (newName, newUsed) = nextId name (_usedCRNames idsource)
 
 -- | Get the next free 'MVarId'.
+--
+-- @since 0.4.0.0
 nextMVId :: String -> IdSource -> (IdSource, MVarId)
 nextMVId name idsource = (newIdSource, newMVId) where
   newIdSource = idsource { _nextMVId = newId, _usedMVNames = newUsed }
@@ -173,6 +194,8 @@ nextMVId name idsource = (newIdSource, newMVId) where
   (newName, newUsed) = nextId name (_usedMVNames idsource)
 
 -- | Get the next free 'TVarId'.
+--
+-- @since 0.4.0.0
 nextTVId :: String -> IdSource -> (IdSource, TVarId)
 nextTVId name idsource = (newIdSource, newTVId) where
   newIdSource = idsource { _nextTVId = newId, _usedTVNames = newUsed }
@@ -181,6 +204,8 @@ nextTVId name idsource = (newIdSource, newTVId) where
   (newName, newUsed) = nextId name (_usedTVNames idsource)
 
 -- | Get the next free 'ThreadId'.
+--
+-- @since 0.4.0.0
 nextTId :: String -> IdSource -> (IdSource, ThreadId)
 nextTId name idsource = (newIdSource, newTId) where
   newIdSource = idsource { _nextTId = newId, _usedTNames = newUsed }
@@ -189,6 +214,8 @@ nextTId name idsource = (newIdSource, newTId) where
   (newName, newUsed) = nextId name (_usedTNames idsource)
 
 -- | The initial ID source.
+--
+-- @since 0.4.0.0
 initialIdSource :: IdSource
 initialIdSource = Id 0 0 0 0 [] [] [] []
 
@@ -199,6 +226,8 @@ initialIdSource = Id 0 0 0 0 [] [] [] []
 -- Thread actions
 
 -- | All the actions that a thread can perform.
+--
+-- @since 0.5.0.2
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -286,6 +315,7 @@ data ThreadAction =
   -- ^ Stop executing an action with @subconcurrency@.
   deriving (Eq, Show)
 
+-- | @since 0.5.1.0
 instance NFData ThreadAction where
   rnf (Fork t) = rnf t
   rnf (GetNumCapabilities c) = rnf c
@@ -317,6 +347,8 @@ instance NFData ThreadAction where
   rnf a = a `seq` ()
 
 -- | Check if a @ThreadAction@ immediately blocks.
+--
+-- @since 0.4.0.0
 isBlock :: ThreadAction -> Bool
 isBlock (BlockedThrowTo  _) = True
 isBlock (BlockedTakeMVar _) = True
@@ -326,6 +358,8 @@ isBlock (BlockedSTM _) = True
 isBlock _ = False
 
 -- | Get the @TVar@s affected by a @ThreadAction@.
+--
+-- @since 0.4.0.0
 tvarsOf :: ThreadAction -> Set TVarId
 tvarsOf act = S.fromList $ case act of
   STM trc _ -> concatMap tvarsOf' trc
@@ -343,6 +377,8 @@ tvarsOf act = S.fromList $ case act of
 -- Lookahead
 
 -- | A one-step look-ahead at what a thread will do next.
+--
+-- @since 0.5.0.2
 data Lookahead =
     WillFork
   -- ^ Will start a new thread.
@@ -419,6 +455,7 @@ data Lookahead =
   -- ^ Will stop executing an extion with @subconcurrency@.
   deriving (Eq, Show)
 
+-- | @since 0.5.1.0
 instance NFData Lookahead where
   rnf (WillSetNumCapabilities c) = rnf c
   rnf (WillPutMVar m) = rnf m
@@ -441,6 +478,8 @@ instance NFData Lookahead where
 
 -- | Convert a 'ThreadAction' into a 'Lookahead': \"rewind\" what has
 -- happened. 'Killed' has no 'Lookahead' counterpart.
+--
+-- @since 0.4.0.0
 rewind :: ThreadAction -> Maybe Lookahead
 rewind (Fork _) = Just WillFork
 rewind MyThreadId = Just WillMyThreadId
@@ -482,6 +521,8 @@ rewind Subconcurrency = Just WillSubconcurrency
 rewind StopSubconcurrency = Just WillStopSubconcurrency
 
 -- | Check if an operation could enable another thread.
+--
+-- @since 0.4.0.0
 willRelease :: Lookahead -> Bool
 willRelease WillFork = True
 willRelease WillYield = True
@@ -501,6 +542,8 @@ willRelease _ = False
 -- Simplified actions
 
 -- | A simplified view of the possible actions a thread can perform.
+--
+-- @since 0.4.0.0
 data ActionType =
     UnsynchronisedRead  CRefId
   -- ^ A 'readCRef' or a 'readForCAS'.
@@ -526,6 +569,7 @@ data ActionType =
   -- communication.
   deriving (Eq, Show)
 
+-- | @since 0.5.1.0
 instance NFData ActionType where
   rnf (UnsynchronisedRead c) = rnf c
   rnf (UnsynchronisedWrite c) = rnf c
@@ -538,6 +582,8 @@ instance NFData ActionType where
   rnf a = a `seq` ()
 
 -- | Check if an action imposes a write barrier.
+--
+-- @since 0.4.0.0
 isBarrier :: ActionType -> Bool
 isBarrier (SynchronisedModify _) = True
 isBarrier (SynchronisedRead   _) = True
@@ -546,6 +592,8 @@ isBarrier SynchronisedOther = True
 isBarrier _ = False
 
 -- | Check if an action commits a given 'CRef'.
+--
+-- @since 0.4.0.0
 isCommit :: ActionType -> CRefId -> Bool
 isCommit (PartiallySynchronisedCommit c) r = c == r
 isCommit (PartiallySynchronisedWrite  c) r = c == r
@@ -553,10 +601,14 @@ isCommit (PartiallySynchronisedModify c) r = c == r
 isCommit _ _ = False
 
 -- | Check if an action synchronises a given 'CRef'.
+--
+-- @since 0.4.0.0
 synchronises :: ActionType -> CRefId -> Bool
 synchronises a r = isCommit a r || isBarrier a
 
 -- | Get the 'CRef' affected.
+--
+-- @since 0.4.0.0
 crefOf :: ActionType -> Maybe CRefId
 crefOf (UnsynchronisedRead  r) = Just r
 crefOf (UnsynchronisedWrite r) = Just r
@@ -567,6 +619,8 @@ crefOf (PartiallySynchronisedModify r) = Just r
 crefOf _ = Nothing
 
 -- | Get the 'MVar' affected.
+--
+-- @since 0.4.0.0
 mvarOf :: ActionType -> Maybe MVarId
 mvarOf (SynchronisedRead  c) = Just c
 mvarOf (SynchronisedWrite c) = Just c
@@ -577,10 +631,14 @@ mvarOf _ = Nothing
 --
 -- This is used in the SCT code to help determine interesting
 -- alternative scheduling decisions.
+--
+-- @since 0.4.0.0
 simplifyAction :: ThreadAction -> ActionType
 simplifyAction = maybe UnsynchronisedOther simplifyLookahead . rewind
 
 -- | Variant of 'simplifyAction' that takes a 'Lookahead'.
+--
+-- @since 0.4.0.0
 simplifyLookahead :: Lookahead -> ActionType
 simplifyLookahead (WillPutMVar c)     = SynchronisedWrite c
 simplifyLookahead (WillTryPutMVar c)  = SynchronisedWrite c
@@ -604,9 +662,13 @@ simplifyLookahead _ = UnsynchronisedOther
 
 -- | A trace of an STM transaction is just a list of actions that
 -- occurred, as there are no scheduling decisions to make.
+--
+-- @since 0.4.0.0
 type TTrace = [TAction]
 
 -- | All the actions that an STM transaction can perform.
+--
+-- @since 0.4.0.0
 data TAction =
     TNew
   -- ^ Create a new @TVar@
@@ -630,6 +692,7 @@ data TAction =
   -- ^ Terminate successfully and commit effects.
   deriving (Eq, Show)
 
+-- | @since 0.5.1.0
 instance NFData TAction where
   rnf (TRead t) = rnf t
   rnf (TWrite t) = rnf t
@@ -643,12 +706,16 @@ instance NFData TAction where
 -- | One of the outputs of the runner is a @Trace@, which is a log of
 -- decisions made, all the runnable threads and what they would do,
 -- and the action a thread took in its step.
+--
+-- @since 0.5.0.0
 type Trace
   = [(Decision, [(ThreadId, NonEmpty Lookahead)], ThreadAction)]
 
 -- | Scheduling decisions are based on the state of the running
 -- program, and so we can capture some of that state in recording what
 -- specific decision we made.
+--
+-- @since 0.5.0.0
 data Decision =
     Start ThreadId
   -- ^ Start a new thread, because the last was blocked (or it's the
@@ -659,6 +726,7 @@ data Decision =
   -- ^ Pre-empt the running thread, and switch to another.
   deriving (Eq, Show)
 
+-- | @since 0.5.1.0
 instance NFData Decision where
   rnf (Start t) = rnf t
   rnf (SwitchTo t) = rnf t
@@ -667,6 +735,8 @@ instance NFData Decision where
 -- | Pretty-print a trace, including a key of the thread IDs (not
 -- including thread 0). Each line of the key is indented by two
 -- spaces.
+--
+-- @since 0.5.0.0
 showTrace :: Trace -> String
 showTrace trc = intercalate "\n" $ concatMap go trc : strkey where
   go (_,_,CommitCRef _ _) = "C-"
@@ -691,6 +761,8 @@ showTrace trc = intercalate "\n" $ concatMap go trc : strkey where
 -- SO, we don't count a switch TO a commit thread as a
 -- preemption. HOWEVER, the switch FROM a commit thread counts as a
 -- preemption if it is not to the thread that the commit interrupted.
+--
+-- @since 0.5.0.0
 preEmpCount :: [(Decision, ThreadAction)]
             -> (Decision, Lookahead)
             -> Int
@@ -720,6 +792,8 @@ preEmpCount [] _ = 0
 
 
 -- | An indication of how a concurrent computation failed.
+--
+-- @since 0.5.0.0
 data Failure =
     InternalError
   -- ^ Will be raised if the scheduler does something bad. This should
@@ -741,10 +815,13 @@ data Failure =
   -- multiple threads existed.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)
 
+-- | @since 0.5.1.0
 instance NFData Failure where
   rnf f = f `seq` ()
 
 -- | Pretty-print a failure
+--
+-- @since 0.4.0.0
 showFail :: Failure -> String
 showFail Abort = "[abort]"
 showFail Deadlock = "[deadlock]"
@@ -757,6 +834,8 @@ showFail IllegalSubconcurrency = "[illegal-subconcurrency]"
 -- Memory Models
 
 -- | The memory model to use for non-synchronised 'CRef' operations.
+--
+-- @since 0.4.0.0
 data MemType =
     SequentialConsistency
   -- ^ The most intuitive model: a program behaves as a simple
@@ -775,6 +854,7 @@ data MemType =
   -- created.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)
 
+-- | @since 0.5.1.0
 instance NFData MemType where
   rnf m = m `seq` ()
 
