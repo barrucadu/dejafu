@@ -7,6 +7,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Fixed
+
+- An issue where `subconcurrency` would re-use `MVar` IDs, leading to false reports of deadlock on
+  occasion (issue #81).
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.6.0.0 [2017-04-08] (git tag: [dejafu-0.6.0.0][])
 -------
 

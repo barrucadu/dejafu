@@ -52,19 +52,24 @@ runConcurrency :: MonadRef r n
                => Scheduler g
                -> MemType
                -> g
+               -> IdSource
                -> Int
                -> M n r a
-               -> n (Either Failure a, g, SeqTrace, Maybe (ThreadId, ThreadAction))
-runConcurrency sched memtype g caps ma = do
+               -> n (Either Failure a, Context n r g, SeqTrace, Maybe (ThreadId, ThreadAction))
+runConcurrency sched memtype g idsrc caps ma = do
   ref <- newRef Nothing
 
   let c = runCont ma (AStop . writeRef ref . Just . Right)
-  let threads = launch' Unmasked initialThread (const c) M.empty
-  let ctx = Context { cSchedState = g, cIdSource = initialIdSource, cThreads = threads, cWriteBuf = emptyBuffer, cCaps = caps }
+  let ctx = Context { cSchedState = g
+                    , cIdSource   = idsrc
+                    , cThreads    = launch' Unmasked initialThread (const c) M.empty
+                    , cWriteBuf   = emptyBuffer
+                    , cCaps       = caps
+                    }
 
   (finalCtx, trace, finalAction) <- runThreads sched memtype ref ctx
   out <- readRef ref
-  pure (fromJust out, cSchedState finalCtx, trace, finalAction)
+  pure (fromJust out, finalCtx, trace, finalAction)
 
 -- | The context a collection of threads are running in.
 data Context n r g = Context
@@ -369,8 +374,11 @@ stepThread sched memtype tid action ctx = case action of
     ASub ma c
       | M.size (cThreads ctx) > 1 -> pure (Left IllegalSubconcurrency, Single Subconcurrency)
       | otherwise -> do
-          (res, g', trace, finalDecision) <- runConcurrency sched memtype (cSchedState ctx) (cCaps ctx) ma
-          pure (Right ctx { cThreads = goto (AStopSub (c res)) tid (cThreads ctx), cSchedState = g' }, SubC trace finalDecision)
+          (res, ctx', trace, finalDecision) <-
+            runConcurrency sched memtype (cSchedState ctx) (cIdSource ctx) (cCaps ctx) ma
+          pure (Right ctx { cThreads    = goto (AStopSub (c res)) tid (cThreads ctx)
+                          , cIdSource   = cIdSource ctx'
+                          , cSchedState = cSchedState ctx' }, SubC trace finalDecision)
 
     -- after the end of a subconcurrent computation. does nothing,
     -- only exists so that: there is an entry in the trace for

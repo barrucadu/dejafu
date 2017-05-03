@@ -198,8 +198,8 @@ runConcurrent :: MonadRef r n
               -> ConcT r n a
               -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s ma = do
-  (res, s', trace, _) <- runConcurrency sched memtype s 2 (unC ma)
-  pure (res, s', F.toList trace)
+  (res, ctx, trace, _) <- runConcurrency sched memtype s initialIdSource 2 (unC ma)
+  pure (res, cSchedState ctx, F.toList trace)
 
 -- | Run a concurrent computation and return its result.
 --
