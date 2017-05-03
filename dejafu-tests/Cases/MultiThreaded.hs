@@ -12,11 +12,12 @@ import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
 import Test.HUnit.DejaFu (testDejafuWay)
 
-import Control.Concurrent.Classy
+import Control.Concurrent.Classy hiding (newQSemN, signalQSemN, waitQSemN)
 import Control.Monad.STM.Class
 import Test.DejaFu.Conc (ConcT, ConcST, subconcurrency)
 
 import Utils
+import QSemN
 
 data T where
   T :: Show a => String -> (forall t. ConcST t a) -> Predicate a -> T
@@ -61,6 +62,7 @@ tests =
       , T "success"   scSuccess   $ gives' [Right ()]
       , T "illegal"   scIllegal   $ gives  [Left IllegalSubconcurrency]
       , T "issue 71"  scIssue71   $ gives' [()]
+      , T "issue 81"  scIssue81   $ gives' [(Right (),0)]
       ]
     ]
   where
@@ -327,3 +329,12 @@ scIssue71 = do
   s <- newEmptyMVar
   _ <- subconcurrency (takeMVar s ||| pure ())
   pure ()
+
+-- | Test case from issue 81.
+scIssue81 :: Monad n => ConcT r n (Either Failure (), Int)
+scIssue81 = do
+  s <- newQSemN 0
+  let interfere = waitQSemN s 0 >> signalQSemN s 0
+  x <- subconcurrency (signalQSemN s 0 ||| waitQSemN s 0 ||| interfere)
+  o <- remainingQSemN s
+  pure (x, o)

@@ -34,6 +34,7 @@ executable dejafu-tests
                      , Examples.SearchParty
                      , Examples.SearchParty.Impredicative
 
+                     , QSemN
                      , Utils
 
   -- other-extensions:    
