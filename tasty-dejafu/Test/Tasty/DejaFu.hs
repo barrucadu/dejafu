@@ -52,9 +52,14 @@ module Test.Tasty.DejaFu
   , testDejafusWayIO
 
   -- ** Re-exports
-  , Way(..)
+  , Way
+  , defaultWay
+  , systematically
+  , randomly
   , Bounds(..)
+  , defaultBounds
   , MemType(..)
+  , defaultMemType
 
   -- * Refinement property testing
   , testProperty
@@ -149,8 +154,8 @@ instance IsOption MemType where
 instance IsOption Way where
   defaultValue = defaultWay
   parseValue = shortName . map toUpper where
-    shortName "SYSTEMATICALLY" = Just (Systematically defaultBounds)
-    shortName "RANDOMLY"       = Just (Randomly (mkStdGen 42) 100 1)
+    shortName "SYSTEMATICALLY" = Just (systematically defaultBounds)
+    shortName "RANDOMLY"       = Just (randomly (mkStdGen 42) 100 1)
     shortName _ = Nothing
   optionName = Tagged "way"
   optionHelp = Tagged "The execution method to use. This should be one of \"systematically\" or \"randomly\"."

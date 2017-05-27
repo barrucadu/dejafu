@@ -17,7 +17,7 @@ import           Test.DejaFu.SCT
 --
 -- @since 0.6.0.0
 defaultWay :: Way
-defaultWay = Systematically defaultBounds
+defaultWay = systematically defaultBounds
 
 -- | The default memory model: @TotalStoreOrder@
 --

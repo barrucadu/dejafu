@@ -10,7 +10,7 @@ import Test.DejaFu (Failure(..), Predicate, Way(..), defaultBounds, defaultMemTy
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
-import Test.HUnit.DejaFu (testDejafuWay)
+import Test.HUnit.DejaFu (randomly, systematically, testDejafuWay)
 
 import Control.Concurrent.Classy hiding (newQSemN, signalQSemN, waitQSemN)
 import Control.Monad.STM.Class
@@ -68,8 +68,8 @@ tests =
   where
     tg ts =
       let useWay way = map (\(T n c p) -> testDejafuWay way defaultMemType c n p) ts
-      in [ testGroup "Systematic" . hUnitTestToTests . test . useWay $ Systematically defaultBounds
-         , testGroup "Random"     . hUnitTestToTests . test . useWay $ Randomly (mkStdGen 0) 100 1
+      in [ testGroup "Systematic" . hUnitTestToTests . test . useWay $ systematically defaultBounds
+         , testGroup "Random"     . hUnitTestToTests . test . useWay $ randomly (mkStdGen 0) 100 1
          ]
 
 

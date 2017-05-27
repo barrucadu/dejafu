@@ -12,7 +12,9 @@
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
   ( -- * Running Concurrent Programs
-    Way(..)
+    Way
+  , systematically
+  , randomly
   , runSCT
   , runSCT'
   , resultsSet
@@ -106,11 +108,7 @@ import           Test.DejaFu.SCT.Internal
 -------------------------------------------------------------------------------
 -- Running Concurrent Programs
 
--- | How to explore the possible executions of a concurrent program:
---
--- * Systematically explore all executions within the bounds; or
---
--- * Explore a fixed number of random executions, with the given PRNG.
+-- | How to explore the possible executions of a concurrent program.
 --
 -- @since unreleased
 data Way where
@@ -121,11 +119,44 @@ instance Show Way where
   show (Systematically bs) = "Systematically (" ++ show bs ++ ")"
   show (Randomly _ n t)      = "Randomly <gen> " ++ show (n, t)
 
--- | Explore possible executions of a concurrent program.
+-- | Systematically execute a program, trying all distinct executions
+-- within the bounds.
 --
--- * If the 'Way' is @Systematically@, 'sctBound' is used.
+-- This corresponds to 'sctBound'.
 --
--- * If the 'Way' is @Randomly@, 'sctRandom' is used.
+-- @since unreleased
+systematically
+  :: Bounds
+  -- ^ The bounds to constrain the exploration.
+  -> Way
+systematically bs = Systematically Bounds
+  { boundPreemp = max 0 <$> boundPreemp bs
+  , boundFair   = max 0 <$> boundFair   bs
+  , boundLength = max 0 <$> boundLength bs
+  }
+
+-- | Randomly execute a program, exploring a fixed number of
+-- executions.
+--
+-- Threads are scheduled by a weighted random selection, where weights
+-- are assigned randomly on thread creation.
+--
+-- This corresponds to 'sctRandom', and is not guaranteed to find all
+-- distinct results (unlike 'systematically' / 'sctBound').
+--
+-- @since unreleased
+randomly :: RandomGen g
+  => g
+  -- ^ The random generator to drive the scheduling.
+  -> Int
+  -- ^ The number of executions to try.
+  -> Int
+  -- ^ The number of executions to re-use the thread weights for.
+  -> Way
+randomly g lim reuse = Randomly g (max 0 lim) (max 1 reuse)
+
+-- | Explore possible executions of a concurrent program according to
+-- the given 'Way'.
 --
 -- @since 0.6.0.0
 runSCT :: MonadRef r n
@@ -136,8 +167,8 @@ runSCT :: MonadRef r n
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-runSCT (Systematically cb) memtype = sctBound memtype cb
-runSCT (Randomly g lim t)  memtype = sctRandom memtype g lim t
+runSCT (Systematically cb)    memtype = sctBound memtype cb
+runSCT (Randomly g lim reuse) memtype = sctRandom memtype g lim reuse
 
 -- | A strict variant of 'runSCT'.
 --

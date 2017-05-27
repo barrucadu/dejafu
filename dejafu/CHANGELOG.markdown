@@ -13,6 +13,7 @@ unreleased
 ### Test.DejaFu
 
 - The new Test.DejaFu.Defaults and Test.DejaFu.Refinement modules are re-exported.
+- The new smart constructors from Test.DejaFu.SCT are exported.
 
 ### Test.DejaFu.Defaults
 
@@ -28,6 +29,9 @@ unreleased
 
 ### Test.DejaFu.SCT
 
+- The `Way` type is now abstract and exposes smart constructor functions:
+    - `systematically`, corresponding to the old `Systematically`.
+    - `randomly`, corresponding to the old `Randomly` with an additional parameter.
 - The `Randomly` constructor of the `Way` type now takes another integer parameter: the number of
   executions to re-use the weights for.
 

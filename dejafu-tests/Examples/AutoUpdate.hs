@@ -59,20 +59,20 @@ tests =
                     "deadlocks"
                     (gives [Left Deadlock, Right ()])
 
-    , testDejafuWay (Systematically defaultBounds { boundPreemp = Just 3 })
+    , testDejafuWay (systematically defaultBounds { boundPreemp = Just 3 })
                     SequentialConsistency
                     nondeterministic
                     "nondeterministic (systematic)"
                     (gives [Left Deadlock, Right 0, Right 1])
     ]
   , testGroup "Random" . hUnitTestToTests $ test
-    [ testDejafuWay (Randomly (mkStdGen 0) 100 1)
+    [ testDejafuWay (randomly (mkStdGen 0) 100 1)
                     SequentialConsistency
                     deadlocks
                     "deadlocks (random)"
                     (gives [Left Deadlock, Right ()])
 
-    , testDejafuWay (Randomly (mkStdGen 0) 100 1)
+    , testDejafuWay (randomly (mkStdGen 0) 100 1)
                     SequentialConsistency
                     nondeterministic
                     "nondeterministic (random)"

@@ -20,7 +20,7 @@ tests = hUnitTestToTests $ test
 
 -- | Shorter execution length bound
 way :: Way
-way = Systematically defaultBounds { boundLength = Just 30 }
+way = systematically defaultBounds { boundLength = Just 30 }
 
 --------------------------------------------------------------------------------
 
