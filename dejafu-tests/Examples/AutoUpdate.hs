@@ -66,13 +66,13 @@ tests =
                     (gives [Left Deadlock, Right 0, Right 1])
     ]
   , testGroup "Random" . hUnitTestToTests $ test
-    [ testDejafuWay (Randomly (mkStdGen 0) 100)
+    [ testDejafuWay (Randomly (mkStdGen 0) 100 1)
                     SequentialConsistency
                     deadlocks
                     "deadlocks (random)"
                     (gives [Left Deadlock, Right ()])
 
-    , testDejafuWay (Randomly (mkStdGen 0) 100)
+    , testDejafuWay (Randomly (mkStdGen 0) 100 1)
                     SequentialConsistency
                     nondeterministic
                     "nondeterministic (random)"

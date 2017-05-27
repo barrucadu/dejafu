@@ -14,6 +14,8 @@ unreleased
 
 - The refinement property testing functionality of dejafu is exposed in the new `testProperty`
   function, and re-exported values.
+- Due to changes in dejafu, the `Randomly` constructor of the `Way` type now takes another integer
+  parameter: the number of executions to re-use the weights for.
 
 ### Miscellaneous
 

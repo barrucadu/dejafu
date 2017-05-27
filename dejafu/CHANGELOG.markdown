@@ -26,6 +26,11 @@ unreleased
 
     This is related to my work on [CoCo][], allowing dejafu to test what CoCo discovers.
 
+### Test.DejaFu.SCT
+
+- The `Randomly` constructor of the `Way` type now takes another integer parameter: the number of
+  executions to re-use the weights for.
+
 ### Fixed
 
 - An issue where `subconcurrency` would re-use `MVar` IDs, leading to false reports of deadlock on

@@ -112,14 +112,14 @@ import           Test.DejaFu.SCT.Internal
 --
 -- * Explore a fixed number of random executions, with the given PRNG.
 --
--- @since 0.6.0.0
+-- @since unreleased
 data Way where
   Systematically :: Bounds -> Way
-  Randomly :: RandomGen g => g -> Int -> Way
+  Randomly :: RandomGen g => g -> Int -> Int -> Way
 
 instance Show Way where
   show (Systematically bs) = "Systematically (" ++ show bs ++ ")"
-  show (Randomly _ n)      = "Randomly <gen> " ++ show n
+  show (Randomly _ n t)      = "Randomly <gen> " ++ show (n, t)
 
 -- | Explore possible executions of a concurrent program.
 --
@@ -137,7 +137,7 @@ runSCT :: MonadRef r n
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
 runSCT (Systematically cb) memtype = sctBound memtype cb
-runSCT (Randomly g lim)    memtype = sctRandom memtype g lim
+runSCT (Randomly g lim t)  memtype = sctRandom memtype g lim t
 
 -- | A strict variant of 'runSCT'.
 --
@@ -408,7 +408,7 @@ sctBound memtype cb conc = go initialState where
 --
 -- This is not guaranteed to find all distinct results.
 --
--- @since 0.5.0.0
+-- @since unreleased
 sctRandom :: (MonadRef r n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -416,18 +416,20 @@ sctRandom :: (MonadRef r n, RandomGen g)
   -- ^ The random number generator.
   -> Int
   -- ^ The number of executions to perform.
+  -> Int
+  -- ^ The number of executions to use the same set of weights for.
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctRandom memtype g0 lim0 conc = go g0 lim0 where
-  go _ 0 = pure []
-  go g n = do
+sctRandom memtype g0 lim0 reuse0 conc = go g0 lim0 reuse0 M.empty where
+  go _ 0 _ _ = pure []
+  go g n 0 _ = go g n reuse0 M.empty
+  go g n reuse ws = do
     (res, s, trace) <- runConcurrent randSched
                                      memtype
-                                     (initialRandSchedState g)
+                                     (initialRandSchedState (Just ws) g)
                                      conc
-
-    ((res, trace):) <$> go (schedGen s) (n-1)
+    ((res, trace):) <$> go (schedGen s) (n-1) (reuse-1) (schedWeights s)
 
 -------------------------------------------------------------------------------
 -- Utilities

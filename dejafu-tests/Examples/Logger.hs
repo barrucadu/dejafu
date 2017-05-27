@@ -19,9 +19,9 @@ tests =
     , testDejafu raceyLogger "bug exists" isBad
     ]
   , testGroup "Random" . hUnitTestToTests $ test
-    [ testDejafuWay (Randomly (mkStdGen 0) 100) defaultMemType raceyLogger "allowed (randomly)" validResult
-    , testDejafuWay (Randomly (mkStdGen 0) 100) defaultMemType raceyLogger "correct occurs (randomly)" isGood
-    , testDejafuWay (Randomly (mkStdGen 0) 100) defaultMemType raceyLogger "bug exists (randomly)" isBad
+    [ testDejafuWay (Randomly (mkStdGen 0) 100 1) defaultMemType raceyLogger "allowed (randomly)" validResult
+    , testDejafuWay (Randomly (mkStdGen 0) 100 1) defaultMemType raceyLogger "correct occurs (randomly)" isGood
+    , testDejafuWay (Randomly (mkStdGen 0) 100 1) defaultMemType raceyLogger "bug exists (randomly)" isBad
     ]
   ]
 

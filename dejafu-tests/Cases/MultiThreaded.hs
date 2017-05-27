@@ -69,7 +69,7 @@ tests =
     tg ts =
       let useWay way = map (\(T n c p) -> testDejafuWay way defaultMemType c n p) ts
       in [ testGroup "Systematic" . hUnitTestToTests . test . useWay $ Systematically defaultBounds
-         , testGroup "Random"     . hUnitTestToTests . test . useWay $ Randomly (mkStdGen 0) 100
+         , testGroup "Random"     . hUnitTestToTests . test . useWay $ Randomly (mkStdGen 0) 100 1
          ]
 
 

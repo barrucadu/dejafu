@@ -150,7 +150,7 @@ instance IsOption Way where
   defaultValue = defaultWay
   parseValue = shortName . map toUpper where
     shortName "SYSTEMATICALLY" = Just (Systematically defaultBounds)
-    shortName "RANDOMLY"       = Just (Randomly (mkStdGen 42) 100)
+    shortName "RANDOMLY"       = Just (Randomly (mkStdGen 42) 100 1)
     shortName _ = Nothing
   optionName = Tagged "way"
   optionHelp = Tagged "The execution method to use. This should be one of \"systematically\" or \"randomly\"."

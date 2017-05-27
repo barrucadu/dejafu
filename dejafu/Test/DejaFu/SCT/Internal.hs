@@ -20,8 +20,8 @@ import           Data.List            (intercalate, nubBy, partition, sortOn)
 import           Data.List.NonEmpty   (NonEmpty(..), toList)
 import           Data.Map.Strict      (Map)
 import qualified Data.Map.Strict      as M
-import           Data.Maybe           (catMaybes, fromJust, isJust, isNothing,
-                                       listToMaybe)
+import           Data.Maybe           (catMaybes, fromJust, fromMaybe, isJust,
+                                       isNothing, listToMaybe)
 import           Data.Sequence        (Seq, (|>))
 import qualified Data.Sequence        as Sq
 import           Data.Set             (Set)
@@ -531,8 +531,8 @@ instance NFData g => NFData (RandSchedState g) where
               )
 
 -- | Initial weighted random scheduler state.
-initialRandSchedState :: g -> RandSchedState g
-initialRandSchedState = RandSchedState M.empty
+initialRandSchedState :: Maybe (Map ThreadId Int) -> g -> RandSchedState g
+initialRandSchedState = RandSchedState . fromMaybe M.empty
 
 -- | Weighted random scheduler: assigns to each new thread a weight,
 -- and makes a weighted random choice out of the runnable threads at
