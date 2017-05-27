@@ -1,51 +1,40 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE RankNTypes #-}
-
 module Cases.MultiThreaded where
 
 import Control.Exception (ArithException(..))
 import Control.Monad (void)
-import System.Random (mkStdGen)
-import Test.DejaFu (Failure(..), Predicate, Way(..), defaultBounds, defaultMemType, gives, gives')
-import Test.Framework (Test, testGroup)
-import Test.Framework.Providers.HUnit (hUnitTestToTests)
-import Test.HUnit (test)
-import Test.HUnit.DejaFu (randomly, systematically, testDejafuWay)
+import Test.DejaFu (Failure(..), gives, gives')
+import Test.Framework (Test)
 
 import Control.Concurrent.Classy hiding (newQSemN, signalQSemN, waitQSemN)
-import Control.Monad.STM.Class
-import Test.DejaFu.Conc (ConcT, ConcST, subconcurrency)
+import Test.DejaFu.Conc (ConcT, subconcurrency)
 
 import Utils
 import QSemN
 
-data T where
-  T :: Show a => String -> (forall t. ConcST t a) -> Predicate a -> T
-
 tests :: [Test]
 tests =
-    [ testGroup "Threading" . tg $
+    [ tg "Threading"
       [ T "child thread ID"  threadId1    $ gives' [True]
       , T "parent thread ID" threadId2    $ gives' [True]
       , T "no wait"          threadNoWait $ gives' [Nothing, Just ()]
       ]
-    , testGroup "MVar" . tg $
+    , tg "MVar"
       [ T "deadlock" cvarLock $ gives  [Left Deadlock, Right 0]
       , T "race"     cvarRace $ gives' [0,1]
       ]
-    , testGroup "CRef" . tg $
+    , tg "CRef"
       [ T "race"        crefRace       $ gives' [0,1]
       , T "cas modify"  crefCASModify  $ gives' [0,1]
       , T "cas race"    crefCASRace    $ gives' [(True, 2), (False, 2)]
       , T "cas tickets" crefCASTickets $ gives' [(True, False, 1), (False, True, 2)]
       ]
-    , testGroup "STM" . tg $
+    , tg "STM"
       [ T "atomicity"   stmAtomic     $ gives' [0,2]
       , T "left retry"  stmLeftRetry  $ gives' [()]
       , T "right retry" stmRightRetry $ gives' [()]
       , T "issue 55"    stmIssue55    $ gives' [True]
       ]
-    , testGroup "Killing Threads" . tg $
+    , tg "Killing Threads"
       [ T "no masking" threadKill      $ gives  [Left Deadlock, Right ()]
       , T "masked"     threadKillMask  $ gives' [()]
       , T "masked (uninterruptible)" threadKillUninterruptibleMask $ gives [Left Deadlock]
@@ -53,10 +42,10 @@ tests =
       , T "throw to main (uncaught)" threadKillToMain1 $ gives  [Left UncaughtException]
       , T "throw to main (caught)"   threadKillToMain2 $ gives' [()]
       ]
-    , testGroup "Daemons" . tg $
+    , tg "Daemons"
       [ T "schedule daemon" schedDaemon $ gives' [0,1]
       ]
-    , testGroup "Subconcurrency" . tg $
+    , tg "Subconcurrency"
       [ T "deadlock1" scDeadlock1 $ gives' [Left Deadlock, Right ()]
       , T "deadlock2" scDeadlock2 $ gives' [(Left Deadlock, ()), (Right (), ())]
       , T "success"   scSuccess   $ gives' [Right ()]
@@ -65,13 +54,6 @@ tests =
       , T "issue 81"  scIssue81   $ gives' [(Right (),0)]
       ]
     ]
-  where
-    tg ts =
-      let useWay way = map (\(T n c p) -> testDejafuWay way defaultMemType c n p) ts
-      in [ testGroup "Systematic" . hUnitTestToTests . test . useWay $ systematically defaultBounds
-         , testGroup "Random"     . hUnitTestToTests . test . useWay $ randomly (mkStdGen 0) 100 1
-         ]
-
 
 --------------------------------------------------------------------------------
 -- Threading

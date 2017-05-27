@@ -8,12 +8,14 @@ import qualified Examples.Logger       as L
 import qualified Examples.Philosophers as P
 import qualified Examples.SearchParty  as S
 
+import Utils (tg)
+
 -- | Run all the example tests.
 testExamples :: [Test]
-testExamples = map (uncurry testGroup)
-  [ ("auto-update",         A.tests)
-  , ("Class Laws",          C.tests)
-  , ("Dining Philosophers", P.tests)
-  , ("Message Logger",      L.tests)
-  , ("Search Party",        S.tests)
+testExamples =
+  [ tg        "auto-update"         A.tests
+  , testGroup "Class Laws"          C.tests
+  , testGroup "Dining Philosophers" P.tests
+  , tg        "Message Logger"      L.tests
+  , testGroup "Search Party"        S.tests
   ]

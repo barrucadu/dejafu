@@ -31,9 +31,10 @@ unreleased
 
 - The `Way` type is now abstract and exposes smart constructor functions:
     - `systematically`, corresponding to the old `Systematically`.
-    - `randomly`, corresponding to the old `Randomly` with an additional parameter.
-- The `Randomly` constructor of the `Way` type now takes another integer parameter: the number of
-  executions to re-use the weights for.
+    - `randomly`, corresponding to the old `Randomly`,
+    - `swarmy`, corresponding to the old `Randomly` and specifying how many executions to use the
+      same weights for.
+- The `sctRandom` function can now re-use the same weights for multiple executions.
 
 ### Fixed
 

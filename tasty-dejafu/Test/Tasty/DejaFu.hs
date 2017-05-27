@@ -56,6 +56,7 @@ module Test.Tasty.DejaFu
   , defaultWay
   , systematically
   , randomly
+  , swarmy
   , Bounds(..)
   , defaultBounds
   , MemType(..)
@@ -155,7 +156,7 @@ instance IsOption Way where
   defaultValue = defaultWay
   parseValue = shortName . map toUpper where
     shortName "SYSTEMATICALLY" = Just (systematically defaultBounds)
-    shortName "RANDOMLY"       = Just (randomly (mkStdGen 42) 100 1)
+    shortName "RANDOMLY"       = Just (randomly (mkStdGen 42) 100)
     shortName _ = Nothing
   optionName = Tagged "way"
   optionHelp = Tagged "The execution method to use. This should be one of \"systematically\" or \"randomly\"."

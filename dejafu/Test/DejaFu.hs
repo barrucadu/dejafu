@@ -97,6 +97,7 @@ module Test.DejaFu
   , defaultWay
   , systematically
   , randomly
+  , swarmy
 
   , autocheckWay
   , autocheckWayIO

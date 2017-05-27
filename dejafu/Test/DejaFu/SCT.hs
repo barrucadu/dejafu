@@ -15,6 +15,7 @@ module Test.DejaFu.SCT
     Way
   , systematically
   , randomly
+  , swarmy
   , runSCT
   , runSCT'
   , resultsSet
@@ -141,8 +142,9 @@ systematically bs = Systematically Bounds
 -- Threads are scheduled by a weighted random selection, where weights
 -- are assigned randomly on thread creation.
 --
--- This corresponds to 'sctRandom', and is not guaranteed to find all
--- distinct results (unlike 'systematically' / 'sctBound').
+-- This corresponds to 'sctRandom' with weight re-use disabled, and is
+-- not guaranteed to find all distinct results (unlike
+-- 'systematically' / 'sctBound').
 --
 -- @since unreleased
 randomly :: RandomGen g
@@ -150,10 +152,28 @@ randomly :: RandomGen g
   -- ^ The random generator to drive the scheduling.
   -> Int
   -- ^ The number of executions to try.
-  -> Int
-  -- ^ The number of executions to re-use the thread weights for.
   -> Way
-randomly g lim reuse = Randomly g (max 0 lim) (max 1 reuse)
+randomly g lim = swarmy g lim 1
+
+-- | Randomly execute a program, exploring a fixed number of
+-- executions.
+--
+-- Threads are scheduled by a weighted random selection, where weights
+-- are assigned randomly on thread creation.
+--
+-- This corresponds to 'sctRandom', and is not guaranteed to find all
+-- distinct results (unlike 'systematically' / 'sctBound').
+--
+-- @since unreleased
+swarmy :: RandomGen g
+  => g
+  -- ^ The random generator to drive the scheduling.
+  -> Int
+  -- ^ The number of executions to try.
+  -> Int
+  -- ^ The number of executions to use the thread weights for.
+  -> Way
+swarmy g lim use = Randomly g (max 0 lim) (max 1 use)
 
 -- | Explore possible executions of a concurrent program according to
 -- the given 'Way'.
@@ -167,8 +187,8 @@ runSCT :: MonadRef r n
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-runSCT (Systematically cb)    memtype = sctBound memtype cb
-runSCT (Randomly g lim reuse) memtype = sctRandom memtype g lim reuse
+runSCT (Systematically cb)  memtype = sctBound memtype cb
+runSCT (Randomly g lim use) memtype = sctRandom memtype g lim use
 
 -- | A strict variant of 'runSCT'.
 --
@@ -452,15 +472,15 @@ sctRandom :: (MonadRef r n, RandomGen g)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctRandom memtype g0 lim0 reuse0 conc = go g0 lim0 reuse0 M.empty where
+sctRandom memtype g0 lim0 use0 conc = go g0 lim0 (max 1 use0) M.empty where
   go _ 0 _ _ = pure []
-  go g n 0 _ = go g n reuse0 M.empty
-  go g n reuse ws = do
+  go g n 0 _ = go g n (max 1 use0) M.empty
+  go g n use ws = do
     (res, s, trace) <- runConcurrent randSched
                                      memtype
                                      (initialRandSchedState (Just ws) g)
                                      conc
-    ((res, trace):) <$> go (schedGen s) (n-1) (reuse-1) (schedWeights s)
+    ((res, trace):) <$> go (schedGen s) (n-1) (use-1) (schedWeights s)
 
 -------------------------------------------------------------------------------
 -- Utilities
