@@ -131,11 +131,7 @@ systematically
   :: Bounds
   -- ^ The bounds to constrain the exploration.
   -> Way
-systematically bs = Systematic Bounds
-  { boundPreemp = max 0 <$> boundPreemp bs
-  , boundFair   = max 0 <$> boundFair   bs
-  , boundLength = max 0 <$> boundLength bs
-  }
+systematically = Systematic
 
 -- | Randomly execute a program, exploring a fixed number of
 -- executions.
@@ -171,7 +167,7 @@ uniformly :: RandomGen g
   -> Int
   -- ^ The number of executions to try.
   -> Way
-uniformly g lim = Uniform g (max 0 lim)
+uniformly = Uniform
 
 -- | Randomly execute a program, exploring a fixed number of
 -- executions.
@@ -191,7 +187,7 @@ swarmy :: RandomGen g
   -> Int
   -- ^ The number of executions to use the thread weights for.
   -> Way
-swarmy g lim use = Weighted g (max 0 lim) (max 1 use)
+swarmy = Weighted
 
 -- | Explore possible executions of a concurrent program according to
 -- the given 'Way'.
@@ -447,7 +443,7 @@ sctUniformRandom :: (MonadRef r n, RandomGen g)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctUniformRandom memtype g0 lim0 conc = go g0 lim0 where
+sctUniformRandom memtype g0 lim0 conc = go g0 (max 0 lim0) where
   go _ 0 = pure []
   go g n = do
     (res, s, trace) <- runConcurrent (randSched $ \g' -> (1, g'))
@@ -476,7 +472,7 @@ sctWeightedRandom :: (MonadRef r n, RandomGen g)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctWeightedRandom memtype g0 lim0 use0 conc = go g0 lim0 (max 1 use0) M.empty where
+sctWeightedRandom memtype g0 lim0 use0 conc = go g0 (max 0 lim0) (max 1 use0) M.empty where
   go _ 0 _ _ = pure []
   go g n 0 _ = go g n (max 1 use0) M.empty
   go g n use ws = do
