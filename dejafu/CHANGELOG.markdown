@@ -38,6 +38,7 @@ unreleased
 - A new `sctUniformRandom` function to do uniform (non-weighted) scheduling.
 - The `sctRandom` function is now called `sctWeightedRandom` and can now re-use the same weights for
   multiple executions.
+- The `sctPreBound`, `sctFairBound`, and `sctLengthBound` functions have been removed.
 
 ### Fixed
 

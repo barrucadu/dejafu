@@ -62,7 +62,6 @@ module Test.DejaFu.SCT
   -- See the BPOR paper for more details.
 
   , PreemptionBound(..)
-  , sctPreBound
 
   -- ** Fair Bounding
 
@@ -73,7 +72,6 @@ module Test.DejaFu.SCT
   -- See the BPOR paper for more details.
 
   , FairBound(..)
-  , sctFairBound
 
   -- ** Length Bounding
 
@@ -81,7 +79,6 @@ module Test.DejaFu.SCT
   -- terms of primitive actions) of an execution.
 
   , LengthBound(..)
-  , sctLengthBound
 
   -- * Random Scheduling
 
@@ -308,20 +305,6 @@ instance NFData PreemptionBound where
   -- not derived, so it can have a separate @since annotation
   rnf (PreemptionBound i) = rnf i
 
--- | An SCT runner using a pre-emption bounding scheduler.
---
--- @since 0.4.0.0
-sctPreBound :: MonadRef r n
-  => MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> PreemptionBound
-  -- ^ The maximum number of pre-emptions to allow in a single
-  -- execution
-  -> ConcT r n a
-  -- ^ The computation to run many times
-  -> n [(Either Failure a, Trace)]
-sctPreBound memtype pb = sctBound memtype $ Bounds (Just pb) Nothing Nothing
-
 -- | Pre-emption bound function. This does not count pre-emptive
 -- context switches to a commit thread.
 pBound :: PreemptionBound -> BoundFunc
@@ -359,20 +342,6 @@ instance NFData FairBound where
   -- not derived, so it can have a separate @since annotation
   rnf (FairBound i) = rnf i
 
--- | An SCT runner using a fair bounding scheduler.
---
--- @since 0.4.0.0
-sctFairBound :: MonadRef r n
-  => MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> FairBound
-  -- ^ The maximum difference between the number of yield operations
-  -- performed by different threads.
-  -> ConcT r n a
-  -- ^ The computation to run many times
-  -> n [(Either Failure a, Trace)]
-sctFairBound memtype fb = sctBound memtype $ Bounds Nothing (Just fb) Nothing
-
 -- | Fair bound function
 fBound :: FairBound -> BoundFunc
 fBound (FairBound fb) ts (_, l) = maxYieldCountDiff ts l <= fb
@@ -395,20 +364,6 @@ newtype LengthBound = LengthBound Int
 instance NFData LengthBound where
   -- not derived, so it can have a separate @since annotation
   rnf (LengthBound i) = rnf i
-
--- | An SCT runner using a length bounding scheduler.
---
--- @since 0.4.0.0
-sctLengthBound :: MonadRef r n
-  => MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> LengthBound
-  -- ^ The maximum length of a schedule, in terms of primitive
-  -- actions.
-  -> ConcT r n a
-  -- ^ The computation to run many times
-  -> n [(Either Failure a, Trace)]
-sctLengthBound memtype lb = sctBound memtype $ Bounds Nothing Nothing (Just lb)
 
 -- | Length bound function
 lBound :: LengthBound -> BoundFunc
