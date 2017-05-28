@@ -13,7 +13,7 @@ import Test.DejaFu.Conc (ConcST)
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
-import Test.HUnit.DejaFu (Bounds, defaultBounds, defaultMemType, randomly, swarmy, systematically, testDejafuWay)
+import Test.HUnit.DejaFu (Bounds, defaultBounds, defaultMemType, uniformly, randomly, swarmy, systematically, testDejafuWay)
 
 -- | Wrap up a test
 data T where
@@ -23,9 +23,10 @@ data T where
 -- | Run a test group with different execution ways.
 tg :: String -> [T] -> Test
 tg name ts = testGroup name
-    [ testGroup "Systematic" . hUnitTestToTests . test . useWay $ systematically
-     , testGroup "Random"     . hUnitTestToTests . test . useWay . const $ randomly (mkStdGen 0) 100
-     , testGroup "Swarm (10)" . hUnitTestToTests . test . useWay . const $ swarmy (mkStdGen 0) 100 10
+    [ testGroup "Systematic"  . hUnitTestToTests . test . useWay $ systematically
+     , testGroup "Uniform"    . hUnitTestToTests . test . useWay . const $ uniformly (mkStdGen 0) 100
+     , testGroup "Weighted"   . hUnitTestToTests . test . useWay . const $ randomly  (mkStdGen 0) 100
+     , testGroup "Swarm (10)" . hUnitTestToTests . test . useWay . const $ swarmy    (mkStdGen 0) 100 10
      ]
   where
     useWay wayf = map (go wayf) ts

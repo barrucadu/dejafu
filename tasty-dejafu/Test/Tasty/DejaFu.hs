@@ -56,6 +56,7 @@ module Test.Tasty.DejaFu
   , defaultWay
   , systematically
   , randomly
+  , uniformly
   , swarmy
   , Bounds(..)
   , defaultBounds

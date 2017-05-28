@@ -13,10 +13,9 @@ module Test.DejaFu.SCT.Internal where
 
 import           Control.DeepSeq      (NFData(..))
 import           Control.Exception    (MaskingState(..))
-import           Data.Char            (ord)
 import qualified Data.Foldable        as F
 import           Data.Function        (on)
-import           Data.List            (intercalate, nubBy, partition, sortOn)
+import           Data.List            (nubBy, partition, sortOn)
 import           Data.List.NonEmpty   (NonEmpty(..), toList)
 import           Data.Map.Strict      (Map)
 import qualified Data.Map.Strict      as M
@@ -537,8 +536,8 @@ initialRandSchedState = RandSchedState . fromMaybe M.empty
 -- | Weighted random scheduler: assigns to each new thread a weight,
 -- and makes a weighted random choice out of the runnable threads at
 -- every step.
-randSched :: RandomGen g => Scheduler (RandSchedState g)
-randSched _ _ threads s = (pick choice enabled, RandSchedState weights' g'') where
+randSched :: RandomGen g => (g -> (Int, g)) -> Scheduler (RandSchedState g)
+randSched weightf _ _ threads s = (pick choice enabled, RandSchedState weights' g'') where
   -- Select a thread
   pick idx ((x, f):xs)
     | idx < f = Just x
@@ -551,7 +550,7 @@ randSched _ _ threads s = (pick choice enabled, RandSchedState weights' g'') whe
   weights' = schedWeights s `M.union` M.fromList newWeights
   (newWeights, g') = foldr assignWeight ([], schedGen s) $ filter (`M.notMember` schedWeights s) tids
   assignWeight tid ~(ws, g0) =
-    let (w, g) = randomR (1, 50) g0
+    let (w, g) = weightf g0
     in ((tid, w):ws, g)
 
   -- The runnable threads.

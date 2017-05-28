@@ -59,6 +59,7 @@ module Test.HUnit.DejaFu
   , defaultWay
   , systematically
   , randomly
+  , uniformly
   , swarmy
   , Bounds(..)
   , defaultBounds
