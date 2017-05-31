@@ -10,6 +10,11 @@ This project is versioned according to the [Package Versioning Policy](https://p
 unreleased
 ----------
 
+### Test.DejaFu.Defaults
+
+- The `default*` values are now defined in the new Test.DejaFu.Defaults module. There is no breaking
+  API change as they are re-exported from Test.DejaFu.
+
 ### Fixed
 
 - An issue where `subconcurrency` would re-use `MVar` IDs, leading to false reports of deadlock on

@@ -43,6 +43,7 @@ library
   exposed-modules:     Test.DejaFu
                      , Test.DejaFu.Conc
                      , Test.DejaFu.Common
+                     , Test.DejaFu.Defaults
                      , Test.DejaFu.Schedule
                      , Test.DejaFu.SCT
                      , Test.DejaFu.STM
