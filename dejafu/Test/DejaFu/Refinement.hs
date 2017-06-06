@@ -76,14 +76,14 @@ module Test.DejaFu.Refinement
   -- | Refinement (or \"weak refinement\") means that all of the
   -- results of the left are also results of the right.  If you think
   -- in terms of sets of results, refinement is subset.
-  , refines, (=<=)
+  , refines, (=>=)
 
   -- ** A strictly refines B
 
   -- | Strict refinement means that the left refines the right, but
   -- the right does not refine the left.  If you think in terms of
   -- sets of results, strict refinement is proper subset.
-  , strictlyRefines, (-<-)
+  , strictlyRefines, (->-)
 
   -- ** A is equivalent to B
 
@@ -168,9 +168,19 @@ refines = RP Weak
 
 -- | Infix synonym for 'refines'.
 --
+-- You might think this should be '=<=', so it looks kind of like a
+-- funny subset operator, with @A =<= B@ meaning \"the result-set of A
+-- is a subset of the result-set of B\".  Unfortunately you would be
+-- wrong.  The operator used in the literature for refinement has the
+-- open end pointing at the LESS general term and the closed end at
+-- the MORE general term.  It is read as \"is refined by\", not
+-- \"refines\".  So for consistency with the literature, the open end
+-- of @=>=@ points at the less general term, and the closed end at the
+-- more general term, to give the same argument order as 'refines'.
+--
 -- @since unreleased
-(=<=) :: Ord o => Sig s1 o x -> Sig s2 o x -> RefinementProperty o x
-(=<=) = refines
+(=>=) :: Ord o => Sig s1 o x -> Sig s2 o x -> RefinementProperty o x
+(=>=) = refines
 
 -- | Observational equivalence.
 --
@@ -207,8 +217,8 @@ strictlyRefines = RP Strict
 -- | Infix synonym for 'strictlyRefines'
 --
 -- @since unreleased
-(-<-) :: Ord o => Sig s1 o x -> Sig s2 o x -> RefinementProperty o x
-(-<-) = strictlyRefines
+(->-) :: Ord o => Sig s1 o x -> Sig s2 o x -> RefinementProperty o x
+(->-) = strictlyRefines
 
 
 -------------------------------------------------------------------------------
