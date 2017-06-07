@@ -7,6 +7,22 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Test.HUnit.DejaFu
+
+- The refinement property testing functionality of dejafu is exposed in the new `testProperty`
+  function, and re-exported values.
+
+### Miscellaneous
+
+- Only dejafu UNRELEASED is supported.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.5.0.0 [2017-04-08] (git tag: [hunit-dejafu-0.5.0.0][])
 -------
 
