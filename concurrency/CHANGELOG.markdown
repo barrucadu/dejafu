@@ -7,8 +7,10 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+1.1.2.1 [2017-06-07] (tag: [concurrency-1.1.2.1][])
+-------
+
+https://hackage.haskell.org/package/concurrency-1.1.2.1
 
 ### Changed
 
@@ -19,6 +21,8 @@ unreleased
 ### Miscellaneous
 
 - There is now a changelog.
+
+[concurrency-1.1.2.1]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.1.2.1
 
 
 ---------------------------------------------------------------------------------------------------

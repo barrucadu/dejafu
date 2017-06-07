@@ -7,8 +7,10 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+0.7.0.0 [2017-06-07] (git tag: [dejafu-0.7.0.0][])
+-------
+
+https://hackage.haskell.org/package/dejafu-0.7.0.0
 
 ### Test.DejaFu
 
@@ -46,6 +48,7 @@ unreleased
   occasion (issue #81).
 
 [CoCo]: https://github.com/barrucadu/coco
+[dejafu-0.7.0.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.7.0.0
 
 
 ---------------------------------------------------------------------------------------------------

@@ -311,7 +311,7 @@ testDejafusWayIO = testio
 -- | Check a refinement property with a variety of seed values and
 -- variable assignments.
 --
--- @since unreleased
+-- @since 0.6.0.0
 testProperty :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
   => TestName
   -- ^ The name of the test.

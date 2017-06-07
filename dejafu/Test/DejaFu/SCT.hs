@@ -110,7 +110,7 @@ import           Test.DejaFu.SCT.Internal
 
 -- | How to explore the possible executions of a concurrent program.
 --
--- @since unreleased
+-- @since 0.7.0.0
 data Way where
   Systematic :: Bounds -> Way
   Weighted   :: RandomGen g => g -> Int -> Int -> Way
@@ -126,7 +126,7 @@ instance Show Way where
 --
 -- This corresponds to 'sctBound'.
 --
--- @since unreleased
+-- @since 0.7.0.0
 systematically
   :: Bounds
   -- ^ The bounds to constrain the exploration.
@@ -143,7 +143,7 @@ systematically = Systematic
 -- disabled, and is not guaranteed to find all distinct results
 -- (unlike 'systematically' / 'sctBound').
 --
--- @since unreleased
+-- @since 0.7.0.0
 randomly :: RandomGen g
   => g
   -- ^ The random generator to drive the scheduling.
@@ -160,7 +160,7 @@ randomly g lim = swarmy g lim 1
 -- This corresponds to 'sctUniformRandom', and is not guaranteed to
 -- find all distinct results (unlike 'systematically' / 'sctBound').
 --
--- @since unreleased
+-- @since 0.7.0.0
 uniformly :: RandomGen g
   => g
   -- ^ The random generator to drive the scheduling.
@@ -178,7 +178,7 @@ uniformly = Uniform
 -- This corresponds to 'sctWeightedRandom', and is not guaranteed to
 -- find all distinct results (unlike 'systematically' / 'sctBound').
 --
--- @since unreleased
+-- @since 0.7.0.0
 swarmy :: RandomGen g
   => g
   -- ^ The random generator to drive the scheduling.
@@ -432,7 +432,7 @@ sctBound memtype cb conc = go initialState where
 --
 -- This is not guaranteed to find all distinct results.
 --
--- @since unreleased
+-- @since 0.7.0.0
 sctUniformRandom :: (MonadRef r n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -459,7 +459,7 @@ sctUniformRandom memtype g0 lim0 conc = go g0 (max 0 lim0) where
 --
 -- This is not guaranteed to find all distinct results.
 --
--- @since unreleased
+-- @since 0.7.0.0
 sctWeightedRandom :: (MonadRef r n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.

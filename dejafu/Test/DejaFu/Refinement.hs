@@ -124,7 +124,7 @@ data How = Weak | Equiv | Strict deriving Eq
 
 -- | A property which can be given to 'check'.
 --
--- @since unreleased
+-- @since 0.7.0.0
 data RefinementProperty o x where
   RP  :: Ord o => How -> Sig s1 o x -> Sig s2 o x -> RefinementProperty o x
   Neg :: RefinementProperty o x -> RefinementProperty o x
@@ -136,7 +136,7 @@ data RefinementProperty o x where
 -- * @o@ is the observation type (@Maybe a@ in the example)
 -- * @x@ is the seed type (@Maybe a@ in the example)
 --
--- @since unreleased
+-- @since 0.7.0.0
 data Sig s o x = Sig
   { initialise :: x -> ConcIO s
   -- ^ Create a new instance of the state variable.
@@ -162,7 +162,7 @@ expectFailure = Neg
 -- compare the behaviour of different data structures.  The
 -- observation and seed types must match, however.
 --
--- @since unreleased
+-- @since 0.7.0.0
 refines :: Ord o => Sig s1 o x -> Sig s2 o x -> RefinementProperty o x
 refines = RP Weak
 
@@ -178,7 +178,7 @@ refines = RP Weak
 -- of @=>=@ points at the less general term, and the closed end at the
 -- more general term, to give the same argument order as 'refines'.
 --
--- @since unreleased
+-- @since 0.7.0.0
 (=>=) :: Ord o => Sig s1 o x -> Sig s2 o x -> RefinementProperty o x
 (=>=) = refines
 
@@ -191,13 +191,13 @@ refines = RP Weak
 -- compare the behaviour of different data structures.  The
 -- observation and seed types must match, however.
 --
--- @since unreleased
+-- @since 0.7.0.0
 equivalentTo :: Ord o => Sig s1 o x -> Sig s2 o x -> RefinementProperty o x
 equivalentTo = RP Equiv
 
 -- | Infix synonym for 'equivalentTo'.
 --
--- @since unreleased
+-- @since 0.7.0.0
 (===) :: Ord o => Sig s1 o x -> Sig s2 o x -> RefinementProperty o x
 (===) = equivalentTo
 
@@ -210,13 +210,13 @@ equivalentTo = RP Equiv
 -- compare the behaviour of different data structures.  The
 -- observation and seed types must match, however.
 --
--- @since unreleased
+-- @since 0.7.0.0
 strictlyRefines :: Ord o => Sig s1 o x -> Sig s2 o x -> RefinementProperty o x
 strictlyRefines = RP Strict
 
 -- | Infix synonym for 'strictlyRefines'
 --
--- @since unreleased
+-- @since 0.7.0.0
 (->-) :: Ord o => Sig s1 o x -> Sig s2 o x -> RefinementProperty o x
 (->-) = strictlyRefines
 
@@ -226,7 +226,7 @@ strictlyRefines = RP Strict
 
 -- | Things which can be tested.
 --
--- @since unreleased
+-- @since 0.7.0.0
 class Testable a where
   -- | The observation value type.  This is used to compare the
   -- results.
@@ -254,7 +254,7 @@ instance (Listable a, Show a, Testable b) => Testable (a -> b) where
 -- | A counter example is a seed value and a list of variable
 -- assignments.
 --
--- @since unreleased
+-- @since 0.7.0.0
 data FailedProperty o x
   = CounterExample
     { failingSeed  :: x
@@ -272,7 +272,7 @@ data FailedProperty o x
 -- | Check a refinement property with a variety of seed values and
 -- variable assignments.
 --
--- @since unreleased
+-- @since 0.7.0.0
 check :: (Testable p, Listable (X p), Eq (X p), Show (X p), Show (O p))
   => p
   -- ^ The property to check.
@@ -294,7 +294,7 @@ check p = do
 -- | A version of 'check' that doesn't print, and returns the
 -- counterexample.
 --
--- @since unreleased
+-- @since 0.7.0.0
 check' :: (Testable p, Listable (X p), Eq (X p), Show (X p), Show (O p))
   => p
   -- ^ The property to check.
@@ -304,7 +304,7 @@ check' = checkFor 10 100
 -- | Like 'check', but take a number of cases to try, also returns the
 -- counter example found rather than printing it.
 --
--- @since unreleased
+-- @since 0.7.0.0
 checkFor :: (Testable p, Listable (X p), Eq (X p), Show (X p))
   => Int
   -- ^ Number of seed values per variable-assignment.
@@ -317,7 +317,7 @@ checkFor sn vn p = listToMaybe <$> counterExamples sn vn p
 
 -- | Find all counterexamples up to a limit.
 --
--- @since unreleased
+-- @since 0.7.0.0
 counterExamples :: (Testable p, Listable (X p), Eq (X p))
   => Int
   -- ^ Number of seed values per variable-assignment.

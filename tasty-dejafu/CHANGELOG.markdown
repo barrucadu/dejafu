@@ -7,8 +7,10 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+0.6.0.0 [2017-04-08] (git tag: [tasty-dejafu-0.6.0.0][])
+-------
+
+https://hackage.haskell.org/package/tasty-dejafu-0.6.0.0
 
 ### Test.Tasty.DejaFu
 
@@ -24,7 +26,9 @@ unreleased
 
 ### Miscellaneous
 
-- Only dejafu UNRELEASED is supported.
+- Only dejafu 0.7 is supported.
+
+[tasty-dejafu-0.6.0.0]: https://github.com/barrucadu/dejafu/releases/tag/tasty-dejafu-0.6.0.0
 
 
 ---------------------------------------------------------------------------------------------------
