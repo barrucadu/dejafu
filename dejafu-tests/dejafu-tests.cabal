@@ -23,6 +23,7 @@ executable dejafu-tests
                      , Cases.Async
                      , Cases.SingleThreaded
                      , Cases.MultiThreaded
+                     , Cases.Refinement
                      , Cases.Litmus
 
                      , Examples
