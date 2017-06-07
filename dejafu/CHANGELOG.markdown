@@ -10,6 +10,10 @@ This project is versioned according to the [Package Versioning Policy](https://p
 unreleased
 ----------
 
+### Test.DejaFu
+
+- The new Test.DejaFu.Defaults and Test.DejaFu.Refinement modules are re-exported.
+
 ### Test.DejaFu.Defaults
 
 - The `default*` values are now defined in the new Test.DejaFu.Defaults module. There is no breaking

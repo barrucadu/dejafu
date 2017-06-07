@@ -240,20 +240,47 @@ module Test.DejaFu
   , somewhereTrue
   , gives
   , gives'
+
+  -- * Refinement property testing
+
+  -- | Consider this statement about @MVar@s: \"using @readMVar@ is
+  -- better than @takeMVar@ followed by @putMVar@ because the former
+  -- is atomic but the latter is not.\"
+  --
+  -- Deja Fu can test properties like that:
+  --
+  -- @
+  -- sig e = Sig
+  --   { initialise = maybe newEmptyMVar newMVar
+  --   , observe    = \\v _ -> tryReadMVar v
+  --   , interfere  = \\v s -> tryTakeMVar v >> maybe (pure ()) (void . tryPutMVar v) s
+  --   , expression = e
+  --   }
+  --
+  -- > check $ sig (void . readMVar) \`equivalentTo\` sig (\\v -> takeMVar v >>= putMVar v)
+  -- *** Failure: (seed Just ())
+  --     left:  [(Nothing,Just ())]
+  --     right: [(Nothing,Just ()),(Just Deadlock,Just ())]
+  -- @
+  --
+  -- The two expressions are not equivalent, and we get given the
+  -- counterexample!
+  , module Test.DejaFu.Refinement
   ) where
 
-import           Control.Arrow        (first)
-import           Control.DeepSeq      (NFData(..))
-import           Control.Monad        (unless, when)
-import           Control.Monad.Ref    (MonadRef)
-import           Control.Monad.ST     (runST)
-import           Data.Function        (on)
-import           Data.List            (intercalate, intersperse, minimumBy)
-import           Data.Ord             (comparing)
+import           Control.Arrow          (first)
+import           Control.DeepSeq        (NFData(..))
+import           Control.Monad          (unless, when)
+import           Control.Monad.Ref      (MonadRef)
+import           Control.Monad.ST       (runST)
+import           Data.Function          (on)
+import           Data.List              (intercalate, intersperse, minimumBy)
+import           Data.Ord               (comparing)
 
 import           Test.DejaFu.Common
 import           Test.DejaFu.Conc
 import           Test.DejaFu.Defaults
+import           Test.DejaFu.Refinement
 import           Test.DejaFu.SCT
 
 

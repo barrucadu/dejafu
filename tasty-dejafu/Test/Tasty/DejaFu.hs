@@ -78,7 +78,7 @@ import           Data.Proxy             (Proxy(..))
 import           Data.Tagged            (Tagged(..))
 import           Data.Typeable          (Typeable)
 import           System.Random          (StdGen, mkStdGen)
-import           Test.DejaFu
+import           Test.DejaFu            hiding (Testable(..))
 import qualified Test.DejaFu.Conc       as Conc
 import qualified Test.DejaFu.Refinement as R
 import qualified Test.DejaFu.SCT        as SCT

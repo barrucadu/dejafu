@@ -77,7 +77,7 @@ import           Control.Monad.Catch    (try)
 import           Control.Monad.ST       (runST)
 import qualified Data.Foldable          as F
 import           Data.List              (intercalate, intersperse)
-import           Test.DejaFu
+import           Test.DejaFu            hiding (Testable(..))
 import qualified Test.DejaFu.Conc       as Conc
 import qualified Test.DejaFu.Refinement as R
 import qualified Test.DejaFu.SCT        as SCT
