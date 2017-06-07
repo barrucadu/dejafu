@@ -3,7 +3,6 @@
 module Cases.SingleThreaded where
 
 import Control.Exception (ArithException(..), ArrayException(..))
-import Control.Monad (void)
 import Data.Maybe (isNothing)
 import Test.DejaFu (Failure(..), gives, gives')
 import Test.Framework (Test, testGroup)

@@ -8,7 +8,6 @@ import Control.Concurrent.Classy.Async
 import Control.Exception (AsyncException(..), BlockedIndefinitelyOnMVar(..), Exception, SomeException(..), fromException)
 import Control.Monad (forever)
 import Control.Monad.Conc.Class
-import Data.Functor (void)
 import Data.Typeable (Typeable, cast)
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
