@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -16,7 +17,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
--- Portability : CPP, FlexibleInstances, ImpredicativeTypes, RankNTypes, ScopedTypeVariables, TypeSynonymInstances
+-- Portability : CPP, FlexibleContexts, FlexibleInstances, ImpredicativeTypes, RankNTypes, ScopedTypeVariables, TypeSynonymInstances
 --
 -- This module allows using Deja Fu predicates with HUnit to test the
 -- behaviour of concurrent systems.
@@ -35,7 +36,7 @@ module Test.HUnit.DejaFu
   --
   -- These instances use 'defaultWay' and 'defaultMemType'.
 
-  -- * Property testing
+  -- * Unit testing
     testAuto
   , testDejafu
   , testDejafus
@@ -53,25 +54,40 @@ module Test.HUnit.DejaFu
   , testDejafuWayIO
   , testDejafusWayIO
 
-  -- * Re-exports
+  -- ** Re-exports
   , Way(..)
   , Bounds(..)
   , MemType(..)
+
+  -- * Refinement property testing
+  , testProperty
+
+  -- ** Re-exports
+  , R.Sig(..)
+  , R.RefinementProperty
+  , R.Testable(..)
+  , R.Listable(..)
+  , R.expectFailure
+  , R.refines, (R.=>=)
+  , R.strictlyRefines, (R.->-)
+  , R.equivalentTo, (R.===)
   ) where
 
-import           Control.Monad.Catch (try)
-import           Control.Monad.ST    (runST)
-import           Data.List           (intercalate, intersperse)
-import           Test.DejaFu
-import qualified Test.DejaFu.Conc    as Conc
-import qualified Test.DejaFu.SCT     as SCT
-import           Test.HUnit          (Assertable(..), Test(..), Testable(..),
-                                      assertString)
-import           Test.HUnit.Lang     (HUnitFailure(..))
+import           Control.Monad.Catch    (try)
+import           Control.Monad.ST       (runST)
+import qualified Data.Foldable          as F
+import           Data.List              (intercalate, intersperse)
+import           Test.DejaFu            hiding (Testable(..))
+import qualified Test.DejaFu.Conc       as Conc
+import qualified Test.DejaFu.Refinement as R
+import qualified Test.DejaFu.SCT        as SCT
+import           Test.HUnit             (Assertable(..), Test(..), Testable(..),
+                                         assertFailure, assertString)
+import           Test.HUnit.Lang        (HUnitFailure(..))
 
 -- Can't put the necessary forall in the @Assertable Conc.ConcST t@
 -- instance :(
-import           Unsafe.Coerce       (unsafeCoerce)
+import           Unsafe.Coerce          (unsafeCoerce)
 
 runSCTst :: Way -> MemType -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Conc.Trace)]
 runSCTst way memtype conc = runST (SCT.runSCT way memtype conc)
@@ -80,7 +96,7 @@ runSCTio :: Way -> MemType -> Conc.ConcIO a -> IO [(Either Failure a, Conc.Trace
 runSCTio = SCT.runSCT
 
 --------------------------------------------------------------------------------
--- Unit testing
+-- HUnit-style unit testing
 
 -- | @since 0.3.0.0
 instance Testable (Conc.ConcST t ()) where
@@ -114,8 +130,9 @@ assertableP = alwaysTrue $ \r -> case r of
   Right (Left HUnitFailure {}) -> False
   _ -> True
 
+
 --------------------------------------------------------------------------------
--- Property testing
+-- DejaFu-style unit testing
 
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
@@ -256,6 +273,23 @@ testDejafusWayIO :: Show a
   => Way -> MemType -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
 testDejafusWayIO = testio
 
+
+-------------------------------------------------------------------------------
+-- Refinement property testing
+
+-- | Check a refinement property with a variety of seed values and
+-- variable assignments.
+--
+-- @since unreleased
+testProperty :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
+  => String
+  -- ^ The name of the test.
+  -> p
+  -- ^ The property to check.
+  -> Test
+testProperty = testprop
+
+
 --------------------------------------------------------------------------------
 -- HUnit integration
 
@@ -287,6 +321,22 @@ testio way memtype concio tests = case map toTest tests of
       -- test computed them).
       traces <- runSCTio way memtype concio
       assertString . showErr $ p traces
+
+-- | Produce a HUnit 'Test' from a Deja Fu refinement property test.
+testprop :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
+  => String -> p -> Test
+testprop name p = TestLabel name . TestCase $ do
+  ce <- R.check' p
+  case ce of
+    Just c -> assertFailure . init $ unlines
+      [ "*** Failure: " ++
+        (if null (R.failingArgs c) then "" else unwords (R.failingArgs c) ++ " ") ++
+        "(seed " ++ show (R.failingSeed c) ++ ")"
+      , "    left:  " ++ show (F.toList $ R.leftResults  c)
+      , "    right: " ++ show (F.toList $ R.rightResults c)
+      ]
+    Nothing -> pure ()
+
 
 --------------------------------------------------------------------------------
 -- Utilities

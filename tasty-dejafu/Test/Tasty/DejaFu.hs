@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
@@ -16,7 +17,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
--- Portability : CPP, FlexibleInstances, GADTs, ImpredicativeTypes, RankNTypes, TypeSynonymInstances
+-- Portability : CPP, FlexibleContexts, FlexibleInstances, GADTs, ImpredicativeTypes, RankNTypes, TypeSynonymInstances
 --
 -- This module allows using Deja Fu predicates with Tasty to test the
 -- behaviour of concurrent systems.
@@ -50,31 +51,46 @@ module Test.Tasty.DejaFu
   , testDejafuWayIO
   , testDejafusWayIO
 
-  -- * Re-exports
+  -- ** Re-exports
   , Way(..)
   , Bounds(..)
   , MemType(..)
+
+  -- * Refinement property testing
+  , testProperty
+
+  -- ** Re-exports
+  , R.Sig(..)
+  , R.RefinementProperty
+  , R.Testable(..)
+  , R.Listable(..)
+  , R.expectFailure
+  , R.refines, (R.=>=)
+  , R.strictlyRefines, (R.->-)
+  , R.equivalentTo, (R.===)
   ) where
 
-import           Control.Monad.ST     (runST)
-import           Data.Char            (toUpper)
-import           Data.List            (intercalate, intersperse)
-import           Data.Proxy           (Proxy(..))
-import           Data.Tagged          (Tagged(..))
-import           Data.Typeable        (Typeable)
-import           System.Random        (StdGen, mkStdGen)
-import           Test.DejaFu
-import qualified Test.DejaFu.Conc     as Conc
-import qualified Test.DejaFu.SCT      as SCT
-import           Test.Tasty           (TestName, TestTree, testGroup)
-import           Test.Tasty.Options   (IsOption(..), OptionDescription(..),
-                                       lookupOption)
-import           Test.Tasty.Providers (IsTest(..), singleTest, testFailed,
-                                       testPassed)
+import           Control.Monad.ST       (runST)
+import           Data.Char              (toUpper)
+import qualified Data.Foldable          as F
+import           Data.List              (intercalate, intersperse)
+import           Data.Proxy             (Proxy(..))
+import           Data.Tagged            (Tagged(..))
+import           Data.Typeable          (Typeable)
+import           System.Random          (StdGen, mkStdGen)
+import           Test.DejaFu            hiding (Testable(..))
+import qualified Test.DejaFu.Conc       as Conc
+import qualified Test.DejaFu.Refinement as R
+import qualified Test.DejaFu.SCT        as SCT
+import           Test.Tasty             (TestName, TestTree, testGroup)
+import           Test.Tasty.Options     (IsOption(..), OptionDescription(..),
+                                         lookupOption)
+import           Test.Tasty.Providers   (IsTest(..), singleTest, testFailed,
+                                         testPassed)
 
 -- Can't put the necessary forall in the @IsTest ConcST t@
 -- instance :(
-import           Unsafe.Coerce        (unsafeCoerce)
+import           Unsafe.Coerce          (unsafeCoerce)
 
 runSCTst :: Way -> MemType -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Conc.Trace)]
 runSCTst way memtype conc = runST (SCT.runSCT way memtype conc)
@@ -83,7 +99,7 @@ runSCTio :: Way -> MemType -> Conc.ConcIO a -> IO [(Either Failure a, Conc.Trace
 runSCTio = SCT.runSCT
 
 --------------------------------------------------------------------------------
--- Unit testing
+-- Tasty-style unit testing
 
 -- | @since 0.3.0.0
 instance Typeable t => IsTest (Conc.ConcST t (Maybe String)) where
@@ -139,8 +155,9 @@ instance IsOption Way where
   optionName = Tagged "way"
   optionHelp = Tagged "The execution method to use. This should be one of \"systematically\" or \"randomly\"."
 
+
 --------------------------------------------------------------------------------
--- Property testing
+-- DejaFu-style unit testing
 
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
@@ -280,6 +297,23 @@ testDejafusWayIO :: Show a
   => Way -> MemType -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
 testDejafusWayIO = testio
 
+
+-------------------------------------------------------------------------------
+-- Refinement property testing
+
+-- | Check a refinement property with a variety of seed values and
+-- variable assignments.
+--
+-- @since unreleased
+testProperty :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
+  => TestName
+  -- ^ The name of the test.
+  -> p
+  -- ^ The property to check.
+  -> TestTree
+testProperty = testprop
+
+
 --------------------------------------------------------------------------------
 -- Tasty integration
 
@@ -289,6 +323,10 @@ data ConcTest where
 
 data ConcIOTest where
   ConcIOTest :: Show a => IO [(Either Failure a, Conc.Trace)] -> Predicate a -> ConcIOTest
+  deriving Typeable
+
+data PropTest where
+  PropTest :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p)) => p -> PropTest
   deriving Typeable
 
 instance IsTest ConcTest where
@@ -305,6 +343,21 @@ instance IsTest ConcIOTest where
     traces <- iotraces
     let err = showErr $ p traces
     pure (if null err then testPassed "" else testFailed err)
+
+instance IsTest PropTest where
+  testOptions = pure []
+
+  run _ (PropTest p) _ = do
+    ce <- R.check' p
+    pure $ case ce of
+      Just c -> testFailed . init $ unlines
+        [ "*** Failure: " ++
+          (if null (R.failingArgs c) then "" else unwords (R.failingArgs c) ++ " ") ++
+          "(seed " ++ show (R.failingSeed c) ++ ")"
+        , "    left:  " ++ show (F.toList $ R.leftResults  c)
+        , "    right: " ++ show (F.toList $ R.rightResults c)
+        ]
+      Nothing -> testPassed ""
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu test.
 testst :: Show a
@@ -331,6 +384,11 @@ testio way memtype concio tests = case map toTest tests of
     -- As with HUnit, constructing a test is side-effect free, so
     -- sharing of traces can't happen here.
     traces = runSCTio way memtype concio
+
+-- | Produce a Tasty 'TestTree' from a Deja Fu refinement property test.
+testprop :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
+  => TestName -> p -> TestTree
+testprop name = singleTest name . PropTest
 
 -- | Convert a test result into an error message on failure (empty
 -- string on success).

@@ -10,10 +10,28 @@ This project is versioned according to the [Package Versioning Policy](https://p
 unreleased
 ----------
 
+### Test.DejaFu
+
+- The new Test.DejaFu.Defaults and Test.DejaFu.Refinement modules are re-exported.
+
+### Test.DejaFu.Defaults
+
+- The `default*` values are now defined in the new Test.DejaFu.Defaults module. There is no breaking
+  API change as they are re-exported from Test.DejaFu.
+
+### Test.DejaFu.Refinement
+
+- A new module for checking observational properties of the side-effects of stateful, concurrent
+  functions.
+
+    This is related to my work on [CoCo][], allowing dejafu to test what CoCo discovers.
+
 ### Fixed
 
 - An issue where `subconcurrency` would re-use `MVar` IDs, leading to false reports of deadlock on
   occasion (issue #81).
+
+[CoCo]: https://github.com/barrucadu/coco
 
 
 ---------------------------------------------------------------------------------------------------
