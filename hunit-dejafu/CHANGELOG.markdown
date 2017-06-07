@@ -14,6 +14,13 @@ unreleased
 
 - The refinement property testing functionality of dejafu is exposed in the new `testProperty`
   function, and re-exported values.
+- Due to changes in dejafu, the `Way` type is now abstract and exposes smart constructor functions:
+    - `systematically`, corresponding to the old `Systematically`.
+    - `randomly`, corresponding to the old `Randomly`.
+    - `uniformly`, a new uniform random (as opposed to weighted random) scheduler.
+    - `swarmy`, corresponding to the old `Randomly` and specifying how many executions to use the
+      same weights for.
+- The `defaultWay`, `defaultMemType`, and `defaultBounds` values are all now re-exported.
 
 ### Miscellaneous
 

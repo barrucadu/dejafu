@@ -93,8 +93,12 @@ module Test.DejaFu
 
   -- * Testing with different settings
 
-  , Way(..)
+  , Way
   , defaultWay
+  , systematically
+  , randomly
+  , uniformly
+  , swarmy
 
   , autocheckWay
   , autocheckWayIO

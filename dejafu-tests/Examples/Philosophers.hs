@@ -4,13 +4,11 @@ module Examples.Philosophers where
 
 import Control.Monad (replicateM, forever)
 import Control.Monad.Conc.Class
-import Data.Functor (void)
 import Test.DejaFu
 import Test.Framework (Test)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
 import Test.HUnit.DejaFu
-import System.Random (StdGen)
 
 tests :: [Test]
 tests = hUnitTestToTests $ test
@@ -20,7 +18,7 @@ tests = hUnitTestToTests $ test
 
 -- | Shorter execution length bound
 way :: Way
-way = Systematically defaultBounds { boundLength = Just 30 }
+way = systematically defaultBounds { boundLength = Just 30 }
 
 --------------------------------------------------------------------------------
 

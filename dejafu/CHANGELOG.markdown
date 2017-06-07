@@ -13,6 +13,7 @@ unreleased
 ### Test.DejaFu
 
 - The new Test.DejaFu.Defaults and Test.DejaFu.Refinement modules are re-exported.
+- The new smart constructors from Test.DejaFu.SCT are exported.
 
 ### Test.DejaFu.Defaults
 
@@ -25,6 +26,19 @@ unreleased
   functions.
 
     This is related to my work on [CoCo][], allowing dejafu to test what CoCo discovers.
+
+### Test.DejaFu.SCT
+
+- The `Way` type is now abstract and exposes smart constructor functions:
+    - `systematically`, corresponding to the old `Systematically`.
+    - `randomly`, corresponding to the old `Randomly`,
+    - `uniformly`, a new uniform random (as opposed to weighted random) scheduler.
+    - `swarmy`, corresponding to the old `Randomly` and specifying how many executions to use the
+      same weights for.
+- A new `sctUniformRandom` function to do uniform (non-weighted) scheduling.
+- The `sctRandom` function is now called `sctWeightedRandom` and can now re-use the same weights for
+  multiple executions.
+- The `sctPreBound`, `sctFairBound`, and `sctLengthBound` functions have been removed.
 
 ### Fixed
 

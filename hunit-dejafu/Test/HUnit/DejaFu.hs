@@ -55,9 +55,16 @@ module Test.HUnit.DejaFu
   , testDejafusWayIO
 
   -- ** Re-exports
-  , Way(..)
+  , Way
+  , defaultWay
+  , systematically
+  , randomly
+  , uniformly
+  , swarmy
   , Bounds(..)
+  , defaultBounds
   , MemType(..)
+  , defaultMemType
 
   -- * Refinement property testing
   , testProperty

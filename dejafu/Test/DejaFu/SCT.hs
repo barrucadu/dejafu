@@ -12,7 +12,11 @@
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
   ( -- * Running Concurrent Programs
-    Way(..)
+    Way
+  , systematically
+  , randomly
+  , uniformly
+  , swarmy
   , runSCT
   , runSCT'
   , resultsSet
@@ -58,7 +62,6 @@ module Test.DejaFu.SCT
   -- See the BPOR paper for more details.
 
   , PreemptionBound(..)
-  , sctPreBound
 
   -- ** Fair Bounding
 
@@ -69,7 +72,6 @@ module Test.DejaFu.SCT
   -- See the BPOR paper for more details.
 
   , FairBound(..)
-  , sctFairBound
 
   -- ** Length Bounding
 
@@ -77,7 +79,6 @@ module Test.DejaFu.SCT
   -- terms of primitive actions) of an execution.
 
   , LengthBound(..)
-  , sctLengthBound
 
   -- * Random Scheduling
 
@@ -88,7 +89,8 @@ module Test.DejaFu.SCT
   -- because a random scheduler is more chaotic than the real
   -- scheduler.
 
-  , sctRandom
+  , sctUniformRandom
+  , sctWeightedRandom
   ) where
 
 import           Control.DeepSeq          (NFData(..))
@@ -97,7 +99,7 @@ import           Data.List                (foldl')
 import qualified Data.Map.Strict          as M
 import           Data.Set                 (Set)
 import qualified Data.Set                 as S
-import           System.Random            (RandomGen)
+import           System.Random            (RandomGen, randomR)
 
 import           Test.DejaFu.Common
 import           Test.DejaFu.Conc
@@ -106,26 +108,89 @@ import           Test.DejaFu.SCT.Internal
 -------------------------------------------------------------------------------
 -- Running Concurrent Programs
 
--- | How to explore the possible executions of a concurrent program:
+-- | How to explore the possible executions of a concurrent program.
 --
--- * Systematically explore all executions within the bounds; or
---
--- * Explore a fixed number of random executions, with the given PRNG.
---
--- @since 0.6.0.0
+-- @since unreleased
 data Way where
-  Systematically :: Bounds -> Way
-  Randomly :: RandomGen g => g -> Int -> Way
+  Systematic :: Bounds -> Way
+  Weighted   :: RandomGen g => g -> Int -> Int -> Way
+  Uniform    :: RandomGen g => g -> Int -> Way
 
 instance Show Way where
-  show (Systematically bs) = "Systematically (" ++ show bs ++ ")"
-  show (Randomly _ n)      = "Randomly <gen> " ++ show n
+  show (Systematic bs)  = "Systematic (" ++ show bs ++ ")"
+  show (Weighted _ n t) = "Weighted <gen> " ++ show (n, t)
+  show (Uniform  _ n)   = "Uniform <gen> " ++ show n
 
--- | Explore possible executions of a concurrent program.
+-- | Systematically execute a program, trying all distinct executions
+-- within the bounds.
 --
--- * If the 'Way' is @Systematically@, 'sctBound' is used.
+-- This corresponds to 'sctBound'.
 --
--- * If the 'Way' is @Randomly@, 'sctRandom' is used.
+-- @since unreleased
+systematically
+  :: Bounds
+  -- ^ The bounds to constrain the exploration.
+  -> Way
+systematically = Systematic
+
+-- | Randomly execute a program, exploring a fixed number of
+-- executions.
+--
+-- Threads are scheduled by a weighted random selection, where weights
+-- are assigned randomly on thread creation.
+--
+-- This corresponds to 'sctWeightedRandom' with weight re-use
+-- disabled, and is not guaranteed to find all distinct results
+-- (unlike 'systematically' / 'sctBound').
+--
+-- @since unreleased
+randomly :: RandomGen g
+  => g
+  -- ^ The random generator to drive the scheduling.
+  -> Int
+  -- ^ The number of executions to try.
+  -> Way
+randomly g lim = swarmy g lim 1
+
+-- | Randomly execute a program, exploring a fixed number of
+-- executions.
+--
+-- Threads are scheduled by a uniform random selection.
+--
+-- This corresponds to 'sctUniformRandom', and is not guaranteed to
+-- find all distinct results (unlike 'systematically' / 'sctBound').
+--
+-- @since unreleased
+uniformly :: RandomGen g
+  => g
+  -- ^ The random generator to drive the scheduling.
+  -> Int
+  -- ^ The number of executions to try.
+  -> Way
+uniformly = Uniform
+
+-- | Randomly execute a program, exploring a fixed number of
+-- executions.
+--
+-- Threads are scheduled by a weighted random selection, where weights
+-- are assigned randomly on thread creation.
+--
+-- This corresponds to 'sctWeightedRandom', and is not guaranteed to
+-- find all distinct results (unlike 'systematically' / 'sctBound').
+--
+-- @since unreleased
+swarmy :: RandomGen g
+  => g
+  -- ^ The random generator to drive the scheduling.
+  -> Int
+  -- ^ The number of executions to try.
+  -> Int
+  -- ^ The number of executions to use the thread weights for.
+  -> Way
+swarmy = Weighted
+
+-- | Explore possible executions of a concurrent program according to
+-- the given 'Way'.
 --
 -- @since 0.6.0.0
 runSCT :: MonadRef r n
@@ -136,8 +201,9 @@ runSCT :: MonadRef r n
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-runSCT (Systematically cb) memtype = sctBound memtype cb
-runSCT (Randomly g lim)    memtype = sctRandom memtype g lim
+runSCT (Systematic cb)      memtype = sctBound memtype cb
+runSCT (Weighted g lim use) memtype = sctWeightedRandom memtype g lim use
+runSCT (Uniform  g lim)     memtype = sctUniformRandom  memtype g lim
 
 -- | A strict variant of 'runSCT'.
 --
@@ -235,20 +301,6 @@ instance NFData PreemptionBound where
   -- not derived, so it can have a separate @since annotation
   rnf (PreemptionBound i) = rnf i
 
--- | An SCT runner using a pre-emption bounding scheduler.
---
--- @since 0.4.0.0
-sctPreBound :: MonadRef r n
-  => MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> PreemptionBound
-  -- ^ The maximum number of pre-emptions to allow in a single
-  -- execution
-  -> ConcT r n a
-  -- ^ The computation to run many times
-  -> n [(Either Failure a, Trace)]
-sctPreBound memtype pb = sctBound memtype $ Bounds (Just pb) Nothing Nothing
-
 -- | Pre-emption bound function. This does not count pre-emptive
 -- context switches to a commit thread.
 pBound :: PreemptionBound -> BoundFunc
@@ -286,20 +338,6 @@ instance NFData FairBound where
   -- not derived, so it can have a separate @since annotation
   rnf (FairBound i) = rnf i
 
--- | An SCT runner using a fair bounding scheduler.
---
--- @since 0.4.0.0
-sctFairBound :: MonadRef r n
-  => MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> FairBound
-  -- ^ The maximum difference between the number of yield operations
-  -- performed by different threads.
-  -> ConcT r n a
-  -- ^ The computation to run many times
-  -> n [(Either Failure a, Trace)]
-sctFairBound memtype fb = sctBound memtype $ Bounds Nothing (Just fb) Nothing
-
 -- | Fair bound function
 fBound :: FairBound -> BoundFunc
 fBound (FairBound fb) ts (_, l) = maxYieldCountDiff ts l <= fb
@@ -322,20 +360,6 @@ newtype LengthBound = LengthBound Int
 instance NFData LengthBound where
   -- not derived, so it can have a separate @since annotation
   rnf (LengthBound i) = rnf i
-
--- | An SCT runner using a length bounding scheduler.
---
--- @since 0.4.0.0
-sctLengthBound :: MonadRef r n
-  => MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> LengthBound
-  -- ^ The maximum length of a schedule, in terms of primitive
-  -- actions.
-  -> ConcT r n a
-  -- ^ The computation to run many times
-  -> n [(Either Failure a, Trace)]
-sctLengthBound memtype lb = sctBound memtype $ Bounds Nothing Nothing (Just lb)
 
 -- | Length bound function
 lBound :: LengthBound -> BoundFunc
@@ -401,15 +425,15 @@ sctBound memtype cb conc = go initialState where
   -- Incorporate the new backtracking steps into the DPOR tree.
   addBacktracks = incorporateBacktrackSteps (cBound cb)
 
--- | SCT via random scheduling.
+-- | SCT via uniform random scheduling.
 --
 -- Schedules are generated by assigning to each new thread a random
 -- weight. Threads are then scheduled by a weighted random selection.
 --
 -- This is not guaranteed to find all distinct results.
 --
--- @since 0.5.0.0
-sctRandom :: (MonadRef r n, RandomGen g)
+-- @since unreleased
+sctUniformRandom :: (MonadRef r n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> g
@@ -419,15 +443,44 @@ sctRandom :: (MonadRef r n, RandomGen g)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctRandom memtype g0 lim0 conc = go g0 lim0 where
+sctUniformRandom memtype g0 lim0 conc = go g0 (max 0 lim0) where
   go _ 0 = pure []
   go g n = do
-    (res, s, trace) <- runConcurrent randSched
+    (res, s, trace) <- runConcurrent (randSched $ \g' -> (1, g'))
                                      memtype
-                                     (initialRandSchedState g)
+                                     (initialRandSchedState Nothing g)
                                      conc
-
     ((res, trace):) <$> go (schedGen s) (n-1)
+
+-- | SCT via weighted random scheduling.
+--
+-- Schedules are generated by assigning to each new thread a random
+-- weight. Threads are then scheduled by a weighted random selection.
+--
+-- This is not guaranteed to find all distinct results.
+--
+-- @since unreleased
+sctWeightedRandom :: (MonadRef r n, RandomGen g)
+  => MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> g
+  -- ^ The random number generator.
+  -> Int
+  -- ^ The number of executions to perform.
+  -> Int
+  -- ^ The number of executions to use the same set of weights for.
+  -> ConcT r n a
+  -- ^ The computation to run many times.
+  -> n [(Either Failure a, Trace)]
+sctWeightedRandom memtype g0 lim0 use0 conc = go g0 (max 0 lim0) (max 1 use0) M.empty where
+  go _ 0 _ _ = pure []
+  go g n 0 _ = go g n (max 1 use0) M.empty
+  go g n use ws = do
+    (res, s, trace) <- runConcurrent (randSched $ randomR (1, 50))
+                                     memtype
+                                     (initialRandSchedState (Just ws) g)
+                                     conc
+    ((res, trace):) <$> go (schedGen s) (n-1) (use-1) (schedWeights s)
 
 -------------------------------------------------------------------------------
 -- Utilities

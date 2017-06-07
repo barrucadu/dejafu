@@ -43,41 +43,13 @@ import Control.Monad
 import Control.Monad.Conc.Class
 
 -- test imports
-import System.Random (StdGen, mkStdGen)
-import Test.DejaFu (Bounds(..), Failure(..), MemType(..), Way(..), defaultBounds, defaultWay, gives)
-import Test.Framework (Test, testGroup)
-import Test.Framework.Providers.HUnit (hUnitTestToTests)
-import Test.HUnit (test)
-import Test.HUnit.DejaFu
+import Test.DejaFu (Bounds(..), Failure(..), defaultBounds, gives)
+import Utils
 
-tests :: [Test]
+tests :: [T]
 tests =
-  [ testGroup "Systematic" . hUnitTestToTests $ test
-    [ testDejafuWay defaultWay
-                    SequentialConsistency
-                    deadlocks
-                    "deadlocks"
-                    (gives [Left Deadlock, Right ()])
-
-    , testDejafuWay (Systematically defaultBounds { boundPreemp = Just 3 })
-                    SequentialConsistency
-                    nondeterministic
-                    "nondeterministic (systematic)"
-                    (gives [Left Deadlock, Right 0, Right 1])
-    ]
-  , testGroup "Random" . hUnitTestToTests $ test
-    [ testDejafuWay (Randomly (mkStdGen 0) 100)
-                    SequentialConsistency
-                    deadlocks
-                    "deadlocks (random)"
-                    (gives [Left Deadlock, Right ()])
-
-    , testDejafuWay (Randomly (mkStdGen 0) 100)
-                    SequentialConsistency
-                    nondeterministic
-                    "nondeterministic (random)"
-                    (gives [Left Deadlock, Right 0, Right 1])
-    ]
+  [ T  "deadlocks"        deadlocks        (gives [Left Deadlock, Right ()])
+  , BT "nondeterministic" nondeterministic (gives [Left Deadlock, Right 0, Right 1]) (defaultBounds { boundPreemp = Just 3 })
   ]
 
 -- This exhibits a deadlock with no preemptions.

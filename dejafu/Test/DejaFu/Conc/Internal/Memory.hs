@@ -131,7 +131,7 @@ writeBarrier (WriteBuffer wb) = mapM_ flush $ M.elems wb where
 addCommitThreads :: WriteBuffer r -> Threads n r -> Threads n r
 addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
   phantoms = [ (ThreadId Nothing $ negate tid, mkthread $ fromJust c)
-             | ((k, b), tid) <- zip (M.toList wb) [1..]
+             | ((_, b), tid) <- zip (M.toList wb) [1..]
              , let c = go $ viewl b
              , isJust c]
   go (BufferedWrite tid (CRef crid _) _ :< _) = Just $ ACommit tid crid

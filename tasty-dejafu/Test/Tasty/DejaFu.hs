@@ -52,9 +52,16 @@ module Test.Tasty.DejaFu
   , testDejafusWayIO
 
   -- ** Re-exports
-  , Way(..)
+  , Way
+  , defaultWay
+  , systematically
+  , randomly
+  , uniformly
+  , swarmy
   , Bounds(..)
+  , defaultBounds
   , MemType(..)
+  , defaultMemType
 
   -- * Refinement property testing
   , testProperty
@@ -77,7 +84,7 @@ import           Data.List              (intercalate, intersperse)
 import           Data.Proxy             (Proxy(..))
 import           Data.Tagged            (Tagged(..))
 import           Data.Typeable          (Typeable)
-import           System.Random          (StdGen, mkStdGen)
+import           System.Random          (mkStdGen)
 import           Test.DejaFu            hiding (Testable(..))
 import qualified Test.DejaFu.Conc       as Conc
 import qualified Test.DejaFu.Refinement as R
@@ -149,8 +156,8 @@ instance IsOption MemType where
 instance IsOption Way where
   defaultValue = defaultWay
   parseValue = shortName . map toUpper where
-    shortName "SYSTEMATICALLY" = Just (Systematically defaultBounds)
-    shortName "RANDOMLY"       = Just (Randomly (mkStdGen 42) 100)
+    shortName "SYSTEMATICALLY" = Just (systematically defaultBounds)
+    shortName "RANDOMLY"       = Just (randomly (mkStdGen 42) 100)
     shortName _ = Nothing
   optionName = Tagged "way"
   optionHelp = Tagged "The execution method to use. This should be one of \"systematically\" or \"randomly\"."
