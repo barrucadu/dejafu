@@ -7,6 +7,17 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+-----------
+
+### Test.DejaFu.Refinement
+
+- `check`, `check'`, and `checkFor` are now faster if there are multiple counterexamples.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.7.0.0 [2017-06-07] (git tag: [dejafu-0.7.0.0][])
 -------
 

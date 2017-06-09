@@ -304,6 +304,9 @@ check' = checkFor 10 100
 -- | Like 'check', but take a number of cases to try, also returns the
 -- counter example found rather than printing it.
 --
+-- If multiple counterexamples exist, this will be faster than
+-- @listToMaybe@ composed with @counterExamples@.
+--
 -- @since 0.7.0.0
 checkFor :: (Testable p, Listable (X p), Eq (X p), Show (X p))
   => Int
@@ -313,7 +316,17 @@ checkFor :: (Testable p, Listable (X p), Eq (X p), Show (X p))
   -> p
   -- ^ The property to check.
   -> IO (Maybe (FailedProperty (O p) (X p)))
-checkFor sn vn p = listToMaybe <$> counterExamples sn vn p
+checkFor sn vn p =  do
+    let seeds = take sn $ concat tiers
+    let cases = take vn $ concat (rpropTiers p)
+    go seeds cases
+  where
+    go seeds ((vs, p'):rest) = do
+      r <- checkWithSeeds seeds p'
+      case r of
+        Just cf -> pure (Just (cf vs))
+        Nothing -> go seeds rest
+    go _ [] = pure Nothing
 
 -- | Find all counterexamples up to a limit.
 --
