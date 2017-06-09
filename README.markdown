@@ -44,7 +44,7 @@ Packages
 |     | Version | Intended Users | Summary |
 | --- | ------- | -------------- | ------- |
 | concurrency  [[docs][d:conc]]   [[hackage][h:conc]]   | 1.1.2.0 | Authors | Typeclasses, functions, and data types for concurrency and STM. |
-| dejafu       [[docs][d:dejafu]] [[hackage][h:dejafu]] | 0.7.0.0 | Testers | Systematic testing for Haskell concurrency. |
+| dejafu       [[docs][d:dejafu]] [[hackage][h:dejafu]] | 0.7.0.1 | Testers | Systematic testing for Haskell concurrency. |
 | hunit-dejafu [[docs][d:hunit]]  [[hackage][h:hunit]]  | 0.6.0.0 | Testers | Deja Fu support for the HUnit test framework. |
 | tasty-dejafu [[docs][d:tasty]]  [[hackage][h:tasty]]  | 0.6.0.0 | Testers | Deja Fu support for the Tasty test framework. |
 
