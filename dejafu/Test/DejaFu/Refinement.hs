@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -10,7 +11,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : FlexibleContexts, FlexibleInstances, GADTs, TupleSections, TypeFamilies
+-- Portability : FlexibleContexts, FlexibleInstances, GADTs, MultiWayIf, TupleSections, TypeFamilies
 --
 -- Properties about the side-effects of concurrent functions on some
 -- shared state.
@@ -349,6 +350,9 @@ counterExamples sn vn p = do
 -------------------------------------------------------------------------------
 -- Internal
 
+-- | Three-valued sum, used in checking strict refinement.
+data F x = Failing x | Unknown | Refuted
+
 -- | Check a refinement property with given seed values.  Returns the
 -- counterexample if the property is false.
 checkWithSeeds
@@ -357,21 +361,33 @@ checkWithSeeds
   -> RefinementProperty o x
   -- ^ The property to check.
   -> IO (Maybe ([String] -> FailedProperty o x))
-checkWithSeeds seeds (RP how l r) = do
-    ls <- mapM (\x -> (x,) <$> evalSigWithSeed l x) seeds
-    rs <- mapM (evalSigWithSeed r) seeds
-    let resultsf f = zipWith (\(x, l') r' -> (l' `f` r', x, l', r')) ls rs
-    pure . listToMaybe $ case how of
-      Weak   -> ces (resultsf S.isSubsetOf)
-      Strict ->
-        -- strict fails if (a) any left result-set is not a subset of
-        -- the corresponding right result-set, or (b) every left
-        -- result-set is equal to the corresponding right result-set
-        let equiv = null (ces (resultsf (==)))
-        in ces (resultsf S.isSubsetOf) ++ if equiv then ces (resultsf S.isProperSubsetOf) else []
-      Equiv  -> ces (resultsf (==))
+checkWithSeeds seeds (RP how l r) = case how of
+    Weak   -> go1 S.isSubsetOf seeds
+    Equiv  -> go1 (==)         seeds
+    Strict -> go2 Unknown      seeds
   where
-    ces results = [toCE x lrs rrs | (False, x, lrs, rrs) <- results]
+    -- weak and equiv need every set of pairwise result-sets to match
+    -- some predicate.
+    go1 f (x:xs) = do
+      lrs <- evalSigWithSeed l x
+      rrs <- evalSigWithSeed r x
+      if lrs `f` rrs
+        then go1 f xs
+        else pure (Just $ toCE x lrs rrs)
+    go1 _ [] = pure Nothing
+
+    -- strict fails if (a) any left result-set is not a subset of the
+    -- corresponding right result-set, or (b) every left result-set is
+    -- equal to the corresponding right result-set
+    go2 eq (x:xs) = do
+      lrs <- evalSigWithSeed l x
+      rrs <- evalSigWithSeed r x
+      let ce = toCE x lrs rrs
+      if | lrs == rrs             -> go2 (case eq of Unknown -> Failing ce; _ -> eq) xs
+         | lrs `S.isSubsetOf` rrs -> go2 Refuted xs
+         | otherwise              -> pure (Just ce)
+    go2 (Failing cf) [] = pure (Just cf)
+    go2 _ [] = pure Nothing
 
     toCE x lrs rrs args = CounterExample
       { failingSeed  = x

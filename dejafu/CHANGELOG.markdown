@@ -13,6 +13,8 @@ unreleased
 ### Test.DejaFu.Refinement
 
 - `check`, `check'`, and `checkFor` are now faster if there are multiple counterexamples.
+- The above and `counterExamples` are now faster even if there is only a single counterexample in
+  some cases.
 
 
 ---------------------------------------------------------------------------------------------------
