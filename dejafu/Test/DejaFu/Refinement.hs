@@ -274,7 +274,7 @@ data FailedProperty o x
 -- variable assignments.
 --
 -- @since 0.7.0.0
-check :: (Testable p, Listable (X p), Eq (X p), Show (X p), Show (O p))
+check :: (Testable p, Listable (X p), Show (X p), Show (O p))
   => p
   -- ^ The property to check.
   -> IO Bool
@@ -296,7 +296,7 @@ check p = do
 -- counterexample.
 --
 -- @since 0.7.0.0
-check' :: (Testable p, Listable (X p), Eq (X p), Show (X p), Show (O p))
+check' :: (Testable p, Listable (X p))
   => p
   -- ^ The property to check.
   -> IO (Maybe (FailedProperty (O p) (X p)))
@@ -309,7 +309,7 @@ check' = checkFor 10 100
 -- @listToMaybe@ composed with @counterExamples@.
 --
 -- @since 0.7.0.0
-checkFor :: (Testable p, Listable (X p), Eq (X p), Show (X p))
+checkFor :: (Testable p, Listable (X p))
   => Int
   -- ^ Number of seed values per variable-assignment.
   -> Int
@@ -332,7 +332,7 @@ checkFor sn vn p =  do
 -- | Find all counterexamples up to a limit.
 --
 -- @since 0.7.0.0
-counterExamples :: (Testable p, Listable (X p), Eq (X p))
+counterExamples :: (Testable p, Listable (X p))
   => Int
   -- ^ Number of seed values per variable-assignment.
   -> Int

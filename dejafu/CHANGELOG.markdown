@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 This project is versioned according to the [Package Versioning Policy](https://pvp.haskell.org), the
 *de facto* standard Haskell versioning scheme.
 
+unreleased
+----------
+
+### Test.DejaFu.Refinement
+
+- Removed unnecessary typeclass constraints from `check`, `check'`, `checkFor`, and
+  `counterExamples`.
+
+
+---------------------------------------------------------------------------------------------------
+
 
 0.7.0.1 [2017-06-09] (git tag: [dejafu-0.7.0.1][])
 -------
