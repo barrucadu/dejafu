@@ -108,7 +108,7 @@ module Test.DejaFu.Refinement
 import           Control.Arrow            (first)
 import           Control.Monad            (void)
 import           Control.Monad.Conc.Class (readMVar, spawn)
-import           Data.Maybe               (isNothing, listToMaybe)
+import           Data.Maybe               (isNothing)
 import           Data.Set                 (Set)
 import qualified Data.Set                 as S
 import           Test.LeanCheck           (Listable(..), concatMapT, mapT)
