@@ -14,6 +14,12 @@ unreleased
 - Removed unnecessary typeclass constraints from `check`, `check'`, `checkFor`, and
   `counterExamples`.
 
+### Miscellaneous
+
+- Removed an unnecessary dependency on [monad-loops][].
+
+[monad-loops]: https://hackage.haskell.org/package/monad-loops
+
 
 ---------------------------------------------------------------------------------------------------
 
