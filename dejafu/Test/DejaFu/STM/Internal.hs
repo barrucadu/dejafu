@@ -101,12 +101,8 @@ instance Foldable Result where
 -- | Run a STM transaction, returning an action to undo its effects.
 doTransaction :: MonadRef r n => M n r a -> IdSource -> n (Result a, n (), IdSource, TTrace)
 doTransaction ma idsource = do
-  ref <- newRef Nothing
-
-  let c = runCont ma (SStop . writeRef ref . Just . Right)
-
+  (c, ref) <- runRefCont SStop (Just . Right) (runCont ma)
   (idsource', undo, readen, written, trace) <- go ref c (pure ()) idsource [] [] []
-
   res <- readRef ref
 
   case res of

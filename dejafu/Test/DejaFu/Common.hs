@@ -56,10 +56,14 @@ module Test.DejaFu.Common
 
   -- * Memory models
   , MemType(..)
+
+  -- * Miscellaneous
+  , runRefCont
   ) where
 
 import           Control.DeepSeq    (NFData(..))
 import           Control.Exception  (MaskingState(..))
+import           Control.Monad.Ref  (MonadRef(..))
 import           Data.List          (intercalate, nub, sort)
 import           Data.List.NonEmpty (NonEmpty)
 import           Data.Maybe         (fromMaybe, mapMaybe)
@@ -857,6 +861,18 @@ data MemType =
 -- | @since 0.5.1.0
 instance NFData MemType where
   rnf m = m `seq` ()
+
+-------------------------------------------------------------------------------
+-- Miscellaneous
+
+-- | Run with a continuation that writes its value into a reference,
+-- returning the computation and the reference.  Using the reference
+-- is non-blocking, it is up to you to ensure you wait sufficiently.
+runRefCont :: MonadRef r n => (n () -> x) -> (a -> Maybe b) -> ((a -> x) -> x) -> n (x, r (Maybe b))
+runRefCont act f k = do
+  ref <- newRef Nothing
+  let c = k (act . writeRef ref . f)
+  pure (c, ref)
 
 -------------------------------------------------------------------------------
 -- Utilities

@@ -71,7 +71,7 @@ instance MonadThrow (STMLike n r) where
 instance MonadCatch (STMLike n r) where
   catch (S stm) handler = toSTM (SCatch (runSTM . handler) stm)
 
-instance Monad n => C.MonadSTM (STMLike n r) where
+instance C.MonadSTM (STMLike n r) where
   type TVar (STMLike n r) = TVar r
 
   retry = toSTM (const SRetry)

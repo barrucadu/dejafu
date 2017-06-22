@@ -57,16 +57,13 @@ runConcurrency :: MonadRef r n
                -> M n r a
                -> n (Either Failure a, Context n r g, SeqTrace, Maybe (ThreadId, ThreadAction))
 runConcurrency sched memtype g idsrc caps ma = do
-  ref <- newRef Nothing
-
-  let c = runCont ma (AStop . writeRef ref . Just . Right)
+  (c, ref) <- runRefCont AStop (Just . Right) (runM ma)
   let ctx = Context { cSchedState = g
                     , cIdSource   = idsrc
                     , cThreads    = launch' Unmasked initialThread (const c) M.empty
                     , cWriteBuf   = emptyBuffer
                     , cCaps       = caps
                     }
-
   (finalCtx, trace, finalAction) <- runThreads sched memtype ref ctx
   out <- readRef ref
   pure (fromJust out, finalCtx, trace, finalAction)
