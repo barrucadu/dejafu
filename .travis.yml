@@ -12,6 +12,7 @@ cache:
 
 # Goal: support latest 3 GHC major versions.
 matrix:
+  fast_finish: true
   include:
   - env: RESOLVER="lts-6" # GHC 7.10
     addons: {apt: {packages: [libgmp-dev]}}
@@ -21,6 +22,8 @@ matrix:
   #   addons: {apt: {packages: [libgmp-dev]}}
   - env: RESOLVER="nightly"
     addons: {apt: {packages: [libgmp-dev]}}
+  allow_failures:
+  - env: RESOLVER="nightly"
 
 # Download and unpack the stack executable
 before_install:
