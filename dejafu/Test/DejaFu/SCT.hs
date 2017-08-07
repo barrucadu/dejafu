@@ -18,9 +18,18 @@ module Test.DejaFu.SCT
   , uniformly
   , swarmy
   , runSCT
-  , runSCT'
   , resultsSet
+
+  -- ** Discarding variants
+  , Discard(..)
+  , runSCTDiscard
+  , resultsSetDiscard
+
+  -- ** Strict variants
+  , runSCT'
   , resultsSet'
+  , runSCTDiscard'
+  , resultsSetDiscard'
 
   -- * Bounded Partial-order Reduction
 
@@ -51,6 +60,7 @@ module Test.DejaFu.SCT
   , Bounds(..)
   , noBounds
   , sctBound
+  , sctBoundDiscard
 
   -- ** Pre-emption Bounding
 
@@ -91,8 +101,11 @@ module Test.DejaFu.SCT
 
   , sctUniformRandom
   , sctWeightedRandom
+  , sctUniformRandomDiscard
+  , sctWeightedRandomDiscard
   ) where
 
+import           Control.Applicative      ((<|>))
 import           Control.DeepSeq          (NFData(..))
 import           Control.Monad.Ref        (MonadRef)
 import           Data.List                (foldl')
@@ -201,21 +214,7 @@ runSCT :: MonadRef r n
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-runSCT (Systematic cb)      memtype = sctBound memtype cb
-runSCT (Weighted g lim use) memtype = sctWeightedRandom memtype g lim use
-runSCT (Uniform  g lim)     memtype = sctUniformRandom  memtype g lim
-
--- | A strict variant of 'runSCT'.
---
--- Demanding the result of this will force it to normal form, which
--- may be more efficient in some situations.
---
--- @since 0.6.0.0
-runSCT' :: (MonadRef r n, NFData a)
-  => Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
-runSCT' way memtype conc = do
-  res <- runSCT way memtype conc
-  rnf res `seq` pure res
+runSCT = runSCTDiscard (const Nothing)
 
 -- | Return the set of results of a concurrent program.
 --
@@ -228,8 +227,67 @@ resultsSet :: (MonadRef r n, Ord a)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n (Set (Either Failure a))
-resultsSet way memtype conc =
-  S.fromList . map fst <$> runSCT way memtype conc
+resultsSet = resultsSetDiscard (const Nothing)
+
+-- | An @Either Failure a -> Maybe Discard@ value can be used to
+-- selectively discard results.
+--
+-- @since unreleased
+data Discard
+  = DiscardTrace
+  -- ^ Discard the trace but keep the result.  The result will appear
+  -- to have an empty trace.
+  | DiscardResultAndTrace
+  -- ^ Discard the result and the trace.  It will simply not be
+  -- reported as a possible behaviour of the program.
+  deriving (Eq, Show, Read, Ord, Enum, Bounded)
+
+instance NFData Discard where
+  rnf d = d `seq` ()
+
+-- | A variant of 'runSCT' which can selectively discard results.
+--
+-- @since unreleased
+runSCTDiscard :: MonadRef r n
+  => (Either Failure a -> Maybe Discard)
+  -- ^ Selectively discard results.
+  -> Way
+  -- ^ How to run the concurrent program.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> ConcT r n a
+  -- ^ The computation to run many times.
+  -> n [(Either Failure a, Trace)]
+runSCTDiscard discard (Systematic cb)      memtype = sctBoundDiscard discard memtype cb
+runSCTDiscard discard (Weighted g lim use) memtype = sctWeightedRandomDiscard discard memtype g lim use
+runSCTDiscard discard (Uniform  g lim)     memtype = sctUniformRandomDiscard  discard memtype g lim
+
+-- | A variant of 'resultsSet' which can selectively discard results.
+--
+-- @since unreleased
+resultsSetDiscard :: (MonadRef r n, Ord a)
+  => (Either Failure a -> Maybe Discard)
+  -- ^ Selectively discard results.  Traces are always discarded.
+  -> Way
+  -- ^ How to run the concurrent program.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> ConcT r n a
+  -- ^ The computation to run many times.
+  -> n (Set (Either Failure a))
+resultsSetDiscard discard way memtype conc =
+  let discard' efa = discard efa <|> Just DiscardTrace
+  in S.fromList . map fst <$> runSCTDiscard discard' way memtype conc
+
+-- | A strict variant of 'runSCT'.
+--
+-- Demanding the result of this will force it to normal form, which
+-- may be more efficient in some situations.
+--
+-- @since 0.6.0.0
+runSCT' :: (MonadRef r n, NFData a)
+  => Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
+runSCT' = runSCTDiscard' (const Nothing)
 
 -- | A strict variant of 'resultsSet'.
 --
@@ -239,8 +297,30 @@ resultsSet way memtype conc =
 -- @since 0.6.0.0
 resultsSet' :: (MonadRef r n, Ord a, NFData a)
   => Way -> MemType -> ConcT r n a -> n (Set (Either Failure a))
-resultsSet' way memtype conc = do
-  res <- resultsSet' way memtype conc
+resultsSet' = resultsSetDiscard' (const Nothing)
+
+-- | A strict variant of 'runSCTDiscard'.
+--
+-- Demanding the result of this will force it to normal form, which
+-- may be more efficient in some situations.
+--
+-- @since unreleased
+runSCTDiscard' :: (MonadRef r n, NFData a)
+  => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
+runSCTDiscard' discard way memtype conc = do
+  res <- runSCTDiscard discard way memtype conc
+  rnf res `seq` pure res
+
+-- | A strict variant of 'resultsSetDiscard'.
+--
+-- Demanding the result of this will force it to normal form, which
+-- may be more efficient in some situations.
+--
+-- @since unreleased
+resultsSetDiscard' :: (MonadRef r n, Ord a, NFData a)
+  => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcT r n a -> n (Set (Either Failure a))
+resultsSetDiscard' discard way memtype conc = do
+  res <- resultsSetDiscard discard way memtype conc
   rnf res `seq` pure res
 
 -------------------------------------------------------------------------------
@@ -394,7 +474,22 @@ sctBound :: MonadRef r n
   -> ConcT r n a
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
-sctBound memtype cb conc = go initialState where
+sctBound = sctBoundDiscard (const Nothing)
+
+-- | A variant of 'sctBound' which can selectively discard results.
+--
+-- @since unreleased
+sctBoundDiscard :: MonadRef r n
+  => (Either Failure a -> Maybe Discard)
+  -- ^ Selectively discard results.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> Bounds
+  -- ^ The combined bounds.
+  -> ConcT r n a
+  -- ^ The computation to run many times
+  -> n [(Either Failure a, Trace)]
+sctBoundDiscard discard memtype cb conc = go initialState where
   -- Repeatedly run the computation gathering all the results and
   -- traces into a list until there are no schedules remaining to try.
   go dp = case findSchedulePrefix dp of
@@ -408,8 +503,8 @@ sctBound memtype cb conc = go initialState where
       let newDPOR = addTrace conservative trace dp
 
       if schedIgnore s
-      then go newDPOR
-      else ((res, trace):) <$> go (addBacktracks bpoints newDPOR)
+        then go newDPOR
+        else checkDiscard discard res trace <$> go (addBacktracks bpoints newDPOR)
 
     Nothing -> pure []
 
@@ -443,14 +538,32 @@ sctUniformRandom :: (MonadRef r n, RandomGen g)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctUniformRandom memtype g0 lim0 conc = go g0 (max 0 lim0) where
+sctUniformRandom = sctUniformRandomDiscard (const Nothing)
+
+-- | A variant of 'sctUniformRandom' which can selectively discard
+-- results.
+--
+-- @since unreleased
+sctUniformRandomDiscard :: (MonadRef r n, RandomGen g)
+  => (Either Failure a -> Maybe Discard)
+  -- ^ Selectively discard results.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> g
+  -- ^ The random number generator.
+  -> Int
+  -- ^ The number of executions to perform.
+  -> ConcT r n a
+  -- ^ The computation to run many times.
+  -> n [(Either Failure a, Trace)]
+sctUniformRandomDiscard discard memtype g0 lim0 conc = go g0 (max 0 lim0) where
   go _ 0 = pure []
   go g n = do
     (res, s, trace) <- runConcurrent (randSched $ \g' -> (1, g'))
                                      memtype
                                      (initialRandSchedState Nothing g)
                                      conc
-    ((res, trace):) <$> go (schedGen s) (n-1)
+    checkDiscard discard res trace <$> go (schedGen s) (n-1)
 
 -- | SCT via weighted random scheduling.
 --
@@ -472,7 +585,27 @@ sctWeightedRandom :: (MonadRef r n, RandomGen g)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctWeightedRandom memtype g0 lim0 use0 conc = go g0 (max 0 lim0) (max 1 use0) M.empty where
+sctWeightedRandom = sctWeightedRandomDiscard (const Nothing)
+
+-- | A variant of 'sctWeightedRandom' which can selectively discard
+-- results.
+--
+-- @since unreleased
+sctWeightedRandomDiscard :: (MonadRef r n, RandomGen g)
+  => (Either Failure a -> Maybe Discard)
+  -- ^ Selectively discard results.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> g
+  -- ^ The random number generator.
+  -> Int
+  -- ^ The number of executions to perform.
+  -> Int
+  -- ^ The number of executions to use the same set of weights for.
+  -> ConcT r n a
+  -- ^ The computation to run many times.
+  -> n [(Either Failure a, Trace)]
+sctWeightedRandomDiscard discard memtype g0 lim0 use0 conc = go g0 (max 0 lim0) (max 1 use0) M.empty where
   go _ 0 _ _ = pure []
   go g n 0 _ = go g n (max 1 use0) M.empty
   go g n use ws = do
@@ -480,7 +613,7 @@ sctWeightedRandom memtype g0 lim0 use0 conc = go g0 (max 0 lim0) (max 1 use0) M.
                                      memtype
                                      (initialRandSchedState (Just ws) g)
                                      conc
-    ((res, trace):) <$> go (schedGen s) (n-1) (use-1) (schedWeights s)
+    checkDiscard discard res trace <$> go (schedGen s) (n-1) (use-1) (schedWeights s)
 
 -------------------------------------------------------------------------------
 -- Utilities
@@ -542,3 +675,10 @@ trueBound _ _ = True
 -- satisfied.
 (&+&) :: BoundFunc -> BoundFunc -> BoundFunc
 (&+&) b1 b2 ts dl = b1 ts dl && b2 ts dl
+
+-- | Apply the discard function.
+checkDiscard :: (a -> Maybe Discard) -> a -> [b] -> [(a, [b])] -> [(a, [b])]
+checkDiscard discard res trace = case discard res of
+  Just DiscardResultAndTrace -> id
+  Just DiscardTrace -> ((res, []):)
+  Nothing -> ((res, trace):)
