@@ -10,21 +10,15 @@ cache:
   - $HOME/.cabal
   - $HOME/.stack
 
-# Build matrix configuration
+# Goal: support latest 3 GHC major versions.
 matrix:
   include:
-  - env: RESOLVER="lts-3"
+  - env: RESOLVER="lts-6" # GHC 7.10
     addons: {apt: {packages: [libgmp-dev]}}
-  - env: RESOLVER="lts-4"
+  - env: RESOLVER="lts-9" # GHC 8.0
     addons: {apt: {packages: [libgmp-dev]}}
-  - env: RESOLVER="lts-5"
-    addons: {apt: {packages: [libgmp-dev]}}
-  - env: RESOLVER="lts-6"
-    addons: {apt: {packages: [libgmp-dev]}}
-  - env: RESOLVER="lts-7"
-    addons: {apt: {packages: [libgmp-dev]}}
-  - env: RESOLVER="lts-8"
-    addons: {apt: {packages: [libgmp-dev]}}
+  # - env: RESOLVER="lts-X" # GHC 8.2
+  #   addons: {apt: {packages: [libgmp-dev]}}
   - env: RESOLVER="nightly"
     addons: {apt: {packages: [libgmp-dev]}}
 
