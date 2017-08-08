@@ -21,11 +21,10 @@ import           Control.Monad.Ref                   (MonadRef, newRef, readRef,
                                                       writeRef)
 import qualified Data.Foldable                       as F
 import           Data.Functor                        (void)
-import           Data.List                           (sort)
+import           Data.List                           (sortOn)
 import           Data.List.NonEmpty                  (NonEmpty(..), fromList)
 import qualified Data.Map.Strict                     as M
-import           Data.Maybe                          (fromJust, isJust,
-                                                      isNothing)
+import           Data.Maybe                          (fromJust, isJust)
 import           Data.Monoid                         ((<>))
 import           Data.Sequence                       (Seq, (<|))
 import qualified Data.Sequence                       as Seq
@@ -87,42 +86,28 @@ runThreads sched memtype ref = go Seq.empty [] Nothing where
     | isTerminated  = pure (ctx, sofar, prior)
     | isDeadlocked  = die sofar prior Deadlock ctx
     | isSTMLocked   = die sofar prior STMDeadlock ctx
-    | isAborted     = die sofar prior Abort $ ctx { cSchedState = g' }
-    | isNonexistant = die sofar prior InternalError $ ctx { cSchedState = g' }
-    | isBlocked     = die sofar prior InternalError $ ctx { cSchedState = g' }
-    | otherwise = do
-      stepped <- stepThread sched memtype chosen (_continuation $ fromJust thread) $ ctx { cSchedState = g' }
-      case stepped of
-        (Right ctx', actOrTrc) ->
-          let (_, trc) = getActAndTrc actOrTrc
-              threads' = if (interruptible <$> M.lookup chosen (cThreads ctx')) /= Just False
-                         then unblockWaitingOn chosen (cThreads ctx')
-                         else cThreads ctx'
-              sofarSched' = sofarSched <> map (\(d,_,a) -> (d,a)) (F.toList trc)
-              ctx'' = ctx' { cThreads = delCommitThreads threads' }
-          in go (sofar <> trc) sofarSched' (getPrior actOrTrc) ctx''
-        (Left failure, actOrTrc) ->
-          let (_, trc) = getActAndTrc actOrTrc
-              ctx'     = ctx { cSchedState = g', cThreads = delCommitThreads threads }
-          in die (sofar <> trc) (getPrior actOrTrc) failure ctx'
-
+    | otherwise =
+      let ctx' = ctx { cSchedState = g' }
+      in case choice of
+           Just chosen -> case M.lookup chosen threadsc of
+             Just thread
+               | isBlocked thread -> die sofar prior InternalError ctx'
+               | otherwise -> step chosen thread ctx'
+             Nothing -> die sofar prior InternalError ctx'
+           Nothing -> die sofar prior Abort ctx'
     where
       (choice, g')  = sched sofarSched prior (fromList $ map (\(t,l:|_) -> (t,l)) runnable') (cSchedState ctx)
-      chosen        = fromJust choice
-      runnable'     = [(t, nextActions t) | t <- sort $ M.keys runnable]
-      runnable      = M.filter (isNothing . _blocking) threadsc
-      thread        = M.lookup chosen threadsc
+      runnable'     = [(t, lookahead (_continuation a)) | (t, a) <- sortOn fst $ M.assocs runnable]
+      runnable      = M.filter (not . isBlocked) threadsc
       threadsc      = addCommitThreads (cWriteBuf ctx) threads
       threads       = cThreads ctx
-      isAborted     = isNothing choice
-      isBlocked     = isJust . _blocking $ fromJust thread
-      isNonexistant = isNothing thread
+      isBlocked     = isJust . _blocking
       isTerminated  = initialThread `notElem` M.keys threads
-      isDeadlocked  = M.null (M.filter (isNothing . _blocking) threads) &&
+      isDeadlocked  = M.null (M.filter (not . isBlocked) threads) &&
         (((~=  OnMVarFull  undefined) <$> M.lookup initialThread threads) == Just True ||
          ((~=  OnMVarEmpty undefined) <$> M.lookup initialThread threads) == Just True ||
          ((~=  OnMask      undefined) <$> M.lookup initialThread threads) == Just True)
-      isSTMLocked = M.null (M.filter (isNothing . _blocking) threads) &&
+      isSTMLocked = M.null (M.filter (not . isBlocked) threads) &&
         ((~=  OnTVar []) <$> M.lookup initialThread threads) == Just True
 
       unblockWaitingOn tid = fmap unblock where
@@ -130,22 +115,37 @@ runThreads sched memtype ref = go Seq.empty [] Nothing where
           Just (OnMask t) | t == tid -> thrd { _blocking = Nothing }
           _ -> thrd
 
-      decision
-        | Just chosen == (fst <$> prior) = Continue
-        | (fst <$> prior) `notElem` map (Just . fst) runnable' = Start chosen
-        | otherwise = SwitchTo chosen
-
-      nextActions t = lookahead . _continuation . fromJust $ M.lookup t threadsc
-
       die sofar' finalDecision reason finalCtx = do
         writeRef ref (Just $ Left reason)
         pure (finalCtx, sofar', finalDecision)
 
-      getActAndTrc (Single a)    = (a, Seq.singleton (decision, runnable', a))
-      getActAndTrc (SubC   as _) = (Subconcurrency, (decision, runnable', Subconcurrency) <| as)
+      step chosen thread ctx' = do
+          (res, actOrTrc) <- stepThread sched memtype chosen (_continuation thread) $ ctx { cSchedState = g' }
+          let trc         = getTrc actOrTrc
+          let sofar'      = sofar      <> trc
+          let sofarSched' = sofarSched <> map (\(d,_,a) -> (d,a)) (F.toList trc)
+          let prior'      = getPrior actOrTrc
+          case res of
+            Right ctx'' ->
+              let threads' = if (interruptible <$> M.lookup chosen (cThreads ctx'')) /= Just False
+                             then unblockWaitingOn chosen (cThreads ctx'')
+                             else cThreads ctx''
+                  ctx''' = ctx'' { cThreads = delCommitThreads threads' }
+              in go sofar' sofarSched' prior' ctx'''
+            Left failure ->
+              let ctx'' = ctx' { cThreads = delCommitThreads threads }
+              in die sofar' prior' failure ctx''
+        where
+          decision
+            | Just chosen == (fst <$> prior) = Continue
+            | (fst <$> prior) `notElem` map (Just . fst) runnable' = Start chosen
+            | otherwise = SwitchTo chosen
 
-      getPrior (Single a)      = Just (chosen, a)
-      getPrior (SubC _ finalD) = finalD
+          getTrc (Single a)    = Seq.singleton (decision, runnable', a)
+          getTrc (SubC   as _) = (decision, runnable', Subconcurrency) <| as
+
+          getPrior (Single a)      = Just (chosen, a)
+          getPrior (SubC _ finalD) = finalD
 
 --------------------------------------------------------------------------------
 -- * Single-step execution
