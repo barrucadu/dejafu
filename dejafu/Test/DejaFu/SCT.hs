@@ -504,7 +504,7 @@ sctBoundDiscard discard memtype cb conc = go initialState where
 
       if schedIgnore s
         then go newDPOR
-        else checkDiscard discard res trace <$> go (addBacktracks bpoints newDPOR)
+        else checkDiscard discard res trace $ go (addBacktracks bpoints newDPOR)
 
     Nothing -> pure []
 
@@ -563,7 +563,7 @@ sctUniformRandomDiscard discard memtype g0 lim0 conc = go g0 (max 0 lim0) where
                                      memtype
                                      (initialRandSchedState Nothing g)
                                      conc
-    checkDiscard discard res trace <$> go (schedGen s) (n-1)
+    checkDiscard discard res trace $ go (schedGen s) (n-1)
 
 -- | SCT via weighted random scheduling.
 --
@@ -613,7 +613,7 @@ sctWeightedRandomDiscard discard memtype g0 lim0 use0 conc = go g0 (max 0 lim0) 
                                      memtype
                                      (initialRandSchedState (Just ws) g)
                                      conc
-    checkDiscard discard res trace <$> go (schedGen s) (n-1) (use-1) (schedWeights s)
+    checkDiscard discard res trace $ go (schedGen s) (n-1) (use-1) (schedWeights s)
 
 -------------------------------------------------------------------------------
 -- Utilities
@@ -677,8 +677,8 @@ trueBound _ _ = True
 (&+&) b1 b2 ts dl = b1 ts dl && b2 ts dl
 
 -- | Apply the discard function.
-checkDiscard :: (a -> Maybe Discard) -> a -> [b] -> [(a, [b])] -> [(a, [b])]
-checkDiscard discard res trace = case discard res of
-  Just DiscardResultAndTrace -> id
-  Just DiscardTrace -> ((res, []):)
-  Nothing -> ((res, trace):)
+checkDiscard :: Functor f => (a -> Maybe Discard) -> a -> [b] -> f [(a, [b])] -> f [(a, [b])]
+checkDiscard discard res trace rest = case discard res of
+  Just DiscardResultAndTrace -> rest
+  Just DiscardTrace -> ((res, []):) <$> rest
+  Nothing -> ((res, trace):) <$> rest
