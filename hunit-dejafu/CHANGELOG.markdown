@@ -7,6 +7,23 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Test.HUnit.DejaFu
+
+- Two new functions: `testDejafuDiscard` and `testDejafuDiscardIO`, allowing you to selectively
+  discard results or traces.
+- The `Discard` type and `defaultDiscarder` function from dejafu is now re-exported.
+
+### Miscellaneous
+
+- Only dejafu UNRELEASED is supported.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.6.0.0 [2017-06-07] (git tag: [hunit-dejafu-0.6.0.0][])
 -------
 

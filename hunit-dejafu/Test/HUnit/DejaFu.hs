@@ -45,6 +45,8 @@ module Test.HUnit.DejaFu
   , testDejafuWay
   , testDejafusWay
 
+  , testDejafuDiscard
+
   -- ** @IO@
   , testAutoIO
   , testDejafuIO
@@ -53,6 +55,8 @@ module Test.HUnit.DejaFu
   , testAutoWayIO
   , testDejafuWayIO
   , testDejafusWayIO
+
+  , testDejafuDiscardIO
 
   -- ** Re-exports
   , Way
@@ -65,6 +69,8 @@ module Test.HUnit.DejaFu
   , defaultBounds
   , MemType(..)
   , defaultMemType
+  , Discard(..)
+  , defaultDiscarder
 
   -- * Refinement property testing
   , testProperty
@@ -96,11 +102,11 @@ import           Test.HUnit.Lang        (HUnitFailure(..))
 -- instance :(
 import           Unsafe.Coerce          (unsafeCoerce)
 
-runSCTst :: Way -> MemType -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Conc.Trace)]
-runSCTst way memtype conc = runST (SCT.runSCT way memtype conc)
+runSCTst :: (Either Failure a -> Maybe Discard) -> Way -> MemType -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Conc.Trace)]
+runSCTst discard way memtype conc = runST (SCT.runSCTDiscard discard way memtype conc)
 
-runSCTio :: Way -> MemType -> Conc.ConcIO a -> IO [(Either Failure a, Conc.Trace)]
-runSCTio = SCT.runSCT
+runSCTio :: (Either Failure a -> Maybe Discard) -> Way -> MemType -> Conc.ConcIO a -> IO [(Either Failure a, Conc.Trace)]
+runSCTio = SCT.runSCTDiscard
 
 --------------------------------------------------------------------------------
 -- HUnit-style unit testing
@@ -124,12 +130,12 @@ instance Assertable (Conc.ConcST t ()) where
       conc' = try conc
 
       runSCTst' :: Conc.ConcST t (Either HUnitFailure ()) -> [(Either Failure (Either HUnitFailure ()), Conc.Trace)]
-      runSCTst' = unsafeCoerce $ runSCTst defaultWay defaultMemType
+      runSCTst' = unsafeCoerce $ runSCTst (const Nothing) defaultWay defaultMemType
 
 -- | @since 0.3.0.0
 instance Assertable (Conc.ConcIO ()) where
   assert conc = do
-    traces <- runSCTio defaultWay defaultMemType (try conc)
+    traces <- runSCTio (const Nothing) defaultWay defaultMemType (try conc)
     assertString . showErr $ assertableP traces
 
 assertableP :: Predicate (Either HUnitFailure ())
@@ -221,8 +227,27 @@ testDejafuWay :: Show a
   -> Predicate a
   -- ^ The predicate to check
   -> Test
-testDejafuWay way memtype conc name p =
-  testDejafusWay way memtype conc [(name, p)]
+testDejafuWay = testDejafuDiscard (const Nothing)
+
+-- | Variant of 'testDejafuWay' which can selectively discard results.
+--
+-- @since unreleased
+testDejafuDiscard :: Show a
+  => (Either Failure a -> Maybe Discard)
+  -- ^ Selectively discard results.
+  -> Way
+  -- ^ How to execute the concurrent program.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> (forall t. Conc.ConcST t a)
+  -- ^ The computation to test
+  -> String
+  -- ^ The name of the test.
+  -> Predicate a
+  -- ^ The predicate to check
+  -> Test
+testDejafuDiscard discard way memtype conc name test =
+  testst discard way memtype conc [(name, test)]
 
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test. This will share work between the predicates, rather than
@@ -251,7 +276,7 @@ testDejafusWay :: Show a
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> Test
-testDejafusWay = testst
+testDejafusWay = testst (const Nothing)
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
 --
@@ -264,8 +289,14 @@ testDejafuIO = testDejafuWayIO defaultWay defaultMemType
 -- @since 0.5.0.0
 testDejafuWayIO :: Show a
   => Way -> MemType -> Conc.ConcIO a -> String -> Predicate a -> Test
-testDejafuWayIO way memtype concio name p =
-  testDejafusWayIO way memtype concio [(name, p)]
+testDejafuWayIO = testDejafuDiscardIO (const Nothing)
+
+-- | Variant of 'testDejafuDiscard' for computations which do 'IO'.
+--
+-- @since unreleased
+testDejafuDiscardIO :: Show a => (Either Failure a -> Maybe Discard) -> Way -> MemType -> Conc.ConcIO a -> String -> Predicate a -> Test
+testDejafuDiscardIO discard way memtype concio name test =
+  testio discard way memtype concio [(name, test)]
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
 --
@@ -278,7 +309,7 @@ testDejafusIO = testDejafusWayIO defaultWay defaultMemType
 -- @since 0.5.0.0
 testDejafusWayIO :: Show a
   => Way -> MemType -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
-testDejafusWayIO = testio
+testDejafusWayIO = testio (const Nothing)
 
 
 -------------------------------------------------------------------------------
@@ -302,8 +333,13 @@ testProperty = testprop
 
 -- | Produce a HUnit 'Test' from a Deja Fu test.
 testst :: Show a
-  => Way -> MemType -> (forall t. Conc.ConcST t a) -> [(String, Predicate a)] -> Test
-testst way memtype conc tests = case map toTest tests of
+  => (Either Failure a -> Maybe Discard)
+  -> Way
+  -> MemType
+  -> (forall t. Conc.ConcST t a)
+  -> [(String, Predicate a)]
+  -> Test
+testst discard way memtype conc tests = case map toTest tests of
   [t] -> t
   ts  -> TestList ts
 
@@ -311,12 +347,17 @@ testst way memtype conc tests = case map toTest tests of
     toTest (name, p) = TestLabel name . TestCase $
       assertString . showErr $ p traces
 
-    traces = runSCTst way memtype conc
+    traces = runSCTst discard way memtype conc
 
 -- | Produce a HUnit 'Test' from an IO-using Deja Fu test.
 testio :: Show a
-  => Way -> MemType -> Conc.ConcIO a -> [(String, Predicate a)] -> Test
-testio way memtype concio tests = case map toTest tests of
+  => (Either Failure a -> Maybe Discard)
+  -> Way
+  -> MemType
+  -> Conc.ConcIO a
+  -> [(String, Predicate a)]
+  -> Test
+testio discard way memtype concio tests = case map toTest tests of
   [t] -> t
   ts  -> TestList ts
 
@@ -326,7 +367,7 @@ testio way memtype concio tests = case map toTest tests of
       -- really unsafe) here, as 'test' doesn't allow side-effects
       -- (eg, constructing an 'MVar' to share the traces after one
       -- test computed them).
-      traces <- runSCTio way memtype concio
+      traces <- runSCTio discard way memtype concio
       assertString . showErr $ p traces
 
 -- | Produce a HUnit 'Test' from a Deja Fu refinement property test.
