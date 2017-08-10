@@ -9,6 +9,19 @@ This project is versioned according to the [Package Versioning Policy](https://p
 unreleased
 ----------
 
+### Test.DejaFu
+
+- Exposed the new SCT discard functions through `dejafuDiscard` and `dejafuDiscardIO`.
+
+    There are no `dejafusDiscard` and `dejafusDiscardIO` functions because this would probably be
+    confusing, as the traces are shared.
+
+- The `Discard` type and `defaultDiscard` function are also exposed.
+
+### Test.DejaFu.Defaults
+
+- Added a new `defaultDiscarder` function, which discards nothing.
+
 ### Test.DejaFu.SCT
 
 - Added new SCT functions to selectively discard results or traces, which can be a significant

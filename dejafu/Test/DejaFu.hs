@@ -107,6 +107,12 @@ module Test.DejaFu
   , dejafusWay
   , dejafusWayIO
 
+  , Discard(..)
+  , defaultDiscarder
+
+  , dejafuDiscard
+  , dejafuDiscardIO
+
   -- ** Memory Models
 
   -- | Threads running under modern multicore processors do not behave
@@ -378,7 +384,26 @@ dejafuWay :: Show a
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
   -> IO Bool
-dejafuWay way memtype conc test = dejafusWay way memtype conc [test]
+dejafuWay = dejafuDiscard (const Nothing)
+
+-- | Variant of 'dejafuWay' which can selectively discard results.
+--
+-- @since unreleased
+dejafuDiscard :: Show a
+  => (Either Failure a -> Maybe Discard)
+  -- ^ Selectively discard results.
+  -> Way
+  -- ^ How to run the concurrent program.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> (forall t. ConcST t a)
+  -- ^ The computation to test
+  -> (String, Predicate a)
+  -- ^ The predicate (with a name) to check
+  -> IO Bool
+dejafuDiscard discard way memtype conc (name, test) = do
+  let traces = runST (runSCTDiscard discard way memtype conc)
+  doTest name (test traces)
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
@@ -421,8 +446,15 @@ dejafuIO = dejafuWayIO defaultWay defaultMemType
 --
 -- @since 0.6.0.0
 dejafuWayIO :: Show a => Way -> MemType -> ConcIO a -> (String, Predicate a) -> IO Bool
-dejafuWayIO way memtype concio test =
-  dejafusWayIO way memtype concio [test]
+dejafuWayIO = dejafuDiscardIO (const Nothing)
+
+-- | Variant of 'dejafuDiscard' for computations which do 'IO'.
+--
+-- @since unreleased
+dejafuDiscardIO :: Show a => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcIO a -> (String, Predicate a) -> IO Bool
+dejafuDiscardIO discard way memtype concio (name, test) = do
+  traces <- runSCTDiscard discard way memtype concio
+  doTest name (test traces)
 
 -- | Variant of 'dejafus' for computations which do 'IO'.
 --

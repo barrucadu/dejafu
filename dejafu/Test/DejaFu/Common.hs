@@ -742,6 +742,7 @@ instance NFData Decision where
 --
 -- @since 0.5.0.0
 showTrace :: Trace -> String
+showTrace []  = "<trace discarded>"
 showTrace trc = intercalate "\n" $ concatMap go trc : strkey where
   go (_,_,CommitCRef _ _) = "C-"
   go (Start    (ThreadId _ i),_,_) = "S" ++ show i ++ "-"
