@@ -7,6 +7,7 @@ import qualified Cases.MultiThreaded  as M
 import qualified Cases.Refinement     as R
 import qualified Cases.Litmus         as L
 import qualified Cases.Async          as A
+import qualified Cases.Discard        as D
 
 -- | Run all the test cases.
 testCases :: [Test]
@@ -16,4 +17,5 @@ testCases = map (uncurry testGroup)
   , ("Refinement",      R.tests)
   , ("Litmus",          L.tests)
   , ("Async",           A.tests)
+  , ("Discard",         D.tests)
   ]

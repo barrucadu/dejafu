@@ -19,6 +19,12 @@ import           Test.DejaFu.SCT
 defaultWay :: Way
 defaultWay = systematically defaultBounds
 
+-- | Do not discard any results.
+--
+-- @since unreleased
+defaultDiscarder :: Either Failure a -> Maybe Discard
+defaultDiscarder = const Nothing
+
 -- | The default memory model: @TotalStoreOrder@
 --
 -- @since 0.2.0.0

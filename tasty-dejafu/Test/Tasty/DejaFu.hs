@@ -42,6 +42,8 @@ module Test.Tasty.DejaFu
   , testDejafuWay
   , testDejafusWay
 
+  , testDejafuDiscard
+
   -- ** @IO@
   , testAutoIO
   , testDejafuIO
@@ -50,6 +52,8 @@ module Test.Tasty.DejaFu
   , testAutoWayIO
   , testDejafuWayIO
   , testDejafusWayIO
+
+  , testDejafuDiscardIO
 
   -- ** Re-exports
   , Way
@@ -62,6 +66,8 @@ module Test.Tasty.DejaFu
   , defaultBounds
   , MemType(..)
   , defaultMemType
+  , Discard(..)
+  , defaultDiscarder
 
   -- * Refinement property testing
   , testProperty
@@ -99,11 +105,11 @@ import           Test.Tasty.Providers   (IsTest(..), singleTest, testFailed,
 -- instance :(
 import           Unsafe.Coerce          (unsafeCoerce)
 
-runSCTst :: Way -> MemType -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Conc.Trace)]
-runSCTst way memtype conc = runST (SCT.runSCT way memtype conc)
+runSCTst :: (Either Failure a -> Maybe Discard) -> Way -> MemType -> (forall t. Conc.ConcST t a) -> [(Either Failure a, Conc.Trace)]
+runSCTst discard way memtype conc = runST (SCT.runSCTDiscard discard way memtype conc)
 
-runSCTio :: Way -> MemType -> Conc.ConcIO a -> IO [(Either Failure a, Conc.Trace)]
-runSCTio = SCT.runSCT
+runSCTio :: (Either Failure a -> Maybe Discard) -> Way -> MemType -> Conc.ConcIO a -> IO [(Either Failure a, Conc.Trace)]
+runSCTio = SCT.runSCTDiscard
 
 --------------------------------------------------------------------------------
 -- Tasty-style unit testing
@@ -116,7 +122,7 @@ instance Typeable t => IsTest (Conc.ConcST t (Maybe String)) where
     let memtype = lookupOption options :: MemType
     let way     = lookupOption options :: Way
     let runSCTst' :: Conc.ConcST t (Maybe String) -> [(Either Failure (Maybe String), Conc.Trace)]
-        runSCTst' = unsafeCoerce $ runSCTst way memtype
+        runSCTst' = unsafeCoerce $ runSCTst (const Nothing) way memtype
     let traces = runSCTst' conc
     run options (ConcTest traces assertableP) callback
 
@@ -127,7 +133,7 @@ instance IsTest (Conc.ConcIO (Maybe String)) where
   run options conc callback = do
     let memtype = lookupOption options
     let way     = lookupOption options
-    let traces  = runSCTio way memtype conc
+    let traces  = runSCTio (const Nothing) way memtype conc
     run options (ConcIOTest traces assertableP) callback
 
 concOptions :: [OptionDescription]
@@ -245,8 +251,27 @@ testDejafuWay :: Show a
   -> Predicate a
   -- ^ The predicate to check
   -> TestTree
-testDejafuWay way memtype conc name p =
-  testDejafusWay way memtype conc [(name, p)]
+testDejafuWay = testDejafuDiscard (const Nothing)
+
+-- | Variant of 'testDejafuWay' which can selectively discard results.
+--
+-- @since unreleased
+testDejafuDiscard :: Show a
+  => (Either Failure a -> Maybe Discard)
+  -- ^ Selectively discard results.
+  -> Way
+  -- ^ How to execute the concurrent program.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> (forall t. Conc.ConcST t a)
+  -- ^ The computation to test
+  -> String
+  -- ^ The name of the test.
+  -> Predicate a
+  -- ^ The predicate to check
+  -> TestTree
+testDejafuDiscard discard way memtype conc name test =
+  testst discard way memtype conc [(name, test)]
 
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test. This will share work between the predicates, rather than
@@ -275,7 +300,7 @@ testDejafusWay :: Show a
   -> [(TestName, Predicate a)]
   -- ^ The list of predicates (with names) to check
   -> TestTree
-testDejafusWay = testst
+testDejafusWay = testst (const Nothing)
 
 -- | Variant of 'testDejafu' for computations which do 'IO'.
 --
@@ -288,8 +313,14 @@ testDejafuIO = testDejafuWayIO defaultWay defaultMemType
 -- @since 0.5.0.0
 testDejafuWayIO :: Show a
   => Way -> MemType -> Conc.ConcIO a -> TestName -> Predicate a -> TestTree
-testDejafuWayIO way memtype concio name p =
-  testDejafusWayIO way memtype concio [(name, p)]
+testDejafuWayIO = testDejafuDiscardIO (const Nothing)
+
+-- | Variant of 'testDejafuDiscard' for computations which do 'IO'.
+--
+-- @since unreleased
+testDejafuDiscardIO :: Show a => (Either Failure a -> Maybe Discard) -> Way -> MemType -> Conc.ConcIO a -> String -> Predicate a -> TestTree
+testDejafuDiscardIO discard way memtype concio name test =
+  testio discard way memtype concio [(name, test)]
 
 -- | Variant of 'testDejafus' for computations which do 'IO'.
 --
@@ -302,7 +333,7 @@ testDejafusIO = testDejafusWayIO defaultWay defaultMemType
 -- @since 0.5.0.0
 testDejafusWayIO :: Show a
   => Way -> MemType -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
-testDejafusWayIO = testio
+testDejafusWayIO = testio (const Nothing)
 
 
 -------------------------------------------------------------------------------
@@ -368,20 +399,30 @@ instance IsTest PropTest where
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu test.
 testst :: Show a
-  => Way -> MemType -> (forall t. Conc.ConcST t a) -> [(TestName, Predicate a)] -> TestTree
-testst way memtype conc tests = case map toTest tests of
+  => (Either Failure a -> Maybe Discard)
+  -> Way
+  -> MemType
+  -> (forall t. Conc.ConcST t a)
+  -> [(TestName, Predicate a)]
+  -> TestTree
+testst discard way memtype conc tests = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts
 
   where
     toTest (name, p) = singleTest name $ ConcTest traces p
 
-    traces = runSCTst way memtype conc
+    traces = runSCTst discard way memtype conc
 
 -- | Produce a Tasty 'Test' from an IO-using Deja Fu test.
 testio :: Show a
-  => Way -> MemType -> Conc.ConcIO a -> [(TestName, Predicate a)] -> TestTree
-testio way memtype concio tests = case map toTest tests of
+  => (Either Failure a -> Maybe Discard)
+  -> Way
+  -> MemType
+  -> Conc.ConcIO a
+  -> [(TestName, Predicate a)]
+  -> TestTree
+testio discard way memtype concio tests = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts
 
@@ -390,7 +431,7 @@ testio way memtype concio tests = case map toTest tests of
 
     -- As with HUnit, constructing a test is side-effect free, so
     -- sharing of traces can't happen here.
-    traces = runSCTio way memtype concio
+    traces = runSCTio discard way memtype concio
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu refinement property test.
 testprop :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
