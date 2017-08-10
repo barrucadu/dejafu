@@ -231,7 +231,7 @@ testDejafuWay = testDejafuDiscard (const Nothing)
 
 -- | Variant of 'testDejafuWay' which can selectively discard results.
 --
--- @since unreleased
+-- @since 0.7.0.0
 testDejafuDiscard :: Show a
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
@@ -293,7 +293,7 @@ testDejafuWayIO = testDejafuDiscardIO (const Nothing)
 
 -- | Variant of 'testDejafuDiscard' for computations which do 'IO'.
 --
--- @since unreleased
+-- @since 0.7.0.0
 testDejafuDiscardIO :: Show a => (Either Failure a -> Maybe Discard) -> Way -> MemType -> Conc.ConcIO a -> String -> Predicate a -> Test
 testDejafuDiscardIO discard way memtype concio name test =
   testio discard way memtype concio [(name, test)]

@@ -232,7 +232,7 @@ resultsSet = resultsSetDiscard (const Nothing)
 -- | An @Either Failure a -> Maybe Discard@ value can be used to
 -- selectively discard results.
 --
--- @since unreleased
+-- @since 0.7.1.0
 data Discard
   = DiscardTrace
   -- ^ Discard the trace but keep the result.  The result will appear
@@ -247,7 +247,7 @@ instance NFData Discard where
 
 -- | A variant of 'runSCT' which can selectively discard results.
 --
--- @since unreleased
+-- @since 0.7.1.0
 runSCTDiscard :: MonadRef r n
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
@@ -264,7 +264,7 @@ runSCTDiscard discard (Uniform  g lim)     memtype = sctUniformRandomDiscard  di
 
 -- | A variant of 'resultsSet' which can selectively discard results.
 --
--- @since unreleased
+-- @since 0.7.1.0
 resultsSetDiscard :: (MonadRef r n, Ord a)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.  Traces are always discarded.
@@ -304,7 +304,7 @@ resultsSet' = resultsSetDiscard' (const Nothing)
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since unreleased
+-- @since 0.7.1.0
 runSCTDiscard' :: (MonadRef r n, NFData a)
   => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
 runSCTDiscard' discard way memtype conc = do
@@ -316,7 +316,7 @@ runSCTDiscard' discard way memtype conc = do
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since unreleased
+-- @since 0.7.1.0
 resultsSetDiscard' :: (MonadRef r n, Ord a, NFData a)
   => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcT r n a -> n (Set (Either Failure a))
 resultsSetDiscard' discard way memtype conc = do
@@ -478,7 +478,7 @@ sctBound = sctBoundDiscard (const Nothing)
 
 -- | A variant of 'sctBound' which can selectively discard results.
 --
--- @since unreleased
+-- @since 0.7.1.0
 sctBoundDiscard :: MonadRef r n
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
@@ -543,7 +543,7 @@ sctUniformRandom = sctUniformRandomDiscard (const Nothing)
 -- | A variant of 'sctUniformRandom' which can selectively discard
 -- results.
 --
--- @since unreleased
+-- @since 0.7.1.0
 sctUniformRandomDiscard :: (MonadRef r n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
@@ -590,7 +590,7 @@ sctWeightedRandom = sctWeightedRandomDiscard (const Nothing)
 -- | A variant of 'sctWeightedRandom' which can selectively discard
 -- results.
 --
--- @since unreleased
+-- @since 0.7.1.0
 sctWeightedRandomDiscard :: (MonadRef r n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.

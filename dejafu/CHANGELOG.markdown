@@ -6,8 +6,10 @@ All notable changes to this project will be documented in this file.
 This project is versioned according to the [Package Versioning Policy](https://pvp.haskell.org), the
 *de facto* standard Haskell versioning scheme.
 
-unreleased
-----------
+0.7.1.0 [2017-08-10] (git tag: [dejafu-0.7.1.0][])
+-------
+
+https://hackage.haskell.org/package/dejafu-0.7.1.0
 
 ### Test.DejaFu
 
@@ -31,6 +33,8 @@ unreleased
       `sctUniformRandomDiscard`, and `sctWeightedRandomDiscard`.
     - `resultsSet` and `resultsSet'` now discard traces as they are produced, rather than all at the
       end, greatly improving performance when traces are large.
+
+[dejafu-0.7.1.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.7.1.0
 
 
 ---------------------------------------------------------------------------------------------------

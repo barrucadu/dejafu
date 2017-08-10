@@ -388,7 +388,7 @@ dejafuWay = dejafuDiscard (const Nothing)
 
 -- | Variant of 'dejafuWay' which can selectively discard results.
 --
--- @since unreleased
+-- @since 0.7.1.0
 dejafuDiscard :: Show a
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
@@ -450,7 +450,7 @@ dejafuWayIO = dejafuDiscardIO (const Nothing)
 
 -- | Variant of 'dejafuDiscard' for computations which do 'IO'.
 --
--- @since unreleased
+-- @since 0.7.1.0
 dejafuDiscardIO :: Show a => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcIO a -> (String, Predicate a) -> IO Bool
 dejafuDiscardIO discard way memtype concio (name, test) = do
   traces <- runSCTDiscard discard way memtype concio

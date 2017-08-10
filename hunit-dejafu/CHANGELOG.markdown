@@ -7,8 +7,10 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+0.7.0.0 [2017-08-10] (git tag: [hunit-dejafu-0.7.0.0][])
+-------
+
+https://hackage.haskell.org/package/hunit-dejafu-0.7.0.0
 
 ### Test.HUnit.DejaFu
 
@@ -18,7 +20,9 @@ unreleased
 
 ### Miscellaneous
 
-- Only dejafu UNRELEASED is supported.
+- Lower version bound on dejafu raised to 0.7.1.0.
+
+[hunit-dejafu-0.7.0.0]: https://github.com/barrucadu/dejafu/releases/tag/hunit-dejafu-0.7.0.0
 
 
 ---------------------------------------------------------------------------------------------------

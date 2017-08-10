@@ -21,7 +21,7 @@ defaultWay = systematically defaultBounds
 
 -- | Do not discard any results.
 --
--- @since unreleased
+-- @since 0.7.1.0
 defaultDiscarder :: Either Failure a -> Maybe Discard
 defaultDiscarder = const Nothing
 
