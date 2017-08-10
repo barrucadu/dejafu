@@ -6,6 +6,22 @@ All notable changes to this project will be documented in this file.
 This project is versioned according to the [Package Versioning Policy](https://pvp.haskell.org), the
 *de facto* standard Haskell versioning scheme.
 
+unreleased
+----------
+
+### Test.DejaFu.SCT
+
+- Added new SCT functions to selectively discard results or traces, which can be a significant
+  memory saving if you know what sorts of results you are interested in:
+    - New type: `Discard`.
+    - New functions: `runSCTDiscard`, `resultsSetDiscard`, `sctBoundDiscard`,
+      `sctUniformRandomDiscard`, and `sctWeightedRandomDiscard`.
+    - `resultsSet` and `resultsSet'` now discard traces as they are produced, rather than all at the
+      end, greatly improving performance when traces are large.
+
+
+---------------------------------------------------------------------------------------------------
+
 
 0.7.0.2 [2017-06-12] (git tag: [dejafu-0.7.0.2][])
 -------
