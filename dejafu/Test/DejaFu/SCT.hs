@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
@@ -7,7 +8,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : GADTs, GeneralizedNewtypeDeriving
+-- Portability : BangPatterns, GADTs, GeneralizedNewtypeDeriving
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
@@ -106,7 +107,7 @@ module Test.DejaFu.SCT
   ) where
 
 import           Control.Applicative      ((<|>))
-import           Control.DeepSeq          (NFData(..))
+import           Control.DeepSeq          (NFData(..), force)
 import           Control.Monad.Ref        (MonadRef)
 import           Data.List                (foldl')
 import qualified Data.Map.Strict          as M
@@ -492,7 +493,7 @@ sctBoundDiscard :: MonadRef r n
 sctBoundDiscard discard memtype cb conc = go initialState where
   -- Repeatedly run the computation gathering all the results and
   -- traces into a list until there are no schedules remaining to try.
-  go dp = case findSchedulePrefix dp of
+  go !dp = case findSchedulePrefix dp of
     Just (prefix, conservative, sleep) -> do
       (res, s, trace) <- runConcurrent scheduler
                                        memtype
@@ -503,8 +504,8 @@ sctBoundDiscard discard memtype cb conc = go initialState where
       let newDPOR = addTrace conservative trace dp
 
       if schedIgnore s
-        then go newDPOR
-        else checkDiscard discard res trace $ go (addBacktracks bpoints newDPOR)
+        then go (force newDPOR)
+        else checkDiscard discard res trace $ go (force (addBacktracks bpoints newDPOR))
 
     Nothing -> pure []
 
