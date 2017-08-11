@@ -33,6 +33,7 @@ Table of Contents
   - [Relaxed Memory and IORefs](#relaxed-memory-and-iorefs)
   - [Program Testing](#program-testing)
   - [Porting](#porting)
+- [Test Performance](#test-performance)
 - [Contributing](#contributing)
 - [Release Notes / Change Logs](#release-notes--change-logs)
 - [Bibliography](#bibliography)
@@ -295,6 +296,62 @@ dejafu:
 - Parameterise all the types by the monad: `MVar` -> `MVar m`, `TVar`
   -> `TVar stm`, `IORef` -> `CRef m`, etc
 - Fix the type errors.
+
+
+Test Performance
+----------------
+
+dejafu (and the hunit/tasty bindings) leans more towards correctness
+than performance, by default. Your test cases will be executed using
+the `Test.DejaFu.SCT.sctBounded ` function, which is complete but can
+be slow; every result you get will have an associated trace, which can
+be useful for debugging, but takes up memory.
+
+If testing it too slow, there are a few knobs you can tweak:
+
+- Are you happy to trade space for time?
+
+    Consider computing the results once and running multiple
+    predicates over the output: this is what `dejafus` / `testDejafus`
+    / etc does.
+
+- Can you sacrifice completeness?
+
+    Consider using the random testing functionality. See the `*Way`
+    functions and `Test.DejaFu.SCT.sct{Uniform,Weighted}Random`.
+
+- Would strictness help?
+
+    Consider using the strict functions in `Test.DejaFu.SCT` (the ones
+    ending with a `'`).
+
+- Do you just want the set of results, and don't care about traces?
+
+    Consider using `Test.DejaFu.SCT.resultsSet`.
+
+- Do you know something about the sort of results you care about?
+
+    Consider discarding results you *don't* care about. See the
+    `*Discard` functions in `Test.DejaFu`, `Test.DejaFu.SCT`, and
+    `Test.{HUnit,Tasty}.DejaFu`.
+
+For example, let's say you want to know if your test case deadlocks,
+and are going to sacrifice completeness because your possible
+state-space is huge. You could do it like this:
+
+```haskell
+dejafuDiscard
+  -- "efa" == "either failure a", discard everything but deadlocks
+  (\efa -> if efa == Left Deadlock then Nothing else Just DiscardResultAndTrace)
+  -- try 1000 executions with random scheduling
+  (randomly (mkStdGen 42) 1000)
+  -- use the default memory model
+  defaultMemType
+  -- your test case
+  testCase
+  -- the predicate to check (which is a bit redundant in this case)
+  ("Never Deadlocks", deadlocksNever)
+```
 
 
 Contributing
