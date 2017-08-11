@@ -11,6 +11,7 @@
 -- interface of this library.
 module Test.DejaFu.SCT.Internal where
 
+import           Control.Applicative  ((<|>))
 import           Control.DeepSeq      (NFData(..))
 import           Control.Exception    (MaskingState(..))
 import qualified Data.Foldable        as F
@@ -42,8 +43,13 @@ data DPOR = DPOR
   , dporTodo     :: Map ThreadId Bool
   -- ^ Follow-on decisions still to make, and whether that decision
   -- was added conservatively due to the bound.
-  , dporDone     :: Map ThreadId DPOR
-  -- ^ Follow-on decisions that have been made.
+  , dporNext     :: Maybe (ThreadId, DPOR)
+  -- ^ The next decision made. Executions are explored in a
+  -- depth-first fashion, so this changes as old subtrees are
+  -- exhausted and new ones explored.
+  , dporDone     :: Set ThreadId
+  -- ^ All transitions which have been taken from this point,
+  -- including conservatively-added ones.
   , dporSleep    :: Map ThreadId ThreadAction
   -- ^ Transitions to ignore (in this node and children) until a
   -- dependent transition happens.
@@ -59,6 +65,7 @@ data DPOR = DPOR
 instance NFData DPOR where
   rnf dpor = rnf ( dporRunnable dpor
                  , dporTodo     dpor
+                 , dporNext     dpor
                  , dporDone     dpor
                  , dporSleep    dpor
                  , dporTaken    dpor
@@ -99,7 +106,8 @@ initialState :: DPOR
 initialState = DPOR
   { dporRunnable = S.singleton initialThread
   , dporTodo     = M.singleton initialThread False
-  , dporDone     = M.empty
+  , dporNext     = Nothing
+  , dporDone     = S.empty
   , dporSleep    = M.empty
   , dporTaken    = M.empty
   , dporAction   = Nothing
@@ -117,24 +125,24 @@ initialState = DPOR
 findSchedulePrefix
   :: DPOR
   -> Maybe ([ThreadId], Bool, Map ThreadId ThreadAction)
-findSchedulePrefix = listToMaybe . go where
-  go dpor =
-    let prefixes = here dpor : map go' (M.toList $ dporDone dpor)
-    in case concatPartition (\(t:_,_,_) -> t >= initialThread) prefixes of
-         ([], choices) -> choices
-         (choices, _)  -> choices
+findSchedulePrefix dpor = case dporNext dpor of
+    Just (tid, child) -> go tid child <|> here
+    Nothing -> here
+  where
+    go tid child = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> findSchedulePrefix child
 
-  go' (tid, dpor) = (\(ts,c,slp) -> (tid:ts,c,slp)) <$> go dpor
+    -- Prefix traces terminating with a to-do decision at this point.
+    here =
+      let todos = [([t], c, sleeps) | (t, c) <- M.toList $ dporTodo dpor]
+          (best, worst) = partition (\([t],_,_) -> t >= initialThread) todos
+      in listToMaybe best <|> listToMaybe worst
 
-  -- Prefix traces terminating with a to-do decision at this point.
-  here dpor = [([t], c, sleeps dpor) | (t, c) <- M.toList $ dporTodo dpor]
+    -- The new sleep set is the union of the sleep set of the node
+    -- we're branching from, plus all the decisions we've already
+    -- explored.
+    sleeps = dporSleep dpor `M.union` dporTaken dpor
 
-  -- The new sleep set is the union of the sleep set of the node we're
-  -- branching from, plus all the decisions we've already explored.
-  sleeps dpor = dporSleep dpor `M.union` dporTaken dpor
-
--- | Add a new trace to the tree, creating a new subtree branching off
--- at the point where the \"to-do\" decision was made.
+-- | Add a new trace to the stack.  This won't work if to-dos aren't explored depth-first.
 incorporateTrace
   :: MemType
   -- ^ Memory model
@@ -150,19 +158,22 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
   grow state tid trc@((d, _, a):rest) dpor =
     let tid'   = tidOf tid d
         state' = updateDepState state tid' a
-    in case M.lookup tid' (dporDone dpor) of
-         Just dpor' ->
-           let done = M.insert tid' (grow state' tid' rest dpor') (dporDone dpor)
-           in dpor { dporDone = done }
-         Nothing ->
+    in case dporNext dpor of
+         Just (t, child)
+           | t == tid'      -> dpor { dporNext = Just (tid', grow state' tid' rest child) }
+           | hasTodos child -> err "incorporateTrace" "replacing child with todos!"
+         _ ->
            let taken = M.insert tid' a (dporTaken dpor)
                sleep = dporSleep dpor `M.union` dporTaken dpor
-               done  = M.insert tid' (subtree state' tid' sleep trc) (dporDone dpor)
            in dpor { dporTaken = if conservative then dporTaken dpor else taken
                    , dporTodo  = M.delete tid' (dporTodo dpor)
-                   , dporDone  = done
+                   , dporNext  = Just (tid', subtree state' tid' sleep trc)
+                   , dporDone  = S.insert tid' (dporDone dpor)
                    }
   grow _ _ [] _ = err "incorporateTrace" "trace exhausted without reading a to-do point!"
+
+  -- check if there are to-do points in a tree
+  hasTodos dpor = not (M.null (dporTodo dpor)) || (case dporNext dpor of Just (_, dpor') -> hasTodos dpor'; _ -> False)
 
   -- Construct a new subtree corresponding to a trace suffix.
   subtree state tid sleep ((_, _, a):rest) =
@@ -172,12 +183,15 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
         { dporRunnable = S.fromList $ case rest of
             ((_, runnable, _):_) -> map fst runnable
             [] -> []
-        , dporTodo     = M.empty
-        , dporDone     = M.fromList $ case rest of
+        , dporTodo = M.empty
+        , dporNext = case rest of
           ((d', _, _):_) ->
             let tid' = tidOf tid d'
-            in  [(tid', subtree state' tid' sleep' rest)]
-          [] -> []
+            in  Just (tid', subtree state' tid' sleep' rest)
+          [] -> Nothing
+        , dporDone = case rest of
+            ((d', _, _):_) -> S.singleton (tidOf tid d')
+            [] -> S.empty
         , dporSleep = sleep'
         , dporTaken = case rest of
           ((d', _, a'):_) -> M.singleton (tidOf tid d') a'
@@ -286,8 +300,12 @@ incorporateBacktrackSteps bv = go Nothing [] where
     let bpor' = doBacktrack priorTid pref b bpor
         tid   = bcktThreadid b
         pref' = pref ++ [(bcktDecision b, bcktAction b)]
-        child = go (Just tid) pref' bs . fromJust $ M.lookup tid (dporDone bpor)
-    in bpor' { dporDone = M.insert tid child $ dporDone bpor' }
+        child = case dporNext bpor of
+                  Just (t, d)
+                    | t /= tid -> err "incorporateBacktrackSteps" "incorporating wrong trace!"
+                    | otherwise -> go (Just t) pref' bs d
+                  Nothing -> err "incorporateBacktrackSteps" "child is missing!"
+    in bpor' { dporNext = Just (tid, child) }
   go _ _ [] bpor = bpor
 
   doBacktrack priorTid pref b bpor =
@@ -296,7 +314,8 @@ incorporateBacktrackSteps bv = go Nothing [] where
                 , let decision  = decisionOf priorTid (dporRunnable bpor) t
                 , let lahead = fromJust . M.lookup t $ bcktRunnable b
                 , bv pref (decision, lahead)
-                , t `notElem` M.keys (dporDone bpor)
+                , Just t /= (fst <$> dporNext bpor)
+                , S.notMember t (dporDone bpor)
                 , c || M.notMember t (dporSleep bpor)
                 ]
     in bpor { dporTodo = dporTodo bpor `M.union` M.fromList todo' }
@@ -795,17 +814,3 @@ killsDaemons _ _ = False
 -- | Internal errors.
 err :: String -> String -> a
 err func msg = error (func ++ ": (internal error) " ++ msg)
-
--- | A combination of 'partition' and 'concat'.
-concatPartition :: (a -> Bool) -> [[a]] -> ([a], [a])
-{-# INLINE concatPartition #-}
--- note: `foldr (flip (foldr select))` is slow, as is `foldl (foldl
--- select))`, and `foldl'` variants. The sweet spot seems to be `foldl
--- (foldr select)` for some reason I don't really understand.
-concatPartition p = foldl (foldr select) ([], []) where
-  -- Lazy pattern matching, got this trick from the 'partition'
-  -- implementation. This reduces allocation fairly significantly; I
-  -- do not know why.
-  select a ~(ts, fs)
-    | p a       = (a:ts, fs)
-    | otherwise = (ts, a:fs)
