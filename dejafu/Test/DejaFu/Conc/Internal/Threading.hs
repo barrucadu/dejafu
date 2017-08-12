@@ -85,26 +85,26 @@ interruptible thread = _masking thread == Unmasked || (_masking thread == Masked
 
 -- | Register a new exception handler.
 catching :: Exception e => (e -> Action n r) -> ThreadId -> Threads n r -> Threads n r
-catching h = M.alter $ \(Just thread) -> Just $ thread { _handlers = Handler h : _handlers thread }
+catching h = M.adjust $ \thread -> thread { _handlers = Handler h : _handlers thread }
 
 -- | Remove the most recent exception handler.
 uncatching :: ThreadId -> Threads n r -> Threads n r
-uncatching = M.alter $ \(Just thread) -> Just $ thread { _handlers = tail $ _handlers thread }
+uncatching = M.adjust $ \thread -> thread { _handlers = tail $ _handlers thread }
 
 -- | Raise an exception in a thread.
 except :: Action n r -> [Handler n r] -> ThreadId -> Threads n r -> Threads n r
-except act hs = M.alter $ \(Just thread) -> Just $ thread { _continuation = act, _handlers = hs, _blocking = Nothing }
+except act hs = M.adjust $ \thread -> thread { _continuation = act, _handlers = hs, _blocking = Nothing }
 
 -- | Set the masking state of a thread.
 mask :: MaskingState -> ThreadId -> Threads n r -> Threads n r
-mask ms = M.alter $ \(Just thread) -> Just $ thread { _masking = ms }
+mask ms = M.adjust $ \thread -> thread { _masking = ms }
 
 --------------------------------------------------------------------------------
 -- * Manipulating threads
 
 -- | Replace the @Action@ of a thread.
 goto :: Action n r -> ThreadId -> Threads n r -> Threads n r
-goto a = M.alter $ \(Just thread) -> Just (thread { _continuation = a })
+goto a = M.adjust $ \thread -> thread { _continuation = a }
 
 -- | Start a thread with the given ID, inheriting the masking state
 -- from the parent thread. This ID must not already be in use!
@@ -126,9 +126,7 @@ kill = M.delete
 
 -- | Block a thread.
 block :: BlockedOn -> ThreadId -> Threads n r -> Threads n r
-block blockedOn = M.alter doBlock where
-  doBlock (Just thread) = Just $ thread { _blocking = Just blockedOn }
-  doBlock _ = error "Invariant failure in 'block': thread does NOT exist!"
+block blockedOn = M.adjust $ \thread -> thread { _blocking = Just blockedOn }
 
 -- | Unblock all threads waiting on the appropriate block. For 'TVar'
 -- blocks, this will wake all threads waiting on at least one of the
