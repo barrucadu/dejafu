@@ -144,50 +144,53 @@ delCommitThreads = M.filterWithKey $ \k _ -> k >= initialThread
 --------------------------------------------------------------------------------
 -- * Manipulating @MVar@s
 
+-- these are a bit clearer than a Bool
+data Blocking = Blocking | NonBlocking
+data Emptying = Emptying | NonEmptying
+
 -- | Put into a @MVar@, blocking if full.
 putIntoMVar :: MonadRef r n => MVar r a -> a -> Action n r
             -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
-putIntoMVar cvar a c = mutMVar True cvar a (const c)
+putIntoMVar cvar a c = mutMVar Blocking cvar a (const c)
 
 -- | Try to put into a @MVar@, not blocking if full.
 tryPutIntoMVar :: MonadRef r n => MVar r a -> a -> (Bool -> Action n r)
                -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
-tryPutIntoMVar = mutMVar False
+tryPutIntoMVar = mutMVar NonBlocking
 
 -- | Read from a @MVar@, blocking if empty.
 readFromMVar :: MonadRef r n => MVar r a -> (a -> Action n r)
             -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
-readFromMVar cvar c = seeMVar False True cvar (c . fromJust)
+readFromMVar cvar c = seeMVar NonEmptying Blocking cvar (c . fromJust)
 
 -- | Try to read from a @MVar@, not blocking if empty.
 tryReadFromMVar :: MonadRef r n => MVar r a -> (Maybe a -> Action n r)
                 -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
-tryReadFromMVar = seeMVar False False
+tryReadFromMVar = seeMVar NonEmptying NonBlocking
 
 -- | Take from a @MVar@, blocking if empty.
 takeFromMVar :: MonadRef r n => MVar r a -> (a -> Action n r)
              -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
-takeFromMVar cvar c = seeMVar True True cvar (c . fromJust)
+takeFromMVar cvar c = seeMVar Emptying Blocking cvar (c . fromJust)
 
 -- | Try to take from a @MVar@, not blocking if empty.
 tryTakeFromMVar :: MonadRef r n => MVar r a -> (Maybe a -> Action n r)
                 -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
-tryTakeFromMVar = seeMVar True False
+tryTakeFromMVar = seeMVar Emptying NonBlocking
 
 -- | Mutate a @MVar@, in either a blocking or nonblocking way.
 mutMVar :: MonadRef r n
-        => Bool -> MVar r a -> a -> (Bool -> Action n r)
+        => Blocking -> MVar r a -> a -> (Bool -> Action n r)
         -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
 mutMVar blocking (MVar cvid ref) a c threadid threads = do
   val <- readRef ref
 
   case val of
-    Just _
-      | blocking ->
+    Just _ -> case blocking of
+      Blocking ->
         let threads' = block (OnMVarEmpty cvid) threadid threads
         in pure (False, threads', [])
-
-      | otherwise ->
+      NonBlocking ->
         pure (False, goto (c False) threadid threads, [])
 
     Nothing -> do
@@ -198,21 +201,22 @@ mutMVar blocking (MVar cvid ref) a c threadid threads = do
 -- | Read a @MVar@, in either a blocking or nonblocking
 -- way.
 seeMVar :: MonadRef r n
-        => Bool -> Bool -> MVar r a -> (Maybe a -> Action n r)
+        => Emptying -> Blocking -> MVar r a -> (Maybe a -> Action n r)
         -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
 seeMVar emptying blocking (MVar cvid ref) c threadid threads = do
   val <- readRef ref
 
   case val of
     Just _ -> do
-      when emptying $ writeRef ref Nothing
+      case emptying of
+        Emptying    -> writeRef ref Nothing
+        NonEmptying -> pure ()
       let (threads', woken) = wake (OnMVarEmpty cvid) threads
       pure (True, goto (c val) threadid threads', woken)
 
-    Nothing
-      | blocking ->
+    Nothing -> case blocking of
+      Blocking ->
         let threads' = block (OnMVarFull cvid) threadid threads
         in pure (False, threads', [])
-
-      | otherwise ->
+      NonBlocking ->
         pure (False, goto (c Nothing) threadid threads, [])
