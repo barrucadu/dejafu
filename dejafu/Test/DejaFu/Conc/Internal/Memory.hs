@@ -8,7 +8,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : BangPatterns, GADTs
+-- Portability : BangPatterns, GADTs, MultiParamTypeClasses
 --
 -- Operations over @CRef@s and @MVar@s. This module is NOT considered
 -- to form part of the public interface of this library.
