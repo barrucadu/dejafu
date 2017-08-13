@@ -57,9 +57,6 @@ data DPOR = DPOR
   -- ^ Transitions which have been taken, excluding
   -- conservatively-added ones. This is used in implementing sleep
   -- sets.
-  , dporAction   :: Maybe ThreadAction
-  -- ^ What happened at this step. This will be 'Nothing' at the root,
-  -- 'Just' everywhere else.
   } deriving (Eq, Show)
 
 instance NFData DPOR where
@@ -69,7 +66,6 @@ instance NFData DPOR where
                  , dporDone     dpor
                  , dporSleep    dpor
                  , dporTaken    dpor
-                 , dporAction   dpor
                  )
 
 -- | One step of the execution, including information for backtracking
@@ -110,7 +106,6 @@ initialState = DPOR
   , dporDone     = S.empty
   , dporSleep    = M.empty
   , dporTaken    = M.empty
-  , dporAction   = Nothing
   }
 
 -- | Produce a new schedule prefix from a @DPOR@ tree. If there are no new
@@ -196,7 +191,6 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
         , dporTaken = case rest of
           ((d', _, a'):_) -> M.singleton (tidOf tid d') a'
           [] -> M.empty
-        , dporAction = Just a
         }
   subtree _ _ _ [] = err "incorporateTrace" "subtree suffix empty!"
 
