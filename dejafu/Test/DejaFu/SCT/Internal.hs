@@ -290,29 +290,29 @@ incorporateBacktrackSteps
   -> DPOR
   -> DPOR
 incorporateBacktrackSteps bv = go Nothing [] where
-  go priorTid pref (b:bs) bpor =
-    let bpor' = doBacktrack priorTid pref b bpor
+  go priorTid pref (b:bs) dpor =
+    let dpor' = doBacktrack priorTid pref b dpor
         tid   = bcktThreadid b
         pref' = pref ++ [(bcktDecision b, bcktAction b)]
-        child = case dporNext bpor of
+        child = case dporNext dpor of
                   Just (t, d)
                     | t /= tid -> err "incorporateBacktrackSteps" "incorporating wrong trace!"
                     | otherwise -> go (Just t) pref' bs d
                   Nothing -> err "incorporateBacktrackSteps" "child is missing!"
-    in bpor' { dporNext = Just (tid, child) }
-  go _ _ [] bpor = bpor
+    in dpor' { dporNext = Just (tid, child) }
+  go _ _ [] dpor = dpor
 
-  doBacktrack priorTid pref b bpor =
+  doBacktrack priorTid pref b dpor =
     let todo' = [ x
                 | x@(t,c) <- M.toList $ bcktBacktracks b
-                , let decision  = decisionOf priorTid (dporRunnable bpor) t
+                , let decision  = decisionOf priorTid (dporRunnable dpor) t
                 , let lahead = fromJust . M.lookup t $ bcktRunnable b
                 , bv pref (decision, lahead)
-                , Just t /= (fst <$> dporNext bpor)
-                , S.notMember t (dporDone bpor)
-                , c || M.notMember t (dporSleep bpor)
+                , Just t /= (fst <$> dporNext dpor)
+                , S.notMember t (dporDone dpor)
+                , c || M.notMember t (dporSleep dpor)
                 ]
-    in bpor { dporTodo = dporTodo bpor `M.union` M.fromList todo' }
+    in dpor { dporTodo = dporTodo dpor `M.union` M.fromList todo' }
 
 -------------------------------------------------------------------------------
 -- * DPOR scheduler
