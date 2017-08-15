@@ -7,6 +7,15 @@ This is Déjà Fu
 
     **Terry Pratchett, Thief of Time**
 
+.. toctree::
+   :maxdepth: 2
+   :caption: User Documentation
+
+   getting_started
+   typeclass
+   unit_testing
+   refinement_testing
+   advanced
 
 .. toctree::
    :maxdepth: 2
