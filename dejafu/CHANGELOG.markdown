@@ -6,6 +6,26 @@ All notable changes to this project will be documented in this file.
 This project is versioned according to the [Package Versioning Policy](https://pvp.haskell.org), the
 *de facto* standard Haskell versioning scheme.
 
+
+0.7.1.1 [2017-08-16] (git tag: [dejafu-0.7.1.1][])
+-------
+
+https://hackage.haskell.org/package/dejafu-0.7.1.1
+
+### Miscellaneous
+
+- Significantly reduced memory usage in systematic testing when discarding traces.
+
+    Previously this was `O(max trace length * number of executions)`
+
+    Now it's `O(max trace length + total size of traces kept)`
+
+[dejafu-0.7.1.1]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.7.1.1
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.7.1.0 [2017-08-10] (git tag: [dejafu-0.7.1.0][])
 -------
 
