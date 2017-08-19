@@ -18,7 +18,7 @@ or email (mike@barrucadu.co.uk).
 [next-major]: https://github.com/barrucadu/dejafu/tree/next-major
 
 
-Test Coverage
+Test coverage
 -------------
 
 [`hpc`][hpc] can generate a coverage report from the execution of
@@ -121,7 +121,7 @@ use the "lint.sh" and "style.sh" scripts to run the tools for you.
 [hlint]:           https://github.com/ndmitchell/hlint
 
 
-Documenting your Changes
+Documenting your changes
 ------------------------
 
 **If a top-level definition is introduced or significantly changed**,

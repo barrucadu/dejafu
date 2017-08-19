@@ -7,10 +7,12 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-0.7.1.1 [2017-08-16] (git tag: [dejafu-0.7.1.1][])
+0.7.1.1
 -------
 
-https://hackage.haskell.org/package/dejafu-0.7.1.1
+- **Date**    2017-08-16
+- **Git tag** [dejafu-0.7.1.1][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.7.1.1
 
 ### Miscellaneous
 
@@ -26,10 +28,12 @@ https://hackage.haskell.org/package/dejafu-0.7.1.1
 ---------------------------------------------------------------------------------------------------
 
 
-0.7.1.0 [2017-08-10] (git tag: [dejafu-0.7.1.0][])
+0.7.1.0
 -------
 
-https://hackage.haskell.org/package/dejafu-0.7.1.0
+- **Date**    2017-08-10
+- **Git tag** [dejafu-0.7.1.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.7.1.0
 
 ### Test.DejaFu
 
@@ -60,10 +64,12 @@ https://hackage.haskell.org/package/dejafu-0.7.1.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.7.0.2 [2017-06-12] (git tag: [dejafu-0.7.0.2][])
+0.7.0.2
 -------
 
-https://hackage.haskell.org/package/dejafu-0.7.0.2
+- **Date**    2017-06-12
+- **Git tag** [dejafu-0.7.0.2][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.7.0.2
 
 ### Test.DejaFu.Refinement
 
@@ -81,10 +87,12 @@ https://hackage.haskell.org/package/dejafu-0.7.0.2
 ---------------------------------------------------------------------------------------------------
 
 
-0.7.0.1 [2017-06-09] (git tag: [dejafu-0.7.0.1][])
+0.7.0.1
 -------
 
-https://hackage.haskell.org/package/dejafu-0.7.0.1
+- **Date**    2017-06-09
+- **Git tag** [dejafu-0.7.0.1][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.7.0.1
 
 ### Test.DejaFu.Refinement
 
@@ -98,10 +106,12 @@ https://hackage.haskell.org/package/dejafu-0.7.0.1
 ---------------------------------------------------------------------------------------------------
 
 
-0.7.0.0 [2017-06-07] (git tag: [dejafu-0.7.0.0][])
+0.7.0.0
 -------
 
-https://hackage.haskell.org/package/dejafu-0.7.0.0
+- **Date**    2017-06-07
+- **Git tag** [dejafu-0.7.0.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.7.0.0
 
 ### Test.DejaFu
 
@@ -145,10 +155,12 @@ https://hackage.haskell.org/package/dejafu-0.7.0.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.6.0.0 [2017-04-08] (git tag: [dejafu-0.6.0.0][])
+0.6.0.0
 -------
 
-https://hackage.haskell.org/package/dejafu-0.6.0.0
+- **Date**    2017-04-08
+- **Git tag** [dejafu-0.6.0.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.6.0.0
 
 ### Test.DejaFu.Conc
 
@@ -176,10 +188,12 @@ https://hackage.haskell.org/package/dejafu-0.6.0.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.1.3 [2017-04-05] (git tag: [dejafu-0.5.1.3][])
+0.5.1.3
 -------
 
-https://hackage.haskell.org/package/dejafu-0.5.1.3
+- **Date**    2017-04-05
+- **Git tag** [dejafu-0.5.1.3][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.5.1.3
 
 ### Miscellaneous
 
@@ -191,10 +205,12 @@ https://hackage.haskell.org/package/dejafu-0.5.1.3
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.1.2 [2017-03-04] (git tag: [dejafu-0.5.1.2][])
+0.5.1.2
 -------
 
-https://hackage.haskell.org/package/dejafu-0.5.1.2
+- **Date**    2017-03-04
+- **Git tag** [dejafu-0.5.1.2][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.5.1.2
 
 **This version was misnumbered! It should have caused a minor version bump!**
 
@@ -217,10 +233,12 @@ https://hackage.haskell.org/package/dejafu-0.5.1.2
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.1.1 [2017-02-25] (git tag: [dejafu-0.5.1.1][])
+0.5.1.1
 -------
 
-https://hackage.haskell.org/package/dejafu-0.5.1.1
+- **Date**    2017-02-25
+- **Git tag** [dejafu-0.5.1.1][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.5.1.1
 
 ### Fixed
 
@@ -234,10 +252,12 @@ https://hackage.haskell.org/package/dejafu-0.5.1.1
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.1.0 [2017-02-25] (git tag: [dejafu-0.5.1.0][])
+0.5.1.0
 -------
 
-https://hackage.haskell.org/package/dejafu-0.5.1.0
+- **Date**    2017-02-25
+- **Git tag** [dejafu-0.5.1.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.5.1.0
 
 ### Test.DejaFu
 
@@ -265,10 +285,12 @@ https://hackage.haskell.org/package/dejafu-0.5.1.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.0.2 [2017-02-22] (git tag: [dejafu-0.5.0.2][])
+0.5.0.2
 -------
 
-https://hackage.haskell.org/package/dejafu-0.5.0.2
+- **Date**    2017-02-22
+- **Git tag** [dejafu-0.5.0.2][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.5.0.2
 
 **This version was misnumbered! It should have caused a major version bump!**
 
@@ -295,10 +317,12 @@ https://hackage.haskell.org/package/dejafu-0.5.0.2
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.0.1 [2017-02-21] (git tag: [dejafu-0.5.0.1][])
+0.5.0.1
 -------
 
-**This version was never pushed to hackage, whoops!**
+- **Date**    2017-02-21
+- **Git tag** [dejafu-0.5.0.1][]
+- **This version was never pushed to hackage, whoops!**
 
 ### Fixed
 
@@ -310,10 +334,12 @@ https://hackage.haskell.org/package/dejafu-0.5.0.2
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.0.0 [2017-02-21] (git tag: [dejafu-0.5.0.0][])
+0.5.0.0
 -------
 
-https://hackage.haskell.org/package/dejafu-0.5.0.0
+- **Date**    2017-02-21
+- **Git tag** [dejafu-0.5.0.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.5.0.0
 
 ### Test.DejaFu
 
@@ -356,10 +382,12 @@ https://hackage.haskell.org/package/dejafu-0.5.0.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.4.0.0 [2016-09-10] (git tag: [dejafu-0.4.0.0][])
+0.4.0.0
 -------
 
-https://hackage.haskell.org/package/dejafu-0.4.0.0
+- **Date**    2016-09-10
+- **Git tag** [dejafu-0.4.0.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.4.0.0
 
 ### Test.DejaFu
 
@@ -403,10 +431,12 @@ https://hackage.haskell.org/package/dejafu-0.4.0.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.2.1 [2016-07-21] (git tag: [dejafu-0.3.2.1][])
+0.3.2.1
 -------
 
-https://hackage.haskell.org/package/dejafu-0.3.2.1
+- **Date**    2016-07-21
+- **Git tag** [dejafu-0.3.2.1][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.3.2.1
 
 ### Fixed
 
@@ -419,10 +449,12 @@ https://hackage.haskell.org/package/dejafu-0.3.2.1
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.2.0 [2016-06-06] (git tag: [dejafu-0.3.2.0][])
+0.3.2.0
 -------
 
-https://hackage.haskell.org/package/dejafu-0.3.2.0
+- **Date**    2016-06-06
+- **Git tag** [dejafu-0.3.2.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.3.2.0
 
 **Builds with both dpor-0.1 and dpor-0.2, however some improvements require dpor-0.2.**
 
@@ -444,10 +476,12 @@ https://hackage.haskell.org/package/dejafu-0.3.2.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.1.1 [2016-05-26] (git tag: [dejafu-0.3.1.1][])
+0.3.1.1
 -------
 
-https://hackage.haskell.org/package/dejafu-0.3.1.1
+- **Date**    2016-05-26
+- **Git tag** [dejafu-0.3.1.1][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.3.1.1
 
 ### Miscellaneous
 
@@ -459,10 +493,12 @@ https://hackage.haskell.org/package/dejafu-0.3.1.1
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.1.0 [2016-05-02] (git tag: [dejafu-0.3.1.0][])
+0.3.1.0
 -------
 
-https://hackage.haskell.org/package/dejafu-0.3.1.0
+- **Date**    2016-05-02
+- **Git tag** [dejafu-0.3.1.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.3.1.0
 
 ### Fixed
 
@@ -475,10 +511,12 @@ https://hackage.haskell.org/package/dejafu-0.3.1.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.0.0 [2016-04-03] (git tag: [dejafu-0.3.0.0][])
+0.3.0.0
 -------
 
-https://hackage.haskell.org/package/dejafu-0.3.0.0
+- **Date**    2016-04-03
+- **Git tag** [dejafu-0.3.0.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.3.0.0
 
 **The minimum supported version of GHC is now 7.10.**
 
@@ -491,10 +529,12 @@ logs.
 ---------------------------------------------------------------------------------------------------
 
 
-0.2.0.0 [2015-12-01] (git tag: [0.2.0.0][])
+0.2.0.0
 -------
 
-https://hackage.haskell.org/package/dejafu-0.2.0.0
+- **Date**    2015-12-01
+- **Git tag** [0.2.0.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.2.0.0
 
 I didn't write proper release notes, and this is so far back I don't really care to dig through the
 logs.
@@ -505,10 +545,12 @@ logs.
 ---------------------------------------------------------------------------------------------------
 
 
-0.1.0.0 [2015-08-27] (git tag: [0.1.0.0][])
+0.1.0.0
 -------
 
-https://hackage.haskell.org/package/dejafu-0.1.0.0
+- **Date**    2015-08-27
+- **Git tag** [0.1.0.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.1.0.0
 
 Initial release. Go read the API docs.
 
