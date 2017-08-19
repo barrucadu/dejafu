@@ -7,10 +7,12 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-1.1.2.1 [2017-06-07] (tag: [concurrency-1.1.2.1][])
+1.1.2.1
 -------
 
-https://hackage.haskell.org/package/concurrency-1.1.2.1
+- **Date**    2017-06-07
+- **Git tag** [concurrency-1.1.2.1][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.1.2.1
 
 ### Changed
 
@@ -28,10 +30,12 @@ https://hackage.haskell.org/package/concurrency-1.1.2.1
 ---------------------------------------------------------------------------------------------------
 
 
-1.1.2.0 [2017-04-05] (tag: [concurrency-1.1.2.0][])
+1.1.2.0
 -------
 
-https://hackage.haskell.org/package/concurrency-1.1.2.0
+- **Date**    2017-04-05
+- **Git tag** [concurrency-1.1.2.0][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.1.2.0
 
 ### Control.Concurrent.Classy.Async
 
@@ -66,10 +70,12 @@ https://hackage.haskell.org/package/concurrency-1.1.2.0
 ---------------------------------------------------------------------------------------------------
 
 
-1.1.1.0 [2017-03-04] (git tag: [concurrency-1.1.1.0][])
+1.1.1.0
 -------
 
-https://hackage.haskell.org/package/concurrency-1.1.1.0
+- **Date**    2017-03-04
+- **Git tag** [concurrency-1.1.1.0][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.1.1.0
 
 ### Miscellaneous
 
@@ -82,10 +88,12 @@ https://hackage.haskell.org/package/concurrency-1.1.1.0
 ---------------------------------------------------------------------------------------------------
 
 
-1.1.0.0 [2017-02-21] (git tag: [concurrency-1.1.0.0][])
+1.1.0.0
 -------
 
-https://hackage.haskell.org/package/concurrency-1.1.0.0
+- **Date**    2017-02-21
+- **Git tag** [concurrency-1.1.0.0][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.1.0.0
 
 ### Control.Monad.Conc.Class
 
@@ -100,10 +108,12 @@ https://hackage.haskell.org/package/concurrency-1.1.0.0
 ---------------------------------------------------------------------------------------------------
 
 
-1.0.0.0 [2016-09-10] (git tag: [concurrency-1.0.0.0][])
+1.0.0.0
 -------
 
-https://hackage.haskell.org/package/concurrency-1.0.0.0
+- **Date**    2016-09-10
+- **Git tag** [concurrency-1.0.0.0][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.0.0.0
 
 Initial release. Go read the API docs.
 

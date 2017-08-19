@@ -7,10 +7,12 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-0.7.0.0 [2017-08-10] (git tag: [tasty-dejafu-0.7.0.0][])
+0.7.0.0
 -------
 
-https://hackage.haskell.org/package/tasty-dejafu-0.6.0.0
+- **Date**    2017-08-10
+- **Git tag** [tasty-dejafu-0.7.0.0][]
+- **Hackage** https://hackage.haskell.org/package/tasty-dejafu-0.6.0.0
 
 ### Test.Tasty.DejaFu
 
@@ -28,10 +30,12 @@ https://hackage.haskell.org/package/tasty-dejafu-0.6.0.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.6.0.0 [2017-04-08] (git tag: [tasty-dejafu-0.6.0.0][])
+0.6.0.0
 -------
 
-https://hackage.haskell.org/package/tasty-dejafu-0.6.0.0
+- **Date**    2017-04-08
+- **Git tag** [tasty-dejafu-0.6.0.0][]
+- **Hackage** https://hackage.haskell.org/package/tasty-dejafu-0.6.0.0
 
 ### Test.Tasty.DejaFu
 
@@ -55,10 +59,12 @@ https://hackage.haskell.org/package/tasty-dejafu-0.6.0.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.5.0.0 [2017-04-08] (git tag: [tasty-dejafu-0.5.0.0][])
+0.5.0.0
 -------
 
-https://hackage.haskell.org/package/tasty-dejafu-0.5.0.0
+- **Date**    2017-04-08
+- **Git tag** [tasty-dejafu-0.5.0.0][]
+- **Hackage** https://hackage.haskell.org/package/tasty-dejafu-0.5.0.0
 
 ### Test.Tasty.DejaFu
 
@@ -76,10 +82,12 @@ https://hackage.haskell.org/package/tasty-dejafu-0.5.0.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.4.0.0 [2017-02-21] (git tag: [tasty-dejafu-0.4.0.0][])
+0.4.0.0
 -------
 
-https://hackage.haskell.org/package/tasty-dejafu-0.4.0.0
+- **Date**    2017-02-21
+- **Git tag** [tasty-dejafu-0.4.0.0][]
+- **Hackage** https://hackage.haskell.org/package/tasty-dejafu-0.4.0.0
 
 ### Test.Tasty.DejaFu
 
@@ -101,10 +109,12 @@ https://hackage.haskell.org/package/tasty-dejafu-0.4.0.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.0.2 [2016-09-10] (git tag: [tasty-dejafu-0.3.0.2][])
+0.3.0.2
 -------
 
-https://hackage.haskell.org/package/tasty-dejafu-0.3.0.2
+- **Date**    2016-09-10
+- **Git tag** [tasty-dejafu-0.3.0.2][]
+- **Hackage** https://hackage.haskell.org/package/tasty-dejafu-0.3.0.2
 
 ### Miscellaneous
 
@@ -116,10 +126,12 @@ https://hackage.haskell.org/package/tasty-dejafu-0.3.0.2
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.0.1 [2016-05-26] (git tag: [tasty-dejafu-0.3.0.1][])
+0.3.0.1
 -------
 
-https://hackage.haskell.org/package/tasty-dejafu-0.3.0.1
+- **Date**    2016-05-26
+- **Git tag** [tasty-dejafu-0.3.0.1][]
+- **Hackage** https://hackage.haskell.org/package/tasty-dejafu-0.3.0.1
 
 ### Miscellaneous
 
@@ -131,10 +143,12 @@ https://hackage.haskell.org/package/tasty-dejafu-0.3.0.1
 ---------------------------------------------------------------------------------------------------
 
 
-0.3.0.0 [2016-04-28] (git tag: [tasty-dejafu-0.3.0.0][])
+0.3.0.0
 -------
 
-https://hackage.haskell.org/package/tasty-dejafu-0.3.0.0
+- **Date**    2016-04-28
+- **Git tag** [tasty-dejafu-0.3.0.0][]
+- **Hackage** https://hackage.haskell.org/package/tasty-dejafu-0.3.0.0
 
 ### Test.Tasty.DejaFu
 
@@ -157,10 +171,12 @@ https://hackage.haskell.org/package/tasty-dejafu-0.3.0.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.1.1.0 [2016-04-03] (git tag: [tasty-dejafu-0.1.1.0][])
+0.1.1.0
 -------
 
-**This version was never pushed to hackage, whoops!**
+- **Date**    2016-04-03
+- **Git tag** [tasty-dejafu-0.1.1.0][]
+- **This version was never pushed to hackage, whoops!**
 
 **This version was misnumbered! It should have been 0.2.1.0!**
 
@@ -174,10 +190,12 @@ https://hackage.haskell.org/package/tasty-dejafu-0.3.0.0
 ---------------------------------------------------------------------------------------------------
 
 
-0.2.0.0 [2015-12-01] (git tag: [0.2.0.0][])
+0.2.0.0
 -------
 
-https://hackage.haskell.org/package/tasty-dejafu-0.2.0.0
+- **Date**    2015-12-01
+- **Git tag**  [0.2.0.0][]
+- **Hackage** https://hackage.haskell.org/package/tasty-dejafu-0.2.0.0
 
 Initial release. Go read the API docs.
 
