@@ -43,20 +43,21 @@ import Control.Monad
 import Control.Monad.Conc.Class
 
 -- test imports
-import Test.DejaFu (Bounds(..), Failure(..), defaultBounds, gives)
+import Test.DejaFu (Failure(..), gives)
 import Utils
 
 tests :: [T]
 tests =
-  [ T  "deadlocks"        deadlocks        (gives [Left Deadlock, Right ()])
-  , BT "nondeterministic" nondeterministic (gives [Left Deadlock, Right 0, Right 1]) (defaultBounds { boundPreemp = Just 3 })
+  [ T "deadlocks"        deadlocks        (gives [Left Deadlock, Right ()])
+  , T "nondeterministic" nondeterministic (gives [Left Deadlock, Right 0, Right 1])
   ]
 
 -- This exhibits a deadlock with no preemptions.
 deadlocks :: MonadConc m => m ()
 deadlocks = join (mkAutoUpdate defaultUpdateSettings)
 
--- This exhibits nondeterminism with three preemptions.
+-- This exhibits nondeterminism with three preemptions.  However, as
+-- the program explicitly yields, the bounds don't need changing.
 nondeterministic :: forall m. MonadConc m => m Int
 nondeterministic = do
   var <- newCRef 0
