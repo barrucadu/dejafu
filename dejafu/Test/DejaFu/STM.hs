@@ -28,7 +28,6 @@ module Test.DejaFu.STM
 
 import           Control.Monad            (unless)
 import           Control.Monad.Catch      (MonadCatch(..), MonadThrow(..))
-import           Control.Monad.Cont       (cont)
 import           Control.Monad.Ref        (MonadRef)
 import           Control.Monad.ST         (ST)
 import           Data.IORef               (IORef)

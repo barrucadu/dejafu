@@ -58,11 +58,12 @@ module Test.DejaFu.Common
   , MemType(..)
 
   -- * Miscellaneous
+  , MonadFailException(..)
   , runRefCont
   ) where
 
 import           Control.DeepSeq    (NFData(..))
-import           Control.Exception  (MaskingState(..))
+import           Control.Exception  (Exception(..), MaskingState(..))
 import           Control.Monad.Ref  (MonadRef(..))
 import           Data.List          (intercalate, nub, sort)
 import           Data.List.NonEmpty (NonEmpty)
@@ -865,6 +866,12 @@ instance NFData MemType where
 
 -------------------------------------------------------------------------------
 -- Miscellaneous
+
+-- | An exception for errors in testing caused by use of 'fail'.
+newtype MonadFailException = MonadFailException String
+  deriving Show
+
+instance Exception MonadFailException
 
 -- | Run with a continuation that writes its value into a reference,
 -- returning the computation and the reference.  Using the reference

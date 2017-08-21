@@ -7,6 +7,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Miscellaneous
+
+- Errors thrown with `Control.Monad.fail` no longer terminate testing, and are now correctly treated
+  as asynchronous exceptions.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.7.1.1
 -------
 

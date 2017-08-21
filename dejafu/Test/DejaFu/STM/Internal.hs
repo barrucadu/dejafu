@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
@@ -8,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : ExistentialQuantification, RankNTypes
+-- Portability : CPP, ExistentialQuantification, MultiParamTypeClasses, RankNTypes
 --
 -- 'MonadSTM' testing implementation, internal types and
 -- definitions. This module is NOT considered to form part of the
@@ -18,18 +19,51 @@ module Test.DejaFu.STM.Internal where
 import           Control.DeepSeq    (NFData(..))
 import           Control.Exception  (Exception, SomeException, fromException,
                                      toException)
-import           Control.Monad.Cont (Cont, runCont)
 import           Control.Monad.Ref  (MonadRef, newRef, readRef, writeRef)
 import           Data.List          (nub)
 
 import           Test.DejaFu.Common
+
+#if MIN_VERSION_base(4,9,0)
+import qualified Control.Monad.Fail as Fail
+#endif
 
 --------------------------------------------------------------------------------
 -- The @STMLike@ monad
 
 -- | The underlying monad is based on continuations over primitive
 -- actions.
-type M n r a = Cont (STMAction n r) a
+--
+-- This is not @Cont@ because we want to give it a custom @MonadFail@
+-- instance.
+newtype M n r a = M { runM :: (a -> STMAction n r) -> STMAction n r }
+
+instance Functor (M n r) where
+    fmap f m = M $ \ c -> runM m (c . f)
+
+instance Applicative (M n r) where
+    pure x  = M $ \c -> c x
+    f <*> v = M $ \c -> runM f (\g -> runM v (c . g))
+
+instance Monad (M n r) where
+    return  = pure
+    m >>= k = M $ \c -> runM m (\x -> runM (k x) c)
+
+#if MIN_VERSION_base(4,9,0)
+    fail = Fail.fail
+
+-- | @since unreleased
+instance Fail.MonadFail (M n r) where
+#endif
+    fail e = cont (\_ -> SThrow (MonadFailException e))
+
+-- | Construct a continuation-passing operation from a function.
+cont :: ((a -> STMAction n r) -> STMAction n r) -> M n r a
+cont = M
+
+-- | Run a CPS computation with the given final computation.
+runCont :: M n r a -> (a -> STMAction n r) -> STMAction n r
+runCont = runM
 
 --------------------------------------------------------------------------------
 -- * Primitive actions

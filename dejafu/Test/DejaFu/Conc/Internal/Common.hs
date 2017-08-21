@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -7,7 +8,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : ExistentialQuantification, RankNTypes
+-- Portability : CPP, ExistentialQuantification, RankNTypes
 --
 -- Common types and utility functions for deterministic execution of
 -- 'MonadConc' implementations. This module is NOT considered to form
@@ -18,6 +19,10 @@ import           Data.List.NonEmpty (NonEmpty, fromList)
 import           Data.Map.Strict    (Map)
 import           Test.DejaFu.Common
 import           Test.DejaFu.STM    (STMLike)
+
+#if MIN_VERSION_base(4,9,0)
+import qualified Control.Monad.Fail as Fail
+#endif
 
 --------------------------------------------------------------------------------
 -- * The @Conc@ Monad
@@ -42,6 +47,14 @@ instance Applicative (M n r) where
 instance Monad (M n r) where
     return  = pure
     m >>= k = M $ \c -> runM m (\x -> runM (k x) c)
+
+#if MIN_VERSION_base(4,9,0)
+    fail = Fail.fail
+
+-- | @since unreleased
+instance Fail.MonadFail (M n r) where
+#endif
+    fail e = cont (\_ -> AThrow (MonadFailException e))
 
 -- | The concurrent variable type used with the 'Conc' monad. One
 -- notable difference between these and 'MVar's is that 'MVar's are
