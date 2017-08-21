@@ -7,13 +7,19 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
+0.7.1.2
 ----------
+
+- **Date**    2017-08-21
+- **Git tag** [dejafu-0.7.1.2][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.7.1.2
 
 ### Miscellaneous
 
 - Errors thrown with `Control.Monad.fail` no longer terminate testing, and are now correctly treated
   as asynchronous exceptions.
+
+[dejafu-0.7.1.2]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.7.1.2
 
 
 ---------------------------------------------------------------------------------------------------

@@ -52,7 +52,7 @@ instance Monad (M n r) where
 #if MIN_VERSION_base(4,9,0)
     fail = Fail.fail
 
--- | @since unreleased
+-- | @since 0.7.1.2
 instance Fail.MonadFail (M n r) where
 #endif
     fail e = cont (\_ -> SThrow (MonadFailException e))
