@@ -56,6 +56,8 @@ tests =
     , testDejafu excSTM      "from stm"     $ gives' [True]
     , testDejafu excToMain1  "throw to main (uncaught)" $ gives  [Left UncaughtException]
     , testDejafu excToMain2  "throw to main (caught)"   $ gives' [()]
+    , testDejafu excMFail    "monadfail"       $ gives [Left UncaughtException]
+    , testDejafu excMFailSTM "monadfail (stm)" $ gives [Left UncaughtException]
     ]
 
   , testGroup "Capabilities" . hUnitTestToTests $ test
@@ -268,6 +270,15 @@ excToMain2 :: MonadConc m => m ()
 excToMain2 = do
   tid <- myThreadId
   catchArithException (throwTo tid Overflow) (\_ -> pure ())
+
+-- | Throw an exception using 'fail'.  Using 'ConcT' directly to avoid
+-- a 'MonadFail' constraint, which won't work with base < 4.9.
+excMFail :: Monad n => ConcT r n (Either Failure ())
+excMFail = fail "hello world"
+
+-- | Throw an exception in an STM transaction using 'fail'.
+excMFailSTM :: Monad n => ConcT r n (Either Failure ())
+excMFailSTM = atomically $ fail "hello world"
 
 --------------------------------------------------------------------------------
 -- Capabilities
