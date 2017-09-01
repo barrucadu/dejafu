@@ -33,6 +33,7 @@ tests =
       , T "left retry"  stmLeftRetry  $ gives' [()]
       , T "right retry" stmRightRetry $ gives' [()]
       , T "issue 55"    stmIssue55    $ gives' [True]
+      , T "issue 111"   stmIssue111   $ gives' [1]
       ]
     , tg "Killing Threads"
       [ T "no masking" threadKill      $ gives  [Left Deadlock, Right ()]
@@ -196,6 +197,16 @@ stmIssue55 = do
   fork . atomically $ writeTQueue b True
   let both a b = readTQueue a `orElse` readTQueue b `orElse` retry
   atomically $ both a b
+
+-- | Test case from issue #111
+stmIssue111 :: MonadConc m => m Int
+stmIssue111 = do
+  v <- atomically $ newTVar 1
+  fork . atomically $ do
+    writeTVar v 2
+    writeTVar v 3
+    retry
+  atomically $ readTVar v
 
 --------------------------------------------------------------------------------
 -- Exceptions
