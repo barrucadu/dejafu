@@ -111,6 +111,7 @@ import           Control.DeepSeq          (NFData(..), force)
 import           Control.Monad.Ref        (MonadRef)
 import           Data.List                (foldl')
 import qualified Data.Map.Strict          as M
+import           Data.Maybe               (fromMaybe)
 import           Data.Set                 (Set)
 import qualified Data.Set                 as S
 import           System.Random            (RandomGen, randomR)
@@ -354,11 +355,11 @@ noBounds = Bounds
   }
 
 -- | Combination bound function
-cBound :: Bounds -> BoundFunc
+cBound :: Bounds -> IncrementalBoundFunc (((Int, Maybe ThreadId), M.Map ThreadId Int), Int)
 cBound (Bounds pb fb lb) =
-  maybe trueBound pBound pb &+&
-  maybe trueBound fBound fb &+&
-  maybe trueBound lBound lb
+  maybe (trueBound (0, Nothing)) pBound pb &+&
+  maybe (trueBound M.empty)      fBound fb &+&
+  maybe (trueBound 0)            lBound lb
 
 -- | Combination backtracking function. Add all backtracking points
 -- corresponding to enabled bound functions.
@@ -384,8 +385,10 @@ instance NFData PreemptionBound where
 
 -- | Pre-emption bound function. This does not count pre-emptive
 -- context switches to a commit thread.
-pBound :: PreemptionBound -> BoundFunc
-pBound (PreemptionBound pb) ts dl = preEmpCount ts dl <= pb
+pBound :: PreemptionBound -> IncrementalBoundFunc (Int, Maybe ThreadId)
+pBound (PreemptionBound pb) k prior lhead =
+  let k'@(pcount, _) = preEmpCountInc (fromMaybe (0, Nothing) k) prior lhead
+  in if pcount <= pb then Just k' else Nothing
 
 -- | Add a backtrack point, and also conservatively add one prior to
 -- the most recent transition before that point. This may result in
@@ -420,8 +423,10 @@ instance NFData FairBound where
   rnf (FairBound i) = rnf i
 
 -- | Fair bound function
-fBound :: FairBound -> BoundFunc
-fBound (FairBound fb) ts (_, l) = maxYieldCountDiff ts l <= fb
+fBound :: FairBound -> IncrementalBoundFunc (M.Map ThreadId Int)
+fBound (FairBound fb) k prior lhead =
+  let k' = yieldCountInc (fromMaybe M.empty k) prior lhead
+  in if maxDiff (M.elems k') <= fb then Just k' else Nothing
 
 -- | Add a backtrack point. If the thread isn't runnable, or performs
 -- a release operation, add all runnable threads.
@@ -443,8 +448,10 @@ instance NFData LengthBound where
   rnf (LengthBound i) = rnf i
 
 -- | Length bound function
-lBound :: LengthBound -> BoundFunc
-lBound (LengthBound lb) ts _ = length ts < lb
+lBound :: LengthBound -> IncrementalBoundFunc Int
+lBound (LengthBound lb) len _ _ =
+  let len' = maybe 1 (+1) len
+  in if len' < lb then Just len' else Nothing
 
 -- | Add a backtrack point. If the thread isn't runnable, add all
 -- runnable threads.
@@ -505,7 +512,7 @@ sctBoundDiscard discard memtype cb conc = go initialState where
 
       if schedIgnore s
         then go (force newDPOR)
-        else checkDiscard discard res trace $ go (force (addBacktracks bpoints newDPOR))
+        else checkDiscard discard res trace $ go (force (incorporateBacktrackSteps bpoints newDPOR))
 
     Nothing -> pure []
 
@@ -517,9 +524,6 @@ sctBoundDiscard discard memtype cb conc = go initialState where
 
   -- Incorporate a trace into the DPOR tree.
   addTrace = incorporateTrace memtype
-
-  -- Incorporate the new backtracking steps into the DPOR tree.
-  addBacktracks = incorporateBacktrackSteps (cBound cb)
 
 -- | SCT via uniform random scheduling.
 --
@@ -619,63 +623,71 @@ sctWeightedRandomDiscard discard memtype g0 lim0 use0 conc = go g0 (max 0 lim0) 
 -------------------------------------------------------------------------------
 -- Utilities
 
+-- | An incremental version of 'preEmpCount', going one step at a time.
+preEmpCountInc
+  :: (Int, Maybe ThreadId)
+  -- ^ The number of preemptions so far and, if currently executing a
+  -- commit thread, what the prior thread was.
+  -> Maybe (ThreadId, ThreadAction)
+  -- ^ What just happened.
+  -> (Decision, a)
+  -- ^ What's coming up.
+  -> (Int, Maybe ThreadId)
+preEmpCountInc (sofar, lastnoncommit) prior (d, _) = case (prior, d) of
+    (Just (tid, _),   Start    tnext) -> cswitch tid tnext False
+    (Just (tid, act), SwitchTo tnext) -> cswitch tid tnext (not (didYield act))
+    (_, Continue) -> (sofar, lastnoncommit)
+    (Nothing, _)  -> (sofar, lastnoncommit)
+  where
+    cswitch tid tnext isPreemptive
+      | isCommitThread tnext = (sofar, if isCommitThread tid then lastnoncommit else Just tid)
+      | isCommitThread tid   = (if lastnoncommit == Just tnext then sofar else sofar + 1, Nothing)
+      | otherwise = (if isPreemptive then sofar + 1 else sofar, Nothing)
+
+    isCommitThread = (< initialThread)
+
+-- | An incremental count of yields, going one step at a time.
+yieldCountInc
+  :: M.Map ThreadId Int
+  -- ^ The number of yields of each thread so far
+  -> Maybe (ThreadId, a)
+  -- ^ What just happened.
+  -> (Decision, Lookahead)
+  -- ^ What's coming up.
+  -> M.Map ThreadId Int
+yieldCountInc sofar prior (d, lnext) = case prior of
+    Just (tid, _) -> ycount (tidOf tid d)
+    Nothing       -> ycount initialThread
+  where
+    ycount tnext = case lnext of
+      WillYield -> M.alter (Just . maybe 1 (+1)) tnext sofar
+      _ -> M.alter (Just . maybe 0 id) tnext sofar
+
 -- | Determine if an action is a commit or not.
 isCommitRef :: ThreadAction -> Bool
 isCommitRef (CommitCRef _ _) = True
 isCommitRef _ = False
 
--- | Extra threads created in a fork.
-forkTids :: ThreadAction -> [ThreadId]
-forkTids (Fork t) = [t]
-forkTids _ = []
-
--- | Count the number of yields by a thread in a schedule prefix.
-yieldCount :: ThreadId
-  -- ^ The thread to count yields for.
-  -> [(Decision, ThreadAction)]
-  -> Lookahead
-  -> Int
-yieldCount tid ts l = go initialThread ts where
-  go t ((Start    t', act):rest) = go' t t' act rest
-  go t ((SwitchTo t', act):rest) = go' t t' act rest
-  go t ((Continue,    act):rest) = go' t t  act rest
-  go t []
-    | t == tid && willYield l = 1
-    | otherwise = 0
-
-  {-# INLINE go' #-}
-  go' t t' act rest
-    | t == tid && didYield act = 1 + go t' rest
-    | otherwise = go t' rest
-
--- | Get the maximum difference between the yield counts of all
--- threads in this schedule prefix.
-maxYieldCountDiff :: [(Decision, ThreadAction)]
-  -> Lookahead
-  -> Int
-maxYieldCountDiff ts l = go 0 yieldCounts where
-  go m (yc:ycs) =
-    let m' = m `max` foldl' (go' yc) 0 ycs
-    in go m' ycs
+-- | Get the maximum difference between two ints in a list.
+maxDiff :: [Int] -> Int
+maxDiff = go 0 where
+  go m (x:xs) =
+    let m' = m `max` foldl' (go' x) 0 xs
+    in go m' xs
   go m [] = m
-  go' yc0 m yc = m `max` abs (yc0 - yc)
-
-  yieldCounts = [yieldCount t ts l | t <- allTids ts]
-
-  -- All the threads created during the lifetime of the system.
-  allTids ((_, act):rest) =
-    let tids' = forkTids act
-    in if null tids' then allTids rest else tids' ++ allTids rest
-  allTids [] = [initialThread]
+  go' x0 m x = m `max` abs (x0 - x)
 
 -- | The \"true\" bound, which allows everything.
-trueBound :: BoundFunc
-trueBound _ _ = True
+trueBound :: k -> IncrementalBoundFunc k
+trueBound k _ _ _ = Just k
 
 -- | Combine two bounds into a larger bound, where both must be
 -- satisfied.
-(&+&) :: BoundFunc -> BoundFunc -> BoundFunc
-(&+&) b1 b2 ts dl = b1 ts dl && b2 ts dl
+(&+&) :: IncrementalBoundFunc k1 -> IncrementalBoundFunc k2 -> IncrementalBoundFunc (k1, k2)
+(&+&) f1 f2 ks prior lhead =
+  let k1' = f1 (fst <$> ks) prior lhead
+      k2' = f2 (snd <$> ks) prior lhead
+  in (,) <$> k1' <*> k2'
 
 -- | Apply the discard function.
 checkDiscard :: Functor f => (a -> Maybe Discard) -> a -> [b] -> f [(a, [b])] -> f [(a, [b])]

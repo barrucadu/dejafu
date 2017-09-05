@@ -7,8 +7,19 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-0.7.1.2
+unreleased
 ----------
+
+### Miscellaneous
+
+- Slightly improved run-time of systematic testing.
+
+
+---------------------------------------------------------------------------------------------------
+
+
+0.7.1.2
+-------
 
 - **Date**    2017-08-21
 - **Git tag** [dejafu-0.7.1.2][]

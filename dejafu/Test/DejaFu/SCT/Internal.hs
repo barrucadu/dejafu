@@ -1,10 +1,12 @@
+{-# LANGUAGE TupleSections #-}
+
 -- |
 -- Module      : Test.DejaFu.SCT.Internal
 -- Copyright   : (c) 2016 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : portable
+-- Portability : TupleSections
 --
 -- Internal types and functions for dynamic partial-order
 -- reduction. This module is NOT considered to form part of the public
@@ -17,7 +19,7 @@ import           Control.Exception    (MaskingState(..))
 import qualified Data.Foldable        as F
 import           Data.Function        (on)
 import           Data.List            (nubBy, partition, sortOn)
-import           Data.List.NonEmpty   (NonEmpty(..), toList)
+import           Data.List.NonEmpty   (toList)
 import           Data.Map.Strict      (Map)
 import qualified Data.Map.Strict      as M
 import           Data.Maybe           (catMaybes, fromJust, fromMaybe, isJust,
@@ -216,9 +218,9 @@ findBacktrackSteps
   -> Bool
   -- ^ Whether the computation was aborted due to no decisions being
   -- in-bounds.
-  -> Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
-  -- ^ A sequence of threads at each step: the nonempty list of
-  -- runnable threads (with lookahead values), and the list of threads
+  -> Seq ([(ThreadId, Lookahead)], [ThreadId])
+  -- ^ A sequence of threads at each step: the list of runnable
+  -- in-bound threads (with lookahead values), and the list of threads
   -- still to try. The reason for the two separate lists is because
   -- the threads chosen to try will be dependent on the specific
   -- domain.
@@ -235,11 +237,11 @@ findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty init
           { bcktThreadid   = tid'
           , bcktDecision   = d
           , bcktAction     = a
-          , bcktRunnable   = M.fromList . toList $ e
+          , bcktRunnable   = M.fromList e
           , bcktBacktracks = M.fromList $ map (\i' -> (i', False)) i
           , bcktState      = state'
           }
-        bs' = doBacktrack killsEarly allThreads' (toList e) (bs++[this])
+        bs' = doBacktrack killsEarly allThreads' e (bs++[this])
         runnable = S.fromList (M.keys $ bcktRunnable this)
         allThreads' = allThreads `S.union` runnable
         killsEarly = null ts && boundKill
@@ -280,53 +282,44 @@ findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty init
     in backtrack bs idxs
 
 -- | Add new backtracking points, if they have not already been
--- visited, fit into the bound, and aren't in the sleep set.
-incorporateBacktrackSteps
-  :: ([(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool)
-  -- ^ Bound function: returns true if that schedule prefix terminated
-  -- with the lookahead decision fits within the bound.
-  -> [BacktrackStep]
-  -- ^ Backtracking steps identified by 'findBacktrackSteps'.
-  -> DPOR
-  -> DPOR
-incorporateBacktrackSteps bv = go Nothing [] where
-  go priorTid pref (b:bs) dpor =
-    let dpor' = doBacktrack priorTid pref b dpor
-        tid   = bcktThreadid b
-        pref' = pref ++ [(bcktDecision b, bcktAction b)]
-        child = case dporNext dpor of
-                  Just (t, d)
-                    | t /= tid -> err "incorporateBacktrackSteps" "incorporating wrong trace!"
-                    | otherwise -> go (Just t) pref' bs d
-                  Nothing -> err "incorporateBacktrackSteps" "child is missing!"
-    in dpor' { dporNext = Just (tid, child) }
-  go _ _ [] dpor = dpor
+-- visited and aren't in the sleep set.
+incorporateBacktrackSteps :: [BacktrackStep] -> DPOR -> DPOR
+incorporateBacktrackSteps (b:bs) dpor = dpor' where
+  tid = bcktThreadid b
 
-  doBacktrack priorTid pref b dpor =
-    let todo' = [ x
-                | x@(t,c) <- M.toList $ bcktBacktracks b
-                , let decision  = decisionOf priorTid (dporRunnable dpor) t
-                , let lahead = fromJust . M.lookup t $ bcktRunnable b
-                , bv pref (decision, lahead)
-                , Just t /= (fst <$> dporNext dpor)
-                , S.notMember t (dporDone dpor)
-                , c || M.notMember t (dporSleep dpor)
-                ]
-    in dpor { dporTodo = dporTodo dpor `M.union` M.fromList todo' }
+  dpor' = dpor
+    { dporTodo = dporTodo dpor `M.union` M.fromList todo
+    , dporNext = Just (tid, child)
+    }
+
+  todo =
+    [ x
+    | x@(t,c) <- M.toList $ bcktBacktracks b
+    , Just t /= (fst <$> dporNext dpor)
+    , S.notMember t (dporDone dpor)
+    , c || M.notMember t (dporSleep dpor)
+    ]
+
+  child = case dporNext dpor of
+    Just (t, d)
+      | t /= tid -> err "incorporateBacktrackSteps" "incorporating wrong trace!"
+      | otherwise -> incorporateBacktrackSteps bs d
+    Nothing -> err "incorporateBacktrackSteps" "child is missing!"
+incorporateBacktrackSteps [] dpor = dpor
 
 -------------------------------------------------------------------------------
 -- * DPOR scheduler
 
 -- | The scheduler state
-data DPORSchedState = DPORSchedState
+data DPORSchedState k = DPORSchedState
   { schedSleep     :: Map ThreadId ThreadAction
   -- ^ The sleep set: decisions not to make until something dependent
   -- with them happens.
   , schedPrefix    :: [ThreadId]
   -- ^ Decisions still to make
-  , schedBPoints   :: Seq (NonEmpty (ThreadId, Lookahead), [ThreadId])
-  -- ^ Which threads are runnable at each step, and the alternative
-  -- decisions still to make.
+  , schedBPoints   :: Seq ([(ThreadId, Lookahead)], [ThreadId])
+  -- ^ Which threads are runnable and in-bound at each step, and the
+  -- alternative decisions still to make.
   , schedIgnore    :: Bool
   -- ^ Whether to ignore this execution or not: @True@ if the
   -- execution is aborted due to all possible decisions being in the
@@ -338,15 +331,18 @@ data DPORSchedState = DPORSchedState
   , schedDepState  :: DepState
   -- ^ State used by the dependency function to determine when to
   -- remove decisions from the sleep set.
+  , schedBState    :: Maybe k
+  -- ^ State used by the incremental bounding function.
   } deriving (Eq, Show)
 
-instance NFData DPORSchedState where
+instance NFData k => NFData (DPORSchedState k) where
   rnf s = rnf ( schedSleep     s
               , schedPrefix    s
               , schedBPoints   s
               , schedIgnore    s
               , schedBoundKill s
               , schedDepState  s
+              , schedBState    s
               )
 
 -- | Initial DPOR scheduler state for a given prefix
@@ -354,7 +350,7 @@ initialDPORSchedState :: Map ThreadId ThreadAction
   -- ^ The initial sleep set.
   -> [ThreadId]
   -- ^ The schedule prefix.
-  -> DPORSchedState
+  -> DPORSchedState k
 initialDPORSchedState sleep prefix = DPORSchedState
   { schedSleep     = sleep
   , schedPrefix    = prefix
@@ -362,13 +358,14 @@ initialDPORSchedState sleep prefix = DPORSchedState
   , schedIgnore    = False
   , schedBoundKill = False
   , schedDepState  = initialDepState
+  , schedBState    = Nothing
   }
 
--- | A bounding function takes the scheduling decisions so far and a
--- decision chosen to come next, and returns if that decision is
--- within the bound.
-type BoundFunc
-  = [(Decision, ThreadAction)] -> (Decision, Lookahead) -> Bool
+-- | An incremental bounding function is a stateful function that
+-- takes the last and next decisions, and returns a new state only if
+-- the next decision is within the bound.
+type IncrementalBoundFunc k
+  = Maybe k -> Maybe (ThreadId, ThreadAction) -> (Decision, Lookahead) -> Maybe k
 
 -- | A backtracking step is a point in the execution where another
 -- decision needs to be made, in order to explore interesting new
@@ -439,21 +436,23 @@ backtrackAt toAll bs0 = backtrackAt' . nubBy ((==) `on` fst') . sortOn fst' wher
 dporSched
   :: MemType
   -- ^ Memory model.
-  -> BoundFunc
+  -> IncrementalBoundFunc k
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
-  -> Scheduler DPORSchedState
-dporSched memtype inBound trc prior threads s = schedule where
+  -> Scheduler (DPORSchedState k)
+dporSched memtype boundf _ prior threads s = schedule where
   -- Pick a thread to run.
   schedule = case schedPrefix s of
     -- If there is a decision available, make it
-    (d:ds) -> (Just d, (nextState []) { schedPrefix = ds })
+    (t:ts) ->
+      let bstate' = boundf (schedBState s) prior (decision t, action t)
+      in (Just t, (nextState []) { schedPrefix = ts, schedBState = bstate' })
 
     -- Otherwise query the initialise function for a list of possible
     -- choices, filter out anything in the sleep set, and make one of
     -- them arbitrarily (recording the others).
     [] ->
-      let choices  = restrictToBound initialise
+      let choices  = restrictToBound id initialise
           checkDep t a = case prior of
             Just (tid, act) -> dependent memtype (schedDepState s) tid act t a
             Nothing -> False
@@ -462,12 +461,15 @@ dporSched memtype inBound trc prior threads s = schedule where
           signore' = not (null choices) && all (`elem` M.keys ssleep') choices
           sbkill'  = not (null initialise) && null choices
       in case choices' of
-            (nextTid:rest) -> (Just nextTid, (nextState rest) { schedSleep = ssleep' })
-            [] -> (Nothing, (nextState []) { schedIgnore = signore', schedBoundKill = sbkill' })
+            (nextTid:rest) ->
+              let bstate' = boundf (schedBState s) prior (decision nextTid, action nextTid)
+              in (Just nextTid, (nextState rest) { schedSleep = ssleep', schedBState = bstate' })
+            [] ->
+              (Nothing, (nextState []) { schedIgnore = signore', schedBoundKill = sbkill', schedBState = Nothing })
 
   -- The next scheduler state
   nextState rest = s
-    { schedBPoints  = schedBPoints s |> (threads, rest)
+    { schedBPoints  = schedBPoints s |> (restrictToBound fst threads', rest)
     , schedDepState = nextDepState
     }
   nextDepState = let ds = schedDepState s in maybe ds (uncurry $ updateDepState ds) prior
@@ -478,7 +480,7 @@ dporSched memtype inBound trc prior threads s = schedule where
   initialise = tryDaemons . yieldsToEnd $ case prior of
     Just (tid, act)
       | not (didYield act) && tid `elem` tids -> [tid]
-    _ -> tids'
+    _ -> tids
 
   -- If one of the chosen actions will kill the computation, and there
   -- are daemon threads, try them instead.
@@ -501,30 +503,29 @@ dporSched memtype inBound trc prior threads s = schedule where
   -- See commits a056f54 and 8554ce9, and my 4th June comment in issue
   -- #52.
   tryDaemons ts
-    | any doesKill ts = case partition doesKill tids' of
+    | any doesKill ts = case partition doesKill tids of
         (kills, nokills) -> nokills ++ kills
     | otherwise = ts
   doesKill t = killsDaemons t (action t)
 
   -- Restrict the possible decisions to those in the bound.
-  restrictToBound = filter (\t -> inBound trc (decision t, action t))
+  restrictToBound f = filter (\x -> let t = f x in isJust $ boundf (schedBState s) prior (decision t, action t))
 
   -- Move the threads which will immediately yield to the end of the list
   yieldsToEnd ts = case partition (willYield . action) ts of
     (yields, noyields) -> noyields ++ yields
 
   -- Get the decision that will lead to a thread being scheduled.
-  decision = decisionOf (fst <$> prior) (S.fromList tids')
+  decision = decisionOf (fst <$> prior) (S.fromList tids)
 
   -- Get the action of a thread
   action t = fromJust $ lookup t threads'
 
   -- The runnable thread IDs
-  tids = fst <$> threads
+  tids = map fst threads'
 
   -- The runnable threads as a normal list.
   threads' = toList threads
-  tids'    = toList tids
 
 -------------------------------------------------------------------------------
 -- Weighted random scheduler
