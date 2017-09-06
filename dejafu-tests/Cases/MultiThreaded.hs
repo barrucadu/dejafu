@@ -1,7 +1,7 @@
 module Cases.MultiThreaded where
 
 import Control.Exception (ArithException(..))
-import Control.Monad (void)
+import Control.Monad (void, unless)
 import Test.DejaFu (Failure(..), gives, gives')
 import Test.Framework (Test)
 
@@ -23,10 +23,11 @@ tests =
       , T "race"     cvarRace $ gives' [0,1]
       ]
     , tg "CRef"
-      [ T "race"        crefRace       $ gives' [0,1]
-      , T "cas modify"  crefCASModify  $ gives' [0,1]
-      , T "cas race"    crefCASRace    $ gives' [(True, 2), (False, 2)]
-      , T "cas tickets" crefCASTickets $ gives' [(True, False, 1), (False, True, 2)]
+      [ T "race"            crefRace        $ gives' [0,1]
+      , T "cas modify"      crefCASModify   $ gives' [0,1]
+      , T "cas race"        crefCASRace     $ gives' [(True, 2), (False, 2)]
+      , T "cas race (redo)" crefCASRaceRedo $ gives' [(True, 1), (True, 2)]
+      , T "cas tickets"     crefCASTickets  $ gives' [(True, False, 1), (False, True, 2)]
       ]
     , tg "STM"
       [ T "atomicity"   stmAtomic     $ gives' [0,2]
@@ -147,6 +148,22 @@ crefCASRace = do
   t <- readForCAS x
   j <- spawn $ casCRef x t 1
   writeCRef x 2
+  b <- fst <$> readMVar j
+  v <- readCRef x
+  pure (b, v)
+
+-- | Failed CAS can use the new ticket to succeed.
+crefCASRaceRedo :: MonadConc m => m (Bool, Int)
+crefCASRaceRedo = do
+  x <- newCRef (0::Int)
+  t <- readForCAS x
+  v <- newEmptyMVar
+  j <- spawn $ do
+    o@(f, t') <- casCRef x t 1
+    takeMVar v
+    if f then pure o else casCRef x t' 1
+  writeCRef x 2
+  putMVar v ()
   b <- fst <$> readMVar j
   v <- readCRef x
   pure (b, v)

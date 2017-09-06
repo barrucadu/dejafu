@@ -41,6 +41,7 @@ tests =
     , testDejafu crefWrite      "write"       $ gives' [True]
     , testDejafu crefModify     "modify"      $ gives' [True]
     , testDejafu crefTicketPeek "ticket peek" $ gives' [True]
+    , testDejafu crefTicketPeek "ticket peek (2)" $ gives' [True]
     , testDejafu crefCas1       "cas"         $ gives' [(True, True)]
     , testDejafu crefCas2       "cas (modified)" $ gives' [(False, False)]
     ]
@@ -188,6 +189,16 @@ crefTicketPeek = do
   writeCRef ref 6
 
   (5==) <$> peekTicket tick
+
+-- | A @Ticket@ contains the value as of when it was created (and
+-- casCRef returns a correct new ticket).
+crefTicketPeek2 :: MonadConc m => m Bool
+crefTicketPeek2 = do
+  ref  <- newCRef (5::Int)
+  tick <- readForCAS ref
+  (_, tick') <- casCRef ref tick 6
+
+  (6==) <$> peekTicket tick'
 
 -- | A compare-and-swap can be done on a @CRef@ which hasn't been
 -- modified.
