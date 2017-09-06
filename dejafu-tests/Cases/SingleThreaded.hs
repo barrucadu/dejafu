@@ -22,12 +22,18 @@ import Control.Applicative ((<$>), (<*>))
 tests :: [Test]
 tests =
   [ testGroup "MVar" . hUnitTestToTests $ test
-    [ testDejafu emptyMVarTake "empty take" $ gives' [True]
-    , testDejafu emptyMVarPut  "empty put"  $ gives' [()]
-    , testDejafu emptyMVarRead "empty read" $ gives' [True]
-    , testDejafu fullMVarPut   "full put"   $ gives' [True]
-    , testDejafu fullMVarTake  "full take"  $ gives' [True]
-    , testDejafu fullMVarRead  "full read"  $ gives' [True]
+    [ testDejafu emptyMVarTake    "empty take"       $ gives  [Left Deadlock]
+    , testDejafu emptyMVarTryTake "empty take (try)" $ gives' [True]
+    , testDejafu emptyMVarPut     "empty put"        $ gives' [True]
+    , testDejafu emptyMVarTryPut  "empty put (try)"  $ gives' [True]
+    , testDejafu emptyMVarRead    "empty read"       $ gives  [Left Deadlock]
+    , testDejafu emptyMVarTryRead "empty read (try)" $ gives' [True]
+    , testDejafu fullMVarPut      "full put"         $ gives  [Left Deadlock]
+    , testDejafu fullMVarTryPut   "full put (try)"   $ gives' [True]
+    , testDejafu fullMVarTake     "full take"        $ gives' [True]
+    , testDejafu fullMVarTryTake  "full take (try)"  $ gives' [True]
+    , testDejafu fullMVarRead     "full read"        $ gives' [True]
+    , testDejafu fullMVarTryRead  "full read (try)"  $ gives' [True]
     ]
 
   , testGroup "CRef" . hUnitTestToTests $ test
@@ -76,28 +82,54 @@ tests =
 -- @MVar@s
 
 -- | An empty @MVar@ cannot be taken from.
-emptyMVarTake :: MonadConc m => m Bool
+emptyMVarTake :: MonadConc m => m ()
 emptyMVarTake = do
+  var <- newEmptyMVar
+  takeMVar var
+
+-- | An empty @MVar@ cannot be taken from.
+emptyMVarTryTake :: MonadConc m => m Bool
+emptyMVarTryTake = do
   var <- newEmptyMVar
   res <- tryTakeMVar var
 
   return $ (res :: Maybe ()) == Nothing
 
 -- | An empty @MVar@ can be put into.
-emptyMVarPut :: MonadConc m => m ()
+emptyMVarPut :: MonadConc m => m Bool
 emptyMVarPut = do
   var <- newEmptyMVar
-  putMVar var ()
+  putMVar var 7
+  (==7) <$> readMVar var
+
+-- | An empty @MVar@ can be put into.
+emptyMVarTryPut :: MonadConc m => m Bool
+emptyMVarTryPut = do
+  var <- newEmptyMVar
+  tryPutMVar var 7
+  (==7) <$> readMVar var
 
 -- | An empty @MVar@ cannot be read from.
-emptyMVarRead :: MonadConc m => m Bool
+emptyMVarRead :: MonadConc m => m ()
 emptyMVarRead = do
+  var <- newEmptyMVar
+  readMVar var
+
+-- | An empty @MVar@ cannot be read from.
+emptyMVarTryRead :: MonadConc m => m Bool
+emptyMVarTryRead = do
   var <- newEmptyMVar
   isNothing <$> tryReadMVar var
 
 -- | A full @MVar@ cannot be put into.
-fullMVarPut :: MonadConc m => m Bool
+fullMVarPut :: MonadConc m => m ()
 fullMVarPut = do
+  var <- newMVar ()
+  putMVar var ()
+
+-- | A full @MVar@ cannot be put into.
+fullMVarTryPut :: MonadConc m => m Bool
+fullMVarTryPut = do
   var <- newMVar ()
   not <$> tryPutMVar var ()
 
@@ -107,11 +139,23 @@ fullMVarTake = do
   var <- newMVar ()
   (() ==) <$> takeMVar var
 
+-- | A full @MVar@ can be taken from.
+fullMVarTryTake :: MonadConc m => m Bool
+fullMVarTryTake = do
+  var <- newMVar ()
+  (Just () ==) <$> tryTakeMVar var
+
 -- | A full @MVar@ can be read from.
 fullMVarRead :: MonadConc m => m Bool
 fullMVarRead = do
   var <- newMVar ()
   (() ==) <$> readMVar var
+
+-- | A full @MVar@ can be read from.
+fullMVarTryRead :: MonadConc m => m Bool
+fullMVarTryRead = do
+  var <- newMVar ()
+  (Just () ==) <$> tryReadMVar var
 
 --------------------------------------------------------------------------------
 -- @CRef@s
