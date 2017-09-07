@@ -41,7 +41,7 @@ tests =
     , testDejafu crefWrite      "write"       $ gives' [True]
     , testDejafu crefModify     "modify"      $ gives' [True]
     , testDejafu crefTicketPeek "ticket peek" $ gives' [True]
-    , testDejafu crefTicketPeek "ticket peek (2)" $ gives' [True]
+    , testDejafu crefTicketPeek2 "ticket peek (2)" $ gives' [True]
     , testDejafu crefCas1       "cas"         $ gives' [(True, True)]
     , testDejafu crefCas2       "cas (modified)" $ gives' [(False, False)]
     ]
