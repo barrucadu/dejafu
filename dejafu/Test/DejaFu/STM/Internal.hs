@@ -151,7 +151,7 @@ doTransaction ma idsource = do
 
       let newIDSource = nidsrc'
           newAct = act'
-          newUndo = undo >> undo'
+          newUndo = undo' >> undo
           newReaden = readen' ++ readen
           newWritten = written' ++ written
           newSofar = tact : sofar
