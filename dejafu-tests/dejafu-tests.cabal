@@ -4,21 +4,18 @@
 name:                dejafu-tests
 version:             0.4.0.0
 synopsis:            The test suite for dejafu
--- description:         
 homepage:            https://github.com/barrucadu/dejafu
 license:             MIT
 license-file:        LICENSE
 author:              Michael Walker
 maintainer:          mike@barrucadu.co.uk
--- copyright:           
--- category:            
 build-type:          Simple
--- extra-source-files:  
 cabal-version:       >=1.10
 
-executable dejafu-tests
-  main-is:             Main.hs
-
+test-suite test
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  default-language:    Haskell2010
   other-modules:       Cases
                      , Cases.Async
                      , Cases.SingleThreaded
@@ -38,19 +35,15 @@ executable dejafu-tests
 
                      , QSemN
                      , Utils
-
-  -- other-extensions:    
-  build-depends:       base
-                     , concurrency
-                     , containers
-                     , dejafu
-                     , exceptions
-                     , HUnit
-                     , hunit-dejafu
-                     , QuickCheck
-                     , random
-                     , test-framework
-                     , test-framework-hunit
-                     , test-framework-quickcheck2
-  -- hs-source-dirs:      
-  default-language:    Haskell2010
+  build-depends: base
+               , concurrency
+               , containers
+               , dejafu
+               , exceptions
+               , HUnit
+               , hunit-dejafu
+               , QuickCheck
+               , random
+               , test-framework
+               , test-framework-hunit
+               , test-framework-quickcheck2
