@@ -79,7 +79,7 @@ import qualified Data.Set           as S
 -- The @Eq@ and @Ord@ instances only consider the int, not the name.
 --
 -- @since 0.4.0.0
-data ThreadId = ThreadId (Maybe String) Int
+data ThreadId = ThreadId (Maybe String) {-# UNPACK #-} !Int
 
 -- | Previously this was a derived instance.
 --
@@ -103,7 +103,7 @@ instance NFData ThreadId where
 -- The @Eq@ and @Ord@ instances only consider the int, not the name.
 --
 -- @since 0.4.0.0
-data CRefId = CRefId (Maybe String) Int
+data CRefId = CRefId (Maybe String) {-# UNPACK #-} !Int
 
 -- | Previously this was a derived instance.
 --
@@ -127,7 +127,7 @@ instance NFData CRefId where
 -- The @Eq@ and @Ord@ instances only consider the int, not the name.
 --
 -- @since 0.4.0.0
-data MVarId = MVarId (Maybe String) Int
+data MVarId = MVarId (Maybe String) {-# UNPACK #-} !Int
 
 -- | Previously this was a derived instance.
 --
@@ -151,7 +151,7 @@ instance NFData MVarId where
 -- The @Eq@ and @Ord@ instances only consider the int, not the name.
 --
 -- @since 0.4.0.0
-data TVarId = TVarId (Maybe String) Int
+data TVarId = TVarId (Maybe String) {-# UNPACK #-} !Int
 
 -- | Previously this was a derived instance.
 --
