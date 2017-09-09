@@ -76,9 +76,16 @@ import qualified Data.Set           as S
 
 -- | Every live thread has a unique identitifer.
 --
+-- The @Eq@ and @Ord@ instances only consider the int, not the name.
+--
 -- @since 0.4.0.0
 data ThreadId = ThreadId (Maybe String) Int
-  deriving Eq
+
+-- | Previously this was a derived instance.
+--
+-- @since unreleased
+instance Eq ThreadId where
+  (ThreadId _ i) == (ThreadId _ j) = i == j
 
 instance Ord ThreadId where
   compare (ThreadId _ i) (ThreadId _ j) = compare i j
@@ -93,9 +100,16 @@ instance NFData ThreadId where
 
 -- | Every @CRef@ has a unique identifier.
 --
+-- The @Eq@ and @Ord@ instances only consider the int, not the name.
+--
 -- @since 0.4.0.0
 data CRefId = CRefId (Maybe String) Int
-  deriving Eq
+
+-- | Previously this was a derived instance.
+--
+-- @since unreleased
+instance Eq CRefId where
+  (CRefId _ i) == (CRefId _ j) = i == j
 
 instance Ord CRefId where
   compare (CRefId _ i) (CRefId _ j) = compare i j
@@ -110,9 +124,16 @@ instance NFData CRefId where
 
 -- | Every @MVar@ has a unique identifier.
 --
+-- The @Eq@ and @Ord@ instances only consider the int, not the name.
+--
 -- @since 0.4.0.0
 data MVarId = MVarId (Maybe String) Int
-  deriving Eq
+
+-- | Previously this was a derived instance.
+--
+-- @since unreleased
+instance Eq MVarId where
+  (MVarId _ i) == (MVarId _ j) = i == j
 
 instance Ord MVarId where
   compare (MVarId _ i) (MVarId _ j) = compare i j
@@ -127,9 +148,16 @@ instance NFData MVarId where
 
 -- | Every @TVar@ has a unique identifier.
 --
+-- The @Eq@ and @Ord@ instances only consider the int, not the name.
+--
 -- @since 0.4.0.0
 data TVarId = TVarId (Maybe String) Int
-  deriving Eq
+
+-- | Previously this was a derived instance.
+--
+-- @since unreleased
+instance Eq TVarId where
+  (TVarId _ i) == (TVarId _ j) = i == j
 
 instance Ord TVarId where
   compare (TVarId _ i) (TVarId _ j) = compare i j

@@ -7,6 +7,20 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Miscellaneous
+
+- The `Eq` instance for `ThreadId`, `CRefId`, `MVarId`, and `TVarId` now only compares the numbers,
+  not the names.
+
+    This makes it consistent with the `Ord` instances, and is also a small performance gain.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.7.1.3
 -------
 
