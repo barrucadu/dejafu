@@ -29,4 +29,4 @@ testcmd concurrency $STACKOPTS
 
 # Test 'dejafu'.
 echo "== dejafu"
-stack $STACKOPS test
+stack $STACKOPTS test
