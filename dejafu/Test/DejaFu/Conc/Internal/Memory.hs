@@ -27,7 +27,8 @@ import           Control.Monad                       (when)
 import           Control.Monad.Ref                   (MonadRef, readRef,
                                                       writeRef)
 import           Data.Map.Strict                     (Map)
-import           Data.Maybe                          (fromJust, isJust)
+import           Data.Maybe                          (fromJust, isJust,
+                                                      maybeToList)
 import           Data.Monoid                         ((<>))
 import           Data.Sequence                       (Seq, ViewL(..), singleton,
                                                       viewl, (><))
@@ -130,10 +131,10 @@ writeBarrier (WriteBuffer wb) = mapM_ flush $ M.elems wb where
 -- | Add phantom threads to the thread list to commit pending writes.
 addCommitThreads :: WriteBuffer r -> Threads n r -> Threads n r
 addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
-  phantoms = [ (ThreadId Nothing $ negate tid, mkthread $ fromJust c)
+  phantoms = [ (ThreadId Nothing $ negate tid, mkthread c)
              | ((_, b), tid) <- zip (M.toList wb) [1..]
-             , let c = go $ viewl b
-             , isJust c]
+             , c <- maybeToList (go $ viewl b)
+             ]
   go (BufferedWrite tid (CRef crid _) _ :< _) = Just $ ACommit tid crid
   go EmptyL = Nothing
 
