@@ -674,17 +674,21 @@ dependentActions memtype ds a1 a2 = case (a1, a2) of
   (UnsynchronisedRead r1, _) | isBarrier a2 -> isBuffered ds r1 && memtype /= SequentialConsistency
   (_, UnsynchronisedRead r2) | isBarrier a1 -> isBuffered ds r2 && memtype /= SequentialConsistency
 
-  (_, _)
+  (_, _) -> case getSame crefOf of
     -- Two actions on the same CRef where at least one is synchronised
-    | same crefOf && (synchronises a1 (fromJust $ crefOf a1) || synchronises a2 (fromJust $ crefOf a2)) -> True
+    Just r -> synchronises a1 r || synchronises a2 r
     -- Two actions on the same MVar
-    | same mvarOf -> True
-
-  _ -> False
+    _ -> same mvarOf
 
   where
     same :: Eq a => (ActionType -> Maybe a) -> Bool
-    same f = isJust (f a1) && f a1 == f a2
+    same = isJust . getSame
+
+    getSame :: Eq a => (ActionType -> Maybe a) -> Maybe a
+    getSame f =
+      let f1 = f a1
+          f2 = f a2
+      in if f1 == f2 then f1 else Nothing
 
 -------------------------------------------------------------------------------
 -- Dependency function state
