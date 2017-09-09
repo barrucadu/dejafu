@@ -29,16 +29,4 @@ testcmd concurrency $STACKOPTS
 
 # Test 'dejafu'.
 echo "== dejafu"
-if ! stack $STACKOPTS build dejafu-tests; then
-  echo "== FAILED (build)"
-  exit 1
-fi
-if ! stack $STACKOPTS exec dejafu-tests; then
-  echo "== FAILED (test)"
-  exit 1
-fi
-
-# Test everything else.
-for pkg in hunit-dejafu tasty-dejafu; do
-  testcmd $pkg $STACKOPTS
-done
+stack $STACKOPS test
