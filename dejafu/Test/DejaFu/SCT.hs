@@ -355,11 +355,13 @@ noBounds = Bounds
   }
 
 -- | Combination bound function
-cBound :: Bounds -> IncrementalBoundFunc (((Int, Maybe ThreadId), M.Map ThreadId Int), Int)
-cBound (Bounds pb fb lb) =
-  maybe (trueBound (0, Nothing)) pBound pb &+&
-  maybe (trueBound M.empty)      fBound fb &+&
-  maybe (trueBound 0)            lBound lb
+cBound :: Bounds -> IncrementalBoundFunc ((Int, Maybe ThreadId), M.Map ThreadId Int, Int)
+cBound (Bounds pb fb lb) (Just (k1, k2, k3)) prior lh =
+  let k1' = maybe (\k _ _ -> k) pBound pb (Just k1) prior lh
+      k2' = maybe (\k _ _ -> k) fBound fb (Just k2) prior lh
+      k3' = maybe (\k _ _ -> k) lBound lb (Just k3) prior lh
+  in (,,) <$> k1' <*> k2' <*> k3'
+cBound _ Nothing _ _ = Just ((0, Nothing), M.empty, 1)
 
 -- | Combination backtracking function. Add all backtracking points
 -- corresponding to enabled bound functions.
@@ -676,18 +678,6 @@ maxDiff = go 0 where
     in go m' xs
   go m [] = m
   go' x0 m x = m `max` abs (x0 - x)
-
--- | The \"true\" bound, which allows everything.
-trueBound :: k -> IncrementalBoundFunc k
-trueBound k _ _ _ = Just k
-
--- | Combine two bounds into a larger bound, where both must be
--- satisfied.
-(&+&) :: IncrementalBoundFunc k1 -> IncrementalBoundFunc k2 -> IncrementalBoundFunc (k1, k2)
-(&+&) f1 f2 ks prior lhead =
-  let k1' = f1 (fst <$> ks) prior lhead
-      k2' = f2 (snd <$> ks) prior lhead
-  in (,) <$> k1' <*> k2'
 
 -- | Apply the discard function.
 checkDiscard :: Functor f => (a -> Maybe Discard) -> a -> [b] -> f [(a, [b])] -> f [(a, [b])]
