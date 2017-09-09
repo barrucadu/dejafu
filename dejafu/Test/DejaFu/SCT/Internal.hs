@@ -561,11 +561,10 @@ randSched weightf _ _ threads s = (pick choice enabled, RandSchedState weights' 
   enabled = M.toList $ M.filterWithKey (\tid _ -> tid `elem` tids) weights'
 
   -- The weights, with any new threads added.
-  weights' = schedWeights s `M.union` M.fromList newWeights
-  (newWeights, g') = foldr assignWeight ([], schedGen s) $ filter (`M.notMember` schedWeights s) tids
+  (weights', g') = foldr assignWeight (M.empty, schedGen s) tids
   assignWeight tid ~(ws, g0) =
-    let (w, g) = weightf g0
-    in ((tid, w):ws, g)
+    let (w, g) = maybe (weightf g0) (,g0) (M.lookup tid (schedWeights s))
+    in (M.insert tid w ws, g)
 
   -- The runnable threads.
   tids = map fst (toList threads)
