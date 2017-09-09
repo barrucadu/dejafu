@@ -259,7 +259,7 @@ findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty init
                  , let is = idxs' u n v tagged
                  , not $ null is]
 
-        idxs' u n v = catMaybes . go' True where
+        idxs' u n v = go' True where
           {-# INLINE go' #-}
           go' final ((i,b):rest)
             -- Don't cross subconcurrency boundaries
@@ -267,7 +267,7 @@ findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty init
             -- If this is the final action in the trace and the
             -- execution was killed due to nothing being within bounds
             -- (@killsEarly == True@) assume worst-case dependency.
-            | bcktThreadid b == v && (killsEarly || isDependent b) = Just i : go' False rest
+            | bcktThreadid b == v && (killsEarly || isDependent b) = i : go' False rest
             | otherwise = go' False rest
           go' _ [] = []
 
