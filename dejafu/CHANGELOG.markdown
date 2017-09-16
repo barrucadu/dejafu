@@ -22,6 +22,8 @@ unreleased
 
     This makes it consistent with the `Ord` instances, and is also a small performance gain.
 
+- Now compatible with concurrency-1.2.0.0.
+
 
 ---------------------------------------------------------------------------------------------------
 

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -8,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : GeneralizedNewtypeDeriving, RankNTypes, TypeFamilies
+-- Portability : CPP, GeneralizedNewtypeDeriving, RankNTypes, TypeFamilies
 --
 -- A 'MonadSTM' implementation, which can be run on top of 'IO' or
 -- 'ST'.
@@ -82,9 +83,13 @@ instance MonadPlus (STMLike n r)
 instance C.MonadSTM (STMLike n r) where
   type TVar (STMLike n r) = TVar r
 
+#if MIN_VERSION_concurrency(1,2,0)
+  -- retry and orElse are top-level definitions in
+  -- Control.Monad.STM.Class in 1.2 and up
+#else
   retry = empty
-
   orElse = (<|>)
+#endif
 
   newTVarN n = toSTM . SNew n
 
