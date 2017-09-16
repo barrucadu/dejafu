@@ -17,22 +17,21 @@
 -- import "Control.Concurrent.Classy.STM" (which exports
 -- "Control.Monad.STM.Class").
 --
--- __Deviations:__ An instance of @MonadSTM@ is not required to be an
--- @Alternative@, @MonadPlus@, and @MonadFix@, unlike @STM@. The
--- @always@ and @alwaysSucceeds@ functions are not provided; if you
--- need these file an issue and I'll look into it.
+-- __Deviations:__ An instance of @MonadSTM@ is not required to be a
+-- @MonadFix@, unlike @STM@. The @always@ and @alwaysSucceeds@
+-- functions are not provided; if you need these file an issue and
+-- I'll look into it.
 module Control.Monad.STM.Class
   ( MonadSTM(..)
+  , retry
   , check
+  , orElse
   , throwSTM
   , catchSTM
-
-  -- * Utilities for instance writers
-  , liftedOrElse
   ) where
 
 import           Control.Exception            (Exception)
-import           Control.Monad                (unless)
+import           Control.Monad                (MonadPlus(..), unless)
 import           Control.Monad.Reader         (ReaderT)
 import           Control.Monad.Trans          (lift)
 import           Control.Monad.Trans.Control  (MonadTransControl, StT, liftWith)
@@ -53,12 +52,10 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- each 'MonadConc' has an associated @MonadSTM@ from which it can
 -- atomically run a transaction.
 --
--- @since 1.0.0.0
-class Ca.MonadCatch stm => MonadSTM stm where
+-- @since unreleased
+class (Ca.MonadCatch stm, MonadPlus stm) => MonadSTM stm where
   {-# MINIMAL
-        retry
-      , orElse
-      , (newTVar | newTVarN)
+        (newTVar | newTVarN)
       , readTVar
       , writeTVar
     #-}
@@ -69,22 +66,6 @@ class Ca.MonadCatch stm => MonadSTM stm where
   --
   -- @since 1.0.0.0
   type TVar stm :: * -> *
-
-  -- | Retry execution of this transaction because it has seen values
-  -- in @TVar@s that it shouldn't have. This will result in the
-  -- thread running the transaction being blocked until any @TVar@s
-  -- referenced in it have been mutated.
-  --
-  -- @since 1.0.0.0
-  retry :: stm a
-
-  -- | Run the first transaction and, if it @retry@s, run the second
-  -- instead. If the monad is an instance of
-  -- 'Alternative'/'MonadPlus', 'orElse' should be the '(<|>)'/'mplus'
-  -- function.
-  --
-  -- @since 1.0.0.0
-  orElse :: stm a -> stm a -> stm a
 
   -- | Create a new @TVar@ containing the given value.
   --
@@ -118,11 +99,31 @@ class Ca.MonadCatch stm => MonadSTM stm where
   -- @since 1.0.0.0
   writeTVar :: TVar stm a -> a -> stm ()
 
+-- | Retry execution of this transaction because it has seen values in
+-- @TVar@s that it shouldn't have. This will result in the thread
+-- running the transaction being blocked until any @TVar@s referenced
+-- in it have been mutated.
+--
+-- This is just 'mzero'.
+--
+-- @since unreleased
+retry :: MonadSTM stm => stm a
+retry = mzero
+
 -- | Check whether a condition is true and, if not, call @retry@.
 --
 -- @since 1.0.0.0
 check :: MonadSTM stm => Bool -> stm ()
 check b = unless b retry
+
+-- | Run the first transaction and, if it @retry@s, run the second
+-- instead.
+--
+-- This is just 'mplus'.
+--
+-- @since unreleased
+orElse :: MonadSTM stm => stm a -> stm a -> stm a
+orElse = mplus
 
 -- | Throw an exception. This aborts the transaction and propagates
 -- the exception.
@@ -141,8 +142,6 @@ catchSTM = Ca.catch
 instance MonadSTM STM.STM where
   type TVar STM.STM = STM.TVar
 
-  retry     = STM.retry
-  orElse    = STM.orElse
   newTVar   = STM.newTVar
   readTVar  = STM.readTVar
   writeTVar = STM.writeTVar
@@ -154,8 +153,6 @@ instance MonadSTM STM.STM where
 instance C => MonadSTM (T stm) where { \
   type TVar (T stm) = TVar stm      ; \
                                       \
-  retry       = lift retry          ; \
-  orElse      = liftedOrElse F      ; \
   newTVar     = lift . newTVar      ; \
   newTVarN n  = lift . newTVarN n   ; \
   readTVar    = lift . readTVar     ; \
@@ -186,17 +183,3 @@ INSTANCE(RL.RWST r w s, (MonadSTM stm, Monoid w), (\(a,_,_) -> a))
 INSTANCE(RS.RWST r w s, (MonadSTM stm, Monoid w), (\(a,_,_) -> a))
 
 #undef INSTANCE
-
--------------------------------------------------------------------------------
-
--- | Given a function to remove the transformer-specific state, lift
--- an @orElse@ invocation.
---
--- @since 1.0.0.0
-liftedOrElse :: (MonadTransControl t, MonadSTM stm)
-  => (forall x. StT t x -> x)
-  -> t stm a -> t stm a -> t stm a
-liftedOrElse unst ma mb = liftWith $ \run ->
-  let ma' = unst <$> run ma
-      mb' = unst <$> run mb
-  in ma' `orElse` mb'

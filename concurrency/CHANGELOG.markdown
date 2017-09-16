@@ -7,6 +7,19 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Control.Monad.STM.Class
+
+- `MonadSTM` now has a `MonadPlus` constraint.
+- The `orElse` and `retry` functions have been promoted to top-level definitions, and are aliases
+  for `mplus` and `mzero`.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 1.1.2.1
 -------
 
