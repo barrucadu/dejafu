@@ -72,12 +72,12 @@ instance MonadThrow (STMLike n r) where
 instance MonadCatch (STMLike n r) where
   catch (S stm) handler = toSTM (SCatch (runSTM . handler) stm)
 
--- | @since unreleased
+-- | @since 0.7.2.0
 instance Alternative (STMLike n r) where
   S a <|> S b = toSTM (SOrElse a b)
   empty = toSTM (const SRetry)
 
--- | @since unreleased
+-- | @since 0.7.2.0
 instance MonadPlus (STMLike n r)
 
 instance C.MonadSTM (STMLike n r) where

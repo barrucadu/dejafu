@@ -83,7 +83,7 @@ data ThreadId = ThreadId (Maybe String) {-# UNPACK #-} !Int
 
 -- | Previously this was a derived instance.
 --
--- @since unreleased
+-- @since 0.7.2.0
 instance Eq ThreadId where
   (ThreadId _ i) == (ThreadId _ j) = i == j
 
@@ -107,7 +107,7 @@ data CRefId = CRefId (Maybe String) {-# UNPACK #-} !Int
 
 -- | Previously this was a derived instance.
 --
--- @since unreleased
+-- @since 0.7.2.0
 instance Eq CRefId where
   (CRefId _ i) == (CRefId _ j) = i == j
 
@@ -131,7 +131,7 @@ data MVarId = MVarId (Maybe String) {-# UNPACK #-} !Int
 
 -- | Previously this was a derived instance.
 --
--- @since unreleased
+-- @since 0.7.2.0
 instance Eq MVarId where
   (MVarId _ i) == (MVarId _ j) = i == j
 
@@ -155,7 +155,7 @@ data TVarId = TVarId (Maybe String) {-# UNPACK #-} !Int
 
 -- | Previously this was a derived instance.
 --
--- @since unreleased
+-- @since 0.7.2.0
 instance Eq TVarId where
   (TVarId _ i) == (TVarId _ j) = i == j
 
