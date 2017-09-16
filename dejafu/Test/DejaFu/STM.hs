@@ -26,7 +26,8 @@ module Test.DejaFu.STM
   , runTransaction
   ) where
 
-import           Control.Monad            (unless)
+import           Control.Applicative      (Alternative(..))
+import           Control.Monad            (MonadPlus(..), unless)
 import           Control.Monad.Catch      (MonadCatch(..), MonadThrow(..))
 import           Control.Monad.Ref        (MonadRef)
 import           Control.Monad.ST         (ST)
@@ -70,12 +71,20 @@ instance MonadThrow (STMLike n r) where
 instance MonadCatch (STMLike n r) where
   catch (S stm) handler = toSTM (SCatch (runSTM . handler) stm)
 
+-- | @since unreleased
+instance Alternative (STMLike n r) where
+  S a <|> S b = toSTM (SOrElse a b)
+  empty = toSTM (const SRetry)
+
+-- | @since unreleased
+instance MonadPlus (STMLike n r)
+
 instance C.MonadSTM (STMLike n r) where
   type TVar (STMLike n r) = TVar r
 
-  retry = toSTM (const SRetry)
+  retry = empty
 
-  orElse (S a) (S b) = toSTM (SOrElse a b)
+  orElse = (<|>)
 
   newTVarN n = toSTM . SNew n
 

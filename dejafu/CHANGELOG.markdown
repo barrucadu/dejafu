@@ -10,6 +10,11 @@ This project is versioned according to the [Package Versioning Policy](https://p
 unreleased
 ----------
 
+### Test.DejaFu.STM
+
+- The `STM n r` monad now has `Alternative` and `MonadPlus` instances, using `orElse` for the binary
+  operation and `retry` for the unit.
+
 ### Miscellaneous
 
 - The `Eq` instance for `ThreadId`, `CRefId`, `MVarId`, and `TVarId` now only compares the numbers,
