@@ -52,7 +52,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- each 'MonadConc' has an associated @MonadSTM@ from which it can
 -- atomically run a transaction.
 --
--- @since unreleased
+-- @since 1.2.0.0
 class (Ca.MonadCatch stm, MonadPlus stm) => MonadSTM stm where
   {-# MINIMAL
         (newTVar | newTVarN)
@@ -106,7 +106,7 @@ class (Ca.MonadCatch stm, MonadPlus stm) => MonadSTM stm where
 --
 -- This is just 'mzero'.
 --
--- @since unreleased
+-- @since 1.2.0.0
 retry :: MonadSTM stm => stm a
 retry = mzero
 
@@ -121,7 +121,7 @@ check b = unless b retry
 --
 -- This is just 'mplus'.
 --
--- @since unreleased
+-- @since 1.2.0.0
 orElse :: MonadSTM stm => stm a -> stm a -> stm a
 orElse = mplus
 

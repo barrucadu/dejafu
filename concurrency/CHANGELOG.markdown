@@ -7,14 +7,20 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+1.2.0.0
+-------
+
+- **Date**    2017-09-16
+- **Git tag** [concurrency-1.2.0.0][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.2.0.0
 
 ### Control.Monad.STM.Class
 
 - `MonadSTM` now has a `MonadPlus` constraint.
 - The `orElse` and `retry` functions have been promoted to top-level definitions, and are aliases
   for `mplus` and `mzero`.
+
+[concurrency-1.2.0.0]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.2.0.0
 
 
 ---------------------------------------------------------------------------------------------------
