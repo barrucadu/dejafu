@@ -32,3 +32,4 @@ This is Déjà Fu
 
    adding_a_new_primitive
    contributing
+   release_process
