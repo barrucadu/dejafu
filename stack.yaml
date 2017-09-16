@@ -1,4 +1,4 @@
-flags: {}
+resolver: nightly-2016-06-20
 
 packages:
 - concurrency
@@ -6,21 +6,12 @@ packages:
 - dejafu-tests
 - hunit-dejafu
 - tasty-dejafu
-# Until test-framework-hunit with HUnit 1.6 support is on Stackage:
-# https://github.com/haskell/test-framework/pull/27
-- location:
-    git: https://github.com/haskell/test-framework.git
-    commit: 7d9c1a67f41da960152657728da7813c533573f2
-  subdirs:
-  - hunit
-  extra-dep: true
 
 extra-deps:
 - call-stack-0.1.0
 - HUnit-1.6.0.0
 - leancheck-0.6.2
-
-resolver: nightly-2016-06-20
+- test-framework-hunit-0.3.0.2
 
 nix:
   packages: [git]

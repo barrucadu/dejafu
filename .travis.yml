@@ -14,16 +14,16 @@ cache:
 matrix:
   fast_finish: true
   include:
-  - env: RESOLVER="lts-6" # GHC 7.10
+  - env: RESOLVER=lts-6 # GHC 7.10
     addons: {apt: {packages: [libgmp-dev]}}
-  - env: RESOLVER="lts-9" # GHC 8.0
+  - env: RESOLVER=lts-9 # GHC 8.0
     addons: {apt: {packages: [libgmp-dev]}}
-  # - env: RESOLVER="lts-X" # GHC 8.2
+  # - env: RESOLVER= # GHC 8.2
   #   addons: {apt: {packages: [libgmp-dev]}}
-  - env: RESOLVER="nightly"
+  - env: RESOLVER=nightly
     addons: {apt: {packages: [libgmp-dev]}}
   allow_failures:
-  - env: RESOLVER="nightly"
+  - env: RESOLVER=nightly
 
 # Download and unpack the stack executable
 before_install:
@@ -33,4 +33,10 @@ before_install:
 
 # Run tests
 script:
-- ./test-build.sh
+- stack --resolver=$RESOLVER setup
+- stack --resolver=$RESOLVER build concurrency
+- stack --resolver=$RESOLVER build dejafu
+- stack --resolver=$RESOLVER build hunit-dejafu
+- stack --resolver=$RESOLVER build tasty-dejafu
+- stack --resolver=$RESOLVER build dejafu-tests
+- stack --resolver=$RESOLVER exec dejafu-tests
