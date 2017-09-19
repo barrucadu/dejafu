@@ -3,12 +3,10 @@
 module Cases.SingleThreaded where
 
 import Control.Exception (ArithException(..), ArrayException(..))
-import Data.Maybe (isNothing)
 import Test.DejaFu (Failure(..), gives, gives')
-import Test.HUnit.DejaFu (testDejafu)
 
 import Control.Concurrent.Classy
-import Test.DejaFu.Conc (ConcT, subconcurrency)
+import Test.DejaFu.Conc (subconcurrency)
 
 import Common
 
@@ -19,348 +17,308 @@ import Control.Applicative ((<$>), (<*>))
 tests :: [Test]
 tests =
   [ testGroup "MVar"
-    [ testDejafu emptyMVarTake    "empty take"       $ gives  [Left Deadlock]
-    , testDejafu emptyMVarTryTake "empty take (try)" $ gives' [True]
-    , testDejafu emptyMVarPut     "empty put"        $ gives' [True]
-    , testDejafu emptyMVarTryPut  "empty put (try)"  $ gives' [True]
-    , testDejafu emptyMVarRead    "empty read"       $ gives  [Left Deadlock]
-    , testDejafu emptyMVarTryRead "empty read (try)" $ gives' [True]
-    , testDejafu fullMVarPut      "full put"         $ gives  [Left Deadlock]
-    , testDejafu fullMVarTryPut   "full put (try)"   $ gives' [True]
-    , testDejafu fullMVarTake     "full take"        $ gives' [True]
-    , testDejafu fullMVarTryTake  "full take (try)"  $ gives' [True]
-    , testDejafu fullMVarRead     "full read"        $ gives' [True]
-    , testDejafu fullMVarTryRead  "full read (try)"  $ gives' [True]
+    [ emptyMVarPut
+    , emptyMVarTryPut
+    , emptyMVarTake
+    , emptyMVarTryTake
+    , emptyMVarRead
+    , emptyMVarTryRead
+    , fullMVarPut
+    , fullMVarTryPut
+    , fullMVarTake
+    , fullMVarTryTake
+    , fullMVarRead
+    , fullMVarTryRead
     ]
 
   , testGroup "CRef"
-    [ testDejafu crefRead       "read"        $ gives' [True]
-    , testDejafu crefWrite      "write"       $ gives' [True]
-    , testDejafu crefModify     "modify"      $ gives' [True]
-    , testDejafu crefTicketPeek "ticket peek" $ gives' [True]
-    , testDejafu crefTicketPeek2 "ticket peek (2)" $ gives' [True]
-    , testDejafu crefCas1       "cas"         $ gives' [(True, True)]
-    , testDejafu crefCas2       "cas (modified)" $ gives' [(False, False)]
+    [ crefRead
+    , crefWrite
+    , crefModify
+    , crefTicketPeek
+    , crefTicketPeek2
+    , crefCas1
+    , crefCas2
     ]
 
   , testGroup "STM"
-    [ testDejafu stmWrite    "write"   $ gives' [True]
-    , testDejafu stmPreserve "write (across transactions)" $ gives' [True]
-    , testDejafu stmRetry    "retry"   $ gives  [Left STMDeadlock]
-    , testDejafu stmOrElse   "or else" $ gives' [True]
-    , testDejafu stmCatch1   "single catch" $ gives' [True]
-    , testDejafu stmCatch2   "nested catch" $ gives' [True]
+    [ stmWrite
+    , stmPreserve
+    , stmRetry
+    , stmOrElse
+    , stmCatch1
+    , stmCatch2
+    , stmMFail
     ]
 
   , testGroup "Exceptions"
-    [ testDejafu excCatch    "single catch" $ gives' [True]
-    , testDejafu excNest     "nested catch" $ gives' [True]
-    , testDejafu excEscape   "uncaught"     $ gives  [Left UncaughtException]
-    , testDejafu excCatchAll "catch all"    $ gives' [(True, True)]
-    , testDejafu excSTM      "from stm"     $ gives' [True]
-    , testDejafu excToMain1  "throw to main (uncaught)" $ gives  [Left UncaughtException]
-    , testDejafu excToMain2  "throw to main (caught)"   $ gives' [()]
-    , testDejafu excMFail    "monadfail"       $ gives [Left UncaughtException]
-    , testDejafu excMFailSTM "monadfail (stm)" $ gives [Left UncaughtException]
+    [ excCatch
+    , excNest
+    , excEscape
+    , excCatchAll
+    , excSTM
+    , excToMain1
+    , excToMain2
+    , excMFail
     ]
 
   , testGroup "Capabilities"
-    [ testDejafu capsGet "get" $ gives' [True]
-    , testDejafu capsSet "set" $ gives' [True]
+    [ capsGet
+    , capsSet
     ]
 
   , testGroup "Subconcurrency"
-    [ testDejafu scDeadlock1 "deadlock1" $ gives' [Left Deadlock]
-    , testDejafu scDeadlock2 "deadlock2" $ gives' [(Left Deadlock, ())]
-    , testDejafu scSuccess   "success"   $ gives' [Right ()]
+    [ scDeadlock1
+    , scDeadlock2
+    , scSuccess
     ]
   ]
 
 --------------------------------------------------------------------------------
 -- @MVar@s
 
--- | An empty @MVar@ cannot be taken from.
-emptyMVarTake :: MonadConc m => m ()
-emptyMVarTake = do
-  var <- newEmptyMVar
+emptyMVarTake :: Test
+emptyMVarTake = djfu "Taking from an empty MVar blocks" (gives [Left Deadlock]) $ do
+  var <- newEmptyMVarInt
   takeMVar var
 
--- | An empty @MVar@ cannot be taken from.
-emptyMVarTryTake :: MonadConc m => m Bool
-emptyMVarTryTake = do
-  var <- newEmptyMVar
-  res <- tryTakeMVar var
+emptyMVarTryTake :: Test
+emptyMVarTryTake = djfu "Non-blockingly taking from an empty MVar gives nothing" (gives' [Nothing]) $ do
+  var <- newEmptyMVarInt
+  tryTakeMVar var
 
-  return $ (res :: Maybe ()) == Nothing
-
--- | An empty @MVar@ can be put into.
-emptyMVarPut :: MonadConc m => m Bool
-emptyMVarPut = do
-  var <- newEmptyMVar
+emptyMVarPut :: Test
+emptyMVarPut = djfu "Putting into an empty MVar updates it" (gives' [True]) $ do
+  var <- newEmptyMVarInt
   putMVar var 7
   (==7) <$> readMVar var
 
--- | An empty @MVar@ can be put into.
-emptyMVarTryPut :: MonadConc m => m Bool
-emptyMVarTryPut = do
-  var <- newEmptyMVar
-  tryPutMVar var 7
+emptyMVarTryPut :: Test
+emptyMVarTryPut = djfu "Non-blockingly putting into an empty MVar updates it" (gives' [True]) $ do
+  var <- newEmptyMVarInt
+  _   <- tryPutMVar var 7
   (==7) <$> readMVar var
 
--- | An empty @MVar@ cannot be read from.
-emptyMVarRead :: MonadConc m => m ()
-emptyMVarRead = do
-  var <- newEmptyMVar
+emptyMVarRead :: Test
+emptyMVarRead = djfu "Reading an empty MVar blocks" (gives [Left Deadlock]) $ do
+  var <- newEmptyMVarInt
   readMVar var
 
--- | An empty @MVar@ cannot be read from.
-emptyMVarTryRead :: MonadConc m => m Bool
-emptyMVarTryRead = do
-  var <- newEmptyMVar
-  isNothing <$> tryReadMVar var
+emptyMVarTryRead :: Test
+emptyMVarTryRead = djfu "Non-blockingly reading an empty MVar gives nothing" (gives' [Nothing]) $ do
+  var <- newEmptyMVarInt
+  tryReadMVar var
 
--- | A full @MVar@ cannot be put into.
-fullMVarPut :: MonadConc m => m ()
-fullMVarPut = do
-  var <- newMVar ()
-  putMVar var ()
+fullMVarPut :: Test
+fullMVarPut = djfu "Putting into a full MVar blocks" (gives [Left Deadlock]) $ do
+  var <- newMVarInt 7
+  putMVar var 10
 
--- | A full @MVar@ cannot be put into.
-fullMVarTryPut :: MonadConc m => m Bool
-fullMVarTryPut = do
-  var <- newMVar ()
-  not <$> tryPutMVar var ()
+fullMVarTryPut :: Test
+fullMVarTryPut = djfu "Non-blockingly putting into a full MVar fails" (gives' [False]) $ do
+  var <- newMVarInt 7
+  tryPutMVar var 10
 
--- | A full @MVar@ can be taken from.
-fullMVarTake :: MonadConc m => m Bool
-fullMVarTake = do
-  var <- newMVar ()
-  (() ==) <$> takeMVar var
+fullMVarTake :: Test
+fullMVarTake = djfu "Taking from a full MVar works" (gives' [True]) $ do
+  var <- newMVarInt 7
+  (==7) <$> takeMVar var
 
--- | A full @MVar@ can be taken from.
-fullMVarTryTake :: MonadConc m => m Bool
-fullMVarTryTake = do
-  var <- newMVar ()
-  (Just () ==) <$> tryTakeMVar var
+fullMVarTryTake :: Test
+fullMVarTryTake = djfu "Non-blockingly taking from a full MVar works" (gives' [True]) $ do
+  var <- newMVarInt 7
+  (==Just 7) <$> tryTakeMVar var
 
--- | A full @MVar@ can be read from.
-fullMVarRead :: MonadConc m => m Bool
-fullMVarRead = do
-  var <- newMVar ()
-  (() ==) <$> readMVar var
+fullMVarRead :: Test
+fullMVarRead = djfu "Reading a full MVar works" (gives' [True]) $ do
+  var <- newMVarInt 7
+  (==7) <$> readMVar var
 
--- | A full @MVar@ can be read from.
-fullMVarTryRead :: MonadConc m => m Bool
-fullMVarTryRead = do
-  var <- newMVar ()
-  (Just () ==) <$> tryReadMVar var
+fullMVarTryRead :: Test
+fullMVarTryRead = djfu "Non-blockingly reading a full MVar works" (gives' [True]) $ do
+  var <- newMVarInt 7
+  (==Just 7) <$> tryReadMVar var
 
 --------------------------------------------------------------------------------
 -- @CRef@s
 
--- | A @CRef@ can be read from.
-crefRead :: MonadConc m => m Bool
-crefRead = do
-  ref <- newCRef (5::Int)
+crefRead :: Test
+crefRead = djfu "Reading a non-updated CRef gives its initial value" (gives' [True]) $ do
+  ref <- newCRefInt 5
   (5==) <$> readCRef ref
 
--- | A @CRef@ can be written to.
-crefWrite :: MonadConc m => m Bool
-crefWrite = do
-  ref <- newCRef (5::Int)
+crefWrite :: Test
+crefWrite = djfu "Reading an updated CRef gives its new value" (gives' [True]) $ do
+  ref <- newCRefInt 5
   writeCRef ref 6
   (6==) <$> readCRef ref
 
--- | A @CRef@ can be modified.
-crefModify :: MonadConc m => m Bool
-crefModify = do
-  ref <- newCRef (5::Int)
+crefModify :: Test
+crefModify = djfu "Updating a CRef by a function changes its value" (gives' [True]) $ do
+  ref <- newCRefInt 5
   atomicModifyCRef ref (\i -> (i+1, ()))
   (6==) <$> readCRef ref
 
--- | A @Ticket@ contains the value as of when it was created.
-crefTicketPeek :: MonadConc m => m Bool
-crefTicketPeek = do
-  ref  <- newCRef (5::Int)
+crefTicketPeek :: Test
+crefTicketPeek = djfu "A ticket contains the value of the CRef at the time of its creation" (gives' [True]) $ do
+  ref  <- newCRefInt 5
   tick <- readForCAS ref
   writeCRef ref 6
-
   (5==) <$> peekTicket tick
 
--- | A @Ticket@ contains the value as of when it was created (and
--- casCRef returns a correct new ticket).
-crefTicketPeek2 :: MonadConc m => m Bool
-crefTicketPeek2 = do
-  ref  <- newCRef (5::Int)
+crefTicketPeek2 :: Test
+crefTicketPeek2 = djfu "Compare-and-swap returns a ticket containing the new value" (gives' [True]) $ do
+  ref  <- newCRefInt 5
   tick <- readForCAS ref
   (_, tick') <- casCRef ref tick 6
-
   (6==) <$> peekTicket tick'
 
--- | A compare-and-swap can be done on a @CRef@ which hasn't been
--- modified.
-crefCas1 :: MonadConc m => m (Bool, Bool)
-crefCas1 = do
-  ref  <- newCRef (5::Int)
+crefCas1 :: Test
+crefCas1 = djfu "Compare-and-swap on an unmodified CRef succeeds" (gives' [True]) $ do
+  ref  <- newCRefInt 5
   tick <- readForCAS ref
-
   (suc, _) <- casCRef ref tick 6
   val <- readCRef ref
-  return (suc, 6 == val)
+  return (suc && (6 == val))
 
--- | A compare-and-swap cannot be done on a @CRef@ which has been
--- modified.
-crefCas2 :: MonadConc m => m (Bool, Bool)
-crefCas2 = do
-  ref  <- newCRef (5::Int)
+crefCas2 :: Test
+crefCas2 = djfu "Compare-and-swap on a modified CRef fails" (gives' [True]) $ do
+  ref  <- newCRefInt 5
   tick <- readForCAS ref
   writeCRef ref 6
-
   (suc, _) <- casCRef ref tick 7
   val <- readCRef ref
-  return (suc, 7 == val)
+  return (not suc && not (7 == val))
 
 --------------------------------------------------------------------------------
 -- STM
 
--- | A @TVar@ can be written to.
-stmWrite :: MonadConc m => m Bool
-stmWrite =
-  (6==) <$> atomically (do { v <- newTVar (5::Int); writeTVar v 6; readTVar v })
+stmWrite :: Test
+stmWrite = djfu "When a TVar is updated in a transaction, its new value is visible later in the transaction" (gives' [True]) $
+  (6==) <$> atomically (do { v <- newTVarInt 5; writeTVar v 6; readTVar v })
 
--- | A @TVar@ preserves its value between transactions.
-stmPreserve :: MonadConc m => m Bool
-stmPreserve = do
-  ctv <- atomically $ newTVar (5::Int)
+stmPreserve :: Test
+stmPreserve = djfu "When a TVar is updated, its new value is visible in a later transaction" (gives' [True]) $ do
+  ctv <- atomically $ newTVarInt 5
   (5==) <$> atomically (readTVar ctv)
 
--- | A transaction can be aborted, which blocks the thread.
-stmRetry :: MonadConc m => m ()
-stmRetry = atomically retry
+stmRetry :: Test
+stmRetry = djfu "Aborting a transaction blocks the thread" (gives [Left STMDeadlock]) $
+  (atomically retry :: MonadConc m => m ()) -- avoid an ambiguous type
 
--- | An abort can be caught by an @orElse@.
-stmOrElse :: MonadConc m => m Bool
-stmOrElse = do
-  ctv <- atomically $ newTVar (5::Int)
+stmOrElse :: Test
+stmOrElse = djfu "Aborting a transaction can be caught and recovered from" (gives' [True]) $ do
+  ctv <- atomically $ newTVarInt 5
   atomically $ orElse retry (writeTVar ctv 6)
-
   (6==) <$> atomically (readTVar ctv)
 
--- | An exception can be caught by an appropriate handler.
-stmCatch1 :: MonadConc m => m Bool
-stmCatch1 = do
-  ctv <- atomically $ newTVar (5::Int)
+stmCatch1 :: Test
+stmCatch1 = djfu "An exception thrown in a transaction can be caught" (gives' [True]) $ do
+  ctv <- atomically $ newTVarInt 5
   atomically $ catchArithException
                  (throwSTM Overflow)
                  (\_ -> writeTVar ctv 6)
-
   (6==) <$> atomically (readTVar ctv)
 
--- | Nested exception handlers can catch different types of exception.
-stmCatch2 :: MonadConc m => m Bool 
-stmCatch2 = do
-  ctv <- atomically $ newTVar (5::Int)
+stmCatch2 :: Test
+stmCatch2 = djfu "Nested exception handlers in transactions work" (gives' [True]) $ do
+  ctv <- atomically $ newTVarInt 5
   atomically $ catchArithException
                  (catchArrayException
                    (throwSTM Overflow)
                    (\_ -> writeTVar ctv 0))
                  (\_ -> writeTVar ctv 6)
-
   (6==) <$> atomically (readTVar ctv)
+
+stmMFail :: Test
+stmMFail = djfu "MonadSTM is a MonadFail" (gives [Left UncaughtException]) $
+  (atomically $ fail "hello world" :: MonadConc m => m ())
 
 --------------------------------------------------------------------------------
 -- Exceptions
 
--- | An exception can be caught by an appropriate handler.
-excCatch :: MonadConc m => m Bool
-excCatch = catchArithException
-  (throw Overflow)
-  (\_ -> return True)
-
--- | Nested exception handlers can catch different types of exception.
-excNest :: MonadConc m => m Bool
-excNest = catchArithException
-  (catchArrayException
+excCatch :: Test
+excCatch = djfu "An exception thrown can be caught" (gives' [True]) $
+  catchArithException
     (throw Overflow)
-    (\_ -> return False))
-  (\_ -> return True)
+    (\_ -> return True)
 
--- | Exceptions of the wrong type kill the computation
-excEscape :: MonadConc m => m ()
-excEscape = catchArithException
-  (throw $ IndexOutOfBounds "")
-  (\_ -> return undefined)
+excNest :: Test
+excNest = djfu "Nested exception handlers work" (gives' [True]) $
+  catchArithException
+    (catchArrayException
+      (throw Overflow)
+      (\_ -> return False))
+    (\_ -> return True)
 
--- | @SomeException@ matches all exception types.
-excCatchAll :: MonadConc m => m (Bool, Bool)
-excCatchAll = do
+excEscape :: Test
+excEscape = djfu "Uncaught exceptions kill the computation" (gives [Left UncaughtException]) $
+  catchArithException
+    (throw $ IndexOutOfBounds "")
+    (\_ -> return False)
+
+excCatchAll :: Test
+excCatchAll = djfu "SomeException matches all exception types" (gives' [True]) $ do
   a <- catchSomeException
         (throw Overflow)
         (\_ -> return True)
   b <- catchSomeException
         (throw $ IndexOutOfBounds "")
         (\_ -> return True)
+  return (a && b)
 
-  return (a, b)
+excSTM :: Test
+excSTM = djfu "Exceptions thrown in a transaction can be caught outside it" (gives' [True]) $
+  catchArithException
+    (atomically $ throwSTM Overflow)
+    (\_ -> return True)
 
--- | Exceptions thrown from STM can be caught.
-excSTM :: MonadConc m => m Bool
-excSTM = catchArithException
-  (atomically $ throwSTM Overflow)
-  (\_ -> return True)
-
--- | Throw an exception to the main thread with 'throwTo', without a
--- handler.
-excToMain1 :: MonadConc m => m ()
-excToMain1 = do
+excToMain1 :: Test
+excToMain1 = djfu "Throwing an unhandled exception to the main thread kills it" (gives [Left UncaughtException]) $ do
   tid <- myThreadId
   throwTo tid Overflow
 
--- | Throw an exception to the main thread with 'throwTo', with a
--- handler.
-excToMain2 :: MonadConc m => m ()
-excToMain2 = do
+excToMain2 :: Test
+excToMain2 = djfu "Throwing a handled exception to the main thread does not kill it" (gives' [True]) $ do
   tid <- myThreadId
-  catchArithException (throwTo tid Overflow) (\_ -> pure ())
+  catchArithException (throwTo tid Overflow >> pure False) (\_ -> pure True)
 
--- | Throw an exception using 'fail'.  Using 'ConcT' directly to avoid
--- a 'MonadFail' constraint, which won't work with base < 4.9.
-excMFail :: Monad n => ConcT r n (Either Failure ())
-excMFail = fail "hello world"
-
--- | Throw an exception in an STM transaction using 'fail'.
-excMFailSTM :: Monad n => ConcT r n (Either Failure ())
-excMFailSTM = atomically $ fail "hello world"
+excMFail :: Test
+excMFail = djfu "MonadConc is a MonadFail" (gives [Left UncaughtException]) $
+  (fail "hello world" :: MonadConc m => m ())
 
 --------------------------------------------------------------------------------
 -- Capabilities
 
--- | Check that the capabilities are consistent when retrieved.
-capsGet :: MonadConc m => m Bool
-capsGet = (==) <$> getNumCapabilities <*> getNumCapabilities
+capsGet :: Test
+capsGet = djfu "Reading the capabilities twice without update gives the same result" (gives' [True]) $ do
+  c1 <- getNumCapabilities
+  c2 <- getNumCapabilities
+  return (c1 == c2)
 
--- | Check that the capabilities can be set.
-capsSet :: MonadConc m => m Bool
-capsSet = do
+capsSet :: Test
+capsSet = djfu "Getting the updated capabilities gives the new value" (gives' [True]) $ do
   caps <- getNumCapabilities
-  setNumCapabilities $ caps + 1
+  setNumCapabilities (caps + 1)
   (== caps + 1) <$> getNumCapabilities
 
 --------------------------------------------------------------------------------
 -- Subconcurrency
 
--- | Subcomputation deadlocks.
-scDeadlock1 :: Monad n => ConcT r n (Either Failure ())
-scDeadlock1 = subconcurrency (newEmptyMVar >>= readMVar)
+scDeadlock1 :: Test
+scDeadlock1 = djfu "Failures in subconcurrency can be observed" (gives' [True]) $ do
+  x <- subconcurrency (newEmptyMVar >>= readMVar)
+  pure (either (==Deadlock) (const False) x)
 
--- | Subcomputation deadlocks, and action after it still happens.
-scDeadlock2 :: Monad n => ConcT r n (Either Failure (), ())
-scDeadlock2 = do
-  var <- newMVar ()
-  (,) <$> subconcurrency (putMVar var ()) <*> readMVar var
+scDeadlock2 :: Test
+scDeadlock2 = djfu "Actions after a failing subconcurrency still happen" (gives' [True]) $ do
+  var <- newMVarInt 0
+  x <- subconcurrency (putMVar var 1)
+  y <- readMVar var
+  pure (either (==Deadlock) (const False) x && y == 0)
 
--- | Subcomputation successfully completes.
-scSuccess :: Monad n => ConcT r n (Either Failure ())
-scSuccess = do
-  var <- newMVar ()
-  subconcurrency (takeMVar var)
+scSuccess :: Test
+scSuccess = djfu "Non-failing subconcurrency returns the final result" (gives' [True]) $ do
+  var <- newMVarInt 3
+  x <- subconcurrency (takeMVar var)
+  pure (either (const False) (==3) x)

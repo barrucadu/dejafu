@@ -9,14 +9,15 @@ module Common
 import Control.Exception (ArithException, ArrayException, SomeException)
 import Control.Monad (void)
 import qualified Control.Monad.Catch as C
-import Control.Monad.Conc.Class (MonadConc, readMVar, spawn)
+import Control.Monad.Conc.Class
+import Control.Monad.STM.Class
 import System.Random (mkStdGen)
 import Test.DejaFu (Predicate)
 import Test.DejaFu.Conc (ConcST)
 import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import qualified Test.HUnit as TH
-import Test.HUnit.DejaFu (Bounds, defaultBounds, defaultMemType, uniformly, randomly, swarmy, systematically, testDejafuWay)
+import Test.HUnit.DejaFu (Bounds, defaultBounds, defaultMemType, uniformly, randomly, swarmy, systematically, testDejafu, testDejafuWay)
 
 -------------------------------------------------------------------------------
 -- Tests
@@ -51,6 +52,12 @@ data T where
 testGroup :: IsTest t => String -> t -> TF.Test
 testGroup name = TF.testGroup name . toTestList
 
+djfu :: Show a => String -> Predicate a -> (forall t. ConcST t a) -> TF.Test
+djfu name p c = head . toTestList $ testDejafu c name p
+
+djfuT :: Show a => String -> Predicate a -> (forall t. ConcST t a) -> [TF.Test]
+djfuT name p c = toTestList $ T name c p
+
 -------------------------------------------------------------------------------
 -- Exceptions
 
@@ -71,3 +78,19 @@ a ||| b = do
   j <- spawn a
   void b
   void (readMVar j)
+
+-- | Create an empty monomorphic @MVar@.
+newEmptyMVarInt :: MonadConc m => m (MVar m Int)
+newEmptyMVarInt = newEmptyMVar
+
+-- | Create a full monomorphic @MVar@.
+newMVarInt :: MonadConc m => Int -> m (MVar m Int)
+newMVarInt = newMVar
+
+-- | Create a monomorphic @CRef@.
+newCRefInt :: MonadConc m => Int -> m (CRef m Int)
+newCRefInt = newCRef
+
+-- | Create a monomorphic @TVar@.
+newTVarInt :: MonadSTM stm => Int -> stm (TVar stm Int)
+newTVarInt = newTVar
