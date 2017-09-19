@@ -5,15 +5,12 @@ module Cases.SingleThreaded where
 import Control.Exception (ArithException(..), ArrayException(..))
 import Data.Maybe (isNothing)
 import Test.DejaFu (Failure(..), gives, gives')
-import Test.Framework (Test, testGroup)
-import Test.Framework.Providers.HUnit (hUnitTestToTests)
-import Test.HUnit (test)
 import Test.HUnit.DejaFu (testDejafu)
 
 import Control.Concurrent.Classy
 import Test.DejaFu.Conc (ConcT, subconcurrency)
 
-import Utils
+import Common
 
 #if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>), (<*>))
@@ -21,7 +18,7 @@ import Control.Applicative ((<$>), (<*>))
 
 tests :: [Test]
 tests =
-  [ testGroup "MVar" . hUnitTestToTests $ test
+  [ testGroup "MVar"
     [ testDejafu emptyMVarTake    "empty take"       $ gives  [Left Deadlock]
     , testDejafu emptyMVarTryTake "empty take (try)" $ gives' [True]
     , testDejafu emptyMVarPut     "empty put"        $ gives' [True]
@@ -36,7 +33,7 @@ tests =
     , testDejafu fullMVarTryRead  "full read (try)"  $ gives' [True]
     ]
 
-  , testGroup "CRef" . hUnitTestToTests $ test
+  , testGroup "CRef"
     [ testDejafu crefRead       "read"        $ gives' [True]
     , testDejafu crefWrite      "write"       $ gives' [True]
     , testDejafu crefModify     "modify"      $ gives' [True]
@@ -46,7 +43,7 @@ tests =
     , testDejafu crefCas2       "cas (modified)" $ gives' [(False, False)]
     ]
 
-  , testGroup "STM" . hUnitTestToTests $ test
+  , testGroup "STM"
     [ testDejafu stmWrite    "write"   $ gives' [True]
     , testDejafu stmPreserve "write (across transactions)" $ gives' [True]
     , testDejafu stmRetry    "retry"   $ gives  [Left STMDeadlock]
@@ -55,7 +52,7 @@ tests =
     , testDejafu stmCatch2   "nested catch" $ gives' [True]
     ]
 
-  , testGroup "Exceptions" . hUnitTestToTests $ test
+  , testGroup "Exceptions"
     [ testDejafu excCatch    "single catch" $ gives' [True]
     , testDejafu excNest     "nested catch" $ gives' [True]
     , testDejafu excEscape   "uncaught"     $ gives  [Left UncaughtException]
@@ -67,12 +64,12 @@ tests =
     , testDejafu excMFailSTM "monadfail (stm)" $ gives [Left UncaughtException]
     ]
 
-  , testGroup "Capabilities" . hUnitTestToTests $ test
+  , testGroup "Capabilities"
     [ testDejafu capsGet "get" $ gives' [True]
     , testDejafu capsSet "set" $ gives' [True]
     ]
 
-  , testGroup "Subconcurrency" . hUnitTestToTests $ test
+  , testGroup "Subconcurrency"
     [ testDejafu scDeadlock1 "deadlock1" $ gives' [Left Deadlock]
     , testDejafu scDeadlock2 "deadlock2" $ gives' [(Left Deadlock, ())]
     , testDejafu scSuccess   "success"   $ gives' [Right ()]

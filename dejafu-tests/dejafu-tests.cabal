@@ -36,8 +36,9 @@ executable dejafu-tests
                      , Examples.SearchParty
                      , Examples.SearchParty.Impredicative
 
+                     , Common
+
                      , QSemN
-                     , Utils
 
   -- other-extensions:    
   build-depends:       base

@@ -4,16 +4,13 @@ import Control.Concurrent.Classy.MVar
 import Control.Monad (void)
 import Test.DejaFu.Conc (ConcIO)
 import Test.DejaFu.Refinement
-import Test.Framework (Test, testGroup)
-import Test.Framework.Providers.HUnit (hUnitTestToTests)
-import Test.HUnit (test)
 import Test.HUnit.DejaFu (testProperty)
 
-import Utils
+import Common
 
 tests :: [Test]
 tests =
-  [ testGroup "MVar" . hUnitTestToTests . test $
+  [ testGroup "MVar"
     [ testProperty "read_idempotent_s"            prop_mvar_read_idempotent_s
     , testProperty "read_idempotent_c"            prop_mvar_read_idempotent_c
     , testProperty "read_neq_take_put"            prop_mvar_read_neq_take_put

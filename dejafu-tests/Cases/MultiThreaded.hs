@@ -8,35 +8,35 @@ import Test.Framework (Test)
 import Control.Concurrent.Classy hiding (newQSemN, signalQSemN, waitQSemN)
 import Test.DejaFu.Conc (ConcT, subconcurrency)
 
-import Utils
+import Common
 import QSemN
 
 tests :: [Test]
 tests =
-    [ tg "Threading"
+    [ testGroup "Threading"
       [ T "child thread ID"  threadId1    $ gives' [True]
       , T "parent thread ID" threadId2    $ gives' [True]
       , T "no wait"          threadNoWait $ gives' [Nothing, Just ()]
       ]
-    , tg "MVar"
+    , testGroup "MVar"
       [ T "deadlock" cvarLock $ gives  [Left Deadlock, Right 0]
       , T "race"     cvarRace $ gives' [0,1]
       ]
-    , tg "CRef"
+    , testGroup "CRef"
       [ T "race"            crefRace        $ gives' [0,1]
       , T "cas modify"      crefCASModify   $ gives' [0,1]
       , T "cas race"        crefCASRace     $ gives' [(True, 2), (False, 2)]
       , T "cas race (redo)" crefCASRaceRedo $ gives' [(True, 1), (True, 2)]
       , T "cas tickets"     crefCASTickets  $ gives' [(True, False, 1), (False, True, 2)]
       ]
-    , tg "STM"
+    , testGroup "STM"
       [ T "atomicity"   stmAtomic     $ gives' [0,2]
       , T "left retry"  stmLeftRetry  $ gives' [()]
       , T "right retry" stmRightRetry $ gives' [()]
       , T "issue 55"    stmIssue55    $ gives' [True]
       , T "issue 111"   stmIssue111   $ gives' [1]
       ]
-    , tg "Killing Threads"
+    , testGroup "Killing Threads"
       [ T "no masking" threadKill      $ gives  [Left Deadlock, Right ()]
       , T "masked"     threadKillMask  $ gives' [()]
       , T "masked (uninterruptible)" threadKillUninterruptibleMask $ gives [Left Deadlock]
@@ -44,10 +44,10 @@ tests =
       , T "throw to main (uncaught)" threadKillToMain1 $ gives  [Left UncaughtException]
       , T "throw to main (caught)"   threadKillToMain2 $ gives' [()]
       ]
-    , tg "Daemons"
+    , testGroup "Daemons"
       [ T "schedule daemon" schedDaemon $ gives' [0,1]
       ]
-    , tg "Subconcurrency"
+    , testGroup "Subconcurrency"
       [ T "deadlock1" scDeadlock1 $ gives' [Left Deadlock, Right ()]
       , T "deadlock2" scDeadlock2 $ gives' [(Left Deadlock, ()), (Right (), ())]
       , T "success"   scSuccess   $ gives' [Right ()]

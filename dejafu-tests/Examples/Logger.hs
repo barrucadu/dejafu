@@ -6,10 +6,10 @@ import Control.Concurrent.Classy
 import Data.Functor (void)
 import Test.DejaFu hiding (MemType(..))
 
-import Utils
+import Common
 
-tests :: [T]
-tests =
+tests :: [Test]
+tests = toTestList
   [ T "allowed"        raceyLogger validResult
   , T "correct occurs" raceyLogger isGood
   , T "bug exists"     raceyLogger isBad
