@@ -26,6 +26,7 @@ executable dejafu-tests
                      , Cases.Refinement
                      , Cases.Litmus
                      , Cases.Discard
+                     , Cases.Regressions
 
                      , Examples
                      , Examples.AutoUpdate
