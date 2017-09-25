@@ -45,7 +45,7 @@ tests =
         retry
       atomically $ readTVar v
 
-  , djfu "https://github.com/barrucadu/dejafu/issues/118" (failing exceptionsAlways) $ do
+  , djfu "https://github.com/barrucadu/dejafu/issues/118" exceptionsAlways $ do
       catchSomeException
         (uninterruptibleMask_ (throw ThreadKilled))
         (\_ -> myThreadId >>= killThread)

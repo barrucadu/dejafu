@@ -66,7 +66,7 @@ thread ~= theblock = case (_blocking thread, theblock) of
 -- * Exceptions
 
 -- | An exception handler.
-data Handler n r = forall e. Exception e => Handler (e -> Action n r)
+data Handler n r = forall e. Exception e => Handler (e -> MaskingState -> Action n r)
 
 -- | Propagate an exception upwards, finding the closest handler
 -- which can deal with it.
@@ -85,15 +85,22 @@ interruptible thread = _masking thread == Unmasked || (_masking thread == Masked
 
 -- | Register a new exception handler.
 catching :: Exception e => (e -> Action n r) -> ThreadId -> Threads n r -> Threads n r
-catching h = M.adjust $ \thread -> thread { _handlers = Handler h : _handlers thread }
+catching h = M.adjust $ \thread ->
+  let ms0 = _masking thread
+      h'  = Handler $ \e ms -> (if ms /= ms0 then AResetMask False False ms0 else id) (h e)
+  in thread { _handlers = h' : _handlers thread }
 
 -- | Remove the most recent exception handler.
 uncatching :: ThreadId -> Threads n r -> Threads n r
 uncatching = M.adjust $ \thread -> thread { _handlers = tail $ _handlers thread }
 
 -- | Raise an exception in a thread.
-except :: Action n r -> [Handler n r] -> ThreadId -> Threads n r -> Threads n r
-except act hs = M.adjust $ \thread -> thread { _continuation = act, _handlers = hs, _blocking = Nothing }
+except :: (MaskingState -> Action n r) -> [Handler n r] -> ThreadId -> Threads n r -> Threads n r
+except actf hs = M.adjust $ \thread -> thread
+  { _continuation = actf (_masking thread)
+  , _handlers = hs
+  , _blocking = Nothing
+  }
 
 -- | Set the masking state of a thread.
 mask :: MaskingState -> ThreadId -> Threads n r -> Threads n r
