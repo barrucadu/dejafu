@@ -48,6 +48,7 @@ module Test.DejaFu.Common
   , Trace
   , Decision(..)
   , showTrace
+  , threadNames
   , preEmpCount
 
   -- * Failures
@@ -65,7 +66,7 @@ module Test.DejaFu.Common
 import           Control.DeepSeq    (NFData(..))
 import           Control.Exception  (Exception(..), MaskingState(..))
 import           Control.Monad.Ref  (MonadRef(..))
-import           Data.List          (intercalate, nub, sort)
+import           Data.List          (intercalate)
 import           Data.List.NonEmpty (NonEmpty)
 import           Data.Maybe         (fromMaybe, mapMaybe)
 import           Data.Set           (Set)
@@ -778,12 +779,16 @@ showTrace trc = intercalate "\n" $ concatMap go trc : strkey where
   go (SwitchTo (ThreadId _ i),_,_) = "P" ++ show i ++ "-"
   go (Continue,_,_) = "-"
 
-  strkey = ["  " ++ show i ++ ": " ++ name | (i, name) <- key]
+  strkey =
+    ["  " ++ show i ++ ": " ++ name | (i, name) <- threadNames trc]
 
-  key = sort . nub $ mapMaybe toKey trc where
-    toKey (Start (ThreadId (Just name) i), _, _)
-      | i > 0 = Just (i, name)
-    toKey _ = Nothing
+-- | Get all named threads in the trace.
+--
+-- @since unreleased
+threadNames :: Trace -> [(Int, String)]
+threadNames = mapMaybe go where
+  go (_, _, Fork (ThreadId (Just name) i)) = Just (i, name)
+  go _ = Nothing
 
 -- | Count the number of pre-emptions in a schedule prefix.
 --

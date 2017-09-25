@@ -10,9 +10,14 @@ This project is versioned according to the [Package Versioning Policy](https://p
 unreleased
 ----------
 
+### Test.DejaFu.Common
+
+- A new function `threadNames`, to get all named threads from a trace.
+
 ### Miscellaneous
 
 - Escaping a mask by raising an exception now correctly restores the masking state (#118).
+- Named threads which are only started by a pre-emption now show up in the trace (#101).
 
 
 ---------------------------------------------------------------------------------------------------
