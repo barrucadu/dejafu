@@ -12,7 +12,7 @@ import qualified Control.Monad.Catch as C
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
 import System.Random (mkStdGen)
-import Test.DejaFu (Predicate)
+import Test.DejaFu (Predicate, Result(..))
 import Test.DejaFu.Conc (ConcST)
 import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
@@ -94,3 +94,9 @@ newCRefInt = newCRef
 -- | Create a monomorphic @TVar@.
 newTVarInt :: MonadSTM stm => Int -> stm (TVar stm Int)
 newTVarInt = newTVar
+
+-- | A test which should fail.
+failing :: Predicate a -> Predicate a
+failing p as =
+  let result = p as
+  in result { _pass = not (_pass result) }

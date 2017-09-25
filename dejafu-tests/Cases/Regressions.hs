@@ -1,9 +1,10 @@
 module Cases.Regressions where
 
-import Test.DejaFu (gives')
+import Test.DejaFu (exceptionsAlways, gives')
 import Test.Framework (Test)
 
 import Control.Concurrent.Classy hiding (newQSemN, signalQSemN, waitQSemN)
+import Control.Exception (AsyncException(..))
 import Test.DejaFu.Conc (subconcurrency)
 
 import Common
@@ -43,4 +44,9 @@ tests =
         writeTVar v 3
         retry
       atomically $ readTVar v
+
+  , djfu "https://github.com/barrucadu/dejafu/issues/118" (failing exceptionsAlways) $ do
+      catchSomeException
+        (uninterruptibleMask_ (throw ThreadKilled))
+        (\_ -> myThreadId >>= killThread)
   ]
