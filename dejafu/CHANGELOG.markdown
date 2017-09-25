@@ -7,6 +7,17 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Miscellaneous
+
+- Escaping a mask by raising an exception now correctly restores the masking state (#118).
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.7.2.0
 -------
 
