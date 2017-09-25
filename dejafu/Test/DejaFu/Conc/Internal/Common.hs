@@ -41,6 +41,8 @@ instance Functor (M n r) where
     fmap f m = M $ \ c -> runM m (c . f)
 
 instance Applicative (M n r) where
+    -- without the @AReturn@, a thread could lock up testing by
+    -- entering an infinite loop (eg: @forever (return ())@)
     pure x  = M $ \c -> AReturn $ c x
     f <*> v = M $ \c -> runM f (\g -> runM v (c . g))
 
