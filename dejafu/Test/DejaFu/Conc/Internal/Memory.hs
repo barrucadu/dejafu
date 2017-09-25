@@ -23,12 +23,10 @@
 -- Memory Models/, N. Zhang, M. Kusano, and C. Wang (2015).
 module Test.DejaFu.Conc.Internal.Memory where
 
-import           Control.Monad                       (when)
 import           Control.Monad.Ref                   (MonadRef, readRef,
                                                       writeRef)
 import           Data.Map.Strict                     (Map)
-import           Data.Maybe                          (fromJust, isJust,
-                                                      maybeToList)
+import           Data.Maybe                          (fromJust, maybeToList)
 import           Data.Monoid                         ((<>))
 import           Data.Sequence                       (Seq, ViewL(..), singleton,
                                                       viewl, (><))

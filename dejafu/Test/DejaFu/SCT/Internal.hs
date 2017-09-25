@@ -22,8 +22,8 @@ import           Data.List            (nubBy, partition, sortOn)
 import           Data.List.NonEmpty   (toList)
 import           Data.Map.Strict      (Map)
 import qualified Data.Map.Strict      as M
-import           Data.Maybe           (catMaybes, fromJust, fromMaybe, isJust,
-                                       isNothing, listToMaybe)
+import           Data.Maybe           (fromJust, fromMaybe, isJust, isNothing,
+                                       listToMaybe)
 import           Data.Sequence        (Seq, (|>))
 import qualified Data.Sequence        as Sq
 import           Data.Set             (Set)
