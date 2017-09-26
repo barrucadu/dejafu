@@ -784,7 +784,7 @@ showTrace trc = intercalate "\n" $ concatMap go trc : strkey where
 
 -- | Get all named threads in the trace.
 --
--- @since unreleased
+-- @since 0.7.3.0
 threadNames :: Trace -> [(Int, String)]
 threadNames = mapMaybe go where
   go (_, _, Fork (ThreadId (Just name) i)) = Just (i, name)

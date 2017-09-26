@@ -7,8 +7,12 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+0.7.3.0
+-------
+
+- **Date**    2017-09-26
+- **Git tag** [dejafu-0.7.3.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.7.3.0
 
 ### Test.DejaFu.Common
 
@@ -18,6 +22,8 @@ unreleased
 
 - Escaping a mask by raising an exception now correctly restores the masking state (#118).
 - Named threads which are only started by a pre-emption now show up in the trace (#101).
+
+[dejafu-0.7.3.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.7.3.0
 
 
 ---------------------------------------------------------------------------------------------------
