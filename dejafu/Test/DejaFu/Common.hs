@@ -63,14 +63,13 @@ module Test.DejaFu.Common
   , runRefCont
   ) where
 
-import           Control.DeepSeq    (NFData(..))
-import           Control.Exception  (Exception(..), MaskingState(..))
-import           Control.Monad.Ref  (MonadRef(..))
-import           Data.List          (intercalate)
-import           Data.List.NonEmpty (NonEmpty)
-import           Data.Maybe         (fromMaybe, mapMaybe)
-import           Data.Set           (Set)
-import qualified Data.Set           as S
+import           Control.DeepSeq   (NFData(..))
+import           Control.Exception (Exception(..), MaskingState(..))
+import           Control.Monad.Ref (MonadRef(..))
+import           Data.List         (intercalate)
+import           Data.Maybe        (fromMaybe, mapMaybe)
+import           Data.Set          (Set)
+import qualified Data.Set          as S
 
 -------------------------------------------------------------------------------
 -- Identifiers
@@ -702,9 +701,9 @@ type TTrace = [TAction]
 
 -- | All the actions that an STM transaction can perform.
 --
--- @since 0.4.0.0
+-- @since unreleased
 data TAction =
-    TNew
+    TNew TVarId
   -- ^ Create a new @TVar@
   | TRead  TVarId
   -- ^ Read from a @TVar@.
@@ -741,9 +740,9 @@ instance NFData TAction where
 -- decisions made, all the runnable threads and what they would do,
 -- and the action a thread took in its step.
 --
--- @since 0.5.0.0
+-- @since unreleased
 type Trace
-  = [(Decision, [(ThreadId, NonEmpty Lookahead)], ThreadAction)]
+  = [(Decision, [(ThreadId, Lookahead)], ThreadAction)]
 
 -- | Scheduling decisions are based on the state of the running
 -- program, and so we can capture some of that state in recording what

@@ -15,7 +15,6 @@
 module Test.DejaFu.Conc.Internal.Common where
 
 import           Control.Exception  (Exception, MaskingState(..))
-import           Data.List.NonEmpty (NonEmpty, fromList)
 import           Data.Map.Strict    (Map)
 import           Test.DejaFu.Common
 import           Test.DejaFu.STM    (STMLike)
@@ -153,37 +152,36 @@ data Action n r =
 -- * Scheduling & Traces
 
 -- | Look as far ahead in the given continuation as possible.
-lookahead :: Action n r -> NonEmpty Lookahead
-lookahead = fromList . lookahead' where
-  lookahead' (AFork _ _ _)           = [WillFork]
-  lookahead' (AMyTId _)              = [WillMyThreadId]
-  lookahead' (AGetNumCapabilities _) = [WillGetNumCapabilities]
-  lookahead' (ASetNumCapabilities i k) = WillSetNumCapabilities i : lookahead' k
-  lookahead' (ANewMVar _ _)           = [WillNewMVar]
-  lookahead' (APutMVar (MVar c _) _ k)    = WillPutMVar c : lookahead' k
-  lookahead' (ATryPutMVar (MVar c _) _ _) = [WillTryPutMVar c]
-  lookahead' (AReadMVar (MVar c _) _)     = [WillReadMVar c]
-  lookahead' (ATryReadMVar (MVar c _) _)  = [WillTryReadMVar c]
-  lookahead' (ATakeMVar (MVar c _) _)     = [WillTakeMVar c]
-  lookahead' (ATryTakeMVar (MVar c _) _)  = [WillTryTakeMVar c]
-  lookahead' (ANewCRef _ _ _)         = [WillNewCRef]
-  lookahead' (AReadCRef (CRef r _) _)     = [WillReadCRef r]
-  lookahead' (AReadCRefCas (CRef r _) _)  = [WillReadCRefCas r]
-  lookahead' (AModCRef (CRef r _) _ _)    = [WillModCRef r]
-  lookahead' (AModCRefCas (CRef r _) _ _) = [WillModCRefCas r]
-  lookahead' (AWriteCRef (CRef r _) _ k) = WillWriteCRef r : lookahead' k
-  lookahead' (ACasCRef (CRef r _) _ _ _) = [WillCasCRef r]
-  lookahead' (ACommit t c)           = [WillCommitCRef t c]
-  lookahead' (AAtom _ _)             = [WillSTM]
-  lookahead' (AThrow _)              = [WillThrow]
-  lookahead' (AThrowTo tid _ k)      = WillThrowTo tid : lookahead' k
-  lookahead' (ACatching _ _ _)       = [WillCatching]
-  lookahead' (APopCatching k)        = WillPopCatching : lookahead' k
-  lookahead' (AMasking ms _ _)       = [WillSetMasking False ms]
-  lookahead' (AResetMask b1 b2 ms k) = (if b1 then WillSetMasking else WillResetMasking) b2 ms : lookahead' k
-  lookahead' (ALift _)               = [WillLiftIO]
-  lookahead' (AYield k)              = WillYield : lookahead' k
-  lookahead' (AReturn k)             = WillReturn : lookahead' k
-  lookahead' (AStop _)               = [WillStop]
-  lookahead' (ASub _ _)              = [WillSubconcurrency]
-  lookahead' (AStopSub k)            = WillStopSubconcurrency : lookahead' k
+lookahead :: Action n r -> Lookahead
+lookahead (AFork _ _ _) = WillFork
+lookahead (AMyTId _) = WillMyThreadId
+lookahead (AGetNumCapabilities _) = WillGetNumCapabilities
+lookahead (ASetNumCapabilities i _) = WillSetNumCapabilities i
+lookahead (ANewMVar _ _) = WillNewMVar
+lookahead (APutMVar (MVar c _) _ _) = WillPutMVar c
+lookahead (ATryPutMVar (MVar c _) _ _) = WillTryPutMVar c
+lookahead (AReadMVar (MVar c _) _) = WillReadMVar c
+lookahead (ATryReadMVar (MVar c _) _) = WillTryReadMVar c
+lookahead (ATakeMVar (MVar c _) _) = WillTakeMVar c
+lookahead (ATryTakeMVar (MVar c _) _) = WillTryTakeMVar c
+lookahead (ANewCRef _ _ _) = WillNewCRef
+lookahead (AReadCRef (CRef r _) _) = WillReadCRef r
+lookahead (AReadCRefCas (CRef r _) _) = WillReadCRefCas r
+lookahead (AModCRef (CRef r _) _ _) = WillModCRef r
+lookahead (AModCRefCas (CRef r _) _ _) = WillModCRefCas r
+lookahead (AWriteCRef (CRef r _) _ _) = WillWriteCRef r
+lookahead (ACasCRef (CRef r _) _ _ _) = WillCasCRef r
+lookahead (ACommit t c) = WillCommitCRef t c
+lookahead (AAtom _ _) = WillSTM
+lookahead (AThrow _) = WillThrow
+lookahead (AThrowTo tid _ _) = WillThrowTo tid
+lookahead (ACatching _ _ _) = WillCatching
+lookahead (APopCatching _) = WillPopCatching
+lookahead (AMasking ms _ _) = WillSetMasking False ms
+lookahead (AResetMask b1 b2 ms _) = (if b1 then WillSetMasking else WillResetMasking) b2 ms
+lookahead (ALift _) = WillLiftIO
+lookahead (AYield _) = WillYield
+lookahead (AReturn _) = WillReturn
+lookahead (AStop _) = WillStop
+lookahead (ASub _ _) = WillSubconcurrency
+lookahead (AStopSub _) = WillStopSubconcurrency

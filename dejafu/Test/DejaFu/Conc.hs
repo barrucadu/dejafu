@@ -190,13 +190,13 @@ instance Monad n => C.MonadConc (ConcT r n) where
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 --
--- @since 0.6.0.0
+-- @since unreleased
 runConcurrent :: MonadRef r n
-              => Scheduler s
-              -> MemType
-              -> s
-              -> ConcT r n a
-              -> n (Either Failure a, s, Trace)
+  => Scheduler s
+  -> MemType
+  -> s
+  -> ConcT r n a
+  -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s ma = do
   (res, ctx, trace, _) <- runConcurrency sched memtype s initialIdSource 2 (unC ma)
   pure (res, cSchedState ctx, F.toList trace)

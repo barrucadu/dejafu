@@ -31,7 +31,7 @@ import qualified Data.Set             as S
 import           System.Random        (RandomGen, randomR)
 
 import           Test.DejaFu.Common
-import           Test.DejaFu.Schedule (Scheduler, decisionOf, tidOf)
+import           Test.DejaFu.Schedule (Scheduler(..), decisionOf, tidOf)
 
 -------------------------------------------------------------------------------
 -- * Dynamic partial-order reduction
@@ -439,9 +439,70 @@ dporSched
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
   -> Scheduler (DPORSchedState k)
-dporSched memtype boundf _ prior threads s = schedule where
-  -- Pick a thread to run.
-  schedule = case schedPrefix s of
+dporSched memtype boundf = Scheduler $ \prior threads s ->
+  let
+    -- The next scheduler state
+    nextState rest = s
+      { schedBPoints  = schedBPoints s |> (restrictToBound fst threads', rest)
+      , schedDepState = nextDepState
+      }
+    nextDepState = let ds = schedDepState s in maybe ds (uncurry $ updateDepState ds) prior
+
+    -- Pick a new thread to run, not considering bounds. Choose the
+    -- current thread if available and it hasn't just yielded,
+    -- otherwise add all runnable threads.
+    initialise = tryDaemons . yieldsToEnd $ case prior of
+      Just (tid, act)
+        | not (didYield act) && tid `elem` tids -> [tid]
+      _ -> tids
+
+    -- If one of the chosen actions will kill the computation, and
+    -- there are daemon threads, try them instead.
+    --
+    -- This is necessary if the killing action is NOT dependent with
+    -- every other action, according to the dependency function. This
+    -- is, strictly speaking, wrong; an action that kills another
+    -- thread is definitely dependent with everything in that
+    -- thread. HOWEVER, implementing it that way leads to an explosion
+    -- of schedules tried. Really, all that needs to happen is for the
+    -- thread-that-would-be-killed to be executed fully ONCE, and then
+    -- the normal dependency mechanism will identify any other
+    -- backtracking points that should be tried. This is achieved by
+    -- adding every thread that would be killed to the to-do list.
+    -- Furthermore, these threads MUST be ahead of the killing thread,
+    -- or the killing thread will end up in the sleep set and so the
+    -- killing action not performed. This is, again, because of the
+    -- lack of the dependency messing things up in the name of
+    -- performance.
+    --
+    -- See commits a056f54 and 8554ce9, and my 4th June comment in
+    -- issue #52.
+    tryDaemons ts
+      | any doesKill ts = case partition doesKill tids of
+          (kills, nokills) -> nokills ++ kills
+      | otherwise = ts
+    doesKill t = killsDaemons t (action t)
+
+    -- Restrict the possible decisions to those in the bound.
+    restrictToBound f =
+      filter (\x -> let t = f x in isJust $ boundf (schedBState s) prior (decision t, action t))
+
+    -- Move the threads which will immediately yield to the end of the list
+    yieldsToEnd ts = case partition (willYield . action) ts of
+      (yields, noyields) -> noyields ++ yields
+
+    -- Get the decision that will lead to a thread being scheduled.
+    decision = decisionOf (fst <$> prior) (S.fromList tids)
+
+    -- Get the action of a thread
+    action t = fromJust $ lookup t threads'
+
+    -- The runnable thread IDs
+    tids = map fst threads'
+
+    -- The runnable threads as a normal list.
+    threads' = toList threads
+  in case schedPrefix s of
     -- If there is a decision available, make it
     (t:ts) ->
       let bstate' = boundf (schedBState s) prior (decision t, action t)
@@ -460,71 +521,11 @@ dporSched memtype boundf _ prior threads s = schedule where
           signore' = not (null choices) && all (`elem` M.keys ssleep') choices
           sbkill'  = not (null initialise) && null choices
       in case choices' of
-            (nextTid:rest) ->
-              let bstate' = boundf (schedBState s) prior (decision nextTid, action nextTid)
-              in (Just nextTid, (nextState rest) { schedSleep = ssleep', schedBState = bstate' })
-            [] ->
-              (Nothing, (nextState []) { schedIgnore = signore', schedBoundKill = sbkill', schedBState = Nothing })
-
-  -- The next scheduler state
-  nextState rest = s
-    { schedBPoints  = schedBPoints s |> (restrictToBound fst threads', rest)
-    , schedDepState = nextDepState
-    }
-  nextDepState = let ds = schedDepState s in maybe ds (uncurry $ updateDepState ds) prior
-
-  -- Pick a new thread to run, not considering bounds. Choose the
-  -- current thread if available and it hasn't just yielded, otherwise
-  -- add all runnable threads.
-  initialise = tryDaemons . yieldsToEnd $ case prior of
-    Just (tid, act)
-      | not (didYield act) && tid `elem` tids -> [tid]
-    _ -> tids
-
-  -- If one of the chosen actions will kill the computation, and there
-  -- are daemon threads, try them instead.
-  --
-  -- This is necessary if the killing action is NOT dependent with
-  -- every other action, according to the dependency function. This
-  -- is, strictly speaking, wrong; an action that kills another thread
-  -- is definitely dependent with everything in that thread. HOWEVER,
-  -- implementing it that way leads to an explosion of schedules
-  -- tried. Really, all that needs to happen is for the
-  -- thread-that-would-be-killed to be executed fully ONCE, and then
-  -- the normal dependency mechanism will identify any other
-  -- backtracking points that should be tried. This is achieved by
-  -- adding every thread that would be killed to the to-do list.
-  -- Furthermore, these threads MUST be ahead of the killing thread,
-  -- or the killing thread will end up in the sleep set and so the
-  -- killing action not performed. This is, again, because of the lack
-  -- of the dependency messing things up in the name of performance.
-  --
-  -- See commits a056f54 and 8554ce9, and my 4th June comment in issue
-  -- #52.
-  tryDaemons ts
-    | any doesKill ts = case partition doesKill tids of
-        (kills, nokills) -> nokills ++ kills
-    | otherwise = ts
-  doesKill t = killsDaemons t (action t)
-
-  -- Restrict the possible decisions to those in the bound.
-  restrictToBound f = filter (\x -> let t = f x in isJust $ boundf (schedBState s) prior (decision t, action t))
-
-  -- Move the threads which will immediately yield to the end of the list
-  yieldsToEnd ts = case partition (willYield . action) ts of
-    (yields, noyields) -> noyields ++ yields
-
-  -- Get the decision that will lead to a thread being scheduled.
-  decision = decisionOf (fst <$> prior) (S.fromList tids)
-
-  -- Get the action of a thread
-  action t = fromJust $ lookup t threads'
-
-  -- The runnable thread IDs
-  tids = map fst threads'
-
-  -- The runnable threads as a normal list.
-  threads' = toList threads
+        (nextTid:rest) ->
+          let bstate' = boundf (schedBState s) prior (decision nextTid, action nextTid)
+          in (Just nextTid, (nextState rest) { schedSleep = ssleep', schedBState = bstate' })
+        [] ->
+          (Nothing, (nextState []) { schedIgnore = signore', schedBoundKill = sbkill', schedBState = Nothing })
 
 -------------------------------------------------------------------------------
 -- Weighted random scheduler
@@ -550,23 +551,25 @@ initialRandSchedState = RandSchedState . fromMaybe M.empty
 -- and makes a weighted random choice out of the runnable threads at
 -- every step.
 randSched :: RandomGen g => (g -> (Int, g)) -> Scheduler (RandSchedState g)
-randSched weightf _ _ threads s = (pick choice enabled, RandSchedState weights' g'') where
-  -- Select a thread
-  pick idx ((x, f):xs)
-    | idx < f = Just x
-    | otherwise = pick (idx - f) xs
-  pick _ [] = Nothing
-  (choice, g'') = randomR (0, sum (map snd enabled) - 1) g'
-  enabled = M.toList $ M.filterWithKey (\tid _ -> tid `elem` tids) weights'
+randSched weightf = Scheduler $ \_ threads s ->
+  let
+    -- Select a thread
+    pick idx ((x, f):xs)
+      | idx < f = Just x
+      | otherwise = pick (idx - f) xs
+    pick _ [] = Nothing
+    (choice, g'') = randomR (0, sum (map snd enabled) - 1) g'
+    enabled = M.toList $ M.filterWithKey (\tid _ -> tid `elem` tids) weights'
 
-  -- The weights, with any new threads added.
-  (weights', g') = foldr assignWeight (M.empty, schedGen s) tids
-  assignWeight tid ~(ws, g0) =
-    let (w, g) = maybe (weightf g0) (,g0) (M.lookup tid (schedWeights s))
-    in (M.insert tid w ws, g)
+    -- The weights, with any new threads added.
+    (weights', g') = foldr assignWeight (M.empty, schedGen s) tids
+    assignWeight tid ~(ws, g0) =
+      let (w, g) = maybe (weightf g0) (,g0) (M.lookup tid (schedWeights s))
+      in (M.insert tid w ws, g)
 
-  -- The runnable threads.
-  tids = map fst (toList threads)
+    -- The runnable threads.
+    tids = map fst (toList threads)
+  in (pick choice enabled, RandSchedState weights' g'')
 
 -------------------------------------------------------------------------------
 -- Dependency function

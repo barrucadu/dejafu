@@ -7,6 +7,23 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Test.DejaFu.Common
+
+- Execution traces now only include a single item of lookahead (#120).
+- STM traces now include IDs of created `TVar`s (#80).
+
+### Test.DejaFu.Schedule
+
+- Schedulers no longer take the execution trace so far (#106).
+- The `Scheduler` type is now a newtype (#122).
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.7.3.0
 -------
 
