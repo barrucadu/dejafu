@@ -439,7 +439,7 @@ dporSched
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
   -> Scheduler (DPORSchedState k)
-dporSched memtype boundf _ prior threads s = schedule where
+dporSched memtype boundf prior threads s = schedule where
   -- Pick a thread to run.
   schedule = case schedPrefix s of
     -- If there is a decision available, make it
@@ -550,7 +550,7 @@ initialRandSchedState = RandSchedState . fromMaybe M.empty
 -- and makes a weighted random choice out of the runnable threads at
 -- every step.
 randSched :: RandomGen g => (g -> (Int, g)) -> Scheduler (RandSchedState g)
-randSched weightf _ _ threads s = (pick choice enabled, RandSchedState weights' g'') where
+randSched weightf _ threads s = (pick choice enabled, RandSchedState weights' g'') where
   -- Select a thread
   pick idx ((x, f):xs)
     | idx < f = Just x

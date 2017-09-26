@@ -78,10 +78,8 @@ data Context n r g = Context
 -- | Run a collection of threads, until there are no threads left.
 runThreads :: MonadRef r n
            => Scheduler g -> MemType -> r (Maybe (Either Failure a)) -> Context n r g -> n (Context n r g, SeqTrace, Maybe (ThreadId, ThreadAction))
-runThreads sched memtype ref = go Seq.empty [] Nothing where
-  -- sofar is the 'SeqTrace', sofarSched is the @[(Decision,
-  -- ThreadAction)]@ trace the scheduler needs.
-  go sofar sofarSched prior ctx
+runThreads sched memtype ref = go Seq.empty Nothing where
+  go sofar prior ctx
     | isTerminated  = pure (ctx, sofar, prior)
     | isDeadlocked  = die sofar prior Deadlock ctx
     | isSTMLocked   = die sofar prior STMDeadlock ctx
@@ -95,7 +93,7 @@ runThreads sched memtype ref = go Seq.empty [] Nothing where
              Nothing -> die sofar prior InternalError ctx'
            Nothing -> die sofar prior Abort ctx'
     where
-      (choice, g')  = sched sofarSched prior (fromList runnable') (cSchedState ctx)
+      (choice, g')  = sched prior (fromList runnable') (cSchedState ctx)
       runnable'     = [(t, lookahead (_continuation a)) | (t, a) <- sortOn fst $ M.assocs runnable]
       runnable      = M.filter (not . isBlocked) threadsc
       threadsc      = addCommitThreads (cWriteBuf ctx) threads
@@ -120,17 +118,16 @@ runThreads sched memtype ref = go Seq.empty [] Nothing where
 
       step chosen thread ctx' = do
           (res, actOrTrc) <- stepThread sched memtype chosen (_continuation thread) $ ctx { cSchedState = g' }
-          let trc         = getTrc actOrTrc
-          let sofar'      = sofar      <> trc
-          let sofarSched' = sofarSched <> map (\(d,_,a) -> (d,a)) (F.toList trc)
-          let prior'      = getPrior actOrTrc
+          let trc    = getTrc actOrTrc
+          let sofar' = sofar <> trc
+          let prior' = getPrior actOrTrc
           case res of
             Right ctx'' ->
               let threads' = if (interruptible <$> M.lookup chosen (cThreads ctx'')) /= Just False
                              then unblockWaitingOn chosen (cThreads ctx'')
                              else cThreads ctx''
                   ctx''' = ctx'' { cThreads = delCommitThreads threads' }
-              in go sofar' sofarSched' prior' ctx'''
+              in go sofar' prior' ctx'''
             Left failure ->
               let ctx'' = ctx' { cThreads = delCommitThreads threads }
               in die sofar' prior' failure ctx''

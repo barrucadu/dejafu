@@ -37,22 +37,19 @@ import           Test.DejaFu.Common
 -- | A @Scheduler@ drives the execution of a concurrent program. The
 -- parameters it takes are:
 --
--- 1. The trace so far.
---
--- 2. The last thread executed (if this is the first invocation, this
+-- 1. The last thread executed (if this is the first invocation, this
 --    is @Nothing@).
 --
--- 3. The runnable threads at this point.
+-- 2. The runnable threads at this point.
 --
--- 4. The state.
+-- 3. The state.
 --
 -- It returns a thread to execute, or @Nothing@ if execution should
 -- abort here, and also a new state.
 --
--- @since 0.5.0.0
+-- @since unreleased
 type Scheduler state
-  = [(Decision, ThreadAction)]
-  -> Maybe (ThreadId, ThreadAction)
+  = Maybe (ThreadId, ThreadAction)
   -> NonEmpty (ThreadId, Lookahead)
   -> state
   -> (Maybe ThreadId, state)
@@ -93,19 +90,19 @@ decisionOf (Just prior) runnable chosen
 -- | A simple random scheduler which, at every step, picks a random
 -- thread to run.
 --
--- @since 0.5.0.0
+-- @since unreleased
 randomSched :: RandomGen g => Scheduler g
-randomSched _ _ threads g = (Just $ threads' !! choice, g') where
+randomSched _ threads g = (Just $ threads' !! choice, g') where
   (choice, g') = randomR (0, length threads' - 1) g
   threads' = map fst $ toList threads
 
 -- | A round-robin scheduler which, at every step, schedules the
 -- thread with the next 'ThreadId'.
 --
--- @since 0.5.0.0
+-- @since unreleased
 roundRobinSched :: Scheduler ()
-roundRobinSched _ Nothing ((tid,_):|_) _ = (Just tid, ())
-roundRobinSched _ (Just (prior, _)) threads _
+roundRobinSched Nothing ((tid,_):|_) _ = (Just tid, ())
+roundRobinSched (Just (prior, _)) threads _
   | prior >= maximum threads' = (Just $ minimum threads', ())
   | otherwise = (Just . minimum $ filter (>prior) threads', ())
 
@@ -119,14 +116,14 @@ roundRobinSched _ (Just (prior, _)) threads _
 -- thread. That is, if the last thread scheduled is still runnable,
 -- run that, otherwise schedule randomly.
 --
--- @since 0.5.0.0
+-- @since unreleased
 randomSchedNP :: RandomGen g => Scheduler g
 randomSchedNP = makeNonPreemptive randomSched
 
 -- | A round-robin scheduler which doesn't preempt the running
 -- thread.
 --
--- @since 0.5.0.0
+-- @since unreleased
 roundRobinSchedNP :: Scheduler ()
 roundRobinSchedNP = makeNonPreemptive roundRobinSched
 
@@ -136,10 +133,10 @@ roundRobinSchedNP = makeNonPreemptive roundRobinSched
 -- | Turn a potentially preemptive scheduler into a non-preemptive
 -- one.
 --
--- @since 0.5.0.0
+-- @since unreleased
 makeNonPreemptive :: Scheduler s -> Scheduler s
 makeNonPreemptive sched = newsched where
-  newsched trc p@(Just (prior, _)) threads s
+  newsched p@(Just (prior, _)) threads s
     | prior `elem` map fst (toList threads) = (Just prior, s)
-    | otherwise = sched trc p threads s
-  newsched trc Nothing threads s = sched trc Nothing threads s
+    | otherwise = sched p threads s
+  newsched Nothing threads s = sched Nothing threads s

@@ -14,6 +14,10 @@ unreleased
 
 - Execution traces now only include a single item of lookahead (#120).
 
+### Test.DejaFu.Schedule
+
+- Schedulers no longer take the execution trace so far (#106).
+
 
 ---------------------------------------------------------------------------------------------------
 
