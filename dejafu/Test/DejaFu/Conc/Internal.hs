@@ -77,7 +77,11 @@ data Context n r g = Context
 
 -- | Run a collection of threads, until there are no threads left.
 runThreads :: MonadRef r n
-           => Scheduler g -> MemType -> r (Maybe (Either Failure a)) -> Context n r g -> n (Context n r g, SeqTrace, Maybe (ThreadId, ThreadAction))
+  => Scheduler g
+  -> MemType
+  -> r (Maybe (Either Failure a))
+  -> Context n r g
+  -> n (Context n r g, SeqTrace, Maybe (ThreadId, ThreadAction))
 runThreads sched memtype ref = go Seq.empty Nothing where
   go sofar prior ctx
     | isTerminated  = pure (ctx, sofar, prior)
@@ -93,7 +97,7 @@ runThreads sched memtype ref = go Seq.empty Nothing where
              Nothing -> die sofar prior InternalError ctx'
            Nothing -> die sofar prior Abort ctx'
     where
-      (choice, g')  = sched prior (fromList runnable') (cSchedState ctx)
+      (choice, g')  = scheduleThread sched prior (fromList runnable') (cSchedState ctx)
       runnable'     = [(t, lookahead (_continuation a)) | (t, a) <- sortOn fst $ M.assocs runnable]
       runnable      = M.filter (not . isBlocked) threadsc
       threadsc      = addCommitThreads (cWriteBuf ctx) threads

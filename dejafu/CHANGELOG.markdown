@@ -17,6 +17,7 @@ unreleased
 ### Test.DejaFu.Schedule
 
 - Schedulers no longer take the execution trace so far (#106).
+- The `Scheduler` type is now a newtype (#122).
 
 
 ---------------------------------------------------------------------------------------------------

@@ -9,7 +9,7 @@
 -- Scheduling for concurrent computations.
 module Test.DejaFu.Schedule
   ( -- * Scheduling
-    Scheduler
+    Scheduler(..)
 
   , Decision(..)
   , tidOf
@@ -48,11 +48,13 @@ import           Test.DejaFu.Common
 -- abort here, and also a new state.
 --
 -- @since unreleased
-type Scheduler state
-  = Maybe (ThreadId, ThreadAction)
-  -> NonEmpty (ThreadId, Lookahead)
-  -> state
-  -> (Maybe ThreadId, state)
+newtype Scheduler state = Scheduler
+  { scheduleThread
+    :: Maybe (ThreadId, ThreadAction)
+    -> NonEmpty (ThreadId, Lookahead)
+    -> state
+    -> (Maybe ThreadId, state)
+  }
 
 -------------------------------------------------------------------------------
 -- Scheduling decisions
@@ -92,22 +94,26 @@ decisionOf (Just prior) runnable chosen
 --
 -- @since unreleased
 randomSched :: RandomGen g => Scheduler g
-randomSched _ threads g = (Just $ threads' !! choice, g') where
-  (choice, g') = randomR (0, length threads' - 1) g
-  threads' = map fst $ toList threads
+randomSched = Scheduler go where
+  go _ threads g =
+    let threads' = map fst (toList threads)
+        (choice, g') = randomR (0, length threads' - 1) g
+    in (Just $ threads' !! choice, g')
 
 -- | A round-robin scheduler which, at every step, schedules the
 -- thread with the next 'ThreadId'.
 --
 -- @since unreleased
 roundRobinSched :: Scheduler ()
-roundRobinSched Nothing ((tid,_):|_) _ = (Just tid, ())
-roundRobinSched (Just (prior, _)) threads _
-  | prior >= maximum threads' = (Just $ minimum threads', ())
-  | otherwise = (Just . minimum $ filter (>prior) threads', ())
-
-  where
-    threads' = map fst $ toList threads
+roundRobinSched = Scheduler go where
+  go Nothing ((tid,_):|_) _ = (Just tid, ())
+  go (Just (prior, _)) threads _ =
+    let threads' = map fst (toList threads)
+        candidates =
+          if prior >= maximum threads'
+          then threads'
+          else filter (>prior) threads'
+    in (Just (minimum candidates), ())
 
 -------------------------------------------------------------------------------
 -- Non-preemptive
@@ -135,8 +141,8 @@ roundRobinSchedNP = makeNonPreemptive roundRobinSched
 --
 -- @since unreleased
 makeNonPreemptive :: Scheduler s -> Scheduler s
-makeNonPreemptive sched = newsched where
+makeNonPreemptive sched = Scheduler newsched where
   newsched p@(Just (prior, _)) threads s
     | prior `elem` map fst (toList threads) = (Just prior, s)
-    | otherwise = sched p threads s
-  newsched Nothing threads s = sched Nothing threads s
+    | otherwise = scheduleThread sched p threads s
+  newsched Nothing threads s = scheduleThread sched Nothing threads s
