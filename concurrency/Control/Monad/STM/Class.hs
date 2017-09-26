@@ -34,7 +34,6 @@ import           Control.Exception            (Exception)
 import           Control.Monad                (MonadPlus(..), unless)
 import           Control.Monad.Reader         (ReaderT)
 import           Control.Monad.Trans          (lift)
-import           Control.Monad.Trans.Control  (MonadTransControl, StT, liftWith)
 import           Control.Monad.Trans.Identity (IdentityT)
 
 import qualified Control.Concurrent.STM       as STM

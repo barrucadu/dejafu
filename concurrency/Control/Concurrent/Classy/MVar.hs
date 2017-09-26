@@ -48,7 +48,7 @@ module Control.Concurrent.Classy.MVar
  , modifyMVarMasked
  ) where
 
-import           Control.Monad.Catch      (mask_, onException)
+import           Control.Monad.Catch      (onException)
 import           Control.Monad.Conc.Class
 import           Data.Maybe               (isJust)
 

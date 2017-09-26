@@ -88,7 +88,6 @@ import           Control.Monad.Catch                 (finally, onException, try)
 import           Control.Monad.Conc.Class
 import           Control.Monad.STM.Class
 import           Data.Foldable                       (foldMap)
-import           Data.Traversable
 
 #if MIN_VERSION_base(4,9,0)
 import           Data.Semigroup                      (Semigroup(..))
