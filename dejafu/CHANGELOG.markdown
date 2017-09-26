@@ -24,6 +24,8 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - Schedulers no longer take the execution trace so far (#106).
 - The `Scheduler` type is now a newtype (#122).
 
+[dejafu-0.8.0.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.8.0.0
+
 
 ---------------------------------------------------------------------------------------------------
 
