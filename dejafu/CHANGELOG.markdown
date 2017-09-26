@@ -13,6 +13,7 @@ unreleased
 ### Test.DejaFu.Common
 
 - Execution traces now only include a single item of lookahead (#120).
+- STM traces now include IDs of created `TVar`s (#80).
 
 ### Test.DejaFu.Schedule
 

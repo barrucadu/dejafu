@@ -201,7 +201,7 @@ stepTrans act idsource = case act of
       let (idsource', tvid) = nextTVId n idsource
       ref <- newRef a
       let tvar = TVar (tvid, ref)
-      pure (c tvar, nothing, idsource', [], [tvid], TNew)
+      pure (c tvar, nothing, idsource', [], [tvid], TNew tvid)
 
     stepOrElse a b c = cases TOrElse a c
       (\trace   -> transaction (TOrElse trace . Just) b c)

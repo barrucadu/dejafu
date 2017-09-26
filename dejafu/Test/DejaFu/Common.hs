@@ -701,9 +701,9 @@ type TTrace = [TAction]
 
 -- | All the actions that an STM transaction can perform.
 --
--- @since 0.4.0.0
+-- @since unreleased
 data TAction =
-    TNew
+    TNew TVarId
   -- ^ Create a new @TVar@
   | TRead  TVarId
   -- ^ Read from a @TVar@.
