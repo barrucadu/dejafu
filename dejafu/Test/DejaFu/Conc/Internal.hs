@@ -19,10 +19,9 @@ import           Control.Exception                   (MaskingState(..),
                                                       toException)
 import           Control.Monad.Ref                   (MonadRef, newRef, readRef,
                                                       writeRef)
-import qualified Data.Foldable                       as F
 import           Data.Functor                        (void)
 import           Data.List                           (sortOn)
-import           Data.List.NonEmpty                  (NonEmpty(..), fromList)
+import           Data.List.NonEmpty                  (fromList)
 import qualified Data.Map.Strict                     as M
 import           Data.Maybe                          (fromJust, isJust)
 import           Data.Monoid                         ((<>))
@@ -42,7 +41,7 @@ import           Test.DejaFu.STM                     (Result(..),
 
 -- | 'Trace' but as a sequence.
 type SeqTrace
-  = Seq (Decision, [(ThreadId, NonEmpty Lookahead)], ThreadAction)
+  = Seq (Decision, [(ThreadId, Lookahead)], ThreadAction)
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the
@@ -96,7 +95,7 @@ runThreads sched memtype ref = go Seq.empty [] Nothing where
              Nothing -> die sofar prior InternalError ctx'
            Nothing -> die sofar prior Abort ctx'
     where
-      (choice, g')  = sched sofarSched prior (fromList $ map (\(t,l:|_) -> (t,l)) runnable') (cSchedState ctx)
+      (choice, g')  = sched sofarSched prior (fromList runnable') (cSchedState ctx)
       runnable'     = [(t, lookahead (_continuation a)) | (t, a) <- sortOn fst $ M.assocs runnable]
       runnable      = M.filter (not . isBlocked) threadsc
       threadsc      = addCommitThreads (cWriteBuf ctx) threads
