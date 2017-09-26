@@ -47,7 +47,7 @@ import           Test.DejaFu.Common
 -- It returns a thread to execute, or @Nothing@ if execution should
 -- abort here, and also a new state.
 --
--- @since unreleased
+-- @since 0.8.0.0
 newtype Scheduler state = Scheduler
   { scheduleThread
     :: Maybe (ThreadId, ThreadAction)
@@ -92,7 +92,7 @@ decisionOf (Just prior) runnable chosen
 -- | A simple random scheduler which, at every step, picks a random
 -- thread to run.
 --
--- @since unreleased
+-- @since 0.8.0.0
 randomSched :: RandomGen g => Scheduler g
 randomSched = Scheduler go where
   go _ threads g =
@@ -103,7 +103,7 @@ randomSched = Scheduler go where
 -- | A round-robin scheduler which, at every step, schedules the
 -- thread with the next 'ThreadId'.
 --
--- @since unreleased
+-- @since 0.8.0.0
 roundRobinSched :: Scheduler ()
 roundRobinSched = Scheduler go where
   go Nothing ((tid,_):|_) _ = (Just tid, ())
@@ -122,14 +122,14 @@ roundRobinSched = Scheduler go where
 -- thread. That is, if the last thread scheduled is still runnable,
 -- run that, otherwise schedule randomly.
 --
--- @since unreleased
+-- @since 0.8.0.0
 randomSchedNP :: RandomGen g => Scheduler g
 randomSchedNP = makeNonPreemptive randomSched
 
 -- | A round-robin scheduler which doesn't preempt the running
 -- thread.
 --
--- @since unreleased
+-- @since 0.8.0.0
 roundRobinSchedNP :: Scheduler ()
 roundRobinSchedNP = makeNonPreemptive roundRobinSched
 
@@ -139,7 +139,7 @@ roundRobinSchedNP = makeNonPreemptive roundRobinSched
 -- | Turn a potentially preemptive scheduler into a non-preemptive
 -- one.
 --
--- @since unreleased
+-- @since 0.8.0.0
 makeNonPreemptive :: Scheduler s -> Scheduler s
 makeNonPreemptive sched = Scheduler newsched where
   newsched p@(Just (prior, _)) threads s

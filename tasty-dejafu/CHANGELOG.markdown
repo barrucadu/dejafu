@@ -7,6 +7,24 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+0.7.0.1
+-------
+
+- **Date**    2017-09-26
+- **Git tag** [tasty-dejafu-0.7.0.1][]
+- **Hackage** https://hackage.haskell.org/package/tasty-dejafu-0.7.0.1
+
+### Miscellaneous
+
+- dejafu-0.8 support
+
+[tasty-dejafu-0.7.0.1]: https://github.com/barrucadu/dejafu/releases/tag/tasty-dejafu-0.7.0.1
+
+
+---------------------------------------------------------------------------------------------------
+
+
+
 0.7.0.0
 -------
 

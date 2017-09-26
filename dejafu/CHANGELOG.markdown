@@ -7,8 +7,12 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+0.8.0.0
+-------
+
+- **Date**    2017-09-26
+- **Git tag** [dejafu-0.8.0.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.8.0.0
 
 ### Test.DejaFu.Common
 

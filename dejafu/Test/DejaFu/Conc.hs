@@ -190,7 +190,7 @@ instance Monad n => C.MonadConc (ConcT r n) where
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 --
--- @since unreleased
+-- @since 0.8.0.0
 runConcurrent :: MonadRef r n
   => Scheduler s
   -> MemType

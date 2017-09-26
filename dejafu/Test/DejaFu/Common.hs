@@ -701,7 +701,7 @@ type TTrace = [TAction]
 
 -- | All the actions that an STM transaction can perform.
 --
--- @since unreleased
+-- @since 0.8.0.0
 data TAction =
     TNew TVarId
   -- ^ Create a new @TVar@
@@ -740,7 +740,7 @@ instance NFData TAction where
 -- decisions made, all the runnable threads and what they would do,
 -- and the action a thread took in its step.
 --
--- @since unreleased
+-- @since 0.8.0.0
 type Trace
   = [(Decision, [(ThreadId, Lookahead)], ThreadAction)]
 
