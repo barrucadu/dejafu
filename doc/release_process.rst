@@ -43,3 +43,21 @@ unclear.
 .. _PVP: https://pvp.haskell.org/
 .. __: https://github.com/barrucadu/dejafu/commit/44181e6018f1ffdfba2c7a71f6a2adfa314cc49d
 .. __: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.7.1.3
+
+
+Pro tips
+--------
+
+* If a release would have a combination of breaking and non-breaking
+  changes, if possible make two releases: the non-breaking ones first,
+  and then a major release with the breaking ones.
+
+  This makes it possible for users who don't want the breaking changes
+  to still benefit from the non-breaking improvements.
+
+* Before uploading to Hackage, check you have no changes to the files
+  (for example, temporarily changing the GHC options, or adding
+  ``trace`` calls, for debugging reasons).
+
+  ``stack upload`` will upload the files on the disk, not the files in
+  version control, so your unwanted changes will be published!
