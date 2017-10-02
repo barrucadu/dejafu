@@ -32,9 +32,13 @@ module Control.Concurrent.Classy.Async
 
   -- * Spawning
   , async
+  , asyncN
   , asyncOn
+  , asyncOnN
   , asyncWithUnmask
+  , asyncWithUnmaskN
   , asyncOnWithUnmask
+  , asyncOnWithUnmaskN
 
   -- * Spawning with automatic 'cancel'ation
   , withAsync
@@ -178,11 +182,23 @@ instance (MonadConc m, Monoid a) => Monoid (Concurrently m a) where
 async :: MonadConc m => m a -> m (Async m a)
 async = asyncUsing fork
 
+-- | Like 'async', but taking a name for better debugging information.
+--
+-- @since unreleased
+asyncN :: MonadConc m => String -> m a -> m (Async m a)
+asyncN name = asyncUsing (forkN name)
+
 -- | Like 'async' but using 'forkOn' internally.
 --
 -- @since 1.1.1.0
 asyncOn :: MonadConc m => Int -> m a -> m (Async m a)
 asyncOn = asyncUsing . forkOn
+
+-- | Like 'asyncOn' but taking a name for better debugging information.
+--
+-- @since unreleased
+asyncOnN :: MonadConc m => String -> Int -> m a -> m (Async m a)
+asyncOnN name = asyncUsing . (forkOnN name)
 
 -- | Like 'async' but using 'forkWithUnmask' internally.
 --
@@ -190,11 +206,23 @@ asyncOn = asyncUsing . forkOn
 asyncWithUnmask :: MonadConc m => ((forall b. m b -> m b) -> m a) -> m (Async m a)
 asyncWithUnmask = asyncUnmaskUsing forkWithUnmask
 
+-- | Like 'asyncWithUnmask' but taking a name for better debugging information.
+--
+-- @since unreleased
+asyncWithUnmaskN :: MonadConc m => String -> ((forall b. m b -> m b) -> m a) -> m (Async m a)
+asyncWithUnmaskN name = asyncUnmaskUsing (forkWithUnmaskN name)
+
 -- | Like 'asyncOn' but using 'forkOnWithUnmask' internally.
 --
 -- @since 1.1.1.0
 asyncOnWithUnmask :: MonadConc m => Int -> ((forall b. m b -> m b) -> m a) -> m (Async m a)
 asyncOnWithUnmask i = asyncUnmaskUsing (forkOnWithUnmask i)
+
+-- | Like 'asyncOnWithUnmask' but taking a name for better debugging information.
+--
+-- @since unreleased
+asyncOnWithUnmaskN :: MonadConc m => String -> Int -> ((forall b. m b -> m b) -> m a) -> m (Async m a)
+asyncOnWithUnmaskN name i = asyncUnmaskUsing (forkOnWithUnmaskN name i)
 
 -- | Fork a thread with the given forking function
 asyncUsing :: MonadConc m => (m () -> m (ThreadId m)) -> m a -> m (Async m a)
