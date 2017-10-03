@@ -171,9 +171,9 @@ Contributing
 See the CONTRIBUTING.markdown file.
 
 **If you'd like to get involved with Déjà Fu**, check out [the
-"beginner friendly" label on the issue tracke][beginners].
+"beginner friendly" label on the issue tracker][beginners].
 
-[beginners]: https://github.com/barrucadu/dejafu/issues?q=is%3Aissue+is%3Aopen+label%3A%22beginner+friendly%22
+[beginners]: https://github.com/barrucadu/dejafu/issues?q=is%3Aissue+is%3Aopen+label%3Abeginner-friendly
 
 
 Release notes

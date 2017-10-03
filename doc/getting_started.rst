@@ -152,7 +152,7 @@ the trace by eye.
 **If you'd like to get involved with Déjà Fu**, check out `the
 "beginner friendly" label on the issue tracker`__.
 
-.. __: https://github.com/barrucadu/dejafu/issues?q=is%3Aissue+is%3Aopen+label%3A%22beginner+friendly%22
+.. __: https://github.com/barrucadu/dejafu/issues?q=is%3Aissue+is%3Aopen+label%3Abeginner-friendly
 
 
 Questions, feedback, discussion
