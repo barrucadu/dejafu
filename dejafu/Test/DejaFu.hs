@@ -1,5 +1,4 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes #-}
 
 -- |
 -- Module      : Test.DejaFu
@@ -7,7 +6,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : RankNTypes
+-- Portability : MultiParamTypeClasses
 --
 -- Deterministic testing for concurrent computations.
 --
@@ -87,9 +86,6 @@ module Test.DejaFu
     autocheck
   , dejafu
   , dejafus
-  , autocheckIO
-  , dejafuIO
-  , dejafusIO
 
   -- * Testing with different settings
 
@@ -101,17 +97,13 @@ module Test.DejaFu
   , swarmy
 
   , autocheckWay
-  , autocheckWayIO
   , dejafuWay
-  , dejafuWayIO
   , dejafusWay
-  , dejafusWayIO
 
   , Discard(..)
   , defaultDiscarder
 
   , dejafuDiscard
-  , dejafuDiscardIO
 
   -- ** Memory Models
 
@@ -216,8 +208,6 @@ module Test.DejaFu
   , Failure(..)
   , runTest
   , runTestWay
-  , runTestM
-  , runTestWayM
 
   -- * Predicates
 
@@ -286,14 +276,15 @@ module Test.DejaFu
   , module Test.DejaFu.Refinement
   ) where
 
-import           Control.Arrow          (first)
-import           Control.DeepSeq        (NFData(..))
-import           Control.Monad          (unless, when)
-import           Control.Monad.Ref      (MonadRef)
-import           Control.Monad.ST       (runST)
-import           Data.Function          (on)
-import           Data.List              (intercalate, intersperse, minimumBy)
-import           Data.Ord               (comparing)
+import           Control.Arrow            (first)
+import           Control.DeepSeq          (NFData(..))
+import           Control.Monad            (unless, when)
+import           Control.Monad.Conc.Class (MonadConc)
+import           Control.Monad.IO.Class   (MonadIO(..))
+import           Control.Monad.Ref        (MonadRef)
+import           Data.Function            (on)
+import           Data.List                (intercalate, intersperse, minimumBy)
+import           Data.Ord                 (comparing)
 
 import           Test.DejaFu.Common
 import           Test.DejaFu.Conc
@@ -312,11 +303,11 @@ import           Test.DejaFu.SCT
 -- 'MonadConc'. If you need to test something which also uses
 -- 'MonadIO', use 'autocheckIO'.
 --
--- @since 0.1.0.0
-autocheck :: (Eq a, Show a)
-  => (forall t. ConcST t a)
+-- @since unreleased
+autocheck :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
+  => ConcT r n a
   -- ^ The computation to test
-  -> IO Bool
+  -> n Bool
 autocheck = autocheckWay defaultWay defaultMemType
 
 -- | Variant of 'autocheck' which takes a way to run the program and a
@@ -333,30 +324,17 @@ autocheck = autocheckWay defaultWay defaultMemType
 -- __Warning:__ Using largers bounds will almost certainly
 -- significantly increase the time taken to test!
 --
--- @since 0.6.0.0
-autocheckWay :: (Eq a, Show a)
+-- @since unreleased
+autocheckWay :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> (forall t. ConcST t a)
+  -> ConcT r n a
   -- ^ The computation to test
-  -> IO Bool
+  -> n Bool
 autocheckWay way memtype conc =
   dejafusWay way memtype conc autocheckCases
-
--- | Variant of 'autocheck' for computations which do 'IO'.
---
--- @since 0.2.0.0
-autocheckIO :: (Eq a, Show a) => ConcIO a -> IO Bool
-autocheckIO = autocheckWayIO defaultWay defaultMemType
-
--- | Variant of 'autocheckWay' for computations which do 'IO'.
---
--- @since 0.6.0.0
-autocheckWayIO :: (Eq a, Show a) => Way -> MemType -> ConcIO a -> IO Bool
-autocheckWayIO way memtype concio =
-  dejafusWayIO way memtype concio autocheckCases
 
 -- | Predicates for the various autocheck functions.
 autocheckCases :: Eq a => [(String, Predicate a)]
@@ -369,114 +347,79 @@ autocheckCases =
 -- | Check a predicate and print the result to stdout, return 'True'
 -- if it passes.
 --
--- @since 0.1.0.0
-dejafu :: Show a
-  => (forall t. ConcST t a)
+-- @since unreleased
+dejafu :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
+  => ConcT r n a
   -- ^ The computation to test
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
-  -> IO Bool
+  -> n Bool
 dejafu = dejafuWay defaultWay defaultMemType
 
 -- | Variant of 'dejafu' which takes a way to run the program and a
 -- memory model.
 --
--- @since 0.6.0.0
-dejafuWay :: Show a
+-- @since unreleased
+dejafuWay :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> (forall t. ConcST t a)
+  -> ConcT r n a
   -- ^ The computation to test
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
-  -> IO Bool
+  -> n Bool
 dejafuWay = dejafuDiscard (const Nothing)
 
 -- | Variant of 'dejafuWay' which can selectively discard results.
 --
--- @since 0.7.1.0
-dejafuDiscard :: Show a
+-- @since unreleased
+dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> (forall t. ConcST t a)
+  -> ConcT r n a
   -- ^ The computation to test
   -> (String, Predicate a)
   -- ^ The predicate (with a name) to check
-  -> IO Bool
+  -> n Bool
 dejafuDiscard discard way memtype conc (name, test) = do
-  let traces = runST (runSCTDiscard discard way memtype conc)
-  doTest name (test traces)
+  traces <- runSCTDiscard discard way memtype conc
+  liftIO $ doTest name (test traces)
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
 --
--- @since 0.1.0.0
-dejafus :: Show a
-  => (forall t. ConcST t a)
+-- @since unreleased
+dejafus :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
+  => ConcT r n a
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
-  -> IO Bool
+  -> n Bool
 dejafus = dejafusWay defaultWay defaultMemType
 
 -- | Variant of 'dejafus' which takes a way to run the program and a
 -- memory model.
 --
--- @since 0.6.0.0
-dejafusWay :: Show a
+-- @since unreleased
+dejafusWay :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> (forall t. ConcST t a)
+  -> ConcT r n a
   -- ^ The computation to test
   -> [(String, Predicate a)]
   -- ^ The list of predicates (with names) to check
-  -> IO Bool
+  -> n Bool
 dejafusWay way memtype conc tests = do
-  let traces = runST (runSCT way memtype conc)
-  results <- mapM (\(name, test) -> doTest name $ test traces) tests
-  pure (and results)
-
--- | Variant of 'dejafu' for computations which do 'IO'.
---
--- @since 0.2.0.0
-dejafuIO :: Show a => ConcIO a -> (String, Predicate a) -> IO Bool
-dejafuIO = dejafuWayIO defaultWay defaultMemType
-
--- | Variant of 'dejafuWay' for computations which do 'IO'.
---
--- @since 0.6.0.0
-dejafuWayIO :: Show a => Way -> MemType -> ConcIO a -> (String, Predicate a) -> IO Bool
-dejafuWayIO = dejafuDiscardIO (const Nothing)
-
--- | Variant of 'dejafuDiscard' for computations which do 'IO'.
---
--- @since 0.7.1.0
-dejafuDiscardIO :: Show a => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcIO a -> (String, Predicate a) -> IO Bool
-dejafuDiscardIO discard way memtype concio (name, test) = do
-  traces <- runSCTDiscard discard way memtype concio
-  doTest name (test traces)
-
--- | Variant of 'dejafus' for computations which do 'IO'.
---
--- @since 0.2.0.0
-dejafusIO :: Show a => ConcIO a -> [(String, Predicate a)] -> IO Bool
-dejafusIO = dejafusWayIO defaultWay defaultMemType
-
--- | Variant of 'dejafusWay' for computations which do 'IO'.
---
--- @since 0.6.0.0
-dejafusWayIO :: Show a => Way -> MemType -> ConcIO a -> [(String, Predicate a)] -> IO Bool
-dejafusWayIO way memtype concio tests = do
-  traces  <- runSCT way memtype concio
-  results <- mapM (\(name, test) -> doTest name $ test traces) tests
+  traces <- runSCT way memtype conc
+  results <- mapM (\(name, test) -> liftIO . doTest name $ test traces) tests
   pure (and results)
 
 
@@ -523,46 +466,30 @@ instance Foldable Result where
 -- | Run a predicate over all executions within the default schedule
 -- bounds.
 --
--- @since 0.1.0.0
-runTest ::
-    Predicate a
+-- @since unreleased
+runTest :: (MonadConc n, MonadRef r n)
+  => Predicate a
   -- ^ The predicate to check
-  -> (forall t. ConcST t a)
+  -> ConcT r n a
   -- ^ The computation to test
-  -> Result a
-runTest test conc =
-  runST (runTestM test conc)
+  -> n (Result a)
+runTest = runTestWay defaultWay defaultMemType
 
 -- | Variant of 'runTest' which takes a way to run the program and a
 -- memory model.
 --
--- @since 0.6.0.0
-runTestWay
-  :: Way
+-- @since unreleased
+runTestWay :: (MonadConc n, MonadRef r n)
+  => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Predicate a
   -- ^ The predicate to check
-  -> (forall t. ConcST t a)
+  -> ConcT r n a
   -- ^ The computation to test
-  -> Result a
+  -> n (Result a)
 runTestWay way memtype predicate conc =
-  runST (runTestWayM way memtype predicate conc)
-
--- | Monad-polymorphic variant of 'runTest'.
---
--- @since 0.4.0.0
-runTestM :: MonadRef r n
-         => Predicate a -> ConcT r n a -> n (Result a)
-runTestM = runTestWayM defaultWay defaultMemType
-
--- | Monad-polymorphic variant of 'runTest''.
---
--- @since 0.6.0.0
-runTestWayM :: MonadRef r n
-            => Way -> MemType -> Predicate a -> ConcT r n a -> n (Result a)
-runTestWayM way memtype predicate conc =
   predicate <$> runSCT way memtype conc
 
 
