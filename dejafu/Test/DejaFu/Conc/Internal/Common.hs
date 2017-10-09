@@ -109,7 +109,9 @@ runCont = runM
 -- primitives of the concurrency. 'spawn' is absent as it is
 -- implemented in terms of 'newEmptyMVar', 'fork', and 'putMVar'.
 data Action n r =
-    AFork  String ((forall b. M n r b -> M n r b) -> Action n r) (ThreadId -> Action n r)
+    AFork   String ((forall b. M n r b -> M n r b) -> Action n r) (ThreadId -> Action n r)
+  | AForkOS String ((forall b. M n r b -> M n r b) -> Action n r) (ThreadId -> Action n r)
+  | AIsBound (Bool -> Action n r)
   | AMyTId (ThreadId -> Action n r)
 
   | AGetNumCapabilities (Int -> Action n r)
@@ -155,6 +157,8 @@ data Action n r =
 -- | Look as far ahead in the given continuation as possible.
 lookahead :: Action n r -> Lookahead
 lookahead (AFork _ _ _) = WillFork
+lookahead (AForkOS _ _ _) = WillForkOS
+lookahead (AIsBound _) = WillIsCurrentThreadBound
 lookahead (AMyTId _) = WillMyThreadId
 lookahead (AGetNumCapabilities _) = WillGetNumCapabilities
 lookahead (ASetNumCapabilities i _) = WillSetNumCapabilities i

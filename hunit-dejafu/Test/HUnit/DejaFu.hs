@@ -17,9 +17,8 @@ module Test.HUnit.DejaFu
   ( -- * Unit testing
 
   -- | This is supported by the 'Assertable' and 'Testable' instances
-  -- for 'ConcIO'.  These instances tries all executions,
-  -- reporting as failures the cases which throw an 'HUnitFailure'
-  -- exception.
+  -- for 'ConcIO'.  These instances try all executions, reporting as
+  -- failures the cases which throw an 'HUnitFailure' exception.
   --
   -- @instance Testable   (ConcIO ())@
   -- @instance Assertable (ConcIO ())@

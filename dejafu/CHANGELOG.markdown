@@ -23,6 +23,11 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - The `autocheckIO`, `dejafuIO`, `dejafusIO`, `autocheckWayIO`, `dejafuWayIO`, `dejafusWayIO`,
   `dejafuDiscardIO`, `runTestM`, and `runTestWayM` functions are now gone.
 
+### Test.DejaFu.Common
+
+- New `ForkOS` and `IsCurrentThreadBound` thread actions. (#126)
+- New `WillForkOS` and `WillIsCurrentThreadBound` lookaheads. (#126)
+
 ### Test.DejaFu.Conc
 
 - The `ConcST` type alias is gone.
@@ -33,6 +38,8 @@ This project is versioned according to the [Package Versioning Policy](https://p
   instance.
 
 - The `runConcurrent` function now has a `MonadConc` constraint.
+
+- If bound threads are supported, the main thread when testing is bound. (#126)
 
 ### Test.DejaFu.SCT
 

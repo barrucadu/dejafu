@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- |
@@ -122,8 +123,11 @@ instance Monad n => C.MonadConc (ConcT r n) where
 
   -- ----------
 
-  forkWithUnmaskN   n ma = toConc (AFork n (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
+  forkWithUnmaskN   n ma = toConc (AFork   n (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
   forkOnWithUnmaskN n _  = C.forkWithUnmaskN n
+  forkOSN n ma = forkOSWithUnmaskN n (const ma)
+
+  isCurrentThreadBound = toConc AIsBound
 
   -- This implementation lies and returns 2 until a value is set. This
   -- will potentially avoid special-case behaviour for 1 capability,
@@ -170,6 +174,12 @@ instance Monad n => C.MonadConc (ConcT r n) where
   -- ----------
 
   atomically = toConc . AAtom
+
+-- move this into the instance defn when forkOSWithUnmaskN is added to MonadConc in 2018
+forkOSWithUnmaskN :: Applicative n => String -> ((forall a. ConcT r n a -> ConcT r n a) -> ConcT r n ()) -> ConcT r n ThreadId
+forkOSWithUnmaskN n ma
+  | C.rtsSupportsBoundThreads = toConc (AForkOS n (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
+  | otherwise = fail "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the
