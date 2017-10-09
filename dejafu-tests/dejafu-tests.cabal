@@ -32,7 +32,6 @@ executable dejafu-tests
                      , Examples
                      , Examples.AutoUpdate
                      , Examples.ClassLaws
-                     , Examples.ClassLaws.Impredicative
                      , Examples.Logger
                      , Examples.Philosophers
                      , Examples.SearchParty

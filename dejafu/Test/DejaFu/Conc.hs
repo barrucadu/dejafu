@@ -2,9 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 -- |
 -- Module      : Test.DejaFu.Conc
@@ -12,7 +10,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RankNTypes, TypeFamilies, TypeSynonymInstances
+-- Portability : CPP, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, TypeFamilies
 --
 -- Deterministic traced execution of concurrent computations.
 --
@@ -22,7 +20,6 @@
 module Test.DejaFu.Conc
   ( -- * The @ConcT@ monad transformer
     ConcT
-  , ConcST
   , ConcIO
 
   -- * Executing computations
@@ -48,16 +45,13 @@ module Test.DejaFu.Conc
   ) where
 
 import           Control.Exception                (MaskingState(..))
-import qualified Control.Monad.Base               as Ba
 import qualified Control.Monad.Catch              as Ca
 import qualified Control.Monad.IO.Class           as IO
 import           Control.Monad.Ref                (MonadRef)
 import qualified Control.Monad.Ref                as Re
-import           Control.Monad.ST                 (ST)
 import           Control.Monad.Trans.Class        (MonadTrans(..))
 import qualified Data.Foldable                    as F
 import           Data.IORef                       (IORef)
-import           Data.STRef                       (STRef)
 import           Test.DejaFu.Schedule
 
 import qualified Control.Monad.Conc.Class         as C
@@ -79,12 +73,6 @@ instance Fail.MonadFail (ConcT r n) where
   fail = C . fail
 #endif
 
--- | A 'MonadConc' implementation using @ST@, this should be preferred
--- if you do not need 'liftIO'.
---
--- @since 0.4.0.0
-type ConcST t = ConcT (STRef t) (ST t)
-
 -- | A 'MonadConc' implementation using @IO@.
 --
 -- @since 0.4.0.0
@@ -96,11 +84,9 @@ toConc = C . cont
 wrap :: (M n r a -> M n r a) -> ConcT r n a -> ConcT r n a
 wrap f = C . f . unC
 
-instance IO.MonadIO ConcIO where
-  liftIO ma = toConc (\c -> ALift (fmap c ma))
-
-instance Ba.MonadBase IO ConcIO where
-  liftBase = IO.liftIO
+-- | @since 1.0.0.0
+instance IO.MonadIO n => IO.MonadIO (ConcT r n) where
+  liftIO ma = toConc (\c -> ALift (fmap c (IO.liftIO ma)))
 
 instance Re.MonadRef (CRef r) (ConcT r n) where
   newRef a = toConc (ANewCRef "" a)
@@ -202,8 +188,8 @@ instance Monad n => C.MonadConc (ConcT r n) where
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 --
--- @since 0.8.0.0
-runConcurrent :: MonadRef r n
+-- @since 1.0.0.0
+runConcurrent :: (C.MonadConc n, MonadRef r n)
   => Scheduler s
   -> MemType
   -> s

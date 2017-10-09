@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- |
@@ -9,7 +8,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, GeneralizedNewtypeDeriving, RankNTypes, TypeFamilies
+-- Portability : CPP, GeneralizedNewtypeDeriving, TypeFamilies
 --
 -- A 'MonadSTM' implementation, which can be run on top of 'IO' or
 -- 'ST'.

@@ -1,5 +1,4 @@
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE RankNTypes #-}
 
 module Common
   ( module Common
@@ -13,7 +12,7 @@ import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
 import System.Random (mkStdGen)
 import Test.DejaFu (Predicate, Failure, Result(..), alwaysTrue)
-import Test.DejaFu.Conc (ConcST)
+import Test.DejaFu.Conc (ConcIO)
 import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import qualified Test.HUnit as TH
@@ -47,16 +46,16 @@ instance IsTest t => IsTest [t] where
   toTestList = concatMap toTestList
 
 data T where
-  T  :: Show a => String -> (forall t. ConcST t a) -> Predicate a -> T
-  BT :: Show a => String -> (forall t. ConcST t a) -> Predicate a -> Bounds -> T
+  T  :: Show a => String -> ConcIO a -> Predicate a -> T
+  BT :: Show a => String -> ConcIO a -> Predicate a -> Bounds -> T
 
 testGroup :: IsTest t => String -> t -> TF.Test
 testGroup name = TF.testGroup name . toTestList
 
-djfu :: Show a => String -> Predicate a -> (forall t. ConcST t a) -> TF.Test
+djfu :: Show a => String -> Predicate a -> ConcIO a -> TF.Test
 djfu name p c = hunitTest $ testDejafu c name p
 
-djfuT :: Show a => String -> Predicate a -> (forall t. ConcST t a) -> [TF.Test]
+djfuT :: Show a => String -> Predicate a -> ConcIO a -> [TF.Test]
 djfuT name p c = toTestList $ T name c p
 
 alwaysFailsWith :: (Failure -> Bool) -> Predicate a

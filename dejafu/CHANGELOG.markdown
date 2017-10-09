@@ -14,6 +14,32 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - **Git tag** [dejafu-1.0.0.0][]
 - **Hackage** https://hackage.haskell.org/package/dejafu-1.0.0.0
 
+### Test.DejaFu
+
+- All testing functions now require a `MonadConc`, `MonadRef`, and `MonadIO` constraint:
+
+    It is no longer possible to test things in `ST`.
+
+- The `autocheckIO`, `dejafuIO`, `dejafusIO`, `autocheckWayIO`, `dejafuWayIO`, `dejafusWayIO`,
+  `dejafuDiscardIO`, `runTestM`, and `runTestWayM` functions are now gone.
+
+### Test.DejaFu.Conc
+
+- The `ConcST` type alias is gone.
+
+- The `MonadBase IO ConcIO` instance is gone.
+
+- The `MonadIO ConcIO` instance is replaces with a more general `MonadIO n => MonadIO (ConcT r n)`
+  instance.
+
+- The `runConcurrent` function now has a `MonadConc` constraint.
+
+### Test.DejaFu.SCT
+
+- All testing functions now require a `MonadConc` constraint:
+
+    It is no longer possible to test things in `ST`.
+
 ### Miscellaneous
 
 - The minimum supported version of concurrency is now 1.3.0.0.

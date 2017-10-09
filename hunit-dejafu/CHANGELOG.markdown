@@ -14,6 +14,11 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - **Git tag** [hunit-dejafu-1.0.0.0][]
 - **Hackage** https://hackage.haskell.org/package/hunit-dejafu-1.0.0.0
 
+### Test.HUnit.DejaFu
+
+- The `ConcST` functions have been removed and replaced by the `ConcIO` functions.
+- The `Testable` and `Assertable` instances for `ConcST t ()` are gone.
+
 ### Miscellaneous
 
 - The minimum supported version of dejafu is now 1.0.0.0.

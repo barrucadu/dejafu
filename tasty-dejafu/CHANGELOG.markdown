@@ -14,6 +14,11 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - **Git tag** [tasty-dejafu-1.0.0.0][]
 - **Hackage** https://hackage.haskell.org/package/tasty-dejafu-1.0.0.0
 
+### Test.Tasty.DejaFu
+
+- The `ConcST` functions have been removed and replaced by the `ConcIO` functions.
+- The `IsTest` instance for `ConcST t (Maybe String)` is gone.
+
 ### Miscellaneous
 
 - The minimum supported version of dejafu is now 1.0.0.0.
