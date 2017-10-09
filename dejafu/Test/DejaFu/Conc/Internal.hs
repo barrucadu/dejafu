@@ -17,6 +17,7 @@ module Test.DejaFu.Conc.Internal where
 
 import           Control.Exception                   (MaskingState(..),
                                                       toException)
+import           Control.Monad.Conc.Class            (MonadConc, rtsSupportsBoundThreads)
 import           Control.Monad.Ref                   (MonadRef, newRef, readRef,
                                                       writeRef)
 import           Data.Functor                        (void)
@@ -45,23 +46,27 @@ type SeqTrace
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
-runConcurrency :: MonadRef r n
-               => Scheduler g
-               -> MemType
-               -> g
-               -> IdSource
-               -> Int
-               -> M n r a
-               -> n (Either Failure a, Context n r g, SeqTrace, Maybe (ThreadId, ThreadAction))
+runConcurrency :: (MonadConc n, MonadRef r n)
+  => Scheduler g
+  -> MemType
+  -> g
+  -> IdSource
+  -> Int
+  -> M n r a
+  -> n (Either Failure a, Context n r g, SeqTrace, Maybe (ThreadId, ThreadAction))
 runConcurrency sched memtype g idsrc caps ma = do
   (c, ref) <- runRefCont AStop (Just . Right) (runM ma)
+  let threads0 = launch' Unmasked initialThread (const c) M.empty
+  threads <- (if rtsSupportsBoundThreads then makeBound initialThread else pure) threads0
   let ctx = Context { cSchedState = g
                     , cIdSource   = idsrc
-                    , cThreads    = launch' Unmasked initialThread (const c) M.empty
+                    , cThreads    = threads
                     , cWriteBuf   = emptyBuffer
                     , cCaps       = caps
                     }
   (finalCtx, trace, finalAction) <- runThreads sched memtype ref ctx
+  let finalThreads = cThreads finalCtx
+  mapM_ (`kill` finalThreads) (M.keys finalThreads)
   out <- readRef ref
   pure (efromJust "runConcurrency" out, finalCtx, trace, finalAction)
 
@@ -75,7 +80,7 @@ data Context n r g = Context
   }
 
 -- | Run a collection of threads, until there are no threads left.
-runThreads :: MonadRef r n
+runThreads :: (MonadConc n, MonadRef r n)
   => Scheduler g
   -> MemType
   -> r (Maybe (Either Failure a))
@@ -159,7 +164,7 @@ data Act
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
-stepThread :: forall n r g. MonadRef r n
+stepThread :: forall n r g. (MonadConc n, MonadRef r n)
   => Scheduler g
   -- ^ The scheduler.
   -> MemType
@@ -174,9 +179,21 @@ stepThread :: forall n r g. MonadRef r n
 stepThread sched memtype tid action ctx = case action of
     -- start a new thread, assigning it the next 'ThreadId'
     AFork n a b -> pure $
-        let threads' = launch tid newtid a (cThreads ctx)
-            (idSource', newtid) = nextTId n (cIdSource ctx)
-        in (Right ctx { cThreads = goto (b newtid) tid threads', cIdSource = idSource' }, Single (Fork newtid))
+      let threads' = launch tid newtid a (cThreads ctx)
+          (idSource', newtid) = nextTId n (cIdSource ctx)
+      in (Right ctx { cThreads = goto (b newtid) tid threads', cIdSource = idSource' }, Single (Fork newtid))
+
+    -- start a new bound thread, assigning it the next 'ThreadId'
+    AForkOS n a b -> do
+      let (idSource', newtid) = nextTId n (cIdSource ctx)
+      let threads' = launch tid newtid a (cThreads ctx)
+      threads'' <- makeBound newtid threads'
+      pure (Right ctx { cThreads = goto (b newtid) tid threads'', cIdSource = idSource' }, Single (Fork newtid))
+
+    -- check if the current thread is bound
+    AIsBound c ->
+      let isBound = isJust (_bound =<< M.lookup tid (cThreads ctx))
+      in simple (goto (c isBound) tid (cThreads ctx)) IsCurrentThreadBound
 
     -- get the 'ThreadId' of the current thread
     AMyTId c -> simple (goto (c tid) tid (cThreads ctx)) MyThreadId
@@ -316,7 +333,7 @@ stepThread sched memtype tid action ctx = case action of
     -- lift an action from the underlying monad into the @Conc@
     -- computation.
     ALift na -> do
-      a <- na
+      a <- runLiftedAct tid (cThreads ctx) na
       simple (goto a tid (cThreads ctx)) LiftIO
 
     -- throw an exception, and propagate it to the appropriate
@@ -367,7 +384,10 @@ stepThread sched memtype tid action ctx = case action of
     AReturn c -> simple (goto c tid (cThreads ctx)) Return
 
     -- kill the current thread.
-    AStop na -> na >> simple (kill tid (cThreads ctx)) Stop
+    AStop na -> do
+      na
+      threads' <- kill tid (cThreads ctx)
+      simple threads' Stop
 
     -- run a subconcurrent computation.
     ASub ma c
@@ -394,7 +414,9 @@ stepThread sched memtype tid action ctx = case action of
            Just ts' -> simple ts' act
            Nothing
              | t == initialThread -> pure (Left (UncaughtException some), Single act)
-             | otherwise -> simple (kill t ts) act
+             | otherwise -> do
+                 ts' <- kill t ts
+                 simple ts' act
 
     -- helper for actions which only change the threads.
     simple threads' act = pure (Right ctx { cThreads = threads' }, Single act)

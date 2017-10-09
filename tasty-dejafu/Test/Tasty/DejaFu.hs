@@ -24,7 +24,7 @@ module Test.Tasty.DejaFu
   -- @instance IsOption Bounds@
   -- @instance IsOption MemType@
 
-  -- * Property testing
+  -- * Unit testing
     testAuto
   , testDejafu
   , testDejafus

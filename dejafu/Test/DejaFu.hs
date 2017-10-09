@@ -77,7 +77,7 @@ module Test.DejaFu
   -- to the list of results produced.
   --
   -- If you simply wish to check that something is deterministic, see
-  -- the 'autocheck' and 'autocheckIO' functions.
+  -- the 'autocheck' function.
   --
   -- These functions use a Total Store Order (TSO) memory model for
   -- unsynchronised actions, see \"Testing under Alternative Memory
@@ -300,8 +300,7 @@ import           Test.DejaFu.SCT
 -- deadlocks, uncaught exceptions, and multiple return values.
 --
 -- This uses the 'Conc' monad for testing, which is an instance of
--- 'MonadConc'. If you need to test something which also uses
--- 'MonadIO', use 'autocheckIO'.
+-- 'MonadConc'.
 --
 -- @since unreleased
 autocheck :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
@@ -321,7 +320,7 @@ autocheck = autocheckWay defaultWay defaultMemType
 -- with as few as two threads and two pre-emptions, which is part of
 -- what 'dejafus' uses.
 --
--- __Warning:__ Using largers bounds will almost certainly
+-- __Warning:__ Using larger bounds will almost certainly
 -- significantly increase the time taken to test!
 --
 -- @since unreleased
