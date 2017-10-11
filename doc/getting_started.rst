@@ -35,7 +35,7 @@ There are a few different packages under the Déjà Fu umbrella:
 .. csv-table::
    :header: "Package", "Version", "Summary"
 
-   "concurrency_",  "1.2.1.0", "Typeclasses, functions, and data types for concurrency and STM"
+   "concurrency_",  "1.2.1.1", "Typeclasses, functions, and data types for concurrency and STM"
    "dejafu_",       "0.8.0.0", "Systematic testing for Haskell concurrency"
    "hunit-dejafu_", "0.7.0.1", "Déjà Fu support for the HUnit test framework"
    "tasty-dejafu_", "0.7.0.1", "Déjà Fu support for the tasty test framework"

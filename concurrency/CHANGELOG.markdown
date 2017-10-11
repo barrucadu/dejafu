@@ -6,13 +6,20 @@ All notable changes to this project will be documented in this file.
 This project is versioned according to the [Package Versioning Policy](https://pvp.haskell.org), the
 *de facto* standard Haskell versioning scheme.
 
-unreleased
-----------
+
+1.2.1.1
+-------
+
+- **Date**    2017-10-11
+- **Git tag** [concurrency-1.2.1.1][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.2.1.1
 
 ### Control.Monad.Conc.Class
 
 - The `IO` instance of `MonadConc` now names threads with `GHC.Conc.labelThread`, so thread names
   now appear in debugging traces of normal execution.
+
+[concurrency-1.2.1.1]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.2.1.1
 
 
 ---------------------------------------------------------------------------------------------------
