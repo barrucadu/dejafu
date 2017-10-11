@@ -7,6 +7,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Test.DejaFu.Common
+
+- New `isInternalError`, `isAbort`, `isDeadlock`, `isUncaughtException`, and
+  `isIllegalSubconcurrency` functions for matching failure types.  Also exported from Test.DejaFu.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.8.0.0
 -------
 

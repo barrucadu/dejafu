@@ -251,6 +251,14 @@ module Test.DejaFu
   , gives
   , gives'
 
+  -- ** Failures
+
+  , isInternalError
+  , isAbort
+  , isDeadlock
+  , isUncaughtException
+  , isIllegalSubconcurrency
+
   -- * Refinement property testing
 
   -- | Consider this statement about @MVar@s: \"using @readMVar@ is
@@ -614,37 +622,37 @@ abortsSometimes = somewhereTrue $ either (==Abort) (const False)
 --
 -- @since 0.1.0.0
 deadlocksNever :: Predicate a
-deadlocksNever = alwaysTrue (not . either (`elem` [Deadlock, STMDeadlock]) (const False))
+deadlocksNever = alwaysTrue (not . either isDeadlock (const False))
 
 -- | Check that a computation always deadlocks.
 --
 -- @since 0.1.0.0
 deadlocksAlways :: Predicate a
-deadlocksAlways = alwaysTrue $ either (`elem` [Deadlock, STMDeadlock]) (const False)
+deadlocksAlways = alwaysTrue $ either isDeadlock (const False)
 
 -- | Check that a computation deadlocks at least once.
 --
 -- @since 0.1.0.0
 deadlocksSometimes :: Predicate a
-deadlocksSometimes = somewhereTrue $ either (`elem` [Deadlock, STMDeadlock]) (const False)
+deadlocksSometimes = somewhereTrue $ either isDeadlock (const False)
 
 -- | Check that a computation never fails with an uncaught exception.
 --
 -- @since 0.1.0.0
 exceptionsNever :: Predicate a
-exceptionsNever = alwaysTrue (not . either (==UncaughtException) (const False))
+exceptionsNever = alwaysTrue (not . either isUncaughtException (const False))
 
 -- | Check that a computation always fails with an uncaught exception.
 --
 -- @since 0.1.0.0
 exceptionsAlways :: Predicate a
-exceptionsAlways = alwaysTrue $ either (==UncaughtException) (const False)
+exceptionsAlways = alwaysTrue $ either isUncaughtException (const False)
 
 -- | Check that a computation fails with an uncaught exception at least once.
 --
 -- @since 0.1.0.0
 exceptionsSometimes :: Predicate a
-exceptionsSometimes = somewhereTrue $ either (==UncaughtException) (const False)
+exceptionsSometimes = somewhereTrue $ either isUncaughtException (const False)
 
 -- | Check that the result of a computation is always the same. In
 -- particular this means either: (a) it always fails in the same way,

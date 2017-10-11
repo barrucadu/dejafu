@@ -53,6 +53,11 @@ module Test.DejaFu.Common
 
   -- * Failures
   , Failure(..)
+  , isInternalError
+  , isAbort
+  , isDeadlock
+  , isUncaughtException
+  , isIllegalSubconcurrency
   , showFail
 
   -- * Memory models
@@ -867,6 +872,42 @@ showFail STMDeadlock = "[stm-deadlock]"
 showFail InternalError = "[internal-error]"
 showFail UncaughtException = "[exception]"
 showFail IllegalSubconcurrency = "[illegal-subconcurrency]"
+
+-- | Check if a failure is an @InternalError@.
+--
+-- @since undefined
+isInternalError :: Failure -> Bool
+isInternalError InternalError = True
+isInternalError _ = False
+
+-- | Check if a failure is an @Abort@.
+--
+-- @since undefined
+isAbort :: Failure -> Bool
+isAbort Abort = True
+isAbort _ = False
+
+-- | Check if a failure is a @Deadlock@ or an @STMDeadlock@.
+--
+-- @since undefined
+isDeadlock :: Failure -> Bool
+isDeadlock Deadlock = True
+isDeadlock STMDeadlock = True
+isDeadlock _ = False
+
+-- | Check if a failure is an @UncaughtException@
+--
+-- @since undefined
+isUncaughtException :: Failure -> Bool
+isUncaughtException UncaughtException = True
+isUncaughtException _ = False
+
+-- | Check if a failure is an @IllegalSubconcurrency@
+--
+-- @since undefined
+isIllegalSubconcurrency :: Failure -> Bool
+isIllegalSubconcurrency IllegalSubconcurrency = True
+isIllegalSubconcurrency _ = False
 
 -------------------------------------------------------------------------------
 -- Memory Models
