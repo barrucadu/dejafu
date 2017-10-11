@@ -3,7 +3,7 @@
 module Cases.SingleThreaded where
 
 import Control.Exception (ArithException(..), ArrayException(..))
-import Test.DejaFu (Failure(..), gives, gives')
+import Test.DejaFu (Failure(..), gives, gives', isUncaughtException)
 
 import Control.Concurrent.Classy
 import Test.DejaFu.Conc (subconcurrency)
@@ -160,7 +160,7 @@ stmTests =
         (\_ -> writeTVar ctv 6)
       (6==) <$> atomically (readTVar ctv)
 
-  , djfu "MonadSTM is a MonadFail" (gives [Left UncaughtException]) $
+  , djfu "MonadSTM is a MonadFail" (alwaysFailsWith isUncaughtException) $
       (atomically $ fail "hello world" :: MonadConc m => m ())  -- avoid an ambiguous type
   ]
 
@@ -180,7 +180,7 @@ exceptionTests =
           (\_ -> return False))
         (\_ -> return True)
 
-  , djfu "Uncaught exceptions kill the computation" (gives [Left UncaughtException]) $
+  , djfu "Uncaught exceptions kill the computation" (alwaysFailsWith isUncaughtException) $
       catchArithException
         (throw $ IndexOutOfBounds "")
         (\_ -> return False)
@@ -199,7 +199,7 @@ exceptionTests =
         (atomically $ throwSTM Overflow)
         (\_ -> return True)
 
-  , djfu "Throwing an unhandled exception to the main thread kills it" (gives [Left UncaughtException]) $ do
+  , djfu "Throwing an unhandled exception to the main thread kills it" (alwaysFailsWith isUncaughtException) $ do
       tid <- myThreadId
       throwTo tid Overflow
 
@@ -207,7 +207,7 @@ exceptionTests =
       tid <- myThreadId
       catchArithException (throwTo tid Overflow >> pure False) (\_ -> pure True)
 
-  , djfu "MonadConc is a MonadFail" (gives [Left UncaughtException]) $
+  , djfu "MonadConc is a MonadFail" (alwaysFailsWith isUncaughtException) $
       (fail "hello world" :: MonadConc m => m ())  -- avoid an ambiguous type
   ]
 

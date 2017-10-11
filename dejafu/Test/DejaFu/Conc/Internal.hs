@@ -387,11 +387,12 @@ stepThread sched memtype tid action ctx = case action of
     -- this is not inline in the long @case@ above as it's needed by
     -- @AAtom@, @AThrow@, and @AThrowTo@.
     stepThrow t ts act e =
-      case propagate (toException e) t ts of
-        Just ts' -> simple ts' act
-        Nothing
-          | t == initialThread -> pure (Left UncaughtException, Single act)
-          | otherwise -> simple (kill t ts) act
+      let some = toException e
+      in case propagate some t ts of
+           Just ts' -> simple ts' act
+           Nothing
+             | t == initialThread -> pure (Left (UncaughtException some), Single act)
+             | otherwise -> simple (kill t ts) act
 
     -- helper for actions which only change the threads.
     simple threads' act = pure (Right ctx { cThreads = threads' }, Single act)

@@ -14,6 +14,10 @@ unreleased
 
 - New `isInternalError`, `isAbort`, `isDeadlock`, `isUncaughtException`, and
   `isIllegalSubconcurrency` functions for matching failure types.  Also exported from Test.DejaFu.
+- The `UncaughtException` `Failure` constructor now includes the exception.
+
+    The `Read`, `Enum`, and `Bounded` instances are gone.  The `Eq`, `Ord`, and `NFData` instances
+    use the `show` of the exception.  Pretty-printed failures include the exception text.
 
 
 ---------------------------------------------------------------------------------------------------

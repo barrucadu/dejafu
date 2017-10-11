@@ -69,8 +69,10 @@ module Test.DejaFu.Common
   ) where
 
 import           Control.DeepSeq   (NFData(..))
-import           Control.Exception (Exception(..), MaskingState(..))
+import           Control.Exception (Exception(..), MaskingState(..),
+                                    SomeException, displayException)
 import           Control.Monad.Ref (MonadRef(..))
+import           Data.Function     (on)
 import           Data.List         (intercalate)
 import           Data.Maybe        (fromMaybe, mapMaybe)
 import           Data.Set          (Set)
@@ -836,9 +838,12 @@ preEmpCount [] _ = 0
 
 -- | An indication of how a concurrent computation failed.
 --
--- @since 0.5.0.0
-data Failure =
-    InternalError
+-- The @Eq@, @Ord@, and @NFData@ instances compare/evaluate the
+-- exception with @show@ in the @UncaughtException@ case.
+--
+-- @since unreleased
+data Failure
+  = InternalError
   -- ^ Will be raised if the scheduler does something bad. This should
   -- never arise unless you write your own, faulty, scheduler! If it
   -- does, please file a bug report.
@@ -851,16 +856,31 @@ data Failure =
   -- ^ The computation became blocked indefinitely on @MVar@s.
   | STMDeadlock
   -- ^ The computation became blocked indefinitely on @TVar@s.
-  | UncaughtException
+  | UncaughtException SomeException
   -- ^ An uncaught exception bubbled to the top of the computation.
   | IllegalSubconcurrency
   -- ^ Calls to @subconcurrency@ were nested, or attempted when
   -- multiple threads existed.
-  deriving (Eq, Show, Read, Ord, Enum, Bounded)
+  deriving Show
 
--- | @since 0.5.1.0
+instance Eq Failure where
+  (==) = (==) `on` _other
+
+instance Ord Failure where
+  compare = compare `on` _other
+
 instance NFData Failure where
-  rnf f = f `seq` ()
+  rnf = rnf . _other
+
+-- | Convert failures into a different representation we can Eq / Ord
+-- / NFData.
+_other :: Failure -> (Int, Maybe String)
+_other InternalError = (0, Nothing)
+_other Abort = (1, Nothing)
+_other Deadlock = (2, Nothing)
+_other STMDeadlock = (3, Nothing)
+_other (UncaughtException e) = (4, Just (show e))
+_other IllegalSubconcurrency = (5, Nothing)
 
 -- | Pretty-print a failure
 --
@@ -870,7 +890,7 @@ showFail Abort = "[abort]"
 showFail Deadlock = "[deadlock]"
 showFail STMDeadlock = "[stm-deadlock]"
 showFail InternalError = "[internal-error]"
-showFail UncaughtException = "[exception]"
+showFail (UncaughtException exc) = "[" ++ displayException exc ++ "]"
 showFail IllegalSubconcurrency = "[illegal-subconcurrency]"
 
 -- | Check if a failure is an @InternalError@.
@@ -899,7 +919,7 @@ isDeadlock _ = False
 --
 -- @since undefined
 isUncaughtException :: Failure -> Bool
-isUncaughtException UncaughtException = True
+isUncaughtException (UncaughtException _) = True
 isUncaughtException _ = False
 
 -- | Check if a failure is an @IllegalSubconcurrency@

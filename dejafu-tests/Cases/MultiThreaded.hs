@@ -1,7 +1,7 @@
 module Cases.MultiThreaded where
 
 import Control.Exception (ArithException(..))
-import Test.DejaFu (Failure(..), gives, gives')
+import Test.DejaFu (Failure(..), gives, gives', isUncaughtException)
 import Test.Framework (Test)
 
 import Control.Concurrent.Classy hiding (newQSemN, signalQSemN, waitQSemN)
@@ -167,7 +167,7 @@ exceptionTests = toTestList
       killThread tid
       readMVar y
 
-  , djfuT "Throwing to main kills the computation, if unhandled" (gives [Left UncaughtException]) $ do
+  , djfuT "Throwing to main kills the computation, if unhandled" (alwaysFailsWith isUncaughtException) $ do
       tid <- myThreadId
       j <- spawn $ throwTo tid Overflow
       readMVar j

@@ -12,7 +12,7 @@ import qualified Control.Monad.Catch as C
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
 import System.Random (mkStdGen)
-import Test.DejaFu (Predicate, Result(..))
+import Test.DejaFu (Predicate, Failure, Result(..), alwaysTrue)
 import Test.DejaFu.Conc (ConcST)
 import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
@@ -57,6 +57,9 @@ djfu name p c = head . toTestList $ testDejafu c name p
 
 djfuT :: Show a => String -> Predicate a -> (forall t. ConcST t a) -> [TF.Test]
 djfuT name p c = toTestList $ T name c p
+
+alwaysFailsWith :: (Failure -> Bool) -> Predicate a
+alwaysFailsWith p = alwaysTrue (either p (const False))
 
 -------------------------------------------------------------------------------
 -- Exceptions
