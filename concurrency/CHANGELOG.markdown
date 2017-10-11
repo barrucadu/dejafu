@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 This project is versioned according to the [Package Versioning Policy](https://pvp.haskell.org), the
 *de facto* standard Haskell versioning scheme.
 
+unreleased
+----------
+
+### Control.Monad.Conc.Class
+
+- The `IO` instance of `MonadConc` now names threads with `GHC.Conc.labelThread`, so thread names
+  now appear in debugging traces of normal execution.
+
+
+---------------------------------------------------------------------------------------------------
+
 
 1.2.1.0
 -------

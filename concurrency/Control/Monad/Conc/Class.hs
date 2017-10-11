@@ -81,6 +81,7 @@ import qualified Control.Concurrent.STM.TVar  as IO
 import qualified Control.Monad.STM            as IO
 import qualified Data.Atomics                 as IO
 import qualified Data.IORef                   as IO
+import qualified GHC.Conc                     as IO
 
 -- for the transformer instances
 import           Control.Monad.Reader         (ReaderT)
@@ -613,8 +614,13 @@ instance MonadConc IO where
   fork   = IO.forkIO
   forkOn = IO.forkOn
 
-  forkWithUnmask   = IO.forkIOWithUnmask
-  forkOnWithUnmask = IO.forkOnWithUnmask
+  forkWithUnmaskN n ma = forkWithUnmask $ \umask -> do
+    labelMe n
+    ma umask
+
+  forkOnWithUnmaskN n i ma = forkOnWithUnmask i $ \umask -> do
+    labelMe n
+    ma umask
 
   getNumCapabilities = IO.getNumCapabilities
   setNumCapabilities = IO.setNumCapabilities
@@ -640,6 +646,13 @@ instance MonadConc IO where
   modifyCRefCAS      = IO.atomicModifyIORefCAS
   atomically         = IO.atomically
   readTVarConc       = IO.readTVarIO
+
+-- | Label the current thread, if the given label is nonempty.
+labelMe :: String -> IO ()
+labelMe "" = pure ()
+labelMe n  = do
+  tid <- myThreadId
+  IO.labelThread tid n
 
 -------------------------------------------------------------------------------
 -- Transformer instances
