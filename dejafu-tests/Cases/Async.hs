@@ -10,6 +10,7 @@ import Control.Exception (AsyncException(..), Exception, SomeException, fromExce
 import Control.Monad (forever, when)
 import Control.Monad.Catch (finally, try)
 import Control.Monad.Conc.Class hiding (threadDelay)
+import qualified Control.Monad.Conc.Class as C
 import Data.List (sort)
 import Data.Maybe (isJust, isNothing)
 import Data.Typeable (Typeable)
@@ -168,7 +169,8 @@ throwIO = throw
 
 -- the tests use 'threadDelay' with a big delay to represent a blocked thread
 threadDelay :: MonadConc m => Int -> m ()
-threadDelay _ = forever yield
+threadDelay 0 = yield
+threadDelay n = C.threadDelay 1 >> threadDelay (n-1)
 
 (@?=) :: (Eq a, MonadConc m) => a -> a -> m ()
 (@?=) = assertEqual "not equal"
