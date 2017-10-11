@@ -799,11 +799,13 @@ initialDPORThread = S.elemAt 0 . dporRunnable
 -- | Check if a thread yielded.
 didYield :: ThreadAction -> Bool
 didYield Yield = True
+didYield (ThreadDelay _) = True
 didYield _ = False
 
 -- | Check if a thread will yield.
 willYield :: Lookahead -> Bool
 willYield WillYield = True
+willYield (WillThreadDelay _) = True
 willYield _ = False
 
 -- | Check if an action will kill daemon threads.

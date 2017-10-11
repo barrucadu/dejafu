@@ -661,9 +661,9 @@ yieldCountInc sofar prior (d, lnext) = case prior of
     Just (tid, _) -> ycount (tidOf tid d)
     Nothing       -> ycount initialThread
   where
-    ycount tnext = case lnext of
-      WillYield -> M.alter (Just . maybe 1 (+1)) tnext sofar
-      _ -> M.alter (Just . fromMaybe 0) tnext sofar
+    ycount tnext
+      | willYield lnext = M.alter (Just . maybe 1 (+1)) tnext sofar
+      | otherwise       = M.alter (Just . fromMaybe 0)  tnext sofar
 
 -- | Determine if an action is a commit or not.
 isCommitRef :: ThreadAction -> Bool

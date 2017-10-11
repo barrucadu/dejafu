@@ -141,6 +141,7 @@ data Action n r =
   | forall a. AAtom (STMLike n r a) (a -> Action n r)
   | ALift (n (Action n r))
   | AYield  (Action n r)
+  | ADelay Int (Action n r)
   | AReturn (Action n r)
   | ACommit ThreadId CRefId
   | AStop (n ())
@@ -181,6 +182,7 @@ lookahead (AMasking ms _ _) = WillSetMasking False ms
 lookahead (AResetMask b1 b2 ms _) = (if b1 then WillSetMasking else WillResetMasking) b2 ms
 lookahead (ALift _) = WillLiftIO
 lookahead (AYield _) = WillYield
+lookahead (ADelay n _) = WillThreadDelay n
 lookahead (AReturn _) = WillReturn
 lookahead (AStop _) = WillStop
 lookahead (ASub _ _) = WillSubconcurrency

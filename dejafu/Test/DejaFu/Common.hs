@@ -267,7 +267,7 @@ initialIdSource = Id 0 0 0 0 [] [] [] []
 
 -- | All the actions that a thread can perform.
 --
--- @since 0.5.0.2
+-- @since unreleased
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -279,6 +279,8 @@ data ThreadAction =
   -- ^ Set the number of Haskell threads that can run simultaneously.
   | Yield
   -- ^ Yield the current thread.
+  | ThreadDelay Int
+  -- ^ Yield/delay the current thread.
   | NewMVar MVarId
   -- ^ Create a new 'MVar'.
   | PutMVar MVarId [ThreadId]
@@ -355,9 +357,9 @@ data ThreadAction =
   -- ^ Stop executing an action with @subconcurrency@.
   deriving (Eq, Show)
 
--- | @since 0.5.1.0
 instance NFData ThreadAction where
   rnf (Fork t) = rnf t
+  rnf (ThreadDelay n) = rnf n
   rnf (GetNumCapabilities c) = rnf c
   rnf (SetNumCapabilities c) = rnf c
   rnf (NewMVar m) = rnf m
@@ -418,7 +420,7 @@ tvarsOf act = S.fromList $ case act of
 
 -- | A one-step look-ahead at what a thread will do next.
 --
--- @since 0.5.0.2
+-- @since unreleased
 data Lookahead =
     WillFork
   -- ^ Will start a new thread.
@@ -432,6 +434,8 @@ data Lookahead =
   -- simultaneously.
   | WillYield
   -- ^ Will yield the current thread.
+  | WillThreadDelay Int
+  -- ^ Will yield/delay the current thread.
   | WillNewMVar
   -- ^ Will create a new 'MVar'.
   | WillPutMVar MVarId
@@ -495,8 +499,8 @@ data Lookahead =
   -- ^ Will stop executing an extion with @subconcurrency@.
   deriving (Eq, Show)
 
--- | @since 0.5.1.0
 instance NFData Lookahead where
+  rnf (WillThreadDelay n) = rnf n
   rnf (WillSetNumCapabilities c) = rnf c
   rnf (WillPutMVar m) = rnf m
   rnf (WillTryPutMVar m) = rnf m
@@ -526,6 +530,7 @@ rewind MyThreadId = Just WillMyThreadId
 rewind (GetNumCapabilities _) = Just WillGetNumCapabilities
 rewind (SetNumCapabilities i) = Just (WillSetNumCapabilities i)
 rewind Yield = Just WillYield
+rewind (ThreadDelay n) = Just (WillThreadDelay n)
 rewind (NewMVar _) = Just WillNewMVar
 rewind (PutMVar c _) = Just (WillPutMVar c)
 rewind (BlockedPutMVar c) = Just (WillPutMVar c)
@@ -566,6 +571,7 @@ rewind StopSubconcurrency = Just WillStopSubconcurrency
 willRelease :: Lookahead -> Bool
 willRelease WillFork = True
 willRelease WillYield = True
+willRelease (WillThreadDelay _) = True
 willRelease (WillPutMVar _) = True
 willRelease (WillTryPutMVar _) = True
 willRelease (WillReadMVar _) = True
@@ -813,6 +819,7 @@ preEmpCount :: [(Decision, ThreadAction)]
             -> Int
 preEmpCount (x:xs) (d, _) = go initialThread x xs where
   go _ (_, Yield) (r@(SwitchTo t, _):rest) = go t r rest
+  go _ (_, ThreadDelay _) (r@(SwitchTo t, _):rest) = go t r rest
   go tid prior (r@(SwitchTo t, _):rest)
     | isCommitThread t = go tid prior (skip rest)
     | otherwise = 1 + go t r rest
@@ -820,6 +827,7 @@ preEmpCount (x:xs) (d, _) = go initialThread x xs where
   go tid _ (r@(Continue, _):rest) = go tid r rest
   go _ prior [] = case (prior, d) of
     ((_, Yield), SwitchTo _) -> 0
+    ((_, ThreadDelay _), SwitchTo _) -> 0
     (_, SwitchTo _) -> 1
     _ -> 0
 

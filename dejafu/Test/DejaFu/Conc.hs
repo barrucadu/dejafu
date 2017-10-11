@@ -137,6 +137,7 @@ instance Monad n => C.MonadConc (ConcT r n) where
   myThreadId = toConc AMyTId
 
   yield = toConc (\c -> AYield (c ()))
+  threadDelay n = toConc (\c -> ADelay n (c ()))
 
   -- ----------
 

@@ -192,6 +192,9 @@ stepThread sched memtype tid action ctx = case action of
     -- yield the current thread
     AYield c -> simple (goto c tid (cThreads ctx)) Yield
 
+    -- yield the current thread (delay is ignored)
+    ADelay n c -> simple (goto c tid (cThreads ctx)) (ThreadDelay n)
+
     -- create a new @MVar@, using the next 'MVarId'.
     ANewMVar n c -> do
       let (idSource', newmvid) = nextMVId n (cIdSource ctx)
