@@ -7,6 +7,23 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+0.7.0.2
+-------
+
+- **Date**    2017-10-11
+- **Git tag** [hunit-dejafu-0.7.0.2][]
+- **Hackage** https://hackage.haskell.org/package/hunit-dejafu-0.7.0.2
+
+### Miscellaneous
+
+- dejafu-0.9 support
+
+[hunit-dejafu-0.7.0.2]: https://github.com/barrucadu/dejafu/releases/tag/hunit-dejafu-0.7.0.2
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.7.0.1
 -------
 

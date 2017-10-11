@@ -7,8 +7,12 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+0.9.0.0
+-------
+
+- **Date**    2017-10-11
+- **Git tag** [dejafu-0.9.0.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.9.0.0
 
 ### Test.DejaFu.Common
 
@@ -22,6 +26,8 @@ unreleased
 
 - New `ThreadDelay` and `WillThreadDelay` constructors in `ThreadAction` and `Lookahead`.  Uses of
   `threadDelay` are no longer reported as a use of `yield`.
+
+[dejafu-0.9.0.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.9.0.0
 
 
 ---------------------------------------------------------------------------------------------------

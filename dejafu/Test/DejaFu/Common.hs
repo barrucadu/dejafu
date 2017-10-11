@@ -267,7 +267,7 @@ initialIdSource = Id 0 0 0 0 [] [] [] []
 
 -- | All the actions that a thread can perform.
 --
--- @since unreleased
+-- @since 0.9.0.0
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -420,7 +420,7 @@ tvarsOf act = S.fromList $ case act of
 
 -- | A one-step look-ahead at what a thread will do next.
 --
--- @since unreleased
+-- @since 0.9.0.0
 data Lookahead =
     WillFork
   -- ^ Will start a new thread.
@@ -849,7 +849,7 @@ preEmpCount [] _ = 0
 -- The @Eq@, @Ord@, and @NFData@ instances compare/evaluate the
 -- exception with @show@ in the @UncaughtException@ case.
 --
--- @since unreleased
+-- @since 0.9.0.0
 data Failure
   = InternalError
   -- ^ Will be raised if the scheduler does something bad. This should
