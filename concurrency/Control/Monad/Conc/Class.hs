@@ -613,6 +613,7 @@ instance MonadConc IO where
 
   fork   = IO.forkIO
   forkOn = IO.forkOn
+  forkWithUnmask = IO.forkIOWithUnmask
 
   forkWithUnmaskN n ma = forkWithUnmask $ \umask -> do
     labelMe n
