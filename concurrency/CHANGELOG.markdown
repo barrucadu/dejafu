@@ -7,6 +7,24 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+1.2.1.2
+-------
+
+- **Date**    2017-10-14
+- **Git tag** [concurrency-1.2.1.2][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.2.1.2
+
+### Control.Monad.Conc.Class
+
+- Fixes an infinite loop introduced for the `IO` instance of `MonadConc` in `forkWithUnmask` and
+  `forkOnWithUnmask` in 1.2.1.1 (#134).
+
+[concurrency-1.2.1.2]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.2.1.2
+
+
+---------------------------------------------------------------------------------------------------
+
+
 1.2.1.1
 -------
 
