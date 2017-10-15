@@ -150,9 +150,9 @@ out, you can be certain that a bug has been fixed by simply following
 the trace by eye.
 
 **If you'd like to get involved with Déjà Fu**, check out `the
-"beginner friendly" label on the issue tracker`__.
+"good first issue" label on the issue tracker`__.
 
-.. __: https://github.com/barrucadu/dejafu/issues?q=is%3Aissue+is%3Aopen+label%3Abeginner-friendly
+.. __: https://github.com/barrucadu/dejafu/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
 
 
 Questions, feedback, discussion
