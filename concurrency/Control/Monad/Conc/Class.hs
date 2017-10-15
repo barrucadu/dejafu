@@ -304,9 +304,9 @@ class ( Applicative m, Monad m
   readMVar :: MVar m a -> m a
 
   -- | Attempt to read a value from a @MVar@ non-blockingly, returning
-  -- a 'Just' (and emptying the @MVar@) if there is something there,
-  -- otherwise returning 'Nothing'. As with 'readMVar', this does not
-  -- \"remove\" the value.
+  -- a 'Just' if there is something there, otherwise returning
+  -- 'Nothing'. As with 'readMVar', this does not \"remove\" the
+  -- value.
   --
   -- @since 1.1.0.0
   tryReadMVar :: MVar m a -> m (Maybe a)
