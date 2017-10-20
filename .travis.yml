@@ -30,13 +30,31 @@ before_install:
 - export PATH=/opt/ghc/$GHCVER/bin:$HOME/.local/bin:$PATH
 - mkdir -p ~/.local/bin
 - curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+- rm stack.yaml
+- if [[ -e .travis/$RESOLVER.yaml ]]; then mv .travis/$RESOLVER.yaml stack.yaml; else stack init --resolver=$RESOLVER; fi
+- stack setup
 
 # Run tests
 script:
-- stack --resolver=$RESOLVER setup
-- stack --resolver=$RESOLVER build concurrency
-- stack --resolver=$RESOLVER build dejafu
-- stack --resolver=$RESOLVER build hunit-dejafu
-- stack --resolver=$RESOLVER build tasty-dejafu
-- stack --resolver=$RESOLVER build dejafu-tests
-- stack --resolver=$RESOLVER exec dejafu-tests
+- echo '# build' && echo -en 'travis_fold:start:script.stack-build\\r'
+- stack build concurrency
+- stack build dejafu
+- stack build hunit-dejafu
+- stack build tasty-dejafu
+- stack build dejafu-tests
+- echo -en 'travis_fold:end:script.stack-build\\r'
+
+- echo '# weeder' && echo -en 'travis_fold:start:script.weeder\\r'
+- curl -sL https://raw.github.com/ndmitchell/weeder/master/misc/travis.sh | sh -s .
+- echo -en 'travis_fold:end:script.weeder\\r'
+
+- echo '# hlint' && echo -en 'travis_fold:start:script.hlint\\r'
+- curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh | sh -s concurrency
+- curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh | sh -s dejafu
+- curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh | sh -s hunit-dejafu
+- curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh | sh -s tasty-dejafu
+- echo -en 'travis_fold:end:script.hlint\\r'
+
+- echo '# test' && echo -en 'travis_fold:start:script.stack-exec\\r'
+- stack exec dejafu-tests
+- echo -en 'travis_fold:end:script.stack-exec\\r'

@@ -1,0 +1,162 @@
+# It would be good to not need this
+# https://github.com/ndmitchell/weeder/issues/24
+
+- package:
+  - name: dejafu-tests
+  - section:
+    - name: exe:dejafu-tests
+    - message:
+      - name: Weeds exported
+      - module:
+        - name: Cases.Async
+        - identifier:
+          - ! '@?='
+          - TestException
+          - TestFailed
+          - assertEqual
+          - assertFailure
+          - async_cancel
+          - async_exwait
+          - async_exwaitCatch
+          - async_poll
+          - async_poll2
+          - async_wait
+          - async_waitCatch
+          - case_concurrently_
+          - case_replicateConcurrently
+          - case_replicateConcurrently_
+          - testCase
+          - threadDelay
+          - throwIO
+          - value
+          - withasync_wait2
+          - withasync_waitCatch
+      - module:
+        - name: Cases.Discard
+        - identifier: nondet
+      - module:
+        - name: Cases.Litmus
+        - identifier:
+          - compareTest
+          - intelWP21
+          - intelWP22
+          - intelWP23
+          - intelWP24
+          - intelWP25
+          - intelWP26
+          - intelWP27
+          - intelWP28
+          - litmus2
+          - litmusTest
+      - module:
+        - name: Cases.MultiThreaded
+        - identifier:
+          - crefTests
+          - exceptionTests
+          - mvarTests
+          - stmTests
+          - subconcurrencyTests
+          - threadingTests
+      - module:
+        - name: Cases.Refinement
+        - identifier:
+          - mvar
+          - mvarProps
+      - module:
+        - name: Cases.SingleThreaded
+        - identifier:
+          - capabilityTests
+          - crefTests
+          - exceptionTests
+          - mvarTests
+          - stmTests
+          - subconcurrencyTests
+      - module:
+        - name: Common
+        - identifier:
+          - BT
+          - failing
+      - module:
+        - name: Examples.AutoUpdate
+        - identifier:
+          - UpdateSettings
+          - catchSome
+          - deadlocks
+          - defaultUpdateSettings
+          - mkAutoUpdate
+          - nondeterministic
+          - updateAction
+          - updateFreq
+          - updateSpawnThreshold
+      - module:
+        - name: Examples.ClassLaws
+        - identifier:
+          - CST
+          - Concurrently
+          - concurrently
+          - concurrently'
+          - eq
+          - eq'
+          - eqf
+          - prop_alternative_assoc
+          - prop_alternative_left_id
+          - prop_alternative_right_id
+          - prop_applicative_comp
+          - prop_applicative_fmap
+          - prop_applicative_homo
+          - prop_applicative_id
+          - prop_applicative_inter
+          - prop_functor_comp
+          - prop_functor_id
+          - prop_monad_ap
+          - prop_monad_ap'
+          - prop_monad_assoc
+          - prop_monad_fmap
+          - prop_monad_left_id
+          - prop_monad_pure
+          - prop_monad_right_id
+          - race
+          - runConcurrently
+      - module:
+        - name: Examples.Logger
+        - identifier:
+          - LogCommand
+          - Logger
+          - Message
+          - Stop
+          - initLogger
+          - isBad
+          - isGood
+          - logMessage
+          - logStop
+          - logger
+          - raceyLogger
+          - validResult
+      - module:
+        - name: Examples.Philosophers
+        - identifier:
+          - philosophers
+          - way
+      - module:
+        - name: Examples.SearchParty
+        - identifier:
+          - ! '@!'
+          - Find
+          - allOf
+          - blockOn
+          - checkResultLists
+          - concFilter
+          - failure
+          - getState
+          - hasFailed
+          - invPred
+          - result
+          - success
+          - unFind
+          - unsafeResult
+          - unsafeRunFind
+          - work
+      - module:
+        - name: QSemN
+        - identifier: signal
+

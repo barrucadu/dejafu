@@ -1,0 +1,11 @@
+resolver: lts-6.35
+
+packages:
+- concurrency
+- dejafu
+- dejafu-tests
+- hunit-dejafu
+- tasty-dejafu
+
+extra-deps:
+- leancheck-0.6.7
