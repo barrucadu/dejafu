@@ -198,7 +198,7 @@ asyncOn = asyncUsing . forkOn
 --
 -- @since 1.2.1.0
 asyncOnN :: MonadConc m => String -> Int -> m a -> m (Async m a)
-asyncOnN name = asyncUsing . (forkOnN name)
+asyncOnN name = asyncUsing . forkOnN name
 
 -- | Like 'async' but using 'forkWithUnmask' internally.
 --
