@@ -56,5 +56,5 @@ script:
 - echo -en 'travis_fold:end:script.hlint\\r'
 
 - echo '# test' && echo -en 'travis_fold:start:script.stack-exec\\r'
-- stack exec dejafu-tests
+- stack exec -- dejafu-tests --plain
 - echo -en 'travis_fold:end:script.stack-exec\\r'
