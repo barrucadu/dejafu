@@ -66,10 +66,10 @@ library
                      , leancheck         >=0.6 && <0.7
                      , random            >=1.0 && <1.2
                      , ref-fd            >=0.4 && <0.5
-                     -- remove semigroups dep when GHC 8.4 is out
-                     , semigroups        >=0.16 && <0.19
                      , transformers      >=0.4  && <0.6
                      , transformers-base >=0.4  && <0.5
   -- hs-source-dirs:      
   default-language:    Haskell2010
   ghc-options:         -Wall
+  if impl(ghc < 8.0.1)
+    build-depends: semigroups >=0.16 && <0.19
