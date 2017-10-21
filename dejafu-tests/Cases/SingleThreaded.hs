@@ -10,10 +10,6 @@ import Test.DejaFu.Conc (subconcurrency)
 
 import Common
 
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative ((<$>), (<*>))
-#endif
-
 tests :: [Test]
 tests =
   [ testGroup "MVar" mvarTests

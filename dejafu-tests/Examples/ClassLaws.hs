@@ -24,11 +24,6 @@ import Test.QuickCheck.Function (Fun, apply)
 
 import Examples.ClassLaws.Impredicative
 
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative ((<$>), (<*>))
-import Data.Monoid (Monoid(..))
-#endif
-
 -- Tests at bottom of file due to Template Haskell silliness.
 
 --------------------------------------------------------------------------------
