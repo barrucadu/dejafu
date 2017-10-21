@@ -5,7 +5,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
-#if __GLASGOW_HASKELL__ >= 800
+#if MIN_TOOL_VERSION_ghc(8,0,0)
 -- Impredicative polymorphism checks got stronger in GHC 8, breaking
 -- the use of 'unsafeCoerce' below.
 {-# LANGUAGE ImpredicativeTypes #-}
