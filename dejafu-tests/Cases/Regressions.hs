@@ -49,4 +49,10 @@ tests =
       catchSomeException
         (uninterruptibleMask_ (throw ThreadKilled))
         (\_ -> myThreadId >>= killThread)
+
+  , djfu "https://github.com/barrucadu/dejafu/issues/139" (failing $ gives' [()]) $
+      catchSomeException
+        (catchSomeException (throw ThreadKilled) (\_ -> pure ())
+         >> throw ThreadKilled)
+        (\_ -> pure ())
   ]
