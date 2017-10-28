@@ -22,7 +22,7 @@ import           Data.List            (nubBy, partition, sortOn)
 import           Data.List.NonEmpty   (toList)
 import           Data.Map.Strict      (Map)
 import qualified Data.Map.Strict      as M
-import           Data.Maybe           (fromJust, fromMaybe, isJust, isNothing,
+import           Data.Maybe           (fromMaybe, isJust, isNothing,
                                        listToMaybe)
 import           Data.Sequence        (Seq, (|>))
 import qualified Data.Sequence        as Sq
@@ -157,7 +157,7 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
     in case dporNext dpor of
          Just (t, child)
            | t == tid'      -> dpor { dporNext = Just (tid', grow state' tid' rest child) }
-           | hasTodos child -> err "incorporateTrace" "replacing child with todos!"
+           | hasTodos child -> fatal "incorporateTrace" "replacing child with todos!"
          _ ->
            let taken = M.insert tid' a (dporTaken dpor)
                sleep = dporSleep dpor `M.union` dporTaken dpor
@@ -166,7 +166,7 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
                    , dporNext  = Just (tid', subtree state' tid' sleep trc)
                    , dporDone  = S.insert tid' (dporDone dpor)
                    }
-  grow _ _ [] _ = err "incorporateTrace" "trace exhausted without reading a to-do point!"
+  grow _ _ [] _ = fatal "incorporateTrace" "trace exhausted without reading a to-do point!"
 
   -- check if there are to-do points in a tree
   hasTodos dpor = not (M.null (dporTodo dpor)) || (case dporNext dpor of Just (_, dpor') -> hasTodos dpor'; _ -> False)
@@ -193,7 +193,7 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
           ((d', _, a'):_) -> M.singleton (tidOf tid d') a'
           [] -> M.empty
         }
-  subtree _ _ _ [] = err "incorporateTrace" "subtree suffix empty!"
+  subtree _ _ _ [] = fatal "incorporateTrace" "subtree suffix empty!"
 
 -- | Produce a list of new backtracking points from an execution
 -- trace. These are then used to inform new \"to-do\" points in the
@@ -251,7 +251,7 @@ findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty init
   -- backtracking points.
   doBacktrack killsEarly allThreads enabledThreads bs =
     let tagged = reverse $ zip [0..] bs
-        idxs   = [ (head is, False, u)
+        idxs   = [ (ehead "doBacktrack.idxs" is, False, u)
                  | (u, n) <- enabledThreads
                  , v <- S.toList allThreads
                  , u /= v
@@ -301,9 +301,9 @@ incorporateBacktrackSteps (b:bs) dpor = dpor' where
 
   child = case dporNext dpor of
     Just (t, d)
-      | t /= tid -> err "incorporateBacktrackSteps" "incorporating wrong trace!"
+      | t /= tid -> fatal "incorporateBacktrackSteps" "incorporating wrong trace!"
       | otherwise -> incorporateBacktrackSteps bs d
-    Nothing -> err "incorporateBacktrackSteps" "child is missing!"
+    Nothing -> fatal "incorporateBacktrackSteps" "child is missing!"
 incorporateBacktrackSteps [] dpor = dpor
 
 -------------------------------------------------------------------------------
@@ -416,7 +416,7 @@ backtrackAt toAll bs0 = backtrackAt' . nubBy ((==) `on` fst') . sortOn fst' wher
         ((i',c',t'):is') -> go i' bs (i'-i0-1) c' t' is'
         [] -> bs
   go i0 (b:bs) i c tid is = b : go i0 bs (i-1) c tid is
-  go _ [] _ _ _ _ = err "backtrackAt" "ran out of schedule whilst backtracking!"
+  go _ [] _ _ _ _ = fatal "backtrackAt" "ran out of schedule whilst backtracking!"
 
   -- Backtrack to a single thread
   backtrackTo tid c = M.insert tid c . bcktBacktracks
@@ -495,7 +495,7 @@ dporSched memtype boundf = Scheduler $ \prior threads s ->
     decision = decisionOf (fst <$> prior) (S.fromList tids)
 
     -- Get the action of a thread
-    action t = fromJust $ lookup t threads'
+    action t = efromJust "dporSched.action" (lookup t threads')
 
     -- The runnable thread IDs
     tids = map fst threads'
@@ -812,7 +812,3 @@ willYield _ = False
 killsDaemons :: ThreadId -> Lookahead -> Bool
 killsDaemons t WillStop = t == initialThread
 killsDaemons _ _ = False
-
--- | Internal errors.
-err :: String -> String -> a
-err func msg = error (func ++ ": (internal error) " ++ msg)

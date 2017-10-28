@@ -98,7 +98,7 @@ randomSched = Scheduler go where
   go _ threads g =
     let threads' = map fst (toList threads)
         (choice, g') = randomR (0, length threads' - 1) g
-    in (Just $ threads' !! choice, g')
+    in (Just $ eidx "randomSched" threads' choice, g')
 
 -- | A round-robin scheduler which, at every step, schedules the
 -- thread with the next 'ThreadId'.

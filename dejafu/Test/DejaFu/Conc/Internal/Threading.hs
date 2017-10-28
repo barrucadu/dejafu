@@ -92,7 +92,7 @@ catching h = M.adjust $ \thread ->
 
 -- | Remove the most recent exception handler.
 uncatching :: ThreadId -> Threads n r -> Threads n r
-uncatching = M.adjust $ \thread -> thread { _handlers = tail $ _handlers thread }
+uncatching = M.adjust $ \thread -> thread { _handlers = etail "uncatching" (_handlers thread) }
 
 -- | Raise an exception in a thread.
 except :: (MaskingState -> Action n r) -> [Handler n r] -> ThreadId -> Threads n r -> Threads n r

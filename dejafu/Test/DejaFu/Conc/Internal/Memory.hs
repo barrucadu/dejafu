@@ -26,7 +26,7 @@ module Test.DejaFu.Conc.Internal.Memory where
 import           Control.Monad.Ref                   (MonadRef, readRef,
                                                       writeRef)
 import           Data.Map.Strict                     (Map)
-import           Data.Maybe                          (fromJust, maybeToList)
+import           Data.Maybe                          (maybeToList)
 import           Data.Monoid                         ((<>))
 import           Data.Sequence                       (Seq, ViewL(..), singleton,
                                                       viewl, (><))
@@ -160,7 +160,7 @@ tryPutIntoMVar = mutMVar NonBlocking
 -- | Read from a @MVar@, blocking if empty.
 readFromMVar :: MonadRef r n => MVar r a -> (a -> Action n r)
             -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
-readFromMVar cvar c = seeMVar NonEmptying Blocking cvar (c . fromJust)
+readFromMVar cvar c = seeMVar NonEmptying Blocking cvar (c . efromJust "readFromMVar")
 
 -- | Try to read from a @MVar@, not blocking if empty.
 tryReadFromMVar :: MonadRef r n => MVar r a -> (Maybe a -> Action n r)
@@ -170,7 +170,7 @@ tryReadFromMVar = seeMVar NonEmptying NonBlocking
 -- | Take from a @MVar@, blocking if empty.
 takeFromMVar :: MonadRef r n => MVar r a -> (a -> Action n r)
              -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId])
-takeFromMVar cvar c = seeMVar Emptying Blocking cvar (c . fromJust)
+takeFromMVar cvar c = seeMVar Emptying Blocking cvar (c . efromJust "takeFromMVar")
 
 -- | Try to take from a @MVar@, not blocking if empty.
 tryTakeFromMVar :: MonadRef r n => MVar r a -> (Maybe a -> Action n r)

@@ -66,17 +66,24 @@ module Test.DejaFu.Common
   -- * Miscellaneous
   , MonadFailException(..)
   , runRefCont
+  , ehead
+  , etail
+  , eidx
+  , efromJust
+  , efromList
+  , fatal
   ) where
 
-import           Control.DeepSeq   (NFData(..))
-import           Control.Exception (Exception(..), MaskingState(..),
-                                    SomeException, displayException)
-import           Control.Monad.Ref (MonadRef(..))
-import           Data.Function     (on)
-import           Data.List         (intercalate)
-import           Data.Maybe        (fromMaybe, mapMaybe)
-import           Data.Set          (Set)
-import qualified Data.Set          as S
+import           Control.DeepSeq    (NFData(..))
+import           Control.Exception  (Exception(..), MaskingState(..),
+                                     SomeException, displayException)
+import           Control.Monad.Ref  (MonadRef(..))
+import           Data.Function      (on)
+import           Data.List          (intercalate)
+import           Data.List.NonEmpty (NonEmpty(..))
+import           Data.Maybe         (fromMaybe, mapMaybe)
+import           Data.Set           (Set)
+import qualified Data.Set           as S
 
 -------------------------------------------------------------------------------
 -- Identifiers
@@ -982,6 +989,42 @@ runRefCont act f k = do
   ref <- newRef Nothing
   let c = k (act . writeRef ref . f)
   pure (c, ref)
+
+-- | 'head' but with a better error message if it fails.  Use this
+-- only where it shouldn't fail!
+ehead :: String -> [a] -> a
+ehead _ (x:_) = x
+ehead src _ = fatal src "head: empty list"
+
+-- | 'tail' but with a better error message if it fails.  Use this
+-- only where it shouldn't fail!
+etail :: String -> [a] -> [a]
+etail _ (_:xs) = xs
+etail src _ = fatal src "tail: empty list"
+
+-- | '(!!)' but with a better error message if it fails.  Use this
+-- only where it shouldn't fail!
+eidx :: String -> [a] -> Int -> a
+eidx src xs i
+  | i < length xs = xs !! i
+  | otherwise = fatal src "(!!): index too large"
+
+-- | 'fromJust' but with a better error message if it fails.  Use this
+-- only where it shouldn't fail!
+efromJust :: String -> Maybe a -> a
+efromJust _ (Just x) = x
+efromJust src _ = fatal src "fromJust: Nothing"
+
+-- | 'fromList' but with a better error message if it fails.  Use this
+-- only where it shouldn't fail!
+efromList :: String -> [a] -> NonEmpty a
+efromList _ (x:xs) = x:|xs
+efromList src _ = fatal src "fromList: empty list"
+
+-- | 'error' but saying where it came from
+fatal :: String -> String -> a
+fatal src msg = error ("(dejafu: " ++ src ++ ") " ++ msg)
+
 
 -------------------------------------------------------------------------------
 -- Utilities

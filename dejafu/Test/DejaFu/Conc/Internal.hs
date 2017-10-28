@@ -21,9 +21,8 @@ import           Control.Monad.Ref                   (MonadRef, newRef, readRef,
                                                       writeRef)
 import           Data.Functor                        (void)
 import           Data.List                           (sortOn)
-import           Data.List.NonEmpty                  (fromList)
 import qualified Data.Map.Strict                     as M
-import           Data.Maybe                          (fromJust, isJust)
+import           Data.Maybe                          (isJust)
 import           Data.Monoid                         ((<>))
 import           Data.Sequence                       (Seq, (<|))
 import qualified Data.Sequence                       as Seq
@@ -64,7 +63,7 @@ runConcurrency sched memtype g idsrc caps ma = do
                     }
   (finalCtx, trace, finalAction) <- runThreads sched memtype ref ctx
   out <- readRef ref
-  pure (fromJust out, finalCtx, trace, finalAction)
+  pure (efromJust "runConcurrency" out, finalCtx, trace, finalAction)
 
 -- | The context a collection of threads are running in.
 data Context n r g = Context
@@ -97,7 +96,7 @@ runThreads sched memtype ref = go Seq.empty Nothing where
              Nothing -> die sofar prior InternalError ctx'
            Nothing -> die sofar prior Abort ctx'
     where
-      (choice, g')  = scheduleThread sched prior (fromList runnable') (cSchedState ctx)
+      (choice, g')  = scheduleThread sched prior (efromList "runThreads" runnable') (cSchedState ctx)
       runnable'     = [(t, lookahead (_continuation a)) | (t, a) <- sortOn fst $ M.assocs runnable]
       runnable      = M.filter (not . isBlocked) threadsc
       threadsc      = addCommitThreads (cWriteBuf ctx) threads
@@ -290,7 +289,7 @@ stepThread sched memtype tid action ctx = case action of
       wb' <- case memtype of
         -- shouldn't ever get here
         SequentialConsistency ->
-          error "Attempting to commit under SequentialConsistency"
+          fatal "stepThread.ACommit" "Attempting to commit under SequentialConsistency"
         -- commit using the thread id.
         TotalStoreOrder -> commitWrite (cWriteBuf ctx) (t, Nothing)
         -- commit using the cref id.
@@ -351,7 +350,7 @@ stepThread sched memtype tid action ctx = case action of
     -- a function to run a computation with the current masking state.
     AMasking m ma c ->
       let a = runCont (ma umask) (AResetMask False False m' . c)
-          m' = _masking . fromJust $ M.lookup tid (cThreads ctx)
+          m' = _masking . efromJust "stepThread.AMasking" $ M.lookup tid (cThreads ctx)
           umask mb = resetMask True m' >> mb >>= \b -> resetMask False m >> pure b
           resetMask typ ms = cont $ \k -> AResetMask typ True ms $ k ()
           threads' = goto a tid (mask m tid (cThreads ctx))
