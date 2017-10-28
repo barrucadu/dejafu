@@ -336,8 +336,8 @@ stepThread sched memtype tid action ctx = case action of
 
     -- run a subcomputation in an exception-catching context.
     ACatching h ma c ->
-      let a        = runCont ma      (APopCatching . c)
-          e exc    = runCont (h exc) (APopCatching . c)
+      let a        = runCont ma (APopCatching . c)
+          e exc    = runCont (h exc) c
           threads' = goto a tid (catching e tid (cThreads ctx))
       in simple threads' Catching
 

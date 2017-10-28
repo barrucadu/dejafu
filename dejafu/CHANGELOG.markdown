@@ -7,6 +7,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Miscellaneous
+
+- Fixed an issue where tests with exception handlers would sometimes skip over nested handlers or
+  try to take the tail of an empty list (#139 and #141).
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.9.0.0
 -------
 
