@@ -27,6 +27,7 @@ executable dejafu-tests
                      , Cases.Litmus
                      , Cases.Discard
                      , Cases.Regressions
+                     , Cases.Properties
 
                      , Examples
                      , Examples.AutoUpdate
@@ -49,6 +50,7 @@ executable dejafu-tests
                      , exceptions
                      , HUnit
                      , hunit-dejafu
+                     , leancheck
                      , QuickCheck
                      , random
                      , test-framework

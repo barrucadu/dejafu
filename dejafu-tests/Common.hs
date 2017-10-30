@@ -18,6 +18,7 @@ import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import qualified Test.HUnit as TH
 import Test.HUnit.DejaFu (Bounds, defaultBounds, defaultMemType, uniformly, randomly, swarmy, systematically, testDejafu, testDejafuWay)
+import qualified Test.LeanCheck as LeanCheck
 
 -------------------------------------------------------------------------------
 -- Tests
@@ -53,13 +54,21 @@ testGroup :: IsTest t => String -> t -> TF.Test
 testGroup name = TF.testGroup name . toTestList
 
 djfu :: Show a => String -> Predicate a -> (forall t. ConcST t a) -> TF.Test
-djfu name p c = head . toTestList $ testDejafu c name p
+djfu name p c = hunitTest $ testDejafu c name p
 
 djfuT :: Show a => String -> Predicate a -> (forall t. ConcST t a) -> [TF.Test]
 djfuT name p c = toTestList $ T name c p
 
 alwaysFailsWith :: (Failure -> Bool) -> Predicate a
 alwaysFailsWith p = alwaysTrue (either p (const False))
+
+leancheck :: LeanCheck.Testable a => String -> a -> TF.Test
+leancheck name = hunitTest . TH.TestLabel name . lcheck . LeanCheck.counterExamples 2500 where
+  lcheck = TH.TestCase . TH.assertString . unlines . map showf
+  showf xs = "Failed for " ++ unwords xs
+
+hunitTest :: TH.Test -> TF.Test
+hunitTest = head . toTestList
 
 -------------------------------------------------------------------------------
 -- Exceptions

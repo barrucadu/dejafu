@@ -58,6 +58,11 @@
           - subconcurrencyTests
           - threadingTests
       - module:
+        - name: Cases.Properties
+        - identifier:
+          - canRewind
+          - rewind'
+      - module:
         - name: Cases.Refinement
         - identifier:
           - mvar
@@ -76,6 +81,7 @@
         - identifier:
           - BT
           - failing
+          - hunitTest
       - module:
         - name: Examples.AutoUpdate
         - identifier:

@@ -7,6 +7,7 @@ import qualified Cases.Regressions    as G
 import qualified Cases.Litmus         as L
 import qualified Cases.Async          as A
 import qualified Cases.Discard        as D
+import qualified Cases.Properties     as P
 
 import Common
 
@@ -19,5 +20,6 @@ testCases =
   , testGroup "Litmus"          L.tests
   , testGroup "Async"           A.tests
   , testGroup "Discard"         D.tests
+  , testGroup "Properties"      P.tests
   , testGroup "Regressions"     G.tests
   ]
