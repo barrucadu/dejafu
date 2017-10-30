@@ -629,8 +629,8 @@ dependent' memtype ds t1 a1 t2 l2 = case (a1, l2) of
   -- normal termination of a thread: it doesn't make a difference.
   (ThrowTo t, WillStop) | t == t2 -> False
   (Stop, WillThrowTo t) | t == t1 -> False
-  (ThrowTo t, _)     -> t == t2 && canInterruptL ds t2 l2
-  (_, WillThrowTo t) -> t == t1 && canInterrupt  ds t1 a1
+  (ThrowTo t, _)     | t == t2 -> canInterruptL ds t2 l2
+  (_, WillThrowTo t) | t == t1 -> canInterrupt  ds t1 a1
 
   -- Another worst-case: assume all STM is dependent.
   (STM _ _, WillSTM) -> True
