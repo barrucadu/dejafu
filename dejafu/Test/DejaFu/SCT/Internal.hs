@@ -592,8 +592,8 @@ dependent memtype ds t1 a1 t2 a2 = case (a1, a2) of
   -- actually blocked. 'dependent'' has to assume that all
   -- potentially-blocking operations can block, and so is more
   -- pessimistic in this case.
-  (ThrowTo t, _) | t == t2 -> canInterrupt ds t2 a2
-  (_, ThrowTo t) | t == t1 -> canInterrupt ds t1 a1
+  (ThrowTo t, _) | t == t2 -> canInterrupt ds t2 a2 && a2 /= Stop
+  (_, ThrowTo t) | t == t1 -> canInterrupt ds t1 a1 && a1 /= Stop
 
   -- Dependency of STM transactions can be /greatly/ improved here, as
   -- the 'Lookahead' does not know which @TVar@s will be touched, and
