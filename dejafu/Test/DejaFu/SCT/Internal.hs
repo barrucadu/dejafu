@@ -575,44 +575,44 @@ randSched weightf = Scheduler $ \_ threads s ->
 -- Dependency function
 
 -- | Check if an action is dependent on another.
-dependent :: MemType -> DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
+--
 -- This is basically the same as 'dependent'', but can make use of the
--- additional information in a 'ThreadAction' to make different
--- decisions in a few cases:
---
---  - @SetNumCapabilities@ and @GetNumCapabilities@ are NOT dependent
---    IF the value read is the same as the value written. 'dependent''
---    can not see the value read (as it hasn't happened yet!), and so
---    is more pessimistic here.
---
---  - When masked interruptible, a thread can only be interrupted when
---    actually blocked. 'dependent'' has to assume that all
---    potentially-blocking operations can block, and so is more
---    pessimistic in this case.
---
---  - The @isBlock@ / @isBarrier@ case in 'dependent'' is NOT a sound
---    optimisation when dealing with a 'ThreadAction' that has been
---    converted to a 'Lookahead'. I'm not entirely sure why, which
---    makes me question whether the \"optimisation\" is sound as it
---    is.
---
---  - Dependency of STM transactions can be /greatly/ improved here,
---    as the 'Lookahead' does not know which @TVar@s will be touched,
---    and so has to assume all transactions are dependent.
-dependent _ _ _ (SetNumCapabilities a) _ (GetNumCapabilities b) = a /= b
-dependent _ ds _ (ThrowTo t) t2 a = t == t2 && canInterrupt ds t2 a
-dependent memtype ds t1 a1 t2 a2 = case rewind a2 of
-  Just l2
-    | isSTM a1 && isSTM a2
-      -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
-    | not (isBlock a1 && isBarrier (simplifyLookahead l2)) ->
-      dependent' memtype ds t1 a1 t2 l2
-  _ -> dependentActions memtype ds (simplifyAction a1) (simplifyAction a2)
+-- additional information in a 'ThreadAction' to make better decisions
+-- in a few cases.
+dependent :: MemType -> DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
+dependent memtype ds t1 a1 t2 a2 = case (a1, a2) of
+  -- @SetNumCapabilities@ and @GetNumCapabilities@ are NOT dependent
+  -- IF the value read is the same as the value written. 'dependent''
+  -- can not see the value read (as it hasn't happened yet!), and so
+  -- is more pessimistic here.
+  (SetNumCapabilities a, GetNumCapabilities b) | a == b -> False
+  (GetNumCapabilities a, SetNumCapabilities b) | a == b -> False
 
-  where
-    isSTM (STM _ _) = True
-    isSTM (BlockedSTM _) = True
-    isSTM _ = False
+  -- When masked interruptible, a thread can only be interrupted when
+  -- actually blocked. 'dependent'' has to assume that all
+  -- potentially-blocking operations can block, and so is more
+  -- pessimistic in this case.
+  (ThrowTo t, _) | t == t2 -> canInterrupt ds t2 a2
+  (_, ThrowTo t) | t == t1 -> canInterrupt ds t1 a1
+
+  -- Dependency of STM transactions can be /greatly/ improved here, as
+  -- the 'Lookahead' does not know which @TVar@s will be touched, and
+  -- so has to assume all transactions are dependent.
+  (STM _ _, STM _ _)           -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
+  (STM _ _, BlockedSTM _)      -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
+  (BlockedSTM _, STM _ _)      -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
+  (BlockedSTM _, BlockedSTM _) -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
+
+  -- The @isBlock@ / @isBarrier@ case in 'dependent'' is NOT a sound
+  -- optimisation when dealing with a 'ThreadAction' that has been
+  -- converted to a 'Lookahead'. I'm not entirely sure why, which
+  -- makes me question whether the \"optimisation\" is sound as it is.
+  _ -> case (,) <$> rewind a1 <*> rewind a2 of
+    Just (l1, l2)
+      | not (isBlock a1 && isBarrier (simplifyLookahead l2)) &&
+        not (isBlock a2 && isBarrier (simplifyLookahead l1)) ->
+        dependent' memtype ds t1 a1 t2 l2 && dependent' memtype ds t2 a2 t1 l1
+    _ -> dependentActions memtype ds (simplifyAction a1) (simplifyAction a2)
 
 -- | Variant of 'dependent' to handle 'Lookahead'.
 --
