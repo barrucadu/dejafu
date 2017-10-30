@@ -277,7 +277,14 @@ findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty init
             _ -> False
 
           {-# INLINE isDependent #-}
-          isDependent b = dependent' memtype (bcktState b) (bcktThreadid b) (bcktAction b) u n
+          isDependent b
+            -- Don't impose a dependency if the other thread will
+            -- immediately block already. This is safe because a
+            -- context switch will occur anyway so there's no point
+            -- pre-empting the action UNLESS the pre-emption would
+            -- possibly allow for a different relaxed memory stage.
+            | isBlock (bcktAction b) && isBarrier (simplifyLookahead n) = False
+            | otherwise = dependent' memtype (bcktState b) (bcktThreadid b) (bcktAction b) u n
     in backtrack bs idxs
 
 -- | Add new backtracking points, if they have not already been
@@ -603,15 +610,8 @@ dependent memtype ds t1 a1 t2 a2 = case (a1, a2) of
   (BlockedSTM _, STM _ _)      -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
   (BlockedSTM _, BlockedSTM _) -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
 
-  -- The @isBlock@ / @isBarrier@ case in 'dependent'' is NOT a sound
-  -- optimisation when dealing with a 'ThreadAction' that has been
-  -- converted to a 'Lookahead'. I'm not entirely sure why, which
-  -- makes me question whether the \"optimisation\" is sound as it is.
   _ -> case (,) <$> rewind a1 <*> rewind a2 of
-    Just (l1, l2)
-      | not (isBlock a1 && isBarrier (simplifyLookahead l2)) &&
-        not (isBlock a2 && isBarrier (simplifyLookahead l1)) ->
-        dependent' memtype ds t1 a1 t2 l2 && dependent' memtype ds t2 a2 t1 l1
+    Just (l1, l2) -> dependent' memtype ds t1 a1 t2 l2 && dependent' memtype ds t2 a2 t1 l1
     _ -> dependentActions memtype ds (simplifyAction a1) (simplifyAction a2)
 
 -- | Variant of 'dependent' to handle 'Lookahead'.
@@ -642,13 +642,7 @@ dependent' memtype ds t1 a1 t2 l2 = case (a1, l2) of
   (SetNumCapabilities _, WillGetNumCapabilities)   -> True
   (SetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
 
-  -- Don't impose a dependency if the other thread will immediately
-  -- block already. This is safe because a context switch will occur
-  -- anyway so there's no point pre-empting the action UNLESS the
-  -- pre-emption would possibly allow for a different relaxed memory
-  -- stage.
-  _ | isBlock a1 && isBarrier (simplifyLookahead l2) -> False
-    | otherwise -> dependentActions memtype ds (simplifyAction a1) (simplifyLookahead l2)
+  _ -> dependentActions memtype ds (simplifyAction a1) (simplifyLookahead l2)
 
 -- | Check if two 'ActionType's are dependent. Note that this is not
 -- sufficient to know if two 'ThreadAction's are dependent, without
