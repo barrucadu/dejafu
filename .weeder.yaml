@@ -61,6 +61,8 @@
         - name: Cases.Properties
         - identifier:
           - canRewind
+          - eq_wb
+          - makeCRef
           - rewind'
       - module:
         - name: Cases.Refinement

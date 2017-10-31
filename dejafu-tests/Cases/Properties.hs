@@ -1,12 +1,21 @@
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Cases.Properties where
 
+import Control.Monad (zipWithM, liftM2)
+import qualified Control.Monad.ST as ST
+import qualified Data.STRef as ST
 import qualified Control.Exception as E
-import Data.Map (Map, fromList)
+import qualified Data.Foldable as F
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Maybe (fromJust, isJust)
 import Data.Proxy (Proxy(..))
+import qualified Data.Sequence as S
 import Test.DejaFu.Common (ThreadAction, Lookahead)
 import qualified Test.DejaFu.Common as D
+import qualified Test.DejaFu.Conc.Internal.Common as D
+import qualified Test.DejaFu.Conc.Internal.Memory as Mem
 import qualified Test.DejaFu.SCT.Internal as SCT
 import Test.Framework (Test)
 import Test.LeanCheck (Listable(..), (\/), (><), (==>), cons0, cons1, cons2, cons3, mapT)
@@ -33,6 +42,42 @@ tests =
 
     , leancheck "isCommit a r ==> synchronises a r" $
       \a r -> D.isCommit a r ==> D.synchronises a r
+    ]
+
+  , testGroup "Memory"
+    [ leancheck "bufferWrite emptyBuffer k c a /= emptyBuffer" $
+      \k a -> crefProp $ \cref -> do
+        wb <- Mem.bufferWrite Mem.emptyBuffer k cref a
+        not <$> wb `eq_wb` Mem.emptyBuffer
+
+    , leancheck "commitWrite emptyBuffer k == emptyBuffer" $
+      \k -> ST.runST $ do
+        wb <- Mem.commitWrite Mem.emptyBuffer k
+        wb `eq_wb` Mem.emptyBuffer
+
+    , leancheck "commitWrite (bufferWrite emptyBuffer k a) k == emptyBuffer" $
+      \k a -> crefProp $ \cref -> do
+        wb1 <- Mem.bufferWrite Mem.emptyBuffer k cref a
+        wb2 <- Mem.commitWrite wb1 k
+        wb2 `eq_wb` Mem.emptyBuffer
+
+    , leancheck "Single buffered write/read from same thread" $
+      \k@(tid, _) a -> crefProp $ \cref -> do
+        Mem.bufferWrite Mem.emptyBuffer k cref a
+        (a ==) <$> Mem.readCRef cref tid
+
+    , leancheck "Overriding buffered write/read from same thread" $
+      \k@(tid, _) a1 a2 -> crefProp $ \cref -> do
+        Mem.bufferWrite Mem.emptyBuffer k cref a1
+        Mem.bufferWrite Mem.emptyBuffer k cref a2
+        (a2 ==) <$> Mem.readCRef cref tid
+
+    , leancheck "Buffered write/read from different thread" $
+      \k1@(tid1, _) k2@(tid2, _) a1 a2 -> crefProp $ \cref -> do
+        Mem.bufferWrite Mem.emptyBuffer k1 cref a1
+        Mem.bufferWrite Mem.emptyBuffer k2 cref a2
+        a' <- Mem.readCRef cref tid1
+        pure (tid1 /= tid2 ==> a' == a1)
     ]
 
   , testGroup "SCT"
@@ -68,6 +113,9 @@ tests =
       , leancheck "Eq / Ord Consistency" $ \(x :: a) y   -> x == y ==> x <= y
       ]
 
+    crefProp :: (forall s. D.CRef (ST.STRef s) Int -> ST.ST s Bool) -> D.CRefId -> Bool
+    crefProp prop crid = ST.runST $ makeCRef crid >>= prop
+
 -------------------------------------------------------------------------------
 -- Utils
 
@@ -77,8 +125,41 @@ canRewind = isJust . D.rewind
 rewind' :: ThreadAction -> Lookahead
 rewind' = fromJust . D.rewind
 
+makeCRef :: D.CRefId -> ST.ST t (D.CRef (ST.STRef t) Int)
+makeCRef crid = D.CRef crid <$> ST.newSTRef (M.empty, 0, 42)
+
+-- equality for writebuffers is a little tricky as we can't directly
+-- compare the buffered values, so we compare everything else:
+--  - the sets of nonempty buffers must be equal
+--  - each pair of buffers for the same key must have the same size
+--  - each pair of buffers for the same key must have an equal sequence of writes
+--
+-- individual writes are compared like so:
+--  - the threadid and crefid must be the same
+--  - the cache and number of writes inside the ref must be the same
+eq_wb :: Mem.WriteBuffer (ST.STRef t) -> Mem.WriteBuffer (ST.STRef t) -> ST.ST t Bool
+eq_wb (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
+    [ (&&) (S.length ws1 == S.length ws2) <$> (and <$> zipWithM eq_bw (F.toList ws1) (F.toList ws2))
+    | k <- ks1
+    , let (Just ws1) = M.lookup k wb1
+    , let (Just ws2) = M.lookup k wb2
+    ])
+  where
+    ks1 = M.keys $ M.filter (not . S.null) wb1
+    ks2 = M.keys $ M.filter (not . S.null) wb2
+
+    eq_bw (Mem.BufferedWrite t1 (D.CRef crid1 ref1) _) (Mem.BufferedWrite t2 (D.CRef crid2 ref2) _) = do
+      d1 <- (\(m,i,_) -> (M.keys m, i)) <$> ST.readSTRef ref1
+      d2 <- (\(m,i,_) -> (M.keys m, i)) <$> ST.readSTRef ref2
+      pure (t1 == t2 && crid1 == crid2 && d1 == d2)
+
+    andM [] = pure True
+    andM (p:ps) = do
+      q <- p
+      if q then andM ps else pure False
+
 -------------------------------------------------------------------------------
--- Arbitrary instances
+-- Typeclass instances
 
 instance Listable D.ThreadId where
   tiers = mapT (D.ThreadId Nothing) tiers
@@ -176,7 +257,7 @@ instance Listable SCT.DepState where
   tiers = mapT (uncurry SCT.DepState) (tiers >< tiers)
 
 instance (Ord k, Listable k, Listable v) => Listable (Map k v) where
-  tiers = mapT fromList tiers
+  tiers = mapT M.fromList tiers
 
 instance Listable D.Failure where
   list =
