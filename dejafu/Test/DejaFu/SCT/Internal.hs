@@ -605,14 +605,20 @@ dependent memtype ds t1 a1 t2 a2 = case (a1, a2) of
   -- Dependency of STM transactions can be /greatly/ improved here, as
   -- the 'Lookahead' does not know which @TVar@s will be touched, and
   -- so has to assume all transactions are dependent.
-  (STM _ _, STM _ _)           -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
-  (STM _ _, BlockedSTM _)      -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
-  (BlockedSTM _, STM _ _)      -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
-  (BlockedSTM _, BlockedSTM _) -> not . S.null $ tvarsOf a1 `S.intersection` tvarsOf a2
+  (STM _ _, STM _ _)           -> checkSTM
+  (STM _ _, BlockedSTM _)      -> checkSTM
+  (BlockedSTM _, STM _ _)      -> checkSTM
+  (BlockedSTM _, BlockedSTM _) -> checkSTM
 
   _ -> case (,) <$> rewind a1 <*> rewind a2 of
     Just (l1, l2) -> dependent' memtype ds t1 a1 t2 l2 && dependent' memtype ds t2 a2 t1 l1
     _ -> dependentActions memtype ds (simplifyAction a1) (simplifyAction a2)
+
+  where
+    -- STM actions A and B are dependent if A wrote to anything B
+    -- touched, or vice versa.
+    checkSTM = checkSTM' a1 a2 || checkSTM' a2 a1
+    checkSTM' a b = not . S.null $ tvarsWritten a `S.intersection` tvarsOf b
 
 -- | Variant of 'dependent' to handle 'Lookahead'.
 --

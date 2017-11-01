@@ -27,6 +27,8 @@ module Test.DejaFu.Common
   , ThreadAction(..)
   , isBlock
   , tvarsOf
+  , tvarsWritten
+  , tvarsRead
   -- ** Lookahead
   , Lookahead(..)
   , rewind
@@ -410,14 +412,35 @@ isBlock _ = False
 --
 -- @since 0.4.0.0
 tvarsOf :: ThreadAction -> Set TVarId
-tvarsOf act = S.fromList $ case act of
+tvarsOf act = tvarsRead act `S.union` tvarsWritten act
+
+-- | Get the @TVar@s a transaction wrote to (or would have, if it
+-- didn't @retry@).
+--
+-- @since unreleased
+tvarsWritten :: ThreadAction -> Set TVarId
+tvarsWritten act = S.fromList $ case act of
   STM trc _ -> concatMap tvarsOf' trc
   BlockedSTM trc -> concatMap tvarsOf' trc
   _ -> []
 
   where
-    tvarsOf' (TRead  tv) = [tv]
     tvarsOf' (TWrite tv) = [tv]
+    tvarsOf' (TOrElse ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
+    tvarsOf' (TCatch  ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
+    tvarsOf' _ = []
+
+-- | Get the @TVar@s a transaction read from.
+--
+-- @since unreleased
+tvarsRead :: ThreadAction -> Set TVarId
+tvarsRead act = S.fromList $ case act of
+  STM trc _ -> concatMap tvarsOf' trc
+  BlockedSTM trc -> concatMap tvarsOf' trc
+  _ -> []
+
+  where
+    tvarsOf' (TRead tv) = [tv]
     tvarsOf' (TOrElse ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
     tvarsOf' (TCatch  ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
     tvarsOf' _ = []

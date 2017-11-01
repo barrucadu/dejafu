@@ -7,6 +7,17 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Miscellaneous
+
+- Small improvement to dependency detection of STM transactions.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.9.0.1
 -------
 
