@@ -13,6 +13,7 @@ unreleased
 ### Miscellaneous
 
 - Small improvement to dependency detection of STM transactions.
+- A fair bound of 0 will now prevent all yields.
 
 
 ---------------------------------------------------------------------------------------------------

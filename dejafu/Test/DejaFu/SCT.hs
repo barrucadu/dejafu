@@ -428,7 +428,9 @@ instance NFData FairBound where
 fBound :: FairBound -> IncrementalBoundFunc (M.Map ThreadId Int)
 fBound (FairBound fb) k prior lhead =
   let k' = yieldCountInc (fromMaybe M.empty k) prior lhead
-  in if maxDiff (M.elems k') <= fb then Just k' else Nothing
+  in if not (willYield (snd lhead)) || maxDiff (M.elems k') <= fb
+     then Just k'
+     else Nothing
 
 -- | Add a backtrack point. If the thread isn't runnable, or performs
 -- a release operation, add all runnable threads.
@@ -663,7 +665,7 @@ yieldCountInc sofar prior (d, lnext) = case prior of
   where
     ycount tnext
       | willYield lnext = M.alter (Just . maybe 1 (+1)) tnext sofar
-      | otherwise       = M.alter (Just . fromMaybe 0)  tnext sofar
+      | otherwise       = M.alter (Just . fromMaybe 0) tnext sofar
 
 -- | Determine if an action is a commit or not.
 isCommitRef :: ThreadAction -> Bool
