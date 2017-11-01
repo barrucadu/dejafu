@@ -460,7 +460,7 @@ dporSched memtype boundf = Scheduler $ \prior threads s ->
     -- otherwise add all runnable threads.
     initialise = tryDaemons . yieldsToEnd $ case prior of
       Just (tid, act)
-        | not (didYield act) && tid `elem` tids -> [tid]
+        | not (didYield act) && tid `elem` tids && isInBound tid -> [tid]
       _ -> tids
 
     -- If one of the chosen actions will kill the computation, and
@@ -491,8 +491,8 @@ dporSched memtype boundf = Scheduler $ \prior threads s ->
     doesKill t = killsDaemons t (action t)
 
     -- Restrict the possible decisions to those in the bound.
-    restrictToBound f =
-      filter (\x -> let t = f x in isJust $ boundf (schedBState s) prior (decision t, action t))
+    restrictToBound f = filter (isInBound . f)
+    isInBound t = isJust $ boundf (schedBState s) prior (decision t, action t)
 
     -- Move the threads which will immediately yield to the end of the list
     yieldsToEnd ts = case partition (willYield . action) ts of
