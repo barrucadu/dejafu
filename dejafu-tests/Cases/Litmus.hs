@@ -17,8 +17,10 @@ import Control.Monad.Conc.Class
 
 tests :: [Test]
 tests =
-  [ let out = [(a,b) | a <- [0..1], b <- [0..1], (a,b) /= (1,0)]
-    in litmusTest "Loads are not reordered with other loads and stores are not reordered with other stores" intelWP21 out out out
+  [ let sq  = [(a,b) | a <- [0..1], b <- [0..1], (a,b) /= (1,0)]
+        tso = sq
+        pso = [(a,b) | a <- [0..1], b <- [0..1]]
+    in litmusTest "Loads are not reordered with other loads and stores are not reordered with other stores" intelWP21 sq tso pso
 
   , let out = [(a,b) | a <- [0..1], b <- [0..1], (a,b) /= (1,1)]
     in litmusTest "Stores are not reordered with older loads" intelWP22 out out out

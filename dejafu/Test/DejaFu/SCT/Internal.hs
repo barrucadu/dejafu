@@ -676,6 +676,14 @@ dependentActions memtype ds a1 a2 = case (a1, a2) of
   (UnsynchronisedRead r1, _) | isBarrier a2 -> isBuffered ds r1 && memtype /= SequentialConsistency
   (_, UnsynchronisedRead r2) | isBarrier a1 -> isBuffered ds r2 && memtype /= SequentialConsistency
 
+  -- Commits and memory barriers must be dependent, as memory barriers
+  -- (currently) flush in a consistent order.  Alternative orders need
+  -- to be explored as well.  Perhaps a better implementation of
+  -- memory barriers would just block every non-commit thread while
+  -- any buffer is nonempty.
+  (PartiallySynchronisedCommit _, _) | isBarrier a2 -> True
+  (_, PartiallySynchronisedCommit _) | isBarrier a1 -> True
+
   (_, _) -> case getSame crefOf of
     -- Two actions on the same CRef where at least one is synchronised
     Just r -> synchronises a1 r || synchronises a2 r

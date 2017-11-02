@@ -7,6 +7,17 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Miscellaneous
+
+- Impose a dependency between commits and memory barriers, to make barriers sound (#138).
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.9.0.2
 -------
 
