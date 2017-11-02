@@ -512,7 +512,7 @@ sctBoundDiscard discard memtype cb conc = go initialState where
                                        conc
 
       let bpoints = findBacktracks (schedBoundKill s) (schedBPoints s) trace
-      let newDPOR = addTrace conservative trace dp
+      let newDPOR = incorporateTrace conservative trace dp
 
       if schedIgnore s
         then go (force newDPOR)
@@ -521,13 +521,10 @@ sctBoundDiscard discard memtype cb conc = go initialState where
     Nothing -> pure []
 
   -- The DPOR scheduler.
-  scheduler = dporSched memtype (cBound cb)
+  scheduler = dporSched (cBound cb)
 
   -- Find the new backtracking steps.
-  findBacktracks = findBacktrackSteps memtype (cBacktrack cb)
-
-  -- Incorporate a trace into the DPOR tree.
-  addTrace = incorporateTrace memtype
+  findBacktracks = findBacktrackSteps (cBacktrack cb)
 
 -- | SCT via uniform random scheduling.
 --

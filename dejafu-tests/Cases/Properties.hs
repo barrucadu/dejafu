@@ -87,18 +87,18 @@ tests =
         SCT.canInterruptL ds tid (rewind' act)
 
     , leancheck "dependent ==> dependent'" $
-      \mem ds tid1 tid2 ta1 ta2 ->
-        canRewind ta2 && SCT.dependent mem ds tid1 ta1 tid2 ta2 ==>
-        SCT.dependent' mem ds tid1 ta1 tid2 (rewind' ta2)
+      \ds tid1 tid2 ta1 ta2 ->
+        canRewind ta2 && SCT.dependent ds tid1 ta1 tid2 ta2 ==>
+        SCT.dependent' ds tid1 ta1 tid2 (rewind' ta2)
 
     , leancheck "dependent x y == dependent y x" $
-      \mem ds tid1 tid2 ta1 ta2 ->
-        SCT.dependent mem ds tid1 ta1 tid2 ta2 ==
-        SCT.dependent mem ds tid2 ta2 tid1 ta1
+      \ds tid1 tid2 ta1 ta2 ->
+        SCT.dependent ds tid1 ta1 tid2 ta2 ==
+        SCT.dependent ds tid2 ta2 tid1 ta1
 
     , leancheck "dependentActions x y == dependentActions y x" $
-      \mem ds a1 a2 ->
-        SCT.dependentActions mem ds a1 a2 == SCT.dependentActions mem ds a2 a1
+      \ds a1 a2 ->
+        SCT.dependentActions ds a1 a2 == SCT.dependentActions ds a2 a1
     ]
   ]
   where
@@ -245,13 +245,6 @@ instance Listable D.ActionType where
     \/ cons1 D.SynchronisedRead
     \/ cons1 D.SynchronisedWrite
     \/ cons0 D.SynchronisedOther
-
-instance Listable D.MemType where
-  list =
-    [ D.SequentialConsistency
-    , D.TotalStoreOrder
-    , D.PartialStoreOrder
-    ]
 
 instance Listable SCT.DepState where
   tiers = mapT (uncurry SCT.DepState) (tiers >< tiers)

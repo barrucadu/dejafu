@@ -140,9 +140,7 @@ findSchedulePrefix dpor = case dporNext dpor of
 
 -- | Add a new trace to the stack.  This won't work if to-dos aren't explored depth-first.
 incorporateTrace
-  :: MemType
-  -- ^ Memory model
-  -> Bool
+  :: Bool
   -- ^ Whether the \"to-do\" point which was used to create this new
   -- execution was conservative or not.
   -> Trace
@@ -150,7 +148,7 @@ incorporateTrace
   -- and the action performed.
   -> DPOR
   -> DPOR
-incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initialDPORThread dpor0) trace dpor0 where
+incorporateTrace conservative trace dpor0 = grow initialDepState (initialDPORThread dpor0) trace dpor0 where
   grow state tid trc@((d, _, a):rest) dpor =
     let tid'   = tidOf tid d
         state' = updateDepState state tid' a
@@ -174,7 +172,7 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
   -- Construct a new subtree corresponding to a trace suffix.
   subtree state tid sleep ((_, _, a):rest) =
     let state' = updateDepState state tid a
-        sleep' = M.filterWithKey (\t a' -> not $ dependent memtype state' tid a t a') sleep
+        sleep' = M.filterWithKey (\t a' -> not $ dependent state' tid a t a') sleep
     in DPOR
         { dporRunnable = S.fromList $ case rest of
             ((_, runnable, _):_) -> map fst runnable
@@ -207,9 +205,7 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
 -- runnable, a dependency is imposed between this final action and
 -- everything else.
 findBacktrackSteps
-  :: MemType
-  -- ^ Memory model.
-  -> BacktrackFunc
+  :: BacktrackFunc
   -- ^ Backtracking function. Given a list of backtracking points, and
   -- a thread to backtrack to at a specific point in that list, add
   -- the new backtracking points. There will be at least one: this
@@ -226,7 +222,7 @@ findBacktrackSteps
   -> Trace
   -- ^ The execution trace.
   -> [BacktrackStep]
-findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty initialThread [] . F.toList where
+findBacktrackSteps backtrack boundKill = go initialDepState S.empty initialThread [] . F.toList where
   -- Walk through the traces one step at a time, building up a list of
   -- new backtracking points.
   go state allThreads tid bs ((e,i):is) ((d,_,a):ts) =
@@ -284,7 +280,7 @@ findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty init
             -- pre-empting the action UNLESS the pre-emption would
             -- possibly allow for a different relaxed memory stage.
             | isBlock (bcktAction b) && isBarrier (simplifyLookahead n) = False
-            | otherwise = dependent' memtype (bcktState b) (bcktThreadid b) (bcktAction b) u n
+            | otherwise = dependent' (bcktState b) (bcktThreadid b) (bcktAction b) u n
     in backtrack bs idxs
 
 -- | Add new backtracking points, if they have not already been
@@ -440,13 +436,11 @@ backtrackAt toAll bs0 = backtrackAt' . nubBy ((==) `on` fst') . sortOn fst' wher
 -- yielded. Furthermore, threads which /will/ yield are ignored in
 -- preference of those which will not.
 dporSched
-  :: MemType
-  -- ^ Memory model.
-  -> IncrementalBoundFunc k
+  :: IncrementalBoundFunc k
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
   -> Scheduler (DPORSchedState k)
-dporSched memtype boundf = Scheduler $ \prior threads s ->
+dporSched boundf = Scheduler $ \prior threads s ->
   let
     -- The next scheduler state
     nextState rest = s
@@ -521,7 +515,7 @@ dporSched memtype boundf = Scheduler $ \prior threads s ->
     [] ->
       let choices  = restrictToBound id initialise
           checkDep t a = case prior of
-            Just (tid, act) -> dependent memtype (schedDepState s) tid act t a
+            Just (tid, act) -> dependent (schedDepState s) tid act t a
             Nothing -> False
           ssleep'  = M.filterWithKey (\t a -> not $ checkDep t a) $ schedSleep s
           choices' = filter (`notElem` M.keys ssleep') choices
@@ -586,8 +580,8 @@ randSched weightf = Scheduler $ \_ threads s ->
 -- This is basically the same as 'dependent'', but can make use of the
 -- additional information in a 'ThreadAction' to make better decisions
 -- in a few cases.
-dependent :: MemType -> DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
-dependent memtype ds t1 a1 t2 a2 = case (a1, a2) of
+dependent :: DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
+dependent ds t1 a1 t2 a2 = case (a1, a2) of
   -- @SetNumCapabilities@ and @GetNumCapabilities@ are NOT dependent
   -- IF the value read is the same as the value written. 'dependent''
   -- can not see the value read (as it hasn't happened yet!), and so
@@ -611,8 +605,8 @@ dependent memtype ds t1 a1 t2 a2 = case (a1, a2) of
   (BlockedSTM _, BlockedSTM _) -> checkSTM
 
   _ -> case (,) <$> rewind a1 <*> rewind a2 of
-    Just (l1, l2) -> dependent' memtype ds t1 a1 t2 l2 && dependent' memtype ds t2 a2 t1 l1
-    _ -> dependentActions memtype ds (simplifyAction a1) (simplifyAction a2)
+    Just (l1, l2) -> dependent' ds t1 a1 t2 l2 && dependent' ds t2 a2 t1 l1
+    _ -> dependentActions ds (simplifyAction a1) (simplifyAction a2)
 
   where
     -- STM actions A and B are dependent if A wrote to anything B
@@ -624,8 +618,8 @@ dependent memtype ds t1 a1 t2 a2 = case (a1, a2) of
 --
 -- Termination of the initial thread is handled specially in the DPOR
 -- implementation.
-dependent' :: MemType -> DepState -> ThreadId -> ThreadAction -> ThreadId -> Lookahead -> Bool
-dependent' memtype ds t1 a1 t2 l2 = case (a1, l2) of
+dependent' :: DepState -> ThreadId -> ThreadAction -> ThreadId -> Lookahead -> Bool
+dependent' ds t1 a1 t2 l2 = case (a1, l2) of
   -- Worst-case assumption: all IO is dependent.
   (LiftIO, WillLiftIO) -> True
 
@@ -648,13 +642,13 @@ dependent' memtype ds t1 a1 t2 l2 = case (a1, l2) of
   (SetNumCapabilities _, WillGetNumCapabilities)   -> True
   (SetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
 
-  _ -> dependentActions memtype ds (simplifyAction a1) (simplifyLookahead l2)
+  _ -> dependentActions ds (simplifyAction a1) (simplifyLookahead l2)
 
 -- | Check if two 'ActionType's are dependent. Note that this is not
 -- sufficient to know if two 'ThreadAction's are dependent, without
 -- being so great an over-approximation as to be useless!
-dependentActions :: MemType -> DepState -> ActionType -> ActionType -> Bool
-dependentActions memtype ds a1 a2 = case (a1, a2) of
+dependentActions :: DepState -> ActionType -> ActionType -> Bool
+dependentActions ds a1 a2 = case (a1, a2) of
   -- Unsynchronised reads and writes are always dependent, even under
   -- a relaxed memory model, as an unsynchronised write gives rise to
   -- a commit, which synchronises.
@@ -673,8 +667,8 @@ dependentActions memtype ds a1 a2 = case (a1, a2) of
 
   -- Unsynchronised reads where a memory barrier would flush a
   -- buffered write
-  (UnsynchronisedRead r1, _) | isBarrier a2 -> isBuffered ds r1 && memtype /= SequentialConsistency
-  (_, UnsynchronisedRead r2) | isBarrier a1 -> isBuffered ds r2 && memtype /= SequentialConsistency
+  (UnsynchronisedRead r1, _) | isBarrier a2 -> isBuffered ds r1
+  (_, UnsynchronisedRead r2) | isBarrier a1 -> isBuffered ds r2
 
   -- Commits and memory barriers must be dependent, as memory barriers
   -- (currently) flush in a consistent order.  Alternative orders need
