@@ -668,8 +668,8 @@ dependentActions memtype ds a1 a2 = case (a1, a2) of
   -- empty.
   --
   -- See [RMMVerification], lemma 5.25.
-  (UnsynchronisedWrite r1, _) | same crefOf && isCommit a2 r1 && isBuffered ds r1 -> False
-  (_, UnsynchronisedWrite r2) | same crefOf && isCommit a1 r2 && isBuffered ds r2 -> False
+  (UnsynchronisedWrite r1, PartiallySynchronisedCommit _) | same crefOf && isBuffered ds r1 -> False
+  (PartiallySynchronisedCommit _, UnsynchronisedWrite r2) | same crefOf && isBuffered ds r2 -> False
 
   -- Unsynchronised reads where a memory barrier would flush a
   -- buffered write
