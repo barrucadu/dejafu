@@ -417,7 +417,7 @@ tvarsOf act = tvarsRead act `S.union` tvarsWritten act
 -- | Get the @TVar@s a transaction wrote to (or would have, if it
 -- didn't @retry@).
 --
--- @since unreleased
+-- @since 0.9.0.2
 tvarsWritten :: ThreadAction -> Set TVarId
 tvarsWritten act = S.fromList $ case act of
   STM trc _ -> concatMap tvarsOf' trc
@@ -432,7 +432,7 @@ tvarsWritten act = S.fromList $ case act of
 
 -- | Get the @TVar@s a transaction read from.
 --
--- @since unreleased
+-- @since 0.9.0.2
 tvarsRead :: ThreadAction -> Set TVarId
 tvarsRead act = S.fromList $ case act of
   STM trc _ -> concatMap tvarsOf' trc
