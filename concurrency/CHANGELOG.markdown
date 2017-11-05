@@ -12,8 +12,16 @@ unreleased
 
 ### Control.Monad.Conc.Class
 
+- A new `IsConc` type (and `toIsConc`, `fromIsConc` functions), where a value of type `IsConc m a`
+  can only be constructed if `m` has a `MonadConc` instance.  Its `STM` type is `IsSTM (STM m)`.
+
 - The provided transformer instances now use the `modifyCRefCAS_` of the underlying monad, rather
   than the default definition in terms of `modifyCRefCAS`.
+
+### Control.Monad.STM.Class
+
+- A new `IsSTM` type (and `toIsSTM`, `fromIsSTM` functions), where a value of type `IsSTM m a` can
+  only be constructed if `m` has a `MonadSTM` instance.
 
 
 ---------------------------------------------------------------------------------------------------

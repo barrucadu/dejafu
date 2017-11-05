@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -60,6 +61,11 @@ module Control.Monad.Conc.Class
   , cas
   , peekTicket
 
+  -- * Utilities for type shenanigans
+  , IsConc
+  , toIsConc
+  , fromIsConc
+
   -- * Utilities for instance writers
   , liftedF
   , liftedFork
@@ -71,7 +77,8 @@ import           Control.Exception            (AsyncException(ThreadKilled),
 import           Control.Monad.Catch          (MonadCatch, MonadMask,
                                                MonadThrow)
 import qualified Control.Monad.Catch          as Ca
-import           Control.Monad.STM.Class      (MonadSTM, TVar, readTVar)
+import           Control.Monad.STM.Class      (IsSTM, MonadSTM, TVar, fromIsSTM,
+                                               readTVar)
 import           Control.Monad.Trans.Control  (MonadTransControl, StT, liftWith)
 import           Data.Proxy                   (Proxy(..))
 
@@ -656,6 +663,73 @@ labelMe "" = pure ()
 labelMe n  = do
   tid <- myThreadId
   IO.labelThread tid n
+
+-------------------------------------------------------------------------------
+-- Type shenanigans
+
+-- | A value of type @IsConc m a@ can only be constructed if @m@ has a
+-- @MonadConc@ instance.
+--
+-- @since unreleased
+newtype IsConc m a = IsConc { unIsConc :: m a }
+  deriving (Functor, Applicative, Monad, MonadThrow, MonadCatch, MonadMask)
+
+-- | Wrap an @m a@ value inside an @IsConc@ if @m@ has a @MonadConc@
+-- instance.
+--
+-- @since unreleased
+toIsConc :: MonadConc m => m a -> IsConc m a
+toIsConc = IsConc
+
+-- | Unwrap an @IsConc@ value.
+--
+-- @since unreleased
+fromIsConc :: MonadConc m => IsConc m a -> m a
+fromIsConc = unIsConc
+
+instance MonadConc m => MonadConc (IsConc m) where
+  type STM      (IsConc m) = IsSTM (STM m)
+  type MVar     (IsConc m) = MVar     m
+  type CRef     (IsConc m) = CRef     m
+  type Ticket   (IsConc m) = Ticket   m
+  type ThreadId (IsConc m) = ThreadId m
+
+
+  fork     ma = toIsConc (fork     $ unIsConc ma)
+  forkOn i ma = toIsConc (forkOn i $ unIsConc ma)
+
+  forkWithUnmask        ma = toIsConc (forkWithUnmask        (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
+  forkWithUnmaskN   n   ma = toIsConc (forkWithUnmaskN   n   (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
+  forkOnWithUnmask    i ma = toIsConc (forkOnWithUnmask    i (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
+  forkOnWithUnmaskN n i ma = toIsConc (forkOnWithUnmaskN n i (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
+
+  getNumCapabilities = toIsConc getNumCapabilities
+  setNumCapabilities = toIsConc . setNumCapabilities
+  myThreadId         = toIsConc myThreadId
+  yield              = toIsConc yield
+  threadDelay        = toIsConc . threadDelay
+  throwTo t          = toIsConc . throwTo t
+  newEmptyMVar       = toIsConc newEmptyMVar
+  newEmptyMVarN      = toIsConc . newEmptyMVarN
+  readMVar           = toIsConc . readMVar
+  tryReadMVar        = toIsConc . tryReadMVar
+  putMVar v          = toIsConc . putMVar v
+  tryPutMVar v       = toIsConc . tryPutMVar v
+  takeMVar           = toIsConc . takeMVar
+  tryTakeMVar        = toIsConc . tryTakeMVar
+  newCRef            = toIsConc . newCRef
+  newCRefN n         = toIsConc . newCRefN n
+  readCRef           = toIsConc . readCRef
+  atomicModifyCRef r = toIsConc . atomicModifyCRef r
+  writeCRef r        = toIsConc . writeCRef r
+  atomicWriteCRef r  = toIsConc . atomicWriteCRef r
+  readForCAS         = toIsConc . readForCAS
+  peekTicket' _      = peekTicket' (Proxy :: Proxy m)
+  casCRef r t        = toIsConc . casCRef r t
+  modifyCRefCAS r    = toIsConc . modifyCRefCAS r
+  modifyCRefCAS_ r   = toIsConc . modifyCRefCAS_ r
+  atomically         = toIsConc . atomically . fromIsSTM
+  readTVarConc       = toIsConc . readTVarConc
 
 -------------------------------------------------------------------------------
 -- Transformer instances

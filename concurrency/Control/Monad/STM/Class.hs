@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -28,8 +29,14 @@ module Control.Monad.STM.Class
   , orElse
   , throwSTM
   , catchSTM
-  ) where
 
+    -- * Utilities for type shenanigans
+  , IsSTM
+  , toIsSTM
+  , fromIsSTM
+) where
+
+import           Control.Applicative          (Alternative(..))
 import           Control.Exception            (Exception)
 import           Control.Monad                (MonadPlus(..), unless)
 import           Control.Monad.Reader         (ReaderT)
@@ -144,6 +151,37 @@ instance MonadSTM STM.STM where
   newTVar   = STM.newTVar
   readTVar  = STM.readTVar
   writeTVar = STM.writeTVar
+
+-------------------------------------------------------------------------------
+-- Type shenanigans
+
+-- | A value of type @IsSTM m a@ can only be constructed if @m@ has a
+-- @MonadSTM@ instance.
+--
+-- @since unreleased
+newtype IsSTM m a = IsSTM { unIsSTM :: m a }
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Ca.MonadThrow, Ca.MonadCatch)
+
+-- | Wrap an @m a@ value inside an @IsSTM@ if @m@ has a @MonadSTM@
+-- instance.
+--
+-- @since unreleased
+toIsSTM :: MonadSTM m => m a -> IsSTM m a
+toIsSTM = IsSTM
+
+-- | Unwrap an @IsSTM@ value.
+--
+-- @since unreleased
+fromIsSTM :: MonadSTM m => IsSTM m a -> m a
+fromIsSTM = unIsSTM
+
+instance MonadSTM m => MonadSTM (IsSTM m) where
+  type TVar (IsSTM m) = TVar m
+
+  newTVar     = toIsSTM . newTVar
+  newTVarN n  = toIsSTM . newTVarN n
+  readTVar    = toIsSTM . readTVar
+  writeTVar v = toIsSTM . writeTVar v
 
 -------------------------------------------------------------------------------
 -- Transformer instances
