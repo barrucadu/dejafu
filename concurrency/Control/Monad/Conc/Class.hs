@@ -670,20 +670,20 @@ labelMe n  = do
 -- | A value of type @IsConc m a@ can only be constructed if @m@ has a
 -- @MonadConc@ instance.
 --
--- @since unreleased
+-- @since 1.2.2.0
 newtype IsConc m a = IsConc { unIsConc :: m a }
   deriving (Functor, Applicative, Monad, MonadThrow, MonadCatch, MonadMask)
 
 -- | Wrap an @m a@ value inside an @IsConc@ if @m@ has a @MonadConc@
 -- instance.
 --
--- @since unreleased
+-- @since 1.2.2.0
 toIsConc :: MonadConc m => m a -> IsConc m a
 toIsConc = IsConc
 
 -- | Unwrap an @IsConc@ value.
 --
--- @since unreleased
+-- @since 1.2.2.0
 fromIsConc :: MonadConc m => IsConc m a -> m a
 fromIsConc = unIsConc
 

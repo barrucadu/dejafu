@@ -158,20 +158,20 @@ instance MonadSTM STM.STM where
 -- | A value of type @IsSTM m a@ can only be constructed if @m@ has a
 -- @MonadSTM@ instance.
 --
--- @since unreleased
+-- @since 1.2.2.0
 newtype IsSTM m a = IsSTM { unIsSTM :: m a }
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Ca.MonadThrow, Ca.MonadCatch)
 
 -- | Wrap an @m a@ value inside an @IsSTM@ if @m@ has a @MonadSTM@
 -- instance.
 --
--- @since unreleased
+-- @since 1.2.2.0
 toIsSTM :: MonadSTM m => m a -> IsSTM m a
 toIsSTM = IsSTM
 
 -- | Unwrap an @IsSTM@ value.
 --
--- @since unreleased
+-- @since 1.2.2.0
 fromIsSTM :: MonadSTM m => IsSTM m a -> m a
 fromIsSTM = unIsSTM
 

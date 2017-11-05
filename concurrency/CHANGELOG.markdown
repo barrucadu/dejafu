@@ -7,13 +7,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+1.2.2.0
+-------
+
+- **Date**    2017-11-05
+- **Git tag** [concurrency-1.2.2.0][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.2.2.0
 
 ### Control.Monad.Conc.Class
 
 - A new `IsConc` type (and `toIsConc`, `fromIsConc` functions), where a value of type `IsConc m a`
   can only be constructed if `m` has a `MonadConc` instance.  Its `STM` type is `IsSTM (STM m)`.
+  (#144)
 
 - The provided transformer instances now use the `modifyCRefCAS_` of the underlying monad, rather
   than the default definition in terms of `modifyCRefCAS`.
@@ -21,7 +26,9 @@ unreleased
 ### Control.Monad.STM.Class
 
 - A new `IsSTM` type (and `toIsSTM`, `fromIsSTM` functions), where a value of type `IsSTM m a` can
-  only be constructed if `m` has a `MonadSTM` instance.
+  only be constructed if `m` has a `MonadSTM` instance. (#144)
+
+[concurrency-1.2.2.0]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.2.2.0
 
 
 ---------------------------------------------------------------------------------------------------
