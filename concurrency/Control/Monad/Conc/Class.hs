@@ -700,6 +700,7 @@ instance C => MonadConc (T m) where                            { \
   peekTicket' _      = peekTicket' (Proxy :: Proxy m)          ; \
   casCRef r t        = lift . casCRef r t                      ; \
   modifyCRefCAS r    = lift . modifyCRefCAS r                  ; \
+  modifyCRefCAS_ r   = lift . modifyCRefCAS_ r                 ; \
   atomically         = lift . atomically                       ; \
   readTVarConc       = lift . readTVarConc                     }
 

@@ -7,6 +7,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Control.Monad.Conc.Class
+
+- The provided transformer instances now use the `modifyCRefCAS_` of the underlying monad, rather
+  than the default definition in terms of `modifyCRefCAS`.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 1.2.1.2
 -------
 
