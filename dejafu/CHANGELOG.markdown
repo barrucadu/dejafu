@@ -7,12 +7,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+0.9.0.3
+-------
+
+- **Date**    2017-11-06
+- **Git tag** [dejafu-0.9.0.3][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.9.0.3
 
 ### Miscellaneous
 
 - Impose a dependency between commits and memory barriers, to make barriers sound (#138).
+
+[dejafu-0.9.0.3]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.9.0.3
 
 
 ---------------------------------------------------------------------------------------------------
