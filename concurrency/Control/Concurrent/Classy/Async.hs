@@ -18,14 +18,9 @@
 -- The 'withAsync' function starts an operation in a separate thread,
 -- and kills it if the inner action finishes before it completes.
 --
--- There are a few deviations from the regular async package:
---
---   * 'asyncBound' and 'withAsyncBound' are missing as @MonadConc@
---   does not support bound threads.
---
---   * The @Alternative@ instance for 'Concurrently' uses @forever
---   yield@ in the definition of @empty@, rather than @forever
---   (threadDelay maxBound)@.
+-- Unlike the regular async package, the @Alternative@ instance for
+-- 'Concurrently' uses @forever yield@ in the definition of @empty@,
+-- rather than @forever (threadDelay maxBound)@.
 module Control.Concurrent.Classy.Async
   ( -- * Asynchronous actions
     Async
@@ -33,6 +28,8 @@ module Control.Concurrent.Classy.Async
   -- * Spawning
   , async
   , asyncN
+  , asyncBound
+  , asyncBoundN
   , asyncOn
   , asyncOnN
   , asyncWithUnmask
@@ -43,6 +40,8 @@ module Control.Concurrent.Classy.Async
   -- * Spawning with automatic 'cancel'ation
   , withAsync
   , withAsyncN
+  , withAsyncBound
+  , withAsyncBoundN
   , withAsyncOn
   , withAsyncOnN
   , withAsyncWithUnmask
@@ -192,6 +191,19 @@ async = asyncUsing fork
 asyncN :: MonadConc m => String -> m a -> m (Async m a)
 asyncN name = asyncUsing (forkN name)
 
+-- | Like 'async' but uses 'forkOS' internally.
+--
+-- @since 1.3.0.0
+asyncBound :: MonadConc m => m a -> m (Async m a)
+asyncBound = asyncUsing forkOS
+
+-- | Like 'asyncBound', but using a named thread for better debugging
+-- information.
+--
+-- @since 1.3.0.0
+asyncBoundN :: MonadConc m => String -> m a -> m (Async m a)
+asyncBoundN name = asyncUsing (forkOSN name)
+
 -- | Like 'async' but using 'forkOn' internally.
 --
 -- @since 1.1.1.0
@@ -265,6 +277,19 @@ withAsync = withAsyncUsing fork
 -- @since 1.2.3.0
 withAsyncN :: MonadConc m => String -> m a -> (Async m a -> m b) -> m b
 withAsyncN name = withAsyncUsing (forkN name)
+
+-- | Like 'withAsync' but uses 'forkOS' internally.
+--
+-- @since 1.3.0.0
+withAsyncBound :: MonadConc m => m a -> (Async m a -> m b) -> m b
+withAsyncBound = withAsyncUsing forkOS
+
+-- | Like 'withAsyncBound' but using a named thread for better
+-- debugging information.
+--
+-- @since 1.3.0.0
+withAsyncBoundN :: MonadConc m => String -> m a -> (Async m a -> m b) -> m b
+withAsyncBoundN name = withAsyncUsing (forkOSN name)
 
 -- | Like 'withAsync' but uses 'forkOn' internally.
 --

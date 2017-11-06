@@ -14,6 +14,11 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - **Git tag** [concurrency-1.3.0.0][]
 - **Hackage** https://hackage.haskell.org/package/concurrency-1.3.0.0
 
+### Control.Concurrent.Classy.Async
+
+- New `asyncBound`, `asyncBoundN`, `withAsyncBound`, and `withAsyncBoundN` functions for doing
+  asynchronous actions on bound threads. (#126)
+
 ### Control.Monad.Conc.Class
 
 - `MonadConc` now supports bound threads with new `forkOS`, `forkOSN`, and `isCurrentThreadBound`
