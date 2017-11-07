@@ -99,7 +99,7 @@
       - module:
         - name: Examples.ClassLaws
         - identifier:
-          - CST
+          - C
           - Concurrently
           - concurrently
           - concurrently'

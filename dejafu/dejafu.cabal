@@ -67,7 +67,6 @@ library
                      , random            >=1.0 && <1.2
                      , ref-fd            >=0.4 && <0.5
                      , transformers      >=0.4  && <0.6
-                     , transformers-base >=0.4  && <0.5
   -- hs-source-dirs:      
   default-language:    Haskell2010
   ghc-options:         -Wall
