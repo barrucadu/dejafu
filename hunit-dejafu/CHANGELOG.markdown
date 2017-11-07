@@ -7,6 +7,22 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Test.HUnit.DejaFu
+
+- The `ConcST` functions have been removed and replaced by the `ConcIO` functions.
+- The `Testable` and `Assertable` instances for `ConcST t ()` are gone.
+
+### Miscellaneous
+
+- The minimum supported version of dejafu has been raised to UNRELEASED.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.7.0.2
 -------
 
