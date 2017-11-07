@@ -302,7 +302,7 @@ import           Test.DejaFu.SCT
 -- This uses the 'Conc' monad for testing, which is an instance of
 -- 'MonadConc'.
 --
--- @since unreleased
+-- @since 1.0.0.0
 autocheck :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
   => ConcT r n a
   -- ^ The computation to test
@@ -323,7 +323,7 @@ autocheck = autocheckWay defaultWay defaultMemType
 -- __Warning:__ Using larger bounds will almost certainly
 -- significantly increase the time taken to test!
 --
--- @since unreleased
+-- @since 1.0.0.0
 autocheckWay :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
   => Way
   -- ^ How to run the concurrent program.
@@ -346,7 +346,7 @@ autocheckCases =
 -- | Check a predicate and print the result to stdout, return 'True'
 -- if it passes.
 --
--- @since unreleased
+-- @since 1.0.0.0
 dejafu :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
   => ConcT r n a
   -- ^ The computation to test
@@ -358,7 +358,7 @@ dejafu = dejafuWay defaultWay defaultMemType
 -- | Variant of 'dejafu' which takes a way to run the program and a
 -- memory model.
 --
--- @since unreleased
+-- @since 1.0.0.0
 dejafuWay :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
   => Way
   -- ^ How to run the concurrent program.
@@ -373,7 +373,7 @@ dejafuWay = dejafuDiscard (const Nothing)
 
 -- | Variant of 'dejafuWay' which can selectively discard results.
 --
--- @since unreleased
+-- @since 1.0.0.0
 dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
@@ -393,7 +393,7 @@ dejafuDiscard discard way memtype conc (name, test) = do
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
 --
--- @since unreleased
+-- @since 1.0.0.0
 dejafus :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
   => ConcT r n a
   -- ^ The computation to test
@@ -405,7 +405,7 @@ dejafus = dejafusWay defaultWay defaultMemType
 -- | Variant of 'dejafus' which takes a way to run the program and a
 -- memory model.
 --
--- @since unreleased
+-- @since 1.0.0.0
 dejafusWay :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
   => Way
   -- ^ How to run the concurrent program.
@@ -465,7 +465,7 @@ instance Foldable Result where
 -- | Run a predicate over all executions within the default schedule
 -- bounds.
 --
--- @since unreleased
+-- @since 1.0.0.0
 runTest :: (MonadConc n, MonadRef r n)
   => Predicate a
   -- ^ The predicate to check
@@ -477,7 +477,7 @@ runTest = runTestWay defaultWay defaultMemType
 -- | Variant of 'runTest' which takes a way to run the program and a
 -- memory model.
 --
--- @since unreleased
+-- @since 1.0.0.0
 runTestWay :: (MonadConc n, MonadRef r n)
   => Way
   -- ^ How to run the concurrent program.

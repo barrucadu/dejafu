@@ -122,7 +122,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Every @MonadConc@ has an associated 'MonadSTM', transactions of
 -- which can be run atomically.
 --
--- @since unreleased
+-- @since 1.3.0.0
 class ( Applicative m, Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -251,7 +251,7 @@ class ( Applicative m, Monad m
   --
   -- > forkOS = forkOSN ""
   --
-  -- @since unreleased
+  -- @since 1.3.0.0
   forkOS :: m () -> m (ThreadId m)
   forkOS = forkOSN ""
 
@@ -260,7 +260,7 @@ class ( Applicative m, Monad m
   --
   -- > forkOSN _ = forkOS
   --
-  -- @since unreleased
+  -- @since 1.3.0.0
   forkOSN :: String -> m () -> m (ThreadId m)
   forkOSN _ = forkOS
 
@@ -271,7 +271,7 @@ class ( Applicative m, Monad m
   -- This will always be false if your program is not compiled with
   -- the threaded runtime.
   --
-  -- @since unreleased
+  -- @since 1.3.0.0
   isCurrentThreadBound :: m Bool
 
   -- | Get the number of Haskell threads that can run simultaneously.
@@ -531,7 +531,7 @@ forkOnN name i ma = forkOnWithUnmaskN name i (const ma)
 -- thread-local state with @runInBoundThread@ so that you can use them
 -- without knowing whether the current thread is /bound/.
 --
--- @since unreleased
+-- @since 1.3.0.0
 runInBoundThread :: MonadConc m => m a -> m a
 runInBoundThread =
   runInThread (not <$> isCurrentThreadBound) (forkOSN "runInBoundThread")
@@ -552,7 +552,7 @@ runInBoundThread =
 -- computation. This ensures there's always a way of killing the
 -- forked thread.
 --
--- @since unreleased
+-- @since 1.3.0.0
 runInUnboundThread :: MonadConc m => m a -> m a
 runInUnboundThread =
   runInThread isCurrentThreadBound (forkN "runInUnboundThread")

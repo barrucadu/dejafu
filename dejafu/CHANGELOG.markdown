@@ -7,8 +7,12 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+1.0.0.0 (unreleased)
+--------------------
+
+- **Date**    -
+- **Git tag** [dejafu-1.0.0.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-1.0.0.0
 
 ### Test.DejaFu
 
@@ -46,7 +50,9 @@ unreleased
 
 ### Miscellaneous
 
-- The minimum supported version of concurrency has been raised to UNRELEASED.
+- The minimum supported version of concurrency has been raised to 1.3.0.0.
+
+[dejafu-1.0.0.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-1.0.0.0
 
 
 ---------------------------------------------------------------------------------------------------

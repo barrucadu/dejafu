@@ -188,14 +188,14 @@ asyncN name = asyncUsing (forkN name)
 
 -- | Like 'async' but uses 'forkOS' internally.
 --
--- @since unreleased
+-- @since 1.3.0.0
 asyncBound :: MonadConc m => m a -> m (Async m a)
 asyncBound = asyncUsing forkOS
 
 -- | Like 'asyncBound', but using a named thread for better debugging
 -- information.
 --
--- @since unreleased
+-- @since 1.3.0.0
 asyncBoundN :: MonadConc m => String -> m a -> m (Async m a)
 asyncBoundN name = asyncUsing (forkOSN name)
 
@@ -268,7 +268,7 @@ withAsync = withAsyncUsing fork
 
 -- | Like 'withAsync' but uses 'forkOS' internally.
 --
--- @since unreleased
+-- @since 1.3.0.0
 withAsyncBound :: MonadConc m => m a -> (Async m a -> m b) -> m b
 withAsyncBound = withAsyncUsing forkOS
 

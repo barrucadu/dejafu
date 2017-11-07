@@ -7,8 +7,12 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+1.3.0.0 (unreleased)
+--------------------
+
+- **Date**    -
+- **Git tag** [concurrency-1.3.0.0][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.3.0.0
 
 ### Control.Concurrent.Classy.Async
 
@@ -26,6 +30,8 @@ unreleased
   re-exported, not just `False`. (#126)
 
 Note that bound threads are only supported if you compile with GHC and link with -threaded.
+
+[concurrency-1.3.0.0]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.3.0.0
 
 
 ---------------------------------------------------------------------------------------------------

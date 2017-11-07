@@ -74,7 +74,7 @@ toConc = C . cont
 wrap :: (M n r a -> M n r a) -> ConcT r n a -> ConcT r n a
 wrap f = C . f . unC
 
--- | @since unreleased
+-- | @since 1.0.0.0
 instance IO.MonadIO n => IO.MonadIO (ConcT r n) where
   liftIO ma = toConc (\c -> ALift (fmap c (IO.liftIO ma)))
 
@@ -187,7 +187,7 @@ forkOSWithUnmaskN n ma
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 --
--- @since unreleased
+-- @since 1.0.0.0
 runConcurrent :: (C.MonadConc n, MonadRef r n)
   => Scheduler s
   -> MemType

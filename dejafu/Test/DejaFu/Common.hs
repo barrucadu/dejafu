@@ -276,7 +276,7 @@ initialIdSource = Id 0 0 0 0 [] [] [] []
 
 -- | All the actions that a thread can perform.
 --
--- @since unreleased
+-- @since 1.0.0.0
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -455,7 +455,7 @@ tvarsRead act = S.fromList $ case act of
 
 -- | A one-step look-ahead at what a thread will do next.
 --
--- @since unreleased
+-- @since 1.0.0.0
 data Lookahead =
     WillFork
   -- ^ Will start a new thread.

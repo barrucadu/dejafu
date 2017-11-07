@@ -132,7 +132,7 @@ instance IsOption Way where
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
 --
--- @since unreleased
+-- @since 0.8.0.0
 testAuto :: (Eq a, Show a)
   => Conc.ConcIO a
   -- ^ The computation to test
@@ -142,7 +142,7 @@ testAuto = testAutoWay defaultWay defaultMemType
 -- | Variant of 'testAuto' which tests a computation under a given
 -- execution way and memory model.
 --
--- @since unreleased
+-- @since 0.8.0.0
 testAutoWay :: (Eq a, Show a)
   => Way
   -- ^ How to execute the concurrent program.
@@ -163,7 +163,7 @@ autocheckCases =
 
 -- | Check that a predicate holds.
 --
--- @since unreleased
+-- @since 0.8.0.0
 testDejafu :: Show a
   => Conc.ConcIO a
   -- ^ The computation to test
@@ -177,7 +177,7 @@ testDejafu = testDejafuWay defaultWay defaultMemType
 -- | Variant of 'testDejafu' which takes a way to execute the program
 -- and a memory model.
 --
--- @since unreleased
+-- @since 0.8.0.0
 testDejafuWay :: Show a
   => Way
   -- ^ How to execute the concurrent program.
@@ -194,7 +194,7 @@ testDejafuWay = testDejafuDiscard (const Nothing)
 
 -- | Variant of 'testDejafuWay' which can selectively discard results.
 --
--- @since unreleased
+-- @since 0.8.0.0
 testDejafuDiscard :: Show a
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
@@ -216,7 +216,7 @@ testDejafuDiscard discard way memtype conc name test =
 -- test. This will share work between the predicates, rather than
 -- running the concurrent computation many times for each predicate.
 --
--- @since unreleased
+-- @since 0.8.0.0
 testDejafus :: Show a
   => Conc.ConcIO a
   -- ^ The computation to test
@@ -228,7 +228,7 @@ testDejafus = testDejafusWay defaultWay defaultMemType
 -- | Variant of 'testDejafus' which takes a way to execute the program
 -- and a memory model.
 --
--- @since unreleased
+-- @since 0.8.0.0
 testDejafusWay :: Show a
   => Way
   -- ^ How to execute the concurrent program.

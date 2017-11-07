@@ -208,7 +208,7 @@ swarmy = Weighted
 -- | Explore possible executions of a concurrent program according to
 -- the given 'Way'.
 --
--- @since unreleased
+-- @since 1.0.0.0
 runSCT :: (MonadConc n, MonadRef r n)
   => Way
   -- ^ How to run the concurrent program.
@@ -221,7 +221,7 @@ runSCT = runSCTDiscard (const Nothing)
 
 -- | Return the set of results of a concurrent program.
 --
--- @since unreleased
+-- @since 1.0.0.0
 resultsSet :: (MonadConc n, MonadRef r n, Ord a)
   => Way
   -- ^ How to run the concurrent program.
@@ -250,7 +250,7 @@ instance NFData Discard where
 
 -- | A variant of 'runSCT' which can selectively discard results.
 --
--- @since unreleased
+-- @since 1.0.0.0
 runSCTDiscard :: (MonadConc n, MonadRef r n)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
@@ -267,7 +267,7 @@ runSCTDiscard discard (Uniform  g lim)     memtype = sctUniformRandomDiscard  di
 
 -- | A variant of 'resultsSet' which can selectively discard results.
 --
--- @since unreleased
+-- @since 1.0.0.0
 resultsSetDiscard :: (MonadConc n, MonadRef r n, Ord a)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.  Traces are always discarded.
@@ -287,7 +287,7 @@ resultsSetDiscard discard way memtype conc =
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since unreleased
+-- @since 1.0.0.0
 runSCT' :: (MonadConc n, MonadRef r n, NFData a)
   => Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
 runSCT' = runSCTDiscard' (const Nothing)
@@ -297,7 +297,7 @@ runSCT' = runSCTDiscard' (const Nothing)
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since unreleased
+-- @since 1.0.0.0
 resultsSet' :: (MonadConc n, MonadRef r n, Ord a, NFData a)
   => Way -> MemType -> ConcT r n a -> n (Set (Either Failure a))
 resultsSet' = resultsSetDiscard' (const Nothing)
@@ -307,7 +307,7 @@ resultsSet' = resultsSetDiscard' (const Nothing)
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since unreleased
+-- @since 1.0.0.0
 runSCTDiscard' :: (MonadConc n, MonadRef r n, NFData a)
   => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
 runSCTDiscard' discard way memtype conc = do
@@ -319,7 +319,7 @@ runSCTDiscard' discard way memtype conc = do
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since unreleased
+-- @since 1.0.0.0
 resultsSetDiscard' :: (MonadConc n, MonadRef r n, Ord a, NFData a)
   => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcT r n a -> n (Set (Either Failure a))
 resultsSetDiscard' discard way memtype conc = do
@@ -478,7 +478,7 @@ lBacktrack = backtrackAt (\_ _ -> False)
 -- do some redundant work as the introduction of a bound can make
 -- previously non-interfering events interfere with each other.
 --
--- @since unreleased
+-- @since 1.0.0.0
 sctBound :: (MonadConc n, MonadRef r n)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -491,7 +491,7 @@ sctBound = sctBoundDiscard (const Nothing)
 
 -- | A variant of 'sctBound' which can selectively discard results.
 --
--- @since unreleased
+-- @since 1.0.0.0
 sctBoundDiscard :: (MonadConc n, MonadRef r n)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
@@ -534,7 +534,7 @@ sctBoundDiscard discard memtype cb conc = go initialState where
 --
 -- This is not guaranteed to find all distinct results.
 --
--- @since unreleased
+-- @since 1.0.0.0
 sctUniformRandom :: (MonadConc n, MonadRef r n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -550,7 +550,7 @@ sctUniformRandom = sctUniformRandomDiscard (const Nothing)
 -- | A variant of 'sctUniformRandom' which can selectively discard
 -- results.
 --
--- @since unreleased
+-- @since 1.0.0.0
 sctUniformRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
@@ -579,7 +579,7 @@ sctUniformRandomDiscard discard memtype g0 lim0 conc = go g0 (max 0 lim0) where
 --
 -- This is not guaranteed to find all distinct results.
 --
--- @since unreleased
+-- @since 1.0.0.0
 sctWeightedRandom :: (MonadConc n, MonadRef r n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -597,7 +597,7 @@ sctWeightedRandom = sctWeightedRandomDiscard (const Nothing)
 -- | A variant of 'sctWeightedRandom' which can selectively discard
 -- results.
 --
--- @since unreleased
+-- @since 1.0.0.0
 sctWeightedRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
