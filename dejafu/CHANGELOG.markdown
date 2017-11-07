@@ -7,6 +7,17 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Test.DejaFu.Common
+
+- Fix some incorrect "@since" haddock comments.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.9.0.3
 -------
 

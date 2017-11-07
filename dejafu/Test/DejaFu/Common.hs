@@ -933,21 +933,21 @@ showFail IllegalSubconcurrency = "[illegal-subconcurrency]"
 
 -- | Check if a failure is an @InternalError@.
 --
--- @since undefined
+-- @since 0.9.0.0
 isInternalError :: Failure -> Bool
 isInternalError InternalError = True
 isInternalError _ = False
 
 -- | Check if a failure is an @Abort@.
 --
--- @since undefined
+-- @since 0.9.0.0
 isAbort :: Failure -> Bool
 isAbort Abort = True
 isAbort _ = False
 
 -- | Check if a failure is a @Deadlock@ or an @STMDeadlock@.
 --
--- @since undefined
+-- @since 0.9.0.0
 isDeadlock :: Failure -> Bool
 isDeadlock Deadlock = True
 isDeadlock STMDeadlock = True
@@ -955,14 +955,14 @@ isDeadlock _ = False
 
 -- | Check if a failure is an @UncaughtException@
 --
--- @since undefined
+-- @since 0.9.0.0
 isUncaughtException :: Failure -> Bool
 isUncaughtException (UncaughtException _) = True
 isUncaughtException _ = False
 
 -- | Check if a failure is an @IllegalSubconcurrency@
 --
--- @since undefined
+-- @since 0.9.0.0
 isIllegalSubconcurrency :: Failure -> Bool
 isIllegalSubconcurrency IllegalSubconcurrency = True
 isIllegalSubconcurrency _ = False
