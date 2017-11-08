@@ -286,6 +286,7 @@ import           Control.Monad.IO.Class   (MonadIO(..))
 import           Control.Monad.Ref        (MonadRef)
 import           Data.Function            (on)
 import           Data.List                (intercalate, intersperse, minimumBy)
+import           Data.Maybe               (mapMaybe)
 import           Data.Ord                 (comparing)
 import           Data.Profunctor          (Profunctor(..))
 
@@ -390,7 +391,8 @@ dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -- ^ The predicate (with a name) to check
   -> n Bool
 dejafuDiscard discard way memtype conc (name, test) = do
-  traces <- runSCTDiscard discard way memtype conc
+  let discarder = strengthenDiscard discard (pdiscard test)
+  traces <- runSCTDiscard discarder way memtype conc
   liftIO $ doTest name (peval test traces)
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
@@ -420,10 +422,25 @@ dejafusWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -- ^ The list of predicates (with names) to check
   -> n Bool
 dejafusWay way memtype conc tests = do
-  traces <- runSCT way memtype conc
-  results <- mapM (\(name, test) -> liftIO . doTest name $ peval test traces) tests
-  pure (and results)
+    traces  <- runSCTDiscard discarder way memtype conc
+    results <- mapM (\(name, test) -> liftIO . doTest name $ check test traces) tests
+    pure (and results)
+  where
+    discarder = foldr
+      (weakenDiscard . pdiscard . snd)
+      (const (Just DiscardResultAndTrace))
+      tests
 
+    -- for evaluating each individual predicate, we only want the
+    -- results/traces it would not discard, but the traces set may
+    -- include more than this if the different predicates have
+    -- different discard functions, so we do another pass of
+    -- discarding.
+    check p = peval p . mapMaybe go where
+      go r@(efa, _) = case pdiscard p efa of
+        Just DiscardResultAndTrace -> Nothing
+        Just DiscardTrace -> Just (efa, [])
+        Nothing -> Just r
 
 -------------------------------------------------------------------------------
 -- Test cases
@@ -491,8 +508,8 @@ runTestWay :: (MonadConc n, MonadRef r n)
   -> ConcT r n a
   -- ^ The computation to test
   -> n (Result b)
-runTestWay way memtype predicate conc =
-  peval predicate <$> runSCT way memtype conc
+runTestWay way memtype p conc =
+  peval p <$> runSCTDiscard (pdiscard p) way memtype conc
 
 
 -------------------------------------------------------------------------------
@@ -511,14 +528,17 @@ type Predicate a = ProPredicate a a
 -- into a 'Result', possibly discarding some on the way.
 --
 -- @since 1.0.0.0
-newtype ProPredicate a b = ProPredicate
-  { peval :: [(Either Failure a, Trace)] -> Result b
+data ProPredicate a b = ProPredicate
+  { pdiscard :: Either Failure a -> Maybe Discard
+  -- ^ Selectively discard results before computing the result.
+  , peval :: [(Either Failure a, Trace)] -> Result b
   -- ^ Compute the result with the un-discarded results.
   }
 
 instance Profunctor ProPredicate where
   dimap f g p = ProPredicate
-    { peval = fmap g . peval p . map (first (fmap f))
+    { pdiscard = pdiscard p . fmap f
+    , peval = fmap g . peval p . map (first (fmap f))
     }
 
 instance Functor (ProPredicate x) where
@@ -620,7 +640,8 @@ alwaysSame = representative $ alwaysTrue2 (==)
 -- @since 1.0.0.0
 notAlwaysSame :: Eq a => Predicate a
 notAlwaysSame = ProPredicate
-    { peval = \case
+    { pdiscard = const Nothing
+    , peval = \case
         [x] -> defaultFail [x]
         xs  -> go xs (defaultFail [])
     }
@@ -639,7 +660,8 @@ notAlwaysSame = ProPredicate
 -- @since 1.0.0.0
 alwaysTrue :: (Either Failure a -> Bool) -> Predicate a
 alwaysTrue p = ProPredicate
-    { peval = \xs -> go xs $ (defaultFail (failures xs)) { _pass = True }
+    { pdiscard = \efa -> if p efa then Just DiscardResultAndTrace else Nothing
+    , peval = \xs -> go xs $ (defaultFail (failures xs)) { _pass = True }
     }
   where
     go (y:ys) res
@@ -659,7 +681,8 @@ alwaysTrue p = ProPredicate
 -- @since 1.0.0.0
 alwaysTrue2 :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
 alwaysTrue2 p = ProPredicate
-    { peval = \case
+    { pdiscard = const Nothing
+    , peval = \case
       [_] -> defaultPass
       xs  -> go xs $ defaultPass { _failures = failures xs }
     }
@@ -689,7 +712,8 @@ alwaysTrue2 p = ProPredicate
 -- @since 1.0.0.0
 somewhereTrue :: (Either Failure a -> Bool) -> Predicate a
 somewhereTrue p = ProPredicate
-    { peval = \xs -> go xs $ defaultFail (failures xs)
+    { pdiscard = \efa -> if p efa then Just DiscardTrace else Nothing
+    , peval = \xs -> go xs $ defaultFail (failures xs)
     }
   where
     go (y:ys) res
@@ -705,7 +729,8 @@ somewhereTrue p = ProPredicate
 -- @since 1.0.0.0
 gives :: (Eq a, Show a) => [Either Failure a] -> Predicate a
 gives expected = ProPredicate
-    { peval = \xs -> go expected [] xs $ defaultFail (failures xs)
+    { pdiscard = \efa -> if efa `elem` expected then Just DiscardTrace else Nothing
+    , peval = \xs -> go expected [] xs $ defaultFail (failures xs)
     }
   where
     go waitingFor alreadySeen ((x, _):xs) res

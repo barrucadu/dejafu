@@ -86,7 +86,7 @@ instance Testable (Conc.ConcIO ()) where
 -- | @since 0.3.0.0
 instance Assertable (Conc.ConcIO ()) where
   assert conc = do
-    traces <- SCT.runSCTDiscard (const Nothing) defaultWay defaultMemType (try conc)
+    traces <- SCT.runSCTDiscard (pdiscard assertableP) defaultWay defaultMemType (try conc)
     assertString . showErr $ peval assertableP traces
 
 assertableP :: Predicate (Either HUnitFailure ())
@@ -245,11 +245,8 @@ testconc discard way memtype concio tests = case map toTest tests of
 
   where
     toTest (name, p) = TestLabel name . TestCase $ do
-      -- Sharing of traces probably not possible (without something
-      -- really unsafe) here, as 'test' doesn't allow side-effects
-      -- (eg, constructing an 'MVar' to share the traces after one
-      -- test computed them).
-      traces <- SCT.runSCTDiscard discard way memtype concio
+      let discarder = SCT.strengthenDiscard discard (pdiscard p)
+      traces <- SCT.runSCTDiscard discarder way memtype concio
       assertString . showErr $ peval p traces
 
 -- | Produce a HUnit 'Test' from a Deja Fu refinement property test.

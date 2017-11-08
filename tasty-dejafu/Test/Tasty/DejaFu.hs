@@ -92,8 +92,8 @@ instance IsTest (Conc.ConcIO (Maybe String)) where
   run options conc callback = do
     let memtype = lookupOption options
     let way     = lookupOption options
-    let traces  = SCT.runSCTDiscard (const Nothing) way memtype conc
-    run options (ConcTest traces assertableP) callback
+    let traces  = SCT.runSCTDiscard (pdiscard assertableP) way memtype conc
+    run options (ConcTest traces (peval assertableP)) callback
 
 concOptions :: [OptionDescription]
 concOptions =
@@ -264,7 +264,7 @@ testProperty = testprop
 -- Tasty integration
 
 data ConcTest where
-  ConcTest :: Show b => IO [(Either Failure a, Conc.Trace)] -> ProPredicate a b -> ConcTest
+  ConcTest :: Show b => IO [(Either Failure a, Conc.Trace)] -> ([(Either Failure a, Conc.Trace)] -> Result b) -> ConcTest
   deriving Typeable
 
 data PropTest where
@@ -276,7 +276,7 @@ instance IsTest ConcTest where
 
   run _ (ConcTest iotraces p) _ = do
     traces <- iotraces
-    let err = showErr $ peval p traces
+    let err = showErr $ p traces
     pure (if null err then testPassed "" else testFailed err)
 
 instance IsTest PropTest where
@@ -307,11 +307,10 @@ testconc discard way memtype concio tests = case map toTest tests of
   ts  -> testGroup "Deja Fu Tests" ts
 
   where
-    toTest (name, p) = singleTest name $ ConcTest traces p
-
-    -- As with HUnit, constructing a test is side-effect free, so
-    -- sharing of traces can't happen here.
-    traces = SCT.runSCTDiscard discard way memtype concio
+    toTest (name, p) =
+      let discarder = SCT.strengthenDiscard discard (pdiscard p)
+          traces    = SCT.runSCTDiscard discarder way memtype concio
+      in singleTest name $ ConcTest traces (peval p)
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu refinement property test.
 testprop :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
