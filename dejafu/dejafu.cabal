@@ -64,9 +64,10 @@ library
                      , deepseq           >=1.1 && <2
                      , exceptions        >=0.7 && <0.9
                      , leancheck         >=0.6 && <0.8
+                     , profunctors       >=4.0 && <6.0
                      , random            >=1.0 && <1.2
                      , ref-fd            >=0.4 && <0.5
-                     , transformers      >=0.4  && <0.6
+                     , transformers      >=0.4 && <0.6
   -- hs-source-dirs:      
   default-language:    Haskell2010
   ghc-options:         -Wall

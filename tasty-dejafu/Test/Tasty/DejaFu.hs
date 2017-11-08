@@ -37,6 +37,8 @@ module Test.Tasty.DejaFu
   , testDejafuDiscard
 
   -- ** Re-exports
+  , Predicate
+  , ProPredicate(..)
   , Way
   , defaultWay
   , systematically
@@ -166,12 +168,12 @@ autocheckCases =
 -- | Check that a predicate holds.
 --
 -- @since 1.0.0.0
-testDejafu :: Show a
+testDejafu :: Show b
   => Conc.ConcIO a
   -- ^ The computation to test
   -> TestName
   -- ^ The name of the test.
-  -> Predicate a
+  -> ProPredicate a b
   -- ^ The predicate to check
   -> TestTree
 testDejafu = testDejafuWay defaultWay defaultMemType
@@ -180,7 +182,7 @@ testDejafu = testDejafuWay defaultWay defaultMemType
 -- and a memory model.
 --
 -- @since 1.0.0.0
-testDejafuWay :: Show a
+testDejafuWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
@@ -189,7 +191,7 @@ testDejafuWay :: Show a
   -- ^ The computation to test
   -> TestName
   -- ^ The name of the test.
-  -> Predicate a
+  -> ProPredicate a b
   -- ^ The predicate to check
   -> TestTree
 testDejafuWay = testDejafuDiscard (const Nothing)
@@ -197,7 +199,7 @@ testDejafuWay = testDejafuDiscard (const Nothing)
 -- | Variant of 'testDejafuWay' which can selectively discard results.
 --
 -- @since 1.0.0.0
-testDejafuDiscard :: Show a
+testDejafuDiscard :: Show b
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
@@ -208,7 +210,7 @@ testDejafuDiscard :: Show a
   -- ^ The computation to test
   -> String
   -- ^ The name of the test.
-  -> Predicate a
+  -> ProPredicate a b
   -- ^ The predicate to check
   -> TestTree
 testDejafuDiscard discard way memtype conc name test =
@@ -219,10 +221,10 @@ testDejafuDiscard discard way memtype conc name test =
 -- running the concurrent computation many times for each predicate.
 --
 -- @since 1.0.0.0
-testDejafus :: Show a
+testDejafus :: Show b
   => Conc.ConcIO a
   -- ^ The computation to test
-  -> [(TestName, Predicate a)]
+  -> [(TestName, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check
   -> TestTree
 testDejafus = testDejafusWay defaultWay defaultMemType
@@ -231,14 +233,14 @@ testDejafus = testDejafusWay defaultWay defaultMemType
 -- and a memory model.
 --
 -- @since 1.0.0.0
-testDejafusWay :: Show a
+testDejafusWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Conc.ConcIO a
   -- ^ The computation to test
-  -> [(TestName, Predicate a)]
+  -> [(TestName, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check
   -> TestTree
 testDejafusWay = testconc (const Nothing)
@@ -282,7 +284,7 @@ testPropertyFor = testprop
 -- Tasty integration
 
 data ConcTest where
-  ConcTest :: Show a => IO [(Either Failure a, Conc.Trace)] -> Predicate a -> ConcTest
+  ConcTest :: Show b => IO [(Either Failure a, Conc.Trace)] -> ProPredicate a b -> ConcTest
   deriving Typeable
 
 data PropTest where
@@ -294,7 +296,7 @@ instance IsTest ConcTest where
 
   run _ (ConcTest iotraces p) _ = do
     traces <- iotraces
-    let err = showErr $ p traces
+    let err = showErr $ peval p traces
     pure (if null err then testPassed "" else testFailed err)
 
 instance IsTest PropTest where
@@ -313,12 +315,12 @@ instance IsTest PropTest where
       Nothing -> testPassed ""
 
 -- | Produce a Tasty 'Test' from a Deja Fu unit test.
-testconc :: Show a
+testconc :: Show b
   => (Either Failure a -> Maybe Discard)
   -> Way
   -> MemType
   -> Conc.ConcIO a
-  -> [(TestName, Predicate a)]
+  -> [(TestName, ProPredicate a b)]
   -> TestTree
 testconc discard way memtype concio tests = case map toTest tests of
   [t] -> t

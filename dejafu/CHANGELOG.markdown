@@ -23,6 +23,12 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - The `autocheckIO`, `dejafuIO`, `dejafusIO`, `autocheckWayIO`, `dejafuWayIO`, `dejafusWayIO`,
   `dejafuDiscardIO`, `runTestM`, and `runTestWayM` functions are now gone.
 
+- The `Predicate` type has been replaced with a more general `ProPredicate` type which is a
+  profunctor. (#124)
+
+    All testing functions have been generalised to take a `ProPredicate` instead.  The `Predicate a`
+    type remains as an alias for `ProPredicate a a`.
+
 ### Test.DejaFu.Common
 
 - New `ForkOS` and `IsCurrentThreadBound` thread actions. (#126)

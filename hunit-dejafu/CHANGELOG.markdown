@@ -18,6 +18,7 @@ This project is versioned according to the [Package Versioning Policy](https://p
 
 - The `ConcST` functions have been removed and replaced by the `ConcIO` functions.
 - The `Testable` and `Assertable` instances for `ConcST t ()` are gone.
+- All test functions are generalised to take a `ProPredicate`.
 
 ### Miscellaneous
 
