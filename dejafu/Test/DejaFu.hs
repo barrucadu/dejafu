@@ -450,31 +450,28 @@ dejafusWay way memtype conc tests = do
 --
 -- @since 0.2.0.0
 data Result a = Result
-  { _pass         :: Bool
+  { _pass :: Bool
   -- ^ Whether the test passed or not.
-  , _casesChecked :: Int
-  -- ^ The number of cases checked.
-  , _failures     :: [(Either Failure a, Trace)]
+  , _failures :: [(Either Failure a, Trace)]
   -- ^ The failing cases, if any.
-  , _failureMsg   :: String
+  , _failureMsg :: String
   -- ^ A message to display on failure, if nonempty
   } deriving (Eq, Show)
 
 -- | @since 0.5.1.0
 instance NFData a => NFData (Result a) where
-  rnf r = rnf ( _pass         r
-              , _casesChecked r
-              , _failures     r
-              , _failureMsg   r
+  rnf r = rnf ( _pass r
+              , _failures r
+              , _failureMsg r
               )
 
 -- | A failed result, taking the given list of failures.
 defaultFail :: [(Either Failure a, Trace)] -> Result a
-defaultFail failures = Result False 0 failures ""
+defaultFail failures = Result False failures ""
 
 -- | A passed result.
 defaultPass :: Result a
-defaultPass = Result True 0 [] ""
+defaultPass = Result True [] ""
 
 instance Functor Result where
   fmap f r = r { _failures = map (first $ fmap f) $ _failures r }
@@ -647,11 +644,11 @@ notAlwaysSame = ProPredicate
     }
   where
     go [y1,y2] res
-      | fst y1 /= fst y2 = incCC res { _pass = True }
-      | otherwise = incCC res { _failures = y1 : y2 : _failures res }
+      | fst y1 /= fst y2 = res { _pass = True }
+      | otherwise = res { _failures = y1 : y2 : _failures res }
     go (y1:y2:ys) res
-      | fst y1 /= fst y2 = go (y2:ys) . incCC $ res { _pass = True }
-      | otherwise = go (y2:ys) . incCC $ res { _failures = y1 : y2 : _failures res }
+      | fst y1 /= fst y2 = go (y2:ys) res { _pass = True }
+      | otherwise = go (y2:ys) res { _failures = y1 : y2 : _failures res }
     go _ res = res
 
 -- | Check that the result of a unary boolean predicate is always
@@ -665,8 +662,8 @@ alwaysTrue p = ProPredicate
     }
   where
     go (y:ys) res
-      | p (fst y) = go ys . incCC $ res
-      | otherwise = incCC $ res { _pass = False }
+      | p (fst y) = go ys res
+      | otherwise = res { _pass = False }
     go [] res = res
 
     failures = filter (not . p . fst)
@@ -688,11 +685,11 @@ alwaysTrue2 p = ProPredicate
     }
   where
     go [y1,y2] res
-      | p (fst y1) (fst y2) = incCC res
-      | otherwise = incCC res { _pass = False }
+      | p (fst y1) (fst y2) = res
+      | otherwise = res { _pass = False }
     go (y1:y2:ys) res
-      | p (fst y1) (fst y2) = go (y2:ys) . incCC $ res
-      | otherwise = go (y2:ys) . incCC $ res { _pass = False }
+      | p (fst y1) (fst y2) = go (y2:ys) res
+      | otherwise = go (y2:ys) res { _pass = False }
     go _ res = res
 
     failures = fgo where
@@ -717,8 +714,8 @@ somewhereTrue p = ProPredicate
     }
   where
     go (y:ys) res
-      | p (fst y) = incCC $ res { _pass = True }
-      | otherwise = go ys . incCC $ res { _failures = y : _failures res }
+      | p (fst y) = res { _pass = True }
+      | otherwise = go ys res { _failures = y : _failures res }
     go [] res = res
 
     failures = filter (not . p . fst)
@@ -736,13 +733,11 @@ gives expected = ProPredicate
     go waitingFor alreadySeen ((x, _):xs) res
       -- If it's a result we're waiting for, move it to the
       -- @alreadySeen@ list and continue.
-      | x `elem` waitingFor  = go (filter (/=x) waitingFor) (x:alreadySeen) xs res { _casesChecked = _casesChecked res + 1 }
-
+      | x `elem` waitingFor  = go (filter (/=x) waitingFor) (x:alreadySeen) xs res
       -- If it's a result we've already seen, continue.
-      | x `elem` alreadySeen = go waitingFor alreadySeen xs res { _casesChecked = _casesChecked res + 1 }
-
+      | x `elem` alreadySeen = go waitingFor alreadySeen xs res
       -- If it's not a result we expected, fail.
-      | otherwise = res { _casesChecked = _casesChecked res + 1 }
+      | otherwise = res
 
     go [] _ [] res = res { _pass = True }
     go es _ [] res = res { _failureMsg = unlines $ map (\e -> "Expected: " ++ show e) es }
@@ -765,10 +760,10 @@ doTest name result = do
   if _pass result
   then
     -- Display a pass message.
-    putStrLn $ "\27[32m[pass]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")"
+    putStrLn ("\27[32m[pass]\27[0m " ++ name)
   else do
     -- Display a failure message, and the first 5 (simplified) failed traces
-    putStrLn ("\27[31m[fail]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")")
+    putStrLn ("\27[31m[fail]\27[0m " ++ name)
 
     unless (null $ _failureMsg result) $
       putStrLn $ _failureMsg result
@@ -787,10 +782,6 @@ moreThan :: Int -> [a] -> Bool
 moreThan n [] = n < 0
 moreThan 0 _ = True
 moreThan n (_:rest) = moreThan (n-1) rest
-
--- | Increment the cases
-incCC :: Result a -> Result a
-incCC r = r { _casesChecked = _casesChecked r + 1 }
 
 -- | Indent every line of a string.
 indent :: String -> String
