@@ -36,6 +36,8 @@ module Test.HUnit.DejaFu
   , testDejafuDiscard
 
   -- ** Re-exports
+  , Predicate
+  , ProPredicate(..)
   , Way
   , defaultWay
   , systematically
@@ -85,7 +87,7 @@ instance Testable (Conc.ConcIO ()) where
 instance Assertable (Conc.ConcIO ()) where
   assert conc = do
     traces <- SCT.runSCTDiscard (const Nothing) defaultWay defaultMemType (try conc)
-    assertString . showErr $ assertableP traces
+    assertString . showErr $ peval assertableP traces
 
 assertableP :: Predicate (Either HUnitFailure ())
 assertableP = alwaysTrue $ \r -> case r of
@@ -132,12 +134,12 @@ autocheckCases =
 -- | Check that a predicate holds.
 --
 -- @since 0.8.0.0
-testDejafu :: Show a
+testDejafu :: Show b
   => Conc.ConcIO a
   -- ^ The computation to test
   -> String
   -- ^ The name of the test.
-  -> Predicate a
+  -> ProPredicate a b
   -- ^ The predicate to check
   -> Test
 testDejafu = testDejafuWay defaultWay defaultMemType
@@ -146,7 +148,7 @@ testDejafu = testDejafuWay defaultWay defaultMemType
 -- and a memory model.
 --
 -- @since 0.8.0.0
-testDejafuWay :: Show a
+testDejafuWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
@@ -155,7 +157,7 @@ testDejafuWay :: Show a
   -- ^ The computation to test
   -> String
   -- ^ The name of the test.
-  -> Predicate a
+  -> ProPredicate a b
   -- ^ The predicate to check
   -> Test
 testDejafuWay = testDejafuDiscard (const Nothing)
@@ -163,7 +165,7 @@ testDejafuWay = testDejafuDiscard (const Nothing)
 -- | Variant of 'testDejafuWay' which can selectively discard results.
 --
 -- @since 0.8.0.0
-testDejafuDiscard :: Show a
+testDejafuDiscard :: Show b
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
@@ -174,7 +176,7 @@ testDejafuDiscard :: Show a
   -- ^ The computation to test
   -> String
   -- ^ The name of the test.
-  -> Predicate a
+  -> ProPredicate a b
   -- ^ The predicate to check
   -> Test
 testDejafuDiscard discard way memtype conc name test =
@@ -185,10 +187,10 @@ testDejafuDiscard discard way memtype conc name test =
 -- running the concurrent computation many times for each predicate.
 --
 -- @since 0.8.0.0
-testDejafus :: Show a
+testDejafus :: Show b
   => Conc.ConcIO a
   -- ^ The computation to test
-  -> [(String, Predicate a)]
+  -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check
   -> Test
 testDejafus = testDejafusWay defaultWay defaultMemType
@@ -197,14 +199,14 @@ testDejafus = testDejafusWay defaultWay defaultMemType
 -- and a memory model.
 --
 -- @since 0.8.0.0
-testDejafusWay :: Show a
+testDejafusWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Conc.ConcIO a
   -- ^ The computation to test
-  -> [(String, Predicate a)]
+  -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check
   -> Test
 testDejafusWay = testconc (const Nothing)
@@ -230,12 +232,12 @@ testProperty = testprop
 -- HUnit integration
 
 -- | Produce a HUnit 'Test' from a Deja Fu unit test.
-testconc :: Show a
+testconc :: Show b
   => (Either Failure a -> Maybe Discard)
   -> Way
   -> MemType
   -> Conc.ConcIO a
-  -> [(String, Predicate a)]
+  -> [(String, ProPredicate a b)]
   -> Test
 testconc discard way memtype concio tests = case map toTest tests of
   [t] -> t
@@ -248,7 +250,7 @@ testconc discard way memtype concio tests = case map toTest tests of
       -- (eg, constructing an 'MVar' to share the traces after one
       -- test computed them).
       traces <- SCT.runSCTDiscard discard way memtype concio
-      assertString . showErr $ p traces
+      assertString . showErr $ peval p traces
 
 -- | Produce a HUnit 'Test' from a Deja Fu refinement property test.
 testprop :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))

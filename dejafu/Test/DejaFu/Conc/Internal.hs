@@ -17,7 +17,8 @@ module Test.DejaFu.Conc.Internal where
 
 import           Control.Exception                   (MaskingState(..),
                                                       toException)
-import           Control.Monad.Conc.Class            (MonadConc, rtsSupportsBoundThreads)
+import           Control.Monad.Conc.Class            (MonadConc,
+                                                      rtsSupportsBoundThreads)
 import           Control.Monad.Ref                   (MonadRef, newRef, readRef,
                                                       writeRef)
 import           Data.Functor                        (void)
