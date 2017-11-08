@@ -30,6 +30,9 @@ This project is versioned according to the [Package Versioning Policy](https://p
     type remains as an alias for `ProPredicate a a`.  Passing tests have their resident memory usage
     significantly decreased.
 
+- The `Result` type no longer includes a number of cases checked, as this is not meaningful with
+  predicates including discard functions.
+
 ### Test.DejaFu.Common
 
 - New `ForkOS` and `IsCurrentThreadBound` thread actions. (#126)

@@ -293,7 +293,7 @@ testprop sn vn name p = TestLabel name . TestCase $ do
 showErr :: Show a => Result a -> String
 showErr res
   | _pass res = ""
-  | otherwise = "Failed after " ++ show (_casesChecked res) ++ " cases:\n" ++ msg ++ unlines failures ++ rest where
+  | otherwise = "Failed:\n" ++ msg ++ unlines failures ++ rest where
 
   msg = if null (_failureMsg res) then "" else _failureMsg res ++ "\n"
 
