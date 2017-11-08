@@ -24,10 +24,11 @@ This project is versioned according to the [Package Versioning Policy](https://p
   `dejafuDiscardIO`, `runTestM`, and `runTestWayM` functions are now gone.
 
 - The `Predicate` type has been replaced with a more general `ProPredicate` type which is a
-  profunctor. (#124)
+  profunctor and (b) can discard results not needed to determine if the predicate passes. (#124)
 
     All testing functions have been generalised to take a `ProPredicate` instead.  The `Predicate a`
-    type remains as an alias for `ProPredicate a a`.
+    type remains as an alias for `ProPredicate a a`.  Passing tests have their resident memory usage
+    significantly decreased.
 
 ### Test.DejaFu.Common
 
@@ -52,6 +53,8 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - All testing functions now require a `MonadConc` constraint:
 
     It is no longer possible to test things in `ST`.
+
+- New functions `strengthenDiscard` and `weakenDiscard` to combine discard functions.
 
 ### Miscellaneous
 
