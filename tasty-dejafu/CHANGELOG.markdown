@@ -18,6 +18,7 @@ This project is versioned according to the [Package Versioning Policy](https://p
 
 - The `ConcST` functions have been removed and replaced by the `ConcIO` functions.
 - The `IsTest` instance for `ConcST t (Maybe String)` is gone.
+- All test functions are generalised to take a `ProPredicate`.
 
 ### Miscellaneous
 

@@ -11,7 +11,7 @@ import qualified Control.Monad.Catch as C
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
 import System.Random (mkStdGen)
-import Test.DejaFu (Predicate, Failure, Result(..), alwaysTrue)
+import Test.DejaFu (Predicate, ProPredicate(..), Failure, Result(..), alwaysTrue)
 import Test.DejaFu.Conc (ConcIO)
 import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
@@ -108,6 +108,8 @@ newTVarInt = newTVar
 
 -- | A test which should fail.
 failing :: Predicate a -> Predicate a
-failing p as =
-  let result = p as
-  in result { _pass = not (_pass result) }
+failing p = p
+  { peval = \xs ->
+      let result = peval p xs
+      in result { _pass = not (_pass result) }
+  }

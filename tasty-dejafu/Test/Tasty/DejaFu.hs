@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 -- |
@@ -9,7 +10,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
--- Portability : FlexibleContexts, FlexibleInstances, GADTs, TypeSynonymInstances
+-- Portability : FlexibleContexts, FlexibleInstances, GADTs, LambdaCase, TypeSynonymInstances
 --
 -- This module allows using Deja Fu predicates with Tasty to test the
 -- behaviour of concurrent systems.
@@ -36,6 +37,8 @@ module Test.Tasty.DejaFu
   , testDejafuDiscard
 
   -- ** Re-exports
+  , Predicate
+  , ProPredicate(..)
   , Way
   , defaultWay
   , systematically
@@ -90,8 +93,8 @@ instance IsTest (Conc.ConcIO (Maybe String)) where
   run options conc callback = do
     let memtype = lookupOption options
     let way     = lookupOption options
-    let traces  = SCT.runSCTDiscard (const Nothing) way memtype conc
-    run options (ConcTest traces assertableP) callback
+    let traces  = SCT.runSCTDiscard (pdiscard assertableP) way memtype conc
+    run options (ConcTest traces (peval assertableP)) callback
 
 concOptions :: [OptionDescription]
 concOptions =
@@ -99,8 +102,8 @@ concOptions =
   , Option (Proxy :: Proxy Way)
   ]
 
-assertableP :: Predicate (Maybe String)
-assertableP = alwaysTrue $ \r -> case r of
+assertableP :: Predicate (Maybe a)
+assertableP = alwaysTrue $ \case
   Right (Just _) -> False
   _ -> True
 
@@ -164,12 +167,12 @@ autocheckCases =
 -- | Check that a predicate holds.
 --
 -- @since 0.8.0.0
-testDejafu :: Show a
+testDejafu :: Show b
   => Conc.ConcIO a
   -- ^ The computation to test
   -> TestName
   -- ^ The name of the test.
-  -> Predicate a
+  -> ProPredicate a b
   -- ^ The predicate to check
   -> TestTree
 testDejafu = testDejafuWay defaultWay defaultMemType
@@ -178,7 +181,7 @@ testDejafu = testDejafuWay defaultWay defaultMemType
 -- and a memory model.
 --
 -- @since 0.8.0.0
-testDejafuWay :: Show a
+testDejafuWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
@@ -187,7 +190,7 @@ testDejafuWay :: Show a
   -- ^ The computation to test
   -> TestName
   -- ^ The name of the test.
-  -> Predicate a
+  -> ProPredicate a b
   -- ^ The predicate to check
   -> TestTree
 testDejafuWay = testDejafuDiscard (const Nothing)
@@ -195,7 +198,7 @@ testDejafuWay = testDejafuDiscard (const Nothing)
 -- | Variant of 'testDejafuWay' which can selectively discard results.
 --
 -- @since 0.8.0.0
-testDejafuDiscard :: Show a
+testDejafuDiscard :: Show b
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
@@ -206,7 +209,7 @@ testDejafuDiscard :: Show a
   -- ^ The computation to test
   -> String
   -- ^ The name of the test.
-  -> Predicate a
+  -> ProPredicate a b
   -- ^ The predicate to check
   -> TestTree
 testDejafuDiscard discard way memtype conc name test =
@@ -217,10 +220,10 @@ testDejafuDiscard discard way memtype conc name test =
 -- running the concurrent computation many times for each predicate.
 --
 -- @since 0.8.0.0
-testDejafus :: Show a
+testDejafus :: Show b
   => Conc.ConcIO a
   -- ^ The computation to test
-  -> [(TestName, Predicate a)]
+  -> [(TestName, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check
   -> TestTree
 testDejafus = testDejafusWay defaultWay defaultMemType
@@ -229,14 +232,14 @@ testDejafus = testDejafusWay defaultWay defaultMemType
 -- and a memory model.
 --
 -- @since 0.8.0.0
-testDejafusWay :: Show a
+testDejafusWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Conc.ConcIO a
   -- ^ The computation to test
-  -> [(TestName, Predicate a)]
+  -> [(TestName, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check
   -> TestTree
 testDejafusWay = testconc (const Nothing)
@@ -262,7 +265,7 @@ testProperty = testprop
 -- Tasty integration
 
 data ConcTest where
-  ConcTest :: Show a => IO [(Either Failure a, Conc.Trace)] -> Predicate a -> ConcTest
+  ConcTest :: Show b => IO [(Either Failure a, Conc.Trace)] -> ([(Either Failure a, Conc.Trace)] -> Result b) -> ConcTest
   deriving Typeable
 
 data PropTest where
@@ -293,23 +296,22 @@ instance IsTest PropTest where
       Nothing -> testPassed ""
 
 -- | Produce a Tasty 'Test' from a Deja Fu unit test.
-testconc :: Show a
+testconc :: Show b
   => (Either Failure a -> Maybe Discard)
   -> Way
   -> MemType
   -> Conc.ConcIO a
-  -> [(TestName, Predicate a)]
+  -> [(TestName, ProPredicate a b)]
   -> TestTree
 testconc discard way memtype concio tests = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts
 
   where
-    toTest (name, p) = singleTest name $ ConcTest traces p
-
-    -- As with HUnit, constructing a test is side-effect free, so
-    -- sharing of traces can't happen here.
-    traces = SCT.runSCTDiscard discard way memtype concio
+    toTest (name, p) =
+      let discarder = SCT.strengthenDiscard discard (pdiscard p)
+          traces    = SCT.runSCTDiscard discarder way memtype concio
+      in singleTest name $ ConcTest traces (peval p)
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu refinement property test.
 testprop :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
@@ -321,7 +323,7 @@ testprop name = singleTest name . PropTest
 showErr :: Show a => Result a -> String
 showErr res
   | _pass res = ""
-  | otherwise = "Failed after " ++ show (_casesChecked res) ++ " cases:\n" ++ msg ++ unlines failures ++ rest where
+  | otherwise = "Failed:\n" ++ msg ++ unlines failures ++ rest where
 
   msg = if null (_failureMsg res) then "" else _failureMsg res ++ "\n"
 

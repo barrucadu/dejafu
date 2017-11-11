@@ -1,4 +1,6 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TupleSections #-}
 
 -- |
 -- Module      : Test.DejaFu
@@ -6,7 +8,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : MultiParamTypeClasses
+-- Portability : LambdaCase, MultiParamTypeClasses, TupleSections
 --
 -- Deterministic testing for concurrent computations.
 --
@@ -217,13 +219,12 @@ module Test.DejaFu
   -- the entire list of results, and can check any property which can
   -- be defined for the return type of your monadic action.
   --
-  -- A collection of common predicates are provided, along with the
-  -- helper functions 'alwaysTrue', 'alwaysTrue2' and 'somewhereTrue'
-  -- to lfit predicates over a single result to over a collection of
-  -- results.
+  -- A collection of common predicates are provided, along with helper
+  -- functions to lift predicates over a single result to over a
+  -- collection of results.
 
   , Predicate
-  , representative
+  , ProPredicate(..)
   , abortsNever
   , abortsAlways
   , abortsSometimes
@@ -233,13 +234,18 @@ module Test.DejaFu
   , exceptionsNever
   , exceptionsAlways
   , exceptionsSometimes
+  , gives
+  , gives'
+
+  -- ** Predicate Helpers
+  , representative
   , alwaysSame
   , notAlwaysSame
   , alwaysTrue
   , alwaysTrue2
   , somewhereTrue
-  , gives
-  , gives'
+  , alwaysNothing
+  , somewhereNothing
 
   -- ** Failures
 
@@ -284,7 +290,9 @@ import           Control.Monad.IO.Class   (MonadIO(..))
 import           Control.Monad.Ref        (MonadRef)
 import           Data.Function            (on)
 import           Data.List                (intercalate, intersperse, minimumBy)
+import           Data.Maybe               (catMaybes, isNothing, mapMaybe)
 import           Data.Ord                 (comparing)
+import           Data.Profunctor          (Profunctor(..))
 
 import           Test.DejaFu.Common
 import           Test.DejaFu.Conc
@@ -298,9 +306,6 @@ import           Test.DejaFu.SCT
 
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
---
--- This uses the 'Conc' monad for testing, which is an instance of
--- 'MonadConc'.
 --
 -- @since 1.0.0.0
 autocheck :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
@@ -347,10 +352,10 @@ autocheckCases =
 -- if it passes.
 --
 -- @since 1.0.0.0
-dejafu :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
+dejafu :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   => ConcT r n a
   -- ^ The computation to test
-  -> (String, Predicate a)
+  -> (String, ProPredicate a b)
   -- ^ The predicate (with a name) to check
   -> n Bool
 dejafu = dejafuWay defaultWay defaultMemType
@@ -359,14 +364,14 @@ dejafu = dejafuWay defaultWay defaultMemType
 -- memory model.
 --
 -- @since 1.0.0.0
-dejafuWay :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
+dejafuWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> ConcT r n a
   -- ^ The computation to test
-  -> (String, Predicate a)
+  -> (String, ProPredicate a b)
   -- ^ The predicate (with a name) to check
   -> n Bool
 dejafuWay = dejafuDiscard (const Nothing)
@@ -374,7 +379,7 @@ dejafuWay = dejafuDiscard (const Nothing)
 -- | Variant of 'dejafuWay' which can selectively discard results.
 --
 -- @since 1.0.0.0
-dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
+dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
@@ -383,21 +388,22 @@ dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> ConcT r n a
   -- ^ The computation to test
-  -> (String, Predicate a)
+  -> (String, ProPredicate a b)
   -- ^ The predicate (with a name) to check
   -> n Bool
 dejafuDiscard discard way memtype conc (name, test) = do
-  traces <- runSCTDiscard discard way memtype conc
-  liftIO $ doTest name (test traces)
+  let discarder = strengthenDiscard discard (pdiscard test)
+  traces <- runSCTDiscard discarder way memtype conc
+  liftIO $ doTest name (peval test traces)
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
 --
 -- @since 1.0.0.0
-dejafus :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
+dejafus :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   => ConcT r n a
   -- ^ The computation to test
-  -> [(String, Predicate a)]
+  -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check
   -> n Bool
 dejafus = dejafusWay defaultWay defaultMemType
@@ -406,21 +412,36 @@ dejafus = dejafusWay defaultWay defaultMemType
 -- memory model.
 --
 -- @since 1.0.0.0
-dejafusWay :: (MonadConc n, MonadIO n, MonadRef r n, Show a)
+dejafusWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> ConcT r n a
   -- ^ The computation to test
-  -> [(String, Predicate a)]
+  -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check
   -> n Bool
 dejafusWay way memtype conc tests = do
-  traces <- runSCT way memtype conc
-  results <- mapM (\(name, test) -> liftIO . doTest name $ test traces) tests
-  pure (and results)
+    traces  <- runSCTDiscard discarder way memtype conc
+    results <- mapM (\(name, test) -> liftIO . doTest name $ check test traces) tests
+    pure (and results)
+  where
+    discarder = foldr
+      (weakenDiscard . pdiscard . snd)
+      (const (Just DiscardResultAndTrace))
+      tests
 
+    -- for evaluating each individual predicate, we only want the
+    -- results/traces it would not discard, but the traces set may
+    -- include more than this if the different predicates have
+    -- different discard functions, so we do another pass of
+    -- discarding.
+    check p = peval p . mapMaybe go where
+      go r@(efa, _) = case pdiscard p efa of
+        Just DiscardResultAndTrace -> Nothing
+        Just DiscardTrace -> Just (efa, [])
+        Nothing -> Just r
 
 -------------------------------------------------------------------------------
 -- Test cases
@@ -430,31 +451,28 @@ dejafusWay way memtype conc tests = do
 --
 -- @since 0.2.0.0
 data Result a = Result
-  { _pass         :: Bool
+  { _pass :: Bool
   -- ^ Whether the test passed or not.
-  , _casesChecked :: Int
-  -- ^ The number of cases checked.
-  , _failures     :: [(Either Failure a, Trace)]
+  , _failures :: [(Either Failure a, Trace)]
   -- ^ The failing cases, if any.
-  , _failureMsg   :: String
+  , _failureMsg :: String
   -- ^ A message to display on failure, if nonempty
   } deriving (Eq, Show)
 
 -- | @since 0.5.1.0
 instance NFData a => NFData (Result a) where
-  rnf r = rnf ( _pass         r
-              , _casesChecked r
-              , _failures     r
-              , _failureMsg   r
+  rnf r = rnf ( _pass r
+              , _failures r
+              , _failureMsg r
               )
 
 -- | A failed result, taking the given list of failures.
 defaultFail :: [(Either Failure a, Trace)] -> Result a
-defaultFail failures = Result False 0 failures ""
+defaultFail failures = Result False failures ""
 
 -- | A passed result.
 defaultPass :: Result a
-defaultPass = Result True 0 [] ""
+defaultPass = Result True [] ""
 
 instance Functor Result where
   fmap f r = r { _failures = map (first $ fmap f) $ _failures r }
@@ -467,11 +485,11 @@ instance Foldable Result where
 --
 -- @since 1.0.0.0
 runTest :: (MonadConc n, MonadRef r n)
-  => Predicate a
+  => ProPredicate a b
   -- ^ The predicate to check
   -> ConcT r n a
   -- ^ The computation to test
-  -> n (Result a)
+  -> n (Result b)
 runTest = runTestWay defaultWay defaultMemType
 
 -- | Variant of 'runTest' which takes a way to run the program and a
@@ -483,100 +501,127 @@ runTestWay :: (MonadConc n, MonadRef r n)
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Predicate a
+  -> ProPredicate a b
   -- ^ The predicate to check
   -> ConcT r n a
   -- ^ The computation to test
-  -> n (Result a)
-runTestWay way memtype predicate conc =
-  predicate <$> runSCT way memtype conc
+  -> n (Result b)
+runTestWay way memtype p conc =
+  peval p <$> runSCTDiscard (pdiscard p) way memtype conc
 
 
 -------------------------------------------------------------------------------
 -- Predicates
 
 -- | A @Predicate@ is a function which collapses a list of results
--- into a 'Result'.
+-- into a 'Result', possibly discarding some on the way.
 --
--- @since 0.1.0.0
-type Predicate a = [(Either Failure a, Trace)] -> Result a
+-- @Predicate@ cannot be a functor as the type parameter is used both
+-- co- and contravariantly.
+--
+-- @since 1.0.0.0
+type Predicate a = ProPredicate a a
 
--- | Reduce the list of failures in a @Predicate@ to one
+-- | A @ProPredicate@ is a function which collapses a list of results
+-- into a 'Result', possibly discarding some on the way.
+--
+-- @since 1.0.0.0
+data ProPredicate a b = ProPredicate
+  { pdiscard :: Either Failure a -> Maybe Discard
+  -- ^ Selectively discard results before computing the result.
+  , peval :: [(Either Failure a, Trace)] -> Result b
+  -- ^ Compute the result with the un-discarded results.
+  }
+
+instance Profunctor ProPredicate where
+  dimap f g p = ProPredicate
+    { pdiscard = pdiscard p . fmap f
+    , peval = fmap g . peval p . map (first (fmap f))
+    }
+
+instance Functor (ProPredicate x) where
+  fmap = dimap id
+
+-- | Reduce the list of failures in a @ProPredicate@ to one
 -- representative trace for each unique result.
 --
 -- This may throw away \"duplicate\" failures which have a unique
 -- cause but happen to manifest in the same way. However, it is
 -- convenient for filtering out true duplicates.
 --
--- @since 0.2.0.0
-representative :: Eq a => Predicate a -> Predicate a
-representative p xs = result { _failures = choose . collect $ _failures result } where
-  result  = p xs
-  collect = groupBy' [] ((==) `on` fst)
-  choose  = map $ minimumBy (comparing $ \(_, trc) -> (preEmps trc, length trc))
+-- @since 1.0.0.0
+representative :: Eq b => ProPredicate a b -> ProPredicate a b
+representative p = p
+    { peval = \xs ->
+        let result = peval p xs
+        in result { _failures = choose . collect $ _failures result }
+    }
+  where
+    collect = groupBy' [] ((==) `on` fst)
+    choose  = map $ minimumBy (comparing $ \(_, trc) -> (preEmps trc, length trc))
 
-  preEmps trc = preEmpCount (map (\(d,_,a) -> (d, a)) trc) (Continue, WillStop)
+    preEmps trc = preEmpCount (map (\(d,_,a) -> (d, a)) trc) (Continue, WillStop)
 
-  groupBy' res _ [] = res
-  groupBy' res eq (y:ys) = groupBy' (insert' eq y res) eq ys
+    groupBy' res _ [] = res
+    groupBy' res eq (y:ys) = groupBy' (insert' eq y res) eq ys
 
-  insert' _ x [] = [[x]]
-  insert' eq x (ys@(y:_):yss)
-    | x `eq` y  = (x:ys) : yss
-    | otherwise = ys : insert' eq x yss
-  insert' _ _ ([]:_) = undefined
+    insert' _ x [] = [[x]]
+    insert' eq x (ys@(y:_):yss)
+      | x `eq` y  = (x:ys) : yss
+      | otherwise = ys : insert' eq x yss
+    insert' _ _ ([]:_) = undefined
 
 -- | Check that a computation never aborts.
 --
--- @since 0.2.0.0
+-- @since 1.0.0.0
 abortsNever :: Predicate a
 abortsNever = alwaysTrue (not . either (==Abort) (const False))
 
 -- | Check that a computation always aborts.
 --
--- @since 0.2.0.0
+-- @since 1.0.0.0
 abortsAlways :: Predicate a
 abortsAlways = alwaysTrue $ either (==Abort) (const False)
 
 -- | Check that a computation aborts at least once.
 --
--- @since 0.2.0.0
+-- @since 1.0.0.0
 abortsSometimes :: Predicate a
 abortsSometimes = somewhereTrue $ either (==Abort) (const False)
 
 -- | Check that a computation never deadlocks.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 deadlocksNever :: Predicate a
 deadlocksNever = alwaysTrue (not . either isDeadlock (const False))
 
 -- | Check that a computation always deadlocks.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 deadlocksAlways :: Predicate a
 deadlocksAlways = alwaysTrue $ either isDeadlock (const False)
 
 -- | Check that a computation deadlocks at least once.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 deadlocksSometimes :: Predicate a
 deadlocksSometimes = somewhereTrue $ either isDeadlock (const False)
 
 -- | Check that a computation never fails with an uncaught exception.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 exceptionsNever :: Predicate a
 exceptionsNever = alwaysTrue (not . either isUncaughtException (const False))
 
 -- | Check that a computation always fails with an uncaught exception.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 exceptionsAlways :: Predicate a
 exceptionsAlways = alwaysTrue $ either isUncaughtException (const False)
 
 -- | Check that a computation fails with an uncaught exception at least once.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 exceptionsSometimes :: Predicate a
 exceptionsSometimes = somewhereTrue $ either isUncaughtException (const False)
 
@@ -584,36 +629,46 @@ exceptionsSometimes = somewhereTrue $ either isUncaughtException (const False)
 -- particular this means either: (a) it always fails in the same way,
 -- or (b) it never fails and the values returned are all equal.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 alwaysSame :: Eq a => Predicate a
 alwaysSame = representative $ alwaysTrue2 (==)
 
 -- | Check that the result of a computation is not always the same.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 notAlwaysSame :: Eq a => Predicate a
-notAlwaysSame [x] = (defaultFail [x]) { _casesChecked = 1 }
-notAlwaysSame xs = go xs $ defaultFail [] where
-  go [y1,y2] res
-    | fst y1 /= fst y2 = incCC res { _pass = True }
-    | otherwise = incCC res { _failures = y1 : y2 : _failures res }
-  go (y1:y2:ys) res
-    | fst y1 /= fst y2 = go (y2:ys) . incCC $ res { _pass = True }
-    | otherwise = go (y2:ys) . incCC $ res { _failures = y1 : y2 : _failures res }
-  go _ res = res
+notAlwaysSame = ProPredicate
+    { pdiscard = const Nothing
+    , peval = \case
+        [x] -> defaultFail [x]
+        xs  -> go xs (defaultFail [])
+    }
+  where
+    go [y1,y2] res
+      | fst y1 /= fst y2 = res { _pass = True }
+      | otherwise = res { _failures = y1 : y2 : _failures res }
+    go (y1:y2:ys) res
+      | fst y1 /= fst y2 = go (y2:ys) res { _pass = True }
+      | otherwise = go (y2:ys) res { _failures = y1 : y2 : _failures res }
+    go _ res = res
+
+-- | Check that a @Maybe@-producing function always returns 'Nothing'.
+--
+-- @since 1.0.0.0
+alwaysNothing :: (Either Failure a -> Maybe (Either Failure b)) -> ProPredicate a b
+alwaysNothing f = ProPredicate
+  { pdiscard = maybe (Just DiscardResultAndTrace) (const Nothing) . f
+  , peval = \xs ->
+      let failures = mapMaybe (\(efa,trc) -> (,trc) <$> f efa) xs
+      in Result (null failures) failures ""
+  }
 
 -- | Check that the result of a unary boolean predicate is always
 -- true.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 alwaysTrue :: (Either Failure a -> Bool) -> Predicate a
-alwaysTrue p xs = go xs $ (defaultFail failures) { _pass = True } where
-  go (y:ys) res
-    | p (fst y) = go ys . incCC $ res
-    | otherwise = incCC $ res { _pass = False }
-  go [] res = res
-
-  failures = filter (not . p . fst) xs
+alwaysTrue p = alwaysNothing (\efa -> if p efa then Nothing else Just efa)
 
 -- | Check that the result of a binary boolean predicate is true
 -- between all pairs of results. Only properties which are transitive
@@ -622,67 +677,80 @@ alwaysTrue p xs = go xs $ (defaultFail failures) { _pass = True } where
 -- If the predicate fails, /both/ (result,trace) tuples will be added
 -- to the failures list.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 alwaysTrue2 :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
-alwaysTrue2 _ [_] = defaultPass { _casesChecked = 1 }
-alwaysTrue2 p xs = go xs $ defaultPass { _failures = failures } where
-  go [y1,y2] res
-    | p (fst y1) (fst y2) = incCC res
-    | otherwise = incCC res { _pass = False }
-  go (y1:y2:ys) res
-    | p (fst y1) (fst y2) = go (y2:ys) . incCC $ res
-    | otherwise = go (y2:ys) . incCC $ res { _pass = False }
-  go _ res = res
+alwaysTrue2 p = ProPredicate
+    { pdiscard = const Nothing
+    , peval = \case
+      [_] -> defaultPass
+      xs  -> go xs $ defaultPass { _failures = failures xs }
+    }
+  where
+    go [y1,y2] res
+      | p (fst y1) (fst y2) = res
+      | otherwise = res { _pass = False }
+    go (y1:y2:ys) res
+      | p (fst y1) (fst y2) = go (y2:ys) res
+      | otherwise = go (y2:ys) res { _pass = False }
+    go _ res = res
 
-  failures = fgo xs where
-    fgo (y1:y2:ys)
-      | p (fst y1) (fst y2) = fgo (y2:ys)
-      | otherwise = y1 : y2 : fgo2 y2 ys
-    fgo _ = []
+    failures = fgo where
+      fgo (y1:y2:ys)
+        | p (fst y1) (fst y2) = fgo (y2:ys)
+        | otherwise = y1 : y2 : fgo2 y2 ys
+      fgo _ = []
 
-    fgo2 y1 (y2:ys)
-      | p (fst y1) (fst y2) = fgo (y2:ys)
-      | otherwise = y2 : fgo2 y2 ys
-    fgo2 _ _ = []
+      fgo2 y1 (y2:ys)
+        | p (fst y1) (fst y2) = fgo (y2:ys)
+        | otherwise = y2 : fgo2 y2 ys
+      fgo2 _ _ = []
+
+-- | Check that a @Maybe@-producing function returns 'Nothing' at
+-- least once.
+--
+-- @since 1.0.0.0
+somewhereNothing :: (Either Failure a -> Maybe (Either Failure b)) -> ProPredicate a b
+somewhereNothing f = ProPredicate
+  { pdiscard = maybe (Just DiscardTrace) (const Nothing) . f
+  , peval = \xs ->
+      let failures = map (\(efa,trc) -> (,trc) <$> f efa) xs
+      in Result (any isNothing failures) (catMaybes failures) ""
+  }
 
 -- | Check that the result of a unary boolean predicate is true at
 -- least once.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 somewhereTrue :: (Either Failure a -> Bool) -> Predicate a
-somewhereTrue p xs = go xs $ defaultFail failures where
-  go (y:ys) res
-    | p (fst y) = incCC $ res { _pass = True }
-    | otherwise = go ys . incCC $ res { _failures = y : _failures res }
-  go [] res = res
-
-  failures = filter (not . p . fst) xs
+somewhereTrue p = somewhereNothing (\efa -> if p efa then Nothing else Just efa)
 
 -- | Predicate for when there is a known set of results where every
 -- result must be exhibited at least once.
 --
--- @since 0.2.0.0
+-- @since 1.0.0.0
 gives :: (Eq a, Show a) => [Either Failure a] -> Predicate a
-gives expected results = go expected [] results $ defaultFail failures where
-  go waitingFor alreadySeen ((x, _):xs) res
-    -- If it's a result we're waiting for, move it to the
-    -- @alreadySeen@ list and continue.
-    | x `elem` waitingFor  = go (filter (/=x) waitingFor) (x:alreadySeen) xs res { _casesChecked = _casesChecked res + 1 }
+gives expected = ProPredicate
+    { pdiscard = \efa -> if efa `elem` expected then Just DiscardTrace else Nothing
+    , peval = \xs -> go expected [] xs $ defaultFail (failures xs)
+    }
+  where
+    go waitingFor alreadySeen ((x, _):xs) res
+      -- If it's a result we're waiting for, move it to the
+      -- @alreadySeen@ list and continue.
+      | x `elem` waitingFor  = go (filter (/=x) waitingFor) (x:alreadySeen) xs res
+      -- If it's a result we've already seen, continue.
+      | x `elem` alreadySeen = go waitingFor alreadySeen xs res
+      -- If it's not a result we expected, fail.
+      | otherwise = res
 
-    -- If it's a result we've already seen, continue.
-    | x `elem` alreadySeen = go waitingFor alreadySeen xs res { _casesChecked = _casesChecked res + 1 }
+    go [] _ [] res = res { _pass = True }
+    go es _ [] res = res { _failureMsg = unlines $ map (\e -> "Expected: " ++ show e) es }
 
-    -- If it's not a result we expected, fail.
-    | otherwise = res { _casesChecked = _casesChecked res + 1 }
-
-  go [] _ [] res = res { _pass = True }
-  go es _ [] res = res { _failureMsg = unlines $ map (\e -> "Expected: " ++ show e) es }
-
-  failures = filter (\(r, _) -> r `notElem` expected) results
+    failures = filter (\(r, _) -> r `notElem` expected)
 
 -- | Variant of 'gives' that doesn't allow for expected failures.
 --
--- @since 0.2.0.0
+-- @since 1.0.0.0
 gives' :: (Eq a, Show a) => [a] -> Predicate a
 gives' = gives . map Right
 
@@ -696,10 +764,10 @@ doTest name result = do
   if _pass result
   then
     -- Display a pass message.
-    putStrLn $ "\27[32m[pass]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")"
+    putStrLn ("\27[32m[pass]\27[0m " ++ name)
   else do
     -- Display a failure message, and the first 5 (simplified) failed traces
-    putStrLn ("\27[31m[fail]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")")
+    putStrLn ("\27[31m[fail]\27[0m " ++ name)
 
     unless (null $ _failureMsg result) $
       putStrLn $ _failureMsg result
@@ -718,10 +786,6 @@ moreThan :: Int -> [a] -> Bool
 moreThan n [] = n < 0
 moreThan 0 _ = True
 moreThan n (_:rest) = moreThan (n-1) rest
-
--- | Increment the cases
-incCC :: Result a -> Result a
-incCC r = r { _casesChecked = _casesChecked r + 1 }
 
 -- | Indent every line of a string.
 indent :: String -> String
