@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 -- |
@@ -9,7 +10,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
--- Portability : FlexibleContexts, FlexibleInstances, GADTs, TypeSynonymInstances
+-- Portability : FlexibleContexts, FlexibleInstances, GADTs, LambdaCase, TypeSynonymInstances
 --
 -- This module allows using Deja Fu predicates with Tasty to test the
 -- behaviour of concurrent systems.
@@ -102,7 +103,7 @@ concOptions =
   ]
 
 assertableP :: Predicate (Maybe a)
-assertableP = alwaysTrue $ \r -> case r of
+assertableP = alwaysTrue $ \case
   Right (Just _) -> False
   _ -> True
 

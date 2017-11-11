@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
 -- |
@@ -8,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
--- Portability : FlexibleContexts, FlexibleInstances, TypeSynonymInstances
+-- Portability : FlexibleContexts, FlexibleInstances, LambdaCase, TypeSynonymInstances
 --
 -- This module allows using Deja Fu predicates with HUnit to test the
 -- behaviour of concurrent systems.
@@ -90,7 +91,7 @@ instance Assertable (Conc.ConcIO ()) where
     assertString . showErr $ peval assertableP traces
 
 assertableP :: Predicate (Either HUnitFailure ())
-assertableP = alwaysTrue $ \r -> case r of
+assertableP = alwaysTrue $ \case
   Right (Left HUnitFailure {}) -> False
   _ -> True
 
