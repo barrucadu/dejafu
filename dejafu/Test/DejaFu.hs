@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TupleSections #-}
 
 -- |
 -- Module      : Test.DejaFu
@@ -7,7 +8,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : LambdaCase, MultiParamTypeClasses
+-- Portability : LambdaCase, MultiParamTypeClasses, TupleSections
 --
 -- Deterministic testing for concurrent computations.
 --
@@ -218,14 +219,12 @@ module Test.DejaFu
   -- the entire list of results, and can check any property which can
   -- be defined for the return type of your monadic action.
   --
-  -- A collection of common predicates are provided, along with the
-  -- helper functions 'alwaysTrue', 'alwaysTrue2' and 'somewhereTrue'
-  -- to lfit predicates over a single result to over a collection of
-  -- results.
+  -- A collection of common predicates are provided, along with helper
+  -- functions to lift predicates over a single result to over a
+  -- collection of results.
 
   , Predicate
   , ProPredicate(..)
-  , representative
   , abortsNever
   , abortsAlways
   , abortsSometimes
@@ -235,13 +234,18 @@ module Test.DejaFu
   , exceptionsNever
   , exceptionsAlways
   , exceptionsSometimes
+  , gives
+  , gives'
+
+  -- ** Predicate Helpers
+  , representative
   , alwaysSame
   , notAlwaysSame
   , alwaysTrue
   , alwaysTrue2
   , somewhereTrue
-  , gives
-  , gives'
+  , alwaysNothing
+  , somewhereNothing
 
   -- ** Failures
 
@@ -286,7 +290,7 @@ import           Control.Monad.IO.Class   (MonadIO(..))
 import           Control.Monad.Ref        (MonadRef)
 import           Data.Function            (on)
 import           Data.List                (intercalate, intersperse, minimumBy)
-import           Data.Maybe               (mapMaybe)
+import           Data.Maybe               (catMaybes, isNothing, mapMaybe)
 import           Data.Ord                 (comparing)
 import           Data.Profunctor          (Profunctor(..))
 
@@ -648,22 +652,23 @@ notAlwaysSame = ProPredicate
       | otherwise = go (y2:ys) res { _failures = y1 : y2 : _failures res }
     go _ res = res
 
+-- | Check that a @Maybe@-producing function always returns 'Nothing'.
+--
+-- @since 1.0.0.0
+alwaysNothing :: (Either Failure a -> Maybe (Either Failure b)) -> ProPredicate a b
+alwaysNothing f = ProPredicate
+  { pdiscard = maybe (Just DiscardResultAndTrace) (const Nothing) . f
+  , peval = \xs ->
+      let failures = mapMaybe (\(efa,trc) -> (,trc) <$> f efa) xs
+      in Result (null failures) failures ""
+  }
+
 -- | Check that the result of a unary boolean predicate is always
 -- true.
 --
 -- @since 1.0.0.0
 alwaysTrue :: (Either Failure a -> Bool) -> Predicate a
-alwaysTrue p = ProPredicate
-    { pdiscard = \efa -> if p efa then Just DiscardResultAndTrace else Nothing
-    , peval = \xs -> go xs $ (defaultFail (failures xs)) { _pass = True }
-    }
-  where
-    go (y:ys) res
-      | p (fst y) = go ys res
-      | otherwise = res { _pass = False }
-    go [] res = res
-
-    failures = filter (not . p . fst)
+alwaysTrue p = alwaysNothing (\efa -> if p efa then Nothing else Just efa)
 
 -- | Check that the result of a binary boolean predicate is true
 -- between all pairs of results. Only properties which are transitive
@@ -700,22 +705,24 @@ alwaysTrue2 p = ProPredicate
         | otherwise = y2 : fgo2 y2 ys
       fgo2 _ _ = []
 
+-- | Check that a @Maybe@-producing function returns 'Nothing' at
+-- least once.
+--
+-- @since 1.0.0.0
+somewhereNothing :: (Either Failure a -> Maybe (Either Failure b)) -> ProPredicate a b
+somewhereNothing f = ProPredicate
+  { pdiscard = maybe (Just DiscardTrace) (const Nothing) . f
+  , peval = \xs ->
+      let failures = map (\(efa,trc) -> (,trc) <$> f efa) xs
+      in Result (any isNothing failures) (catMaybes failures) ""
+  }
+
 -- | Check that the result of a unary boolean predicate is true at
 -- least once.
 --
 -- @since 1.0.0.0
 somewhereTrue :: (Either Failure a -> Bool) -> Predicate a
-somewhereTrue p = ProPredicate
-    { pdiscard = \efa -> if p efa then Just DiscardTrace else Nothing
-    , peval = \xs -> go xs $ defaultFail (failures xs)
-    }
-  where
-    go (y:ys) res
-      | p (fst y) = res { _pass = True }
-      | otherwise = go ys res { _failures = y : _failures res }
-    go [] res = res
-
-    failures = filter (not . p . fst)
+somewhereTrue p = somewhereNothing (\efa -> if p efa then Nothing else Just efa)
 
 -- | Predicate for when there is a known set of results where every
 -- result must be exhibited at least once.
