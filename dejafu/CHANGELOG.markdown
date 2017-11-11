@@ -33,6 +33,9 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - The `Result` type no longer includes a number of cases checked, as this is not meaningful with
   predicates including discard functions.
 
+- New `alwaysNothing` and `somewhereNothing` functions, like `alwaysTrue` and `somewhereTrue`, to
+  lift functions to `ProPredicate`s.
+
 ### Test.DejaFu.Common
 
 - New `ForkOS` and `IsCurrentThreadBound` thread actions. (#126)
