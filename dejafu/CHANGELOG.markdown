@@ -23,6 +23,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - The `autocheckIO`, `dejafuIO`, `dejafusIO`, `autocheckWayIO`, `dejafuWayIO`, `dejafusWayIO`,
   `dejafuDiscardIO`, `runTestM`, and `runTestWayM` functions are now gone.
 
+- The `Predicate` type has been replaced with a more general `ProPredicate` type which (a) is a
+  profunctor and (b) can discard results not needed to determine if the predicate passes. (#124)
+
+    All testing functions have been generalised to take a `ProPredicate` instead.  The `Predicate a`
+    type remains as an alias for `ProPredicate a a`.  Passing tests have their resident memory usage
+    significantly decreased.
+
+- The `Result` type no longer includes a number of cases checked, as this is not meaningful with
+  predicates including discard functions.
+
+- New `alwaysNothing` and `somewhereNothing` functions, like `alwaysTrue` and `somewhereTrue`, to
+  lift functions to `ProPredicate`s.
 
 ### Test.DejaFu.Common
 
@@ -47,6 +59,8 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - All testing functions now require a `MonadConc` constraint:
 
     It is no longer possible to test things in `ST`.
+
+- New functions `strengthenDiscard` and `weakenDiscard` to combine discard functions.
 
 ### Miscellaneous
 
