@@ -303,9 +303,6 @@ import           Test.DejaFu.SCT
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
 --
--- This uses the 'Conc' monad for testing, which is an instance of
--- 'MonadConc'.
---
 -- @since 1.0.0.0
 autocheck :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
   => ConcT r n a
