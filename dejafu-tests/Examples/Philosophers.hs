@@ -12,8 +12,8 @@ import Test.HUnit.DejaFu
 
 tests :: [Test]
 tests = hUnitTestToTests $ test
-  [ testDejafuWay way defaultMemType (philosophers 3) "deadlocks" deadlocksSometimes
-  , testDejafuWay way defaultMemType (philosophers 3) "loops"     abortsSometimes
+  [ testDejafuWay way defaultMemType "deadlocks" deadlocksSometimes (philosophers 3)
+  , testDejafuWay way defaultMemType "loops"     abortsSometimes    (philosophers 3)
   ]
 
 -- | Shorter execution length bound

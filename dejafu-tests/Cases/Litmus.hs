@@ -48,9 +48,9 @@ tests =
 
 litmusTest :: (Eq a, Show a) => String -> ConcIO a -> [a] -> [a] -> [a] -> Test
 litmusTest name act sq tso pso = testGroup name . hUnitTestToTests $ test
-  [ testDejafuWay defaultWay SequentialConsistency act "SQ"  (gives' sq)
-  , testDejafuWay defaultWay TotalStoreOrder       act "TSO" (gives' tso)
-  , testDejafuWay defaultWay PartialStoreOrder     act "PSO" (gives' pso)
+  [ testDejafuWay defaultWay SequentialConsistency "SQ"  (gives' sq)  act
+  , testDejafuWay defaultWay TotalStoreOrder       "TSO" (gives' tso) act
+  , testDejafuWay defaultWay PartialStoreOrder     "PSO" (gives' pso) act
   ]
 
 -- | Run a litmus test against the three different memory models, and

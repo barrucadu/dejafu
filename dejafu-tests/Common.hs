@@ -34,7 +34,7 @@ instance IsTest TH.Test where
 instance IsTest T where
   toTestList (T n c p) = toTestList (BT n c p defaultBounds)
   toTestList (BT n c p b) = toTestList . testGroup n $
-    let mk way name = testDejafuWay way defaultMemType c name p
+    let mk way name = testDejafuWay way defaultMemType name p c
         g = mkStdGen 0
     in [ mk (systematically b) "systematically"
        , mk (uniformly g 100) "uniformly"
@@ -53,7 +53,7 @@ testGroup :: IsTest t => String -> t -> TF.Test
 testGroup name = TF.testGroup name . toTestList
 
 djfu :: Show a => String -> Predicate a -> ConcIO a -> TF.Test
-djfu name p c = hunitTest $ testDejafu c name p
+djfu name p c = hunitTest $ testDejafu name p c
 
 djfuT :: Show a => String -> Predicate a -> ConcIO a -> [TF.Test]
 djfuT name p c = toTestList $ T name c p

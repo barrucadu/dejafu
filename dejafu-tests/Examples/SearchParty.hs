@@ -34,7 +34,7 @@ import Examples.SearchParty.Impredicative
 
 tests :: [Test]
 tests = hUnitTestToTests $ test
-  [ testDejafu concFilter "concurrent filter" (failing checkResultLists)
+  [ testDejafu "concurrent filter" (failing checkResultLists) concFilter
   ]
 
 -- | Filter a list concurrently.
