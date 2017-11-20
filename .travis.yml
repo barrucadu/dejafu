@@ -14,16 +14,18 @@ cache:
 matrix:
   fast_finish: true
   include:
-  - env: RESOLVER=lts-6 # GHC 7.10
+  - env: MODE=test RESOLVER=lts-6 # GHC 7.10
     addons: {apt: {packages: [libgmp-dev]}}
-  - env: RESOLVER=lts-9 # GHC 8.0
+  - env: MODE=test RESOLVER=lts-9 # GHC 8.0
     addons: {apt: {packages: [libgmp-dev]}}
   # - env: RESOLVER= # GHC 8.2
   #   addons: {apt: {packages: [libgmp-dev]}}
-  - env: RESOLVER=nightly
+  - env: MODE=test RESOLVER=nightly
+    addons: {apt: {packages: [libgmp-dev]}}
+  - env: MODE=style RESOLVER=lts-9
     addons: {apt: {packages: [libgmp-dev]}}
   allow_failures:
-  - env: RESOLVER=nightly
+  - env: MODE=test RESOLVER=nightly
 
 # Download and unpack the stack executable
 before_install:
@@ -32,29 +34,30 @@ before_install:
 - curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
 - rm stack.yaml
 - if [[ -e .travis/$RESOLVER.yaml ]]; then mv .travis/$RESOLVER.yaml stack.yaml; else stack init --resolver=$RESOLVER; fi
-- stack setup
+- stack --no-terminal setup
+- if [[ "$MODE" == "style" ]]; then stack --no-terminal install stylish-haskell; fi
 
 # Run tests
 script:
-- echo '# build' && echo -en 'travis_fold:start:script.stack-build\\r'
-- stack build concurrency
-- stack build dejafu
-- stack build hunit-dejafu
-- stack build tasty-dejafu
-- stack build dejafu-tests
-- echo -en 'travis_fold:end:script.stack-build\\r'
+- stack --no-terminal build concurrency
+- stack --no-terminal build dejafu
+- stack --no-terminal build hunit-dejafu
+- stack --no-terminal build tasty-dejafu
+- stack --no-terminal build dejafu-tests
 
-- echo '# weeder' && echo -en 'travis_fold:start:script.weeder\\r'
-- curl -sL https://raw.github.com/ndmitchell/weeder/master/misc/travis.sh | sh -s .
-- echo -en 'travis_fold:end:script.weeder\\r'
-
-- echo '# hlint' && echo -en 'travis_fold:start:script.hlint\\r'
-- curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh | sh -s concurrency
-- curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh | sh -s dejafu
-- curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh | sh -s hunit-dejafu
-- curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh | sh -s tasty-dejafu
-- echo -en 'travis_fold:end:script.hlint\\r'
-
-- echo '# test' && echo -en 'travis_fold:start:script.stack-exec\\r'
-- stack exec -- dejafu-tests --plain
-- echo -en 'travis_fold:end:script.stack-exec\\r'
+- |
+  echo -en 'travis_fold:start:script.test\\r'
+  set -ex
+  case "$MODE" in
+    style)
+      curl -sL https://raw.github.com/ndmitchell/weeder/master/misc/travis.sh | sh -s .
+      curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh  | sh -s concurrency dejafu hunit-dejafu tasty-dejafu
+      stack exec ./style.sh
+      git diff --exit-code concurrency dejafu hunit-dejafu tasty-dejafu
+      ;;
+    test)
+      stack exec -- dejafu-tests --plain
+      ;;
+  esac
+  set +ex
+  echo -en 'travis_fold:end:script.test\\r'
