@@ -20,6 +20,8 @@ This project is versioned according to the [Package Versioning Policy](https://p
 
     It is no longer possible to test things in `ST`.
 
+- All testing functions now take the action to test as the last parameter.
+
 - The `autocheckIO`, `dejafuIO`, `dejafusIO`, `autocheckWayIO`, `dejafuWayIO`, `dejafusWayIO`,
   `dejafuDiscardIO`, `runTestM`, and `runTestWayM` functions are now gone.
 

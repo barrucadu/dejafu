@@ -122,8 +122,7 @@ testAutoWay :: (Eq a, Show a)
   -> Conc.ConcIO a
   -- ^ The computation to test
   -> Test
-testAutoWay way memtype conc =
-  testDejafusWay way memtype conc autocheckCases
+testAutoWay way memtype = testDejafusWay way memtype autocheckCases
 
 -- | Predicates for the various autocheck functions.
 autocheckCases :: Eq a => [(String, Predicate a)]
@@ -137,12 +136,12 @@ autocheckCases =
 --
 -- @since 1.0.0.0
 testDejafu :: Show b
-  => Conc.ConcIO a
-  -- ^ The computation to test
-  -> String
-  -- ^ The name of the test.
+  => String
+  -- ^ The name of the test
   -> ProPredicate a b
   -- ^ The predicate to check
+  -> Conc.ConcIO a
+  -- ^ The computation to test
   -> Test
 testDejafu = testDejafuWay defaultWay defaultMemType
 
@@ -155,12 +154,12 @@ testDejafuWay :: Show b
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Conc.ConcIO a
-  -- ^ The computation to test
   -> String
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check
+  -> Conc.ConcIO a
+  -- ^ The computation to test
   -> Test
 testDejafuWay = testDejafuDiscard (const Nothing)
 
@@ -174,15 +173,15 @@ testDejafuDiscard :: Show b
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Conc.ConcIO a
-  -- ^ The computation to test
   -> String
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check
+  -> Conc.ConcIO a
+  -- ^ The computation to test
   -> Test
-testDejafuDiscard discard way memtype conc name test =
-  testconc discard way memtype conc [(name, test)]
+testDejafuDiscard discard way memtype name test =
+  testconc discard way memtype [(name, test)]
 
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test. This will share work between the predicates, rather than
@@ -190,10 +189,10 @@ testDejafuDiscard discard way memtype conc name test =
 --
 -- @since 1.0.0.0
 testDejafus :: Show b
-  => Conc.ConcIO a
-  -- ^ The computation to test
-  -> [(String, ProPredicate a b)]
+  => [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check
+  -> Conc.ConcIO a
+  -- ^ The computation to test
   -> Test
 testDejafus = testDejafusWay defaultWay defaultMemType
 
@@ -206,10 +205,10 @@ testDejafusWay :: Show b
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Conc.ConcIO a
-  -- ^ The computation to test
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check
+  -> Conc.ConcIO a
+  -- ^ The computation to test
   -> Test
 testDejafusWay = testconc (const Nothing)
 
@@ -256,10 +255,10 @@ testconc :: Show b
   => (Either Failure a -> Maybe Discard)
   -> Way
   -> MemType
-  -> Conc.ConcIO a
   -> [(String, ProPredicate a b)]
+  -> Conc.ConcIO a
   -> Test
-testconc discard way memtype concio tests = case map toTest tests of
+testconc discard way memtype tests concio = case map toTest tests of
   [t] -> t
   ts  -> TestList ts
 

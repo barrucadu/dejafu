@@ -337,8 +337,7 @@ autocheckWay :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
   -> ConcT r n a
   -- ^ The computation to test
   -> n Bool
-autocheckWay way memtype conc =
-  dejafusWay way memtype conc autocheckCases
+autocheckWay way memtype = dejafusWay way memtype autocheckCases
 
 -- | Predicates for the various autocheck functions.
 autocheckCases :: Eq a => [(String, Predicate a)]
@@ -353,10 +352,12 @@ autocheckCases =
 --
 -- @since 1.0.0.0
 dejafu :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
-  => ConcT r n a
+  => String
+  -- ^ The name of the test
+  -> ProPredicate a b
+  -- ^ The predicate to check
+  -> ConcT r n a
   -- ^ The computation to test
-  -> (String, ProPredicate a b)
-  -- ^ The predicate (with a name) to check
   -> n Bool
 dejafu = dejafuWay defaultWay defaultMemType
 
@@ -369,10 +370,12 @@ dejafuWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> String
+  -- ^ The name of the test
+  -> ProPredicate a b
+  -- ^ The predicate to check
   -> ConcT r n a
   -- ^ The computation to test
-  -> (String, ProPredicate a b)
-  -- ^ The predicate (with a name) to check
   -> n Bool
 dejafuWay = dejafuDiscard (const Nothing)
 
@@ -386,12 +389,14 @@ dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> String
+  -- ^ The name of the test
+  -> ProPredicate a b
+  -- ^ The predicate to check
   -> ConcT r n a
   -- ^ The computation to test
-  -> (String, ProPredicate a b)
-  -- ^ The predicate (with a name) to check
   -> n Bool
-dejafuDiscard discard way memtype conc (name, test) = do
+dejafuDiscard discard way memtype name test conc = do
   let discarder = strengthenDiscard discard (pdiscard test)
   traces <- runSCTDiscard discarder way memtype conc
   liftIO $ doTest name (peval test traces)
@@ -401,10 +406,10 @@ dejafuDiscard discard way memtype conc (name, test) = do
 --
 -- @since 1.0.0.0
 dejafus :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
-  => ConcT r n a
-  -- ^ The computation to test
-  -> [(String, ProPredicate a b)]
+  => [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check
+  -> ConcT r n a
+  -- ^ The computation to test
   -> n Bool
 dejafus = dejafusWay defaultWay defaultMemType
 
@@ -417,12 +422,12 @@ dejafusWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> ConcT r n a
-  -- ^ The computation to test
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check
+  -> ConcT r n a
+  -- ^ The computation to test
   -> n Bool
-dejafusWay way memtype conc tests = do
+dejafusWay way memtype tests conc = do
     traces  <- runSCTDiscard discarder way memtype conc
     results <- mapM (\(name, test) -> liftIO . doTest name $ check test traces) tests
     pure (and results)

@@ -16,12 +16,9 @@ tests = toTestList
       \x -> if x == Right 3 then Just DiscardResultAndTrace else Nothing
   ]
   where
-    check name xs f = testDejafuDiscard f defaultWay defaultMemType nondet name (gives' xs)
-
-nondet :: MonadConc m => m Int
-nondet = do
-  mvar <- newEmptyMVar
-  _ <- fork $ putMVar mvar 1
-  _ <- fork $ putMVar mvar 2
-  _ <- fork $ putMVar mvar 3
-  readMVar mvar
+    check name xs f = testDejafuDiscard f defaultWay defaultMemType name (gives' xs) $ do
+      mvar <- newEmptyMVar
+      _ <- fork $ putMVar mvar 1
+      _ <- fork $ putMVar mvar 2
+      _ <- fork $ putMVar mvar 3
+      readMVar mvar
