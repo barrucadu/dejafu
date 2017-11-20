@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -17,7 +18,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
--- Portability : CPP, FlexibleContexts, FlexibleInstances, ImpredicativeTypes, RankNTypes, ScopedTypeVariables, TypeSynonymInstances
+-- Portability : CPP, FlexibleContexts, FlexibleInstances, ImpredicativeTypes, LambdaCase, RankNTypes, ScopedTypeVariables, TypeSynonymInstances
 --
 -- This module allows using Deja Fu predicates with HUnit to test the
 -- behaviour of concurrent systems.
@@ -139,7 +140,7 @@ instance Assertable (Conc.ConcIO ()) where
     assertString . showErr $ assertableP traces
 
 assertableP :: Predicate (Either HUnitFailure ())
-assertableP = alwaysTrue $ \r -> case r of
+assertableP = alwaysTrue $ \case
   Right (Left HUnitFailure {}) -> False
   _ -> True
 

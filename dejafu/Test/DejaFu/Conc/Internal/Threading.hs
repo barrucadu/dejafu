@@ -17,7 +17,7 @@ import           Control.Exception                (Exception, MaskingState(..),
                                                    SomeException, fromException)
 import           Data.List                        (intersect)
 import           Data.Map.Strict                  (Map)
-import           Data.Maybe                       (fromMaybe, isJust)
+import           Data.Maybe                       (isJust)
 
 import           Test.DejaFu.Common
 import           Test.DejaFu.Conc.Internal.Common
@@ -117,7 +117,7 @@ goto a = M.adjust $ \thread -> thread { _continuation = a }
 -- from the parent thread. This ID must not already be in use!
 launch :: ThreadId -> ThreadId -> ((forall b. M n r b -> M n r b) -> Action n r) -> Threads n r -> Threads n r
 launch parent tid a threads = launch' ms tid a threads where
-  ms = fromMaybe Unmasked $ _masking <$> M.lookup parent threads
+  ms = maybe Unmasked _masking (M.lookup parent threads)
 
 -- | Start a thread with the given ID and masking state. This must not already be in use!
 launch' :: MaskingState -> ThreadId -> ((forall b. M n r b -> M n r b) -> Action n r) -> Threads n r -> Threads n r
