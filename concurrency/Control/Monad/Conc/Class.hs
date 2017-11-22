@@ -289,8 +289,7 @@ class ( Applicative m, Monad m
   -- @since 1.0.0.0
   myThreadId :: m (ThreadId m)
 
-  -- | Allows a context-switch to any other currently runnable thread
-  -- (if any).
+  -- | Allows a context-switch to any other unblocked thread (if any).
   --
   -- @since 1.0.0.0
   yield :: m ()

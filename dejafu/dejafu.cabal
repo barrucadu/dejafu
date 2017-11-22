@@ -3,21 +3,17 @@
 
 name:                dejafu
 version:             1.0.0.0
-synopsis:            Systematic testing for Haskell concurrency.
+synopsis:            A library for unit-testing concurrent programs.
 
 description:
   /[Déjà Fu is] A martial art in which the user's limbs move in time as well as space, […] It is best described as "the feeling that you have been kicked in the head this way before"/ -- Terry Pratchett, Thief of Time
   .
-  Concurrency is nice, deadlocks and race conditions not so much. The
-  @Par@ monad family, as defined in
-  <https://hackage.haskell.org/package/abstract-par/docs/Control-Monad-Par-Class.html abstract-par>
-  provides deterministic parallelism, but sometimes we can tolerate a
-  bit of nondeterminism.
-  .
   This package builds on the
-  <https://hackage.haskell.org/package/concurrency concurrency>
-  package by enabling you to systematically and deterministically test
-  your concurrent programs.
+  [concurrency](https://hackage.haskell.org/package/concurrency)
+  package by enabling you to deterministically test your concurrent
+  programs.
+  .
+  See the [website](https://dejafu.readthedocs.io) or README for more.
 
 homepage:            https://github.com/barrucadu/dejafu
 license:             MIT

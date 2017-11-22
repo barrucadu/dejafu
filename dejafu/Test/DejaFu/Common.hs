@@ -792,7 +792,7 @@ instance NFData TAction where
 -- Traces
 
 -- | One of the outputs of the runner is a @Trace@, which is a log of
--- decisions made, all the runnable threads and what they would do,
+-- decisions made, all the unblocked threads and what they would do,
 -- and the action a thread took in its step.
 --
 -- @since 0.8.0.0
@@ -909,9 +909,11 @@ data Failure
   -- bounds (there have been too many pre-emptions, the computation
   -- has executed for too long, or there have been too many yields).
   | Deadlock
-  -- ^ The computation became blocked indefinitely on @MVar@s.
+  -- ^ Every thread is blocked, and the main thread is /not/ blocked
+  -- in an STM transaction.
   | STMDeadlock
-  -- ^ The computation became blocked indefinitely on @TVar@s.
+  -- ^ Every thread is blocked, and the main thread is blocked in an
+  -- STM transaction.
   | UncaughtException SomeException
   -- ^ An uncaught exception bubbled to the top of the computation.
   | IllegalSubconcurrency

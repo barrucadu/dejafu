@@ -53,9 +53,9 @@ We can see this by testing with different memory models:
 .. code-block:: none
 
   > autocheckWay defaultWay SequentialConsistency example
-  [pass] Never Deadlocks (checked: 6)
-  [pass] No Exceptions (checked: 6)
-  [fail] Consistent Result (checked: 5)
+  [pass] Never Deadlocks
+  [pass] No Exceptions
+  [fail] Consistent Result
           (False,True) S0---------S1----S0--S2----S0--
 
           (True,True) S0---------S1-P2----S1---S0---
@@ -64,9 +64,9 @@ We can see this by testing with different memory models:
   False
 
   > autocheckWay defaultWay TotalStoreOrder example
-  [pass] Never Deadlocks (checked: 28)
-  [pass] No Exceptions (checked: 28)
-  [fail] Consistent Result (checked: 27)
+  [pass] Never Deadlocks
+  [pass] No Exceptions
+  [fail] Consistent Result
           (False,True) S0---------S1----S0--S2----S0--
 
           (False,False) S0---------S1--P2----S1--S0---
@@ -95,8 +95,8 @@ There are three supported types of bounds:
 
 Pre-emption bounding
   Restricts the number of pre-emptive context switches.  A context
-  switch is pre-emptive if the previously executing thread is still
-  runnable and did not explicitly yield.
+  switch is pre-emptive if the previously executing thread is not
+  blocked and did not explicitly yield.
 
 Fair bounding
   Restricts how many times each thread can yield, by bounding the
@@ -136,7 +136,7 @@ There are three variants:
   Perform the given number of executions using weighted random
   scheduling.  On creation, a thread is given a random weight, which
   is used to perform a nonuniform random selection amongst the
-  runnable threads at every scheduling point.
+  enabled (not blocked) threads at every scheduling point.
 
 ``uniformly randomGen numExecutions``
   Like ``randomly``, but rather than a weighted selection, it's a

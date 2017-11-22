@@ -210,6 +210,9 @@ swarmy = Weighted
 -- | Explore possible executions of a concurrent program according to
 -- the given 'Way'.
 --
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.
+--
 -- @since 1.0.0.0
 runSCT :: (MonadConc n, MonadRef r n)
   => Way
@@ -288,6 +291,9 @@ strengthenDiscard d1 d2 efa = case (d1 efa, d2 efa) of
 
 -- | A variant of 'runSCT' which can selectively discard results.
 --
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.
+--
 -- @since 1.0.0.0
 runSCTDiscard :: (MonadConc n, MonadRef r n)
   => (Either Failure a -> Maybe Discard)
@@ -325,6 +331,9 @@ resultsSetDiscard discard way memtype conc =
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.
+--
 -- @since 1.0.0.0
 runSCT' :: (MonadConc n, MonadRef r n, NFData a)
   => Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
@@ -344,6 +353,9 @@ resultsSet' = resultsSetDiscard' (const Nothing)
 --
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
+--
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.
 --
 -- @since 1.0.0.0
 runSCTDiscard' :: (MonadConc n, MonadRef r n, NFData a)
@@ -471,8 +483,8 @@ fBound (FairBound fb) k prior lhead =
      then Just k'
      else Nothing
 
--- | Add a backtrack point. If the thread isn't runnable, or performs
--- a release operation, add all runnable threads.
+-- | Add a backtrack point. If the thread doesn't exist or is blocked,
+-- or performs a release operation, add all unblocked threads.
 fBacktrack :: BacktrackFunc
 fBacktrack = backtrackAt check where
   -- True if a release operation is performed.
@@ -496,8 +508,8 @@ lBound (LengthBound lb) len _ _ =
   let len' = maybe 1 (+1) len
   in if len' < lb then Just len' else Nothing
 
--- | Add a backtrack point. If the thread isn't runnable, add all
--- runnable threads.
+-- | Add a backtrack point. If the thread doesn't exist or is blocked,
+-- add all unblocked threads.
 lBacktrack :: BacktrackFunc
 lBacktrack = backtrackAt (\_ _ -> False)
 
@@ -516,6 +528,9 @@ lBacktrack = backtrackAt (\_ _ -> False)
 -- do some redundant work as the introduction of a bound can make
 -- previously non-interfering events interfere with each other.
 --
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.
+--
 -- @since 1.0.0.0
 sctBound :: (MonadConc n, MonadRef r n)
   => MemType
@@ -528,6 +543,9 @@ sctBound :: (MonadConc n, MonadRef r n)
 sctBound = sctBoundDiscard (const Nothing)
 
 -- | A variant of 'sctBound' which can selectively discard results.
+--
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.
 --
 -- @since 1.0.0.0
 sctBoundDiscard :: (MonadConc n, MonadRef r n)
@@ -588,6 +606,8 @@ sctUniformRandom = sctUniformRandomDiscard (const Nothing)
 -- | A variant of 'sctUniformRandom' which can selectively discard
 -- results.
 --
+-- This is not guaranteed to find all distinct results.
+--
 -- @since 1.0.0.0
 sctUniformRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
@@ -634,6 +654,8 @@ sctWeightedRandom = sctWeightedRandomDiscard (const Nothing)
 
 -- | A variant of 'sctWeightedRandom' which can selectively discard
 -- results.
+--
+-- This is not guaranteed to find all distinct results.
 --
 -- @since 1.0.0.0
 sctWeightedRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)

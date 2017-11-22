@@ -112,12 +112,12 @@ we'll get onto that shortly.  First, the result of testing:
 
 ```
 > autocheck myFunction
-[pass] Never Deadlocks (checked: 12)
-[pass] No Exceptions (checked: 12)
-[fail] Consistent Result (checked: 11)
-        "hello" S0----S1-P2-S0--
+[pass] Never Deadlocks
+[pass] No Exceptions
+[fail] Consistent Result
+        "hello" S0----S1--S0--
 
-        "world" S0----S2--S0-P1-S0-
+        "world" S0----S2--S0--
 False
 ```
 
@@ -145,10 +145,10 @@ These approaches are inadequate for a few reasons:
 - **How do you know if you've fixed a bug you saw previously?**
   Because the scheduler is a black box, you don't know if the
   previously buggy schedule has been re-run.
-- **You won't actually get that much scheduling variety!** Operating
-  systems and language runtimes like to run threads for long periods
-  of time, which reduces the variety you get (and so drives up the
-  number of runs you need).
+- **You won't get that much scheduling variety!** Operating systems
+  and language runtimes like to run threads for long periods of time,
+  which reduces the variety you get (and so drives up the number of
+  runs you need).
 
 Déjà Fu addresses these points by offering *complete* testing.  You
 can run a test case and be guaranteed to find all results with some

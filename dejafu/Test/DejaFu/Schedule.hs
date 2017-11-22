@@ -40,7 +40,7 @@ import           Test.DejaFu.Common
 -- 1. The last thread executed (if this is the first invocation, this
 --    is @Nothing@).
 --
--- 2. The runnable threads at this point.
+-- 2. The unblocked threads.
 --
 -- 3. The state.
 --
@@ -68,15 +68,16 @@ tidOf _ (Start t)    = t
 tidOf _ (SwitchTo t) = t
 tidOf tid _          = tid
 
--- | Get the 'Decision' that would have resulted in this thread identifier,
--- given a prior thread (if any) and list of runnable threads.
+-- | Get the 'Decision' that would have resulted in this thread
+-- identifier, given a prior thread (if any) and collection of threads
+-- which are unblocked at this point.
 --
 -- @since 0.5.0.0
 decisionOf :: Foldable f
   => Maybe ThreadId
   -- ^ The prior thread.
   -> f ThreadId
-  -- ^ The runnable threads.
+  -- ^ The threads.
   -> ThreadId
   -- ^ The current thread.
   -> Decision
@@ -118,16 +119,18 @@ roundRobinSched = Scheduler go where
 -------------------------------------------------------------------------------
 -- Non-preemptive
 
--- | A random scheduler which doesn't preempt the running
--- thread. That is, if the last thread scheduled is still runnable,
--- run that, otherwise schedule randomly.
+-- | A random scheduler which doesn't preempt the running thread. That
+-- is, if the previously scheduled thread is not blocked, it is picked
+-- again, otherwise schedule randomly.
 --
 -- @since 0.8.0.0
 randomSchedNP :: RandomGen g => Scheduler g
 randomSchedNP = makeNonPreemptive randomSched
 
 -- | A round-robin scheduler which doesn't preempt the running
--- thread.
+-- thread. That is, if the previously scheduled thread is not blocked,
+-- it is picked again, otherwise schedule the thread with the next
+-- 'ThreadId'.
 --
 -- @since 0.8.0.0
 roundRobinSchedNP :: Scheduler ()

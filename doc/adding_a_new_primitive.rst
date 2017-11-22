@@ -159,7 +159,7 @@ The ``rewind`` function converts between ``ThreadAction`` and
 
 Finally, we need to make sure the systematic testing will treat our
 new primitive correctly.  As setting the value of an ``MVar`` may
-cause previously blocked threads to become runnable, it is a *release*
+cause previously blocked threads to be unblocked, it is a *release*
 action.  Furthermore, as it writes to an ``MVar`` it is a
 *synchronised write*:
 
