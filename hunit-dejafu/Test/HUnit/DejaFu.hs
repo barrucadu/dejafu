@@ -105,7 +105,7 @@ assertableP = alwaysTrue $ \case
 -- @since 0.8.0.0
 testAuto :: (Eq a, Show a)
   => Conc.ConcIO a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> Test
 testAuto = testAutoWay defaultWay defaultMemType
 
@@ -119,7 +119,7 @@ testAutoWay :: (Eq a, Show a)
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Conc.ConcIO a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> Test
 testAutoWay way memtype = testDejafusWay way memtype autocheckCases
 
@@ -136,11 +136,11 @@ autocheckCases =
 -- @since 0.8.0.0
 testDejafu :: Show b
   => String
-  -- ^ The name of the test
+  -- ^ The name of the test.
   -> ProPredicate a b
-  -- ^ The predicate to check
+  -- ^ The predicate to check.
   -> Conc.ConcIO a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> Test
 testDejafu = testDejafuWay defaultWay defaultMemType
 
@@ -156,9 +156,9 @@ testDejafuWay :: Show b
   -> String
   -- ^ The name of the test.
   -> ProPredicate a b
-  -- ^ The predicate to check
+  -- ^ The predicate to check.
   -> Conc.ConcIO a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> Test
 testDejafuWay = testDejafuDiscard (const Nothing)
 
@@ -175,9 +175,9 @@ testDejafuDiscard :: Show b
   -> String
   -- ^ The name of the test.
   -> ProPredicate a b
-  -- ^ The predicate to check
+  -- ^ The predicate to check.
   -> Conc.ConcIO a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> Test
 testDejafuDiscard discard way memtype name test =
   testconc discard way memtype [(name, test)]
@@ -189,9 +189,9 @@ testDejafuDiscard discard way memtype name test =
 -- @since 0.8.0.0
 testDejafus :: Show b
   => [(String, ProPredicate a b)]
-  -- ^ The list of predicates (with names) to check
+  -- ^ The list of predicates (with names) to check.
   -> Conc.ConcIO a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> Test
 testDejafus = testDejafusWay defaultWay defaultMemType
 
@@ -205,9 +205,9 @@ testDejafusWay :: Show b
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> [(String, ProPredicate a b)]
-  -- ^ The list of predicates (with names) to check
+  -- ^ The list of predicates (with names) to check.
   -> Conc.ConcIO a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> Test
 testDejafusWay = testconc (const Nothing)
 

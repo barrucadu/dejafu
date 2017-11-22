@@ -310,23 +310,12 @@ import           Test.DejaFu.SCT
 -- @since 1.0.0.0
 autocheck :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
   => ConcT r n a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> n Bool
 autocheck = autocheckWay defaultWay defaultMemType
 
 -- | Variant of 'autocheck' which takes a way to run the program and a
 -- memory model.
---
--- Schedule bounding is used to filter the large number of possible
--- schedules, and can be iteratively increased for further coverage
--- guarantees. Empirical studies (/Concurrency Testing Using Schedule
--- Bounding: an Empirical Study/, P. Thompson, A. Donaldson, and
--- A. Betts) have found that many concurrency bugs can be exhibited
--- with as few as two threads and two pre-emptions, which is part of
--- what 'dejafus' uses.
---
--- __Warning:__ Using larger bounds will almost certainly
--- significantly increase the time taken to test!
 --
 -- @since 1.0.0.0
 autocheckWay :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
@@ -335,7 +324,7 @@ autocheckWay :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> ConcT r n a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> n Bool
 autocheckWay way memtype = dejafusWay way memtype autocheckCases
 
@@ -353,11 +342,11 @@ autocheckCases =
 -- @since 1.0.0.0
 dejafu :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   => String
-  -- ^ The name of the test
+  -- ^ The name of the test.
   -> ProPredicate a b
-  -- ^ The predicate to check
+  -- ^ The predicate to check.
   -> ConcT r n a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> n Bool
 dejafu = dejafuWay defaultWay defaultMemType
 
@@ -371,11 +360,11 @@ dejafuWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> String
-  -- ^ The name of the test
+  -- ^ The name of the test.
   -> ProPredicate a b
-  -- ^ The predicate to check
+  -- ^ The predicate to check.
   -> ConcT r n a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> n Bool
 dejafuWay = dejafuDiscard (const Nothing)
 
@@ -390,11 +379,11 @@ dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> String
-  -- ^ The name of the test
+  -- ^ The name of the test.
   -> ProPredicate a b
-  -- ^ The predicate to check
+  -- ^ The predicate to check.
   -> ConcT r n a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> n Bool
 dejafuDiscard discard way memtype name test conc = do
   let discarder = strengthenDiscard discard (pdiscard test)
@@ -407,9 +396,9 @@ dejafuDiscard discard way memtype name test conc = do
 -- @since 1.0.0.0
 dejafus :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   => [(String, ProPredicate a b)]
-  -- ^ The list of predicates (with names) to check
+  -- ^ The list of predicates (with names) to check.
   -> ConcT r n a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> n Bool
 dejafus = dejafusWay defaultWay defaultMemType
 
@@ -423,9 +412,9 @@ dejafusWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> [(String, ProPredicate a b)]
-  -- ^ The list of predicates (with names) to check
+  -- ^ The list of predicates (with names) to check.
   -> ConcT r n a
-  -- ^ The computation to test
+  -- ^ The computation to test.
   -> n Bool
 dejafusWay way memtype tests conc = do
     traces  <- runSCTDiscard discarder way memtype conc
