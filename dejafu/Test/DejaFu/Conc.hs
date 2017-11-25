@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -11,7 +12,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RankNTypes, TypeFamilies, TypeSynonymInstances
+-- Portability : CPP, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RankNTypes, TypeFamilies, TypeSynonymInstances
 --
 -- Deterministic traced execution of concurrent computations.
 --
@@ -65,8 +66,18 @@ import           Test.DejaFu.Conc.Internal
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.STM
 
+#if MIN_VERSION_base(4,9,0)
+import qualified Control.Monad.Fail               as Fail
+#endif
+
 -- | @since 0.6.0.0
 newtype ConcT r n a = C { unC :: M n r a } deriving (Functor, Applicative, Monad)
+
+#if MIN_VERSION_base(4,9,0)
+-- | @since unreleased
+instance Fail.MonadFail (ConcT r n) where
+  fail = C . fail
+#endif
 
 -- | A 'MonadConc' implementation using @ST@, this should be preferred
 -- if you do not need 'liftIO'.

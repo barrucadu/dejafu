@@ -39,8 +39,18 @@ import qualified Control.Monad.STM.Class  as C
 import           Test.DejaFu.Common
 import           Test.DejaFu.STM.Internal
 
+#if MIN_VERSION_base(4,9,0)
+import qualified Control.Monad.Fail       as Fail
+#endif
+
 -- | @since 0.3.0.0
 newtype STMLike n r a = S { runSTM :: M n r a } deriving (Functor, Applicative, Monad)
+
+#if MIN_VERSION_base(4,9,0)
+-- | @since unreleased
+instance Fail.MonadFail (STMLike r n) where
+  fail = S . fail
+#endif
 
 -- | Create a new STM continuation.
 toSTM :: ((a -> STMAction n r) -> STMAction n r) -> STMLike n r a

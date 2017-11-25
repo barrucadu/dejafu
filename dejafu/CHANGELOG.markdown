@@ -14,6 +14,14 @@ unreleased
 
 - Fix some incorrect "@since" haddock comments.
 
+### Test.DejaFu.Conc
+
+- Add a missing `MonadFail` instance.
+
+### Test.DejaFu.STM
+
+- Add a missing `MonadFail` instance.
+
 
 ---------------------------------------------------------------------------------------------------
 
