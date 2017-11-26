@@ -815,14 +815,19 @@ instance NFData Decision where
 -- @since 0.5.0.0
 showTrace :: Trace -> String
 showTrace []  = "<trace discarded>"
-showTrace trc = intercalate "\n" $ concatMap go trc : strkey where
-  go (_,_,CommitCRef _ _) = "C-"
-  go (Start    (ThreadId _ i),_,_) = "S" ++ show i ++ "-"
-  go (SwitchTo (ThreadId _ i),_,_) = "P" ++ show i ++ "-"
-  go (Continue,_,_) = "-"
+showTrace trc = intercalate "\n" $ go False trc : strkey where
+  go _ ((_,_,CommitCRef _ _):rest) = "C-" ++ go False rest
+  go _ ((Start    (ThreadId _ i),_,a):rest) = "S" ++ show i ++ "-" ++ go (didYield a) rest
+  go y ((SwitchTo (ThreadId _ i),_,a):rest) = (if y then "p" else "P") ++ show i ++ "-" ++ go (didYield a) rest
+  go _ ((Continue,_,a):rest) = '-' : go (didYield a) rest
+  go _ _ = ""
 
   strkey =
     ["  " ++ show i ++ ": " ++ name | (i, name) <- threadNames trc]
+
+  didYield Yield = True
+  didYield (ThreadDelay _) = True
+  didYield _ = False
 
 -- | Get all named threads in the trace.
 --

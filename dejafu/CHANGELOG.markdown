@@ -13,6 +13,7 @@ unreleased
 ### Test.DejaFu.Common
 
 - Fix some incorrect "@since" haddock comments.
+- Pretty-printed traces now display a pre-emption following a yield with a little "p".
 
 ### Test.DejaFu.Conc
 
