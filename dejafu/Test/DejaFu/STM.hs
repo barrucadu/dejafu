@@ -47,7 +47,7 @@ import qualified Control.Monad.Fail       as Fail
 newtype STMLike n r a = S { runSTM :: M n r a } deriving (Functor, Applicative, Monad)
 
 #if MIN_VERSION_base(4,9,0)
--- | @since unreleased
+-- | @since 0.9.1.0
 instance Fail.MonadFail (STMLike r n) where
   fail = S . fail
 #endif
