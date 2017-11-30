@@ -7,13 +7,19 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+0.7.1.0
+-------
+
+- **Date**    2017-11-30
+- **Git tag** [tasty-dejafu-0.7.1.0][]
+- **Hackage** https://hackage.haskell.org/package/tasty-dejafu-0.7.1.0
 
 ### Test.Tasty.DejaFu
 
 - A new `testPropertyFor` function for checking refinement properties with a custom number of seed
   values and variable assignments.
+
+[tasty-dejafu-0.7.1.0]: https://github.com/barrucadu/dejafu/releases/tag/tasty-dejafu-0.7.1.0
 
 
 ---------------------------------------------------------------------------------------------------
