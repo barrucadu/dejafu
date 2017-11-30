@@ -72,6 +72,7 @@ module Test.Tasty.DejaFu
 
   -- * Refinement property testing
   , testProperty
+  , testPropertyFor
 
   -- ** Re-exports
   , R.Sig(..)
@@ -350,7 +351,25 @@ testProperty :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Sho
   -> p
   -- ^ The property to check.
   -> TestTree
-testProperty = testprop
+testProperty = testPropertyFor 10 100
+
+-- | Like 'testProperty', but takes a number of cases to check.
+--
+-- The maximum number of cases tried by @testPropertyFor n m@ will be
+-- @n * m@.
+--
+-- @since unreleased
+testPropertyFor :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
+  => Int
+  -- ^ The number of seed values to try.
+  -> Int
+  -- ^ The number of variable assignments per seed value to try.
+  -> TestName
+  -- ^ The name of the test.
+  -> p
+  -- ^ The property to check.
+  -> TestTree
+testPropertyFor = testprop
 
 
 --------------------------------------------------------------------------------
@@ -365,7 +384,7 @@ data ConcIOTest where
   deriving Typeable
 
 data PropTest where
-  PropTest :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p)) => p -> PropTest
+  PropTest :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p)) => Int -> Int -> p -> PropTest
   deriving Typeable
 
 instance IsTest ConcTest where
@@ -386,8 +405,8 @@ instance IsTest ConcIOTest where
 instance IsTest PropTest where
   testOptions = pure []
 
-  run _ (PropTest p) _ = do
-    ce <- R.check' p
+  run _ (PropTest sn vn p) _ = do
+    ce <- R.checkFor sn vn p
     pure $ case ce of
       Just c -> testFailed . init $ unlines
         [ "*** Failure: " ++
@@ -436,8 +455,8 @@ testio discard way memtype concio tests = case map toTest tests of
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu refinement property test.
 testprop :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
-  => TestName -> p -> TestTree
-testprop name = singleTest name . PropTest
+  => Int -> Int -> TestName -> p -> TestTree
+testprop sn vn name = singleTest name . PropTest sn vn
 
 -- | Convert a test result into an error message on failure (empty
 -- string on success).

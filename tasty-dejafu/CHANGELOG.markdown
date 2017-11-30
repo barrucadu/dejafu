@@ -7,6 +7,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Test.Tasty.DejaFu
+
+- A new `testPropertyFor` function for checking refinement properties with a custom number of seed
+  values and variable assignments.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.7.0.3
 -------
 

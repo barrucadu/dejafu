@@ -75,6 +75,7 @@ module Test.HUnit.DejaFu
 
   -- * Refinement property testing
   , testProperty
+  , testPropertyFor
 
   -- ** Re-exports
   , R.Sig(..)
@@ -326,7 +327,25 @@ testProperty :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Sho
   -> p
   -- ^ The property to check.
   -> Test
-testProperty = testprop
+testProperty = testPropertyFor 10 100
+
+-- | Like 'testProperty', but takes a number of cases to check.
+--
+-- The maximum number of cases tried by @testPropertyFor n m@ will be
+-- @n * m@.
+--
+-- @since unreleased
+testPropertyFor :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
+  => Int
+  -- ^ The number of seed values to try.
+  -> Int
+  -- ^ The number of variable assignments per seed value to try.
+  -> String
+  -- ^ The name of the test.
+  -> p
+  -- ^ The property to check.
+  -> Test
+testPropertyFor = testprop
 
 
 --------------------------------------------------------------------------------
@@ -373,9 +392,9 @@ testio discard way memtype concio tests = case map toTest tests of
 
 -- | Produce a HUnit 'Test' from a Deja Fu refinement property test.
 testprop :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
-  => String -> p -> Test
-testprop name p = TestLabel name . TestCase $ do
-  ce <- R.check' p
+  => Int -> Int -> String -> p -> Test
+testprop sn vn name p = TestLabel name . TestCase $ do
+  ce <- R.checkFor sn vn p
   case ce of
     Just c -> assertFailure . init $ unlines
       [ "*** Failure: " ++
