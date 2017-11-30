@@ -334,7 +334,7 @@ testProperty = testPropertyFor 10 100
 -- The maximum number of cases tried by @testPropertyFor n m@ will be
 -- @n * m@.
 --
--- @since unreleased
+-- @since 0.7.1.0
 testPropertyFor :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))
   => Int
   -- ^ The number of seed values to try.
