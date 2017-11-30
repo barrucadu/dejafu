@@ -42,9 +42,13 @@ module Control.Concurrent.Classy.Async
 
   -- * Spawning with automatic 'cancel'ation
   , withAsync
+  , withAsyncN
   , withAsyncOn
+  , withAsyncOnN
   , withAsyncWithUnmask
+  , withAsyncWithUnmaskN
   , withAsyncOnWithUnmask
+  , withAsyncOnWithUnmaskN
 
   -- * Querying 'Async's
   , wait, waitSTM
@@ -255,11 +259,25 @@ asyncUnmaskUsing doFork action = do
 withAsync :: MonadConc m => m a -> (Async m a -> m b) -> m b
 withAsync = withAsyncUsing fork
 
+-- | Like 'withAsync' but using a named thread for better debugging
+-- information.
+--
+-- @since unreleased
+withAsyncN :: MonadConc m => String -> m a -> (Async m a -> m b) -> m b
+withAsyncN name = withAsyncUsing (forkN name)
+
 -- | Like 'withAsync' but uses 'forkOn' internally.
 --
 -- @since 1.1.1.0
 withAsyncOn :: MonadConc m => Int -> m a -> (Async m a -> m b) -> m b
 withAsyncOn = withAsyncUsing . forkOn
+
+-- | Like 'withAsyncOn' but using a named thread for better debugging
+-- information.
+--
+-- @since unreleased
+withAsyncOnN :: MonadConc m => String -> Int -> m a -> (Async m a -> m b) -> m b
+withAsyncOnN name i = withAsyncUsing (forkOnN name i)
 
 -- | Like 'withAsync' bit uses 'forkWithUnmask' internally.
 --
@@ -267,11 +285,26 @@ withAsyncOn = withAsyncUsing . forkOn
 withAsyncWithUnmask :: MonadConc m => ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
 withAsyncWithUnmask = withAsyncUnmaskUsing forkWithUnmask
 
+-- | Like 'withAsyncWithUnmask' but using a named thread for better
+-- debugging information.
+--
+-- @since unreleased
+withAsyncWithUnmaskN :: MonadConc m => String -> ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
+withAsyncWithUnmaskN name = withAsyncUnmaskUsing (forkWithUnmaskN name)
+
 -- | Like 'withAsyncOn' bit uses 'forkOnWithUnmask' internally.
 --
 -- @since 1.1.1.0
 withAsyncOnWithUnmask :: MonadConc m => Int -> ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
 withAsyncOnWithUnmask i = withAsyncUnmaskUsing (forkOnWithUnmask i)
+
+-- | Like 'withAsyncOnWithUnmask' but using a named thread for better
+-- debugging information.
+--
+-- @since unreleased
+withAsyncOnWithUnmaskN :: MonadConc m
+  => String -> Int -> ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
+withAsyncOnWithUnmaskN name i = withAsyncUnmaskUsing (forkOnWithUnmaskN name i)
 
 -- | Helper for 'withAsync' and 'withAsyncOn': fork a thread with the
 -- given forking function and kill it when the inner action completes.

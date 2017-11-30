@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 This project is versioned according to the [Package Versioning Policy](https://pvp.haskell.org), the
 *de facto* standard Haskell versioning scheme.
 
+unreleased
+----------
+
+### Control.Concurrent.Classy.Async
+
+- New named-thread variants of the `withAsync*` functions: `withAsyncN`, `withAsyncOnN`,
+  `withAsyncWithUnmaskN`, and `withAsyncOnWithUnmaskN` (#148).
+
+
+---------------------------------------------------------------------------------------------------
+
 
 1.2.2.0
 -------
