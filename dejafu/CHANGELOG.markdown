@@ -7,6 +7,23 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+1.0.0.0
+-------
+
+- **Date**    unreleased
+- **Git tag** [dejafu-1.0.0.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-1.0.0.0
+
+### Miscellaneous
+
+- The minimum supported version of concurrency is now 1.3.0.0.
+
+[dejafu-1.0.0.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-1.0.0.0
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.9.1.2
 -------
 

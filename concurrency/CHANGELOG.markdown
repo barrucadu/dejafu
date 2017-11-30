@@ -7,6 +7,19 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+1.3.0.0
+-------
+
+- **Date**    unreleased
+- **Git tag** [concurrency-1.3.0.0][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.3.0.0
+
+[concurrency-1.3.0.0]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.3.0.0
+
+
+---------------------------------------------------------------------------------------------------
+
+
 1.2.3.0
 -------
 
