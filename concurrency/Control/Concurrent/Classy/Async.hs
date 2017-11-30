@@ -262,7 +262,7 @@ withAsync = withAsyncUsing fork
 -- | Like 'withAsync' but using a named thread for better debugging
 -- information.
 --
--- @since unreleased
+-- @since 1.2.3.0
 withAsyncN :: MonadConc m => String -> m a -> (Async m a -> m b) -> m b
 withAsyncN name = withAsyncUsing (forkN name)
 
@@ -275,7 +275,7 @@ withAsyncOn = withAsyncUsing . forkOn
 -- | Like 'withAsyncOn' but using a named thread for better debugging
 -- information.
 --
--- @since unreleased
+-- @since 1.2.3.0
 withAsyncOnN :: MonadConc m => String -> Int -> m a -> (Async m a -> m b) -> m b
 withAsyncOnN name i = withAsyncUsing (forkOnN name i)
 
@@ -288,7 +288,7 @@ withAsyncWithUnmask = withAsyncUnmaskUsing forkWithUnmask
 -- | Like 'withAsyncWithUnmask' but using a named thread for better
 -- debugging information.
 --
--- @since unreleased
+-- @since 1.2.3.0
 withAsyncWithUnmaskN :: MonadConc m => String -> ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
 withAsyncWithUnmaskN name = withAsyncUnmaskUsing (forkWithUnmaskN name)
 
@@ -301,7 +301,7 @@ withAsyncOnWithUnmask i = withAsyncUnmaskUsing (forkOnWithUnmask i)
 -- | Like 'withAsyncOnWithUnmask' but using a named thread for better
 -- debugging information.
 --
--- @since unreleased
+-- @since 1.2.3.0
 withAsyncOnWithUnmaskN :: MonadConc m
   => String -> Int -> ((forall x. m x -> m x) -> m a) -> (Async m a -> m b) -> m b
 withAsyncOnWithUnmaskN name i = withAsyncUnmaskUsing (forkOnWithUnmaskN name i)

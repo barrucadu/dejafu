@@ -6,13 +6,20 @@ All notable changes to this project will be documented in this file.
 This project is versioned according to the [Package Versioning Policy](https://pvp.haskell.org), the
 *de facto* standard Haskell versioning scheme.
 
-unreleased
-----------
+
+1.2.3.0
+-------
+
+- **Date**    2017-11-30
+- **Git tag** [concurrency-1.2.3.0][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.2.3.0
 
 ### Control.Concurrent.Classy.Async
 
 - New named-thread variants of the `withAsync*` functions: `withAsyncN`, `withAsyncOnN`,
   `withAsyncWithUnmaskN`, and `withAsyncOnWithUnmaskN` (#148).
+
+[concurrency-1.2.3.0]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.2.3.0
 
 
 ---------------------------------------------------------------------------------------------------
