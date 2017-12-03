@@ -56,6 +56,10 @@ This project is versioned according to the [Package Versioning Policy](https://p
 
 - If bound threads are supported, the main thread when testing is bound. (#126)
 
+### Test.DejaFu.Refinement
+
+- A blocking interference function is no longer reported as a deadlocking execution.
+
 ### Test.DejaFu.SCT
 
 - All testing functions now require a `MonadConc` constraint:
