@@ -58,8 +58,8 @@ import           Test.DejaFu.Schedule
 import qualified Control.Monad.Conc.Class         as C
 import           Test.DejaFu.Conc.Internal
 import           Test.DejaFu.Conc.Internal.Common
+import           Test.DejaFu.Conc.Internal.STM
 import           Test.DejaFu.Internal
-import           Test.DejaFu.STM
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
 
@@ -120,7 +120,7 @@ instance Monad n => C.MonadConc (ConcT r n) where
   type MVar     (ConcT r n) = MVar r
   type CRef     (ConcT r n) = CRef r
   type Ticket   (ConcT r n) = Ticket
-  type STM      (ConcT r n) = STMLike n r
+  type STM      (ConcT r n) = S n r
   type ThreadId (ConcT r n) = ThreadId
 
   -- ----------

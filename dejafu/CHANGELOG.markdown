@@ -84,6 +84,10 @@ This project is versioned according to the [Package Versioning Policy](https://p
 
     It is no longer possible to test things in `ST`.
 
+### Test.DejaFu.STM
+
+- This is now an internal module. (#155)
+
 ### Miscellaneous
 
 - The minimum supported version of concurrency is now 1.3.0.0.

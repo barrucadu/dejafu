@@ -31,11 +31,10 @@ import qualified Data.Sequence                       as Seq
 
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.Conc.Internal.Memory
+import           Test.DejaFu.Conc.Internal.STM
 import           Test.DejaFu.Conc.Internal.Threading
 import           Test.DejaFu.Internal
 import           Test.DejaFu.Schedule
-import           Test.DejaFu.STM                     (Result(..),
-                                                      runTransaction)
 import           Test.DejaFu.Types
 
 --------------------------------------------------------------------------------

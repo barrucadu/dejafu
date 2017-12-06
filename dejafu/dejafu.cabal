@@ -41,7 +41,6 @@ library
                      , Test.DejaFu.Defaults
                      , Test.DejaFu.Refinement
                      , Test.DejaFu.SCT
-                     , Test.DejaFu.STM
                      , Test.DejaFu.Schedule
                      , Test.DejaFu.Types
                      , Test.DejaFu.Utils
@@ -49,10 +48,10 @@ library
                      , Test.DejaFu.Conc.Internal
                      , Test.DejaFu.Conc.Internal.Common
                      , Test.DejaFu.Conc.Internal.Memory
+                     , Test.DejaFu.Conc.Internal.STM
                      , Test.DejaFu.Conc.Internal.Threading
                      , Test.DejaFu.Internal
                      , Test.DejaFu.SCT.Internal
-                     , Test.DejaFu.STM.Internal
 
   -- other-modules:       
   -- other-extensions:    

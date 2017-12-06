@@ -1,70 +1,88 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
+
+-- Must come after TypeFamilies
+{-# LANGUAGE NoMonoLocalBinds #-}
 
 -- |
--- Module      : Test.DejaFu.STM.Internal
--- Copyright   : (c) 2016 Michael Walker
+-- Module      : Test.DejaFu.Conc.Internal.STM
+-- Copyright   : (c) 2017 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, ExistentialQuantification, MultiParamTypeClasses, RankNTypes
+-- Portability : CPP, ExistentialQuantification, MultiParamTypeClasses, NoMonoLocalBinds, TypeFamilies
 --
--- 'MonadSTM' testing implementation, internal types and
--- definitions. This module is NOT considered to form part of the
--- public interface of this library.
-module Test.DejaFu.STM.Internal where
+-- 'MonadSTM' testing implementation, internal types and definitions.
+-- This module is NOT considered to form part of the public interface
+-- of this library.
+module Test.DejaFu.Conc.Internal.STM where
 
-import           Control.DeepSeq      (NFData(..))
-import           Control.Exception    (Exception, SomeException, fromException,
-                                       toException)
-import           Control.Monad.Ref    (MonadRef, newRef, readRef, writeRef)
-import           Data.List            (nub)
+import           Control.Applicative     (Alternative(..))
+import           Control.Exception       (Exception, SomeException,
+                                          fromException, toException)
+import           Control.Monad           (MonadPlus(..))
+import           Control.Monad.Catch     (MonadCatch(..), MonadThrow(..))
+import           Control.Monad.Ref       (MonadRef, newRef, readRef, writeRef)
+import           Data.List               (nub)
 
+import qualified Control.Monad.STM.Class as C
 import           Test.DejaFu.Internal
 import           Test.DejaFu.Types
 
 #if MIN_VERSION_base(4,9,0)
-import qualified Control.Monad.Fail   as Fail
+import qualified Control.Monad.Fail      as Fail
 #endif
 
 --------------------------------------------------------------------------------
--- The @STMLike@ monad
+-- * The @S@ monad
 
 -- | The underlying monad is based on continuations over primitive
 -- actions.
 --
 -- This is not @Cont@ because we want to give it a custom @MonadFail@
 -- instance.
-newtype M n r a = M { runM :: (a -> STMAction n r) -> STMAction n r }
+newtype S n r a = S { runSTM :: (a -> STMAction n r) -> STMAction n r }
 
-instance Functor (M n r) where
-    fmap f m = M $ \ c -> runM m (c . f)
+instance Functor (S n r) where
+    fmap f m = S $ \c -> runSTM m (c . f)
 
-instance Applicative (M n r) where
-    pure x  = M $ \c -> c x
-    f <*> v = M $ \c -> runM f (\g -> runM v (c . g))
+instance Applicative (S n r) where
+    pure x  = S $ \c -> c x
+    f <*> v = S $ \c -> runSTM f (\g -> runSTM v (c . g))
 
-instance Monad (M n r) where
+instance Monad (S n r) where
     return  = pure
-    m >>= k = M $ \c -> runM m (\x -> runM (k x) c)
+    m >>= k = S $ \c -> runSTM m (\x -> runSTM (k x) c)
 
 #if MIN_VERSION_base(4,9,0)
     fail = Fail.fail
 
--- | @since 0.7.1.2
-instance Fail.MonadFail (M n r) where
+instance Fail.MonadFail (S n r) where
 #endif
-    fail e = cont (\_ -> SThrow (MonadFailException e))
+    fail e = S $ \_ -> SThrow (MonadFailException e)
 
--- | Construct a continuation-passing operation from a function.
-cont :: ((a -> STMAction n r) -> STMAction n r) -> M n r a
-cont = M
+instance MonadThrow (S n r) where
+  throwM e = S $ \_ -> SThrow e
 
--- | Run a CPS computation with the given final computation.
-runCont :: M n r a -> (a -> STMAction n r) -> STMAction n r
-runCont = runM
+instance MonadCatch (S n r) where
+  catch stm handler = S $ SCatch handler stm
+
+instance Alternative (S n r) where
+  a <|> b = S $ SOrElse a b
+  empty = S $ const SRetry
+
+instance MonadPlus (S n r)
+
+instance C.MonadSTM (S n r) where
+  type TVar (S n r) = TVar r
+
+  newTVarN n = S . SNew n
+
+  readTVar = S . SRead
+
+  writeTVar tvar a = S $ \c -> SWrite tvar a (c ())
 
 --------------------------------------------------------------------------------
 -- * Primitive actions
@@ -72,10 +90,10 @@ runCont = runM
 -- | STM transactions are represented as a sequence of primitive
 -- actions.
 data STMAction n r
-  = forall a e. Exception e => SCatch (e -> M n r a) (M n r a) (a -> STMAction n r)
+  = forall a e. Exception e => SCatch (e -> S n r a) (S n r a) (a -> STMAction n r)
   | forall a. SRead  (TVar r a) (a -> STMAction n r)
   | forall a. SWrite (TVar r a) a (STMAction n r)
-  | forall a. SOrElse (M n r a) (M n r a) (a -> STMAction n r)
+  | forall a. SOrElse (S n r a) (S n r a) (a -> STMAction n r)
   | forall a. SNew String a (TVar r a -> STMAction n r)
   | forall e. Exception e => SThrow e
   | SRetry
@@ -94,8 +112,6 @@ newtype TVar r a = TVar (TVarId, r a)
 
 -- | The result of an STM transaction, along with which 'TVar's it
 -- touched whilst executing.
---
--- @since 0.1.0.0
 data Result a =
     Success [TVarId] [TVarId] a
   -- ^ The transaction completed successfully, reading the first list
@@ -108,41 +124,35 @@ data Result a =
   -- ^ The transaction aborted by throwing an exception.
   deriving Show
 
--- | This only reduces a 'SomeException' to WHNF.
---
--- @since 0.5.1.0
-instance NFData a => NFData (Result a) where
-  rnf (Success tr1 tr2 a) = rnf (tr1, tr2, a)
-  rnf (Retry tr) = rnf tr
-  rnf (Exception e) = e `seq` ()
-
--- | Check if a 'Result' is a @Success@.
-isSTMSuccess :: Result a -> Bool
-isSTMSuccess (Success _ _ _) = True
-isSTMSuccess _ = False
-
-instance Functor Result where
-  fmap f (Success rs ws a) = Success rs ws $ f a
-  fmap _ (Retry rs)    = Retry rs
-  fmap _ (Exception e) = Exception e
-
-instance Foldable Result where
-  foldMap f (Success _ _ a) = f a
-  foldMap _ _ = mempty
 
 --------------------------------------------------------------------------------
 -- * Execution
 
+-- | Run a transaction, returning the result and new initial 'TVarId'.
+-- If the transaction failed, any effects are undone.
+runTransaction :: MonadRef r n
+  => S n r a
+  -> IdSource
+  -> n (Result a, IdSource, [TAction])
+runTransaction ma tvid = do
+  (res, _, tvid', trace) <- doTransaction ma tvid
+  pure (res, tvid', trace)
+
 -- | Run a STM transaction, returning an action to undo its effects.
-doTransaction :: MonadRef r n => M n r a -> IdSource -> n (Result a, n (), IdSource, [TAction])
+--
+-- If the transaction fails, its effects will automatically be undone,
+-- so the undo action returned will be @pure ()@.
+doTransaction :: MonadRef r n
+  => S n r a
+  -> IdSource
+  -> n (Result a, n (), IdSource, [TAction])
 doTransaction ma idsource = do
-  (c, ref) <- runRefCont SStop (Just . Right) (runCont ma)
+  (c, ref) <- runRefCont SStop (Just . Right) (runSTM ma)
   (idsource', undo, readen, written, trace) <- go ref c (pure ()) idsource [] [] []
   res <- readRef ref
 
   case res of
     Just (Right val) -> pure (Success (nub readen) (nub written) val, undo, idsource', reverse trace)
-
     Just (Left  exc) -> undo >> pure (Exception exc,      pure (), idsource, reverse trace)
     Nothing          -> undo >> pure (Retry $ nub readen, pure (), idsource, reverse trace)
 
@@ -168,7 +178,10 @@ doTransaction ma idsource = do
         _ -> go ref newAct newUndo newIDSource newReaden newWritten newSofar
 
 -- | Run a transaction for one step.
-stepTrans :: MonadRef r n => STMAction n r -> IdSource -> n (STMAction n r, n (), IdSource, [TVarId], [TVarId], TAction)
+stepTrans :: MonadRef r n
+  => STMAction n r
+  -> IdSource
+  -> n (STMAction n r, n (), IdSource, [TVarId], [TVarId], TAction)
 stepTrans act idsource = case act of
   SCatch  h stm c -> stepCatch h stm c
   SRead   ref c   -> stepRead ref c

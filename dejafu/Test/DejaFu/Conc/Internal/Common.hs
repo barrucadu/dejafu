@@ -12,15 +12,16 @@
 --
 -- Common types and utility functions for deterministic execution of
 -- 'MonadConc' implementations. This module is NOT considered to form
+-- part of the public interface of this library.
 module Test.DejaFu.Conc.Internal.Common where
 
-import           Control.Exception  (Exception, MaskingState(..))
-import           Data.Map.Strict    (Map)
-import           Test.DejaFu.STM    (STMLike)
+import           Control.Exception             (Exception, MaskingState(..))
+import           Data.Map.Strict               (Map)
+import           Test.DejaFu.Conc.Internal.STM (S)
 import           Test.DejaFu.Types
 
 #if MIN_VERSION_base(4,9,0)
-import qualified Control.Monad.Fail as Fail
+import qualified Control.Monad.Fail            as Fail
 #endif
 
 --------------------------------------------------------------------------------
@@ -140,7 +141,7 @@ data Action n r =
   | forall a. AMasking MaskingState ((forall b. M n r b -> M n r b) -> M n r a) (a -> Action n r)
   | AResetMask Bool Bool MaskingState (Action n r)
 
-  | forall a. AAtom (STMLike n r a) (a -> Action n r)
+  | forall a. AAtom (S n r a) (a -> Action n r)
   | ALift (n (Action n r))
   | AYield  (Action n r)
   | ADelay Int (Action n r)
