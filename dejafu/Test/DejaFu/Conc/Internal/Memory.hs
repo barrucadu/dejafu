@@ -26,16 +26,16 @@ module Test.DejaFu.Conc.Internal.Memory where
 import           Control.Monad.Ref                   (MonadRef, readRef,
                                                       writeRef)
 import           Data.Map.Strict                     (Map)
+import qualified Data.Map.Strict                     as M
 import           Data.Maybe                          (maybeToList)
 import           Data.Monoid                         ((<>))
 import           Data.Sequence                       (Seq, ViewL(..), singleton,
                                                       viewl, (><))
 
-import           Test.DejaFu.Common
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.Conc.Internal.Threading
-
-import qualified Data.Map.Strict                     as M
+import           Test.DejaFu.Internal
+import           Test.DejaFu.Types
 
 --------------------------------------------------------------------------------
 -- * Manipulating @CRef@s

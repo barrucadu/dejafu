@@ -56,10 +56,12 @@ import           Data.IORef                       (IORef)
 import           Test.DejaFu.Schedule
 
 import qualified Control.Monad.Conc.Class         as C
-import           Test.DejaFu.Common
 import           Test.DejaFu.Conc.Internal
 import           Test.DejaFu.Conc.Internal.Common
+import           Test.DejaFu.Internal
 import           Test.DejaFu.STM
+import           Test.DejaFu.Types
+import           Test.DejaFu.Utils
 
 #if MIN_VERSION_base(4,9,0)
 import qualified Control.Monad.Fail               as Fail

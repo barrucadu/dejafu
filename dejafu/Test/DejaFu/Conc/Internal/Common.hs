@@ -16,8 +16,8 @@ module Test.DejaFu.Conc.Internal.Common where
 
 import           Control.Exception  (Exception, MaskingState(..))
 import           Data.Map.Strict    (Map)
-import           Test.DejaFu.Common
 import           Test.DejaFu.STM    (STMLike)
+import           Test.DejaFu.Types
 
 #if MIN_VERSION_base(4,9,0)
 import qualified Control.Monad.Fail as Fail

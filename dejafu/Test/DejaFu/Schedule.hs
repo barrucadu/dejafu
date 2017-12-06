@@ -29,10 +29,11 @@ module Test.DejaFu.Schedule
   , makeNonPreemptive
   ) where
 
-import           Data.List.NonEmpty (NonEmpty(..), toList)
-import           System.Random      (RandomGen, randomR)
+import           Data.List.NonEmpty   (NonEmpty(..), toList)
+import           System.Random        (RandomGen, randomR)
 
-import           Test.DejaFu.Common
+import           Test.DejaFu.Internal
+import           Test.DejaFu.Types
 
 -- | A @Scheduler@ drives the execution of a concurrent program. The
 -- parameters it takes are:

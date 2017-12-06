@@ -47,8 +47,19 @@ This project is versioned according to the [Package Versioning Policy](https://p
 
 ### Test.DejaFu.Common
 
+- This module has been split up into new Test.DejaFu.Internal, Types, and Utils modules. (#155)
+
 - New `ForkOS` and `IsCurrentThreadBound` thread actions. (#126)
+
 - New `WillForkOS` and `WillIsCurrentThreadBound` lookaheads. (#126)
+
+- The `TTrace` type synonym for `[TAction]` has been removed.
+
+- The `preEmpCount` function has been removed.
+
+- New functions `strengthenDiscard` and `weakenDiscard` to combine discard functions.
+
+- The `Discard` type is now defined here and re-exported from Test.DejaFu.SCT.
 
 ### Test.DejaFu.Conc
 
@@ -72,8 +83,6 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - All testing functions now require a `MonadConc` constraint:
 
     It is no longer possible to test things in `ST`.
-
-- New functions `strengthenDiscard` and `weakenDiscard` to combine discard functions.
 
 ### Miscellaneous
 

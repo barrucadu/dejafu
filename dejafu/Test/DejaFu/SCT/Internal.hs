@@ -30,8 +30,9 @@ import           Data.Set             (Set)
 import qualified Data.Set             as S
 import           System.Random        (RandomGen, randomR)
 
-import           Test.DejaFu.Common
+import           Test.DejaFu.Internal
 import           Test.DejaFu.Schedule (Scheduler(..), decisionOf, tidOf)
+import           Test.DejaFu.Types
 
 -------------------------------------------------------------------------------
 -- * Dynamic partial-order reduction

@@ -16,16 +16,17 @@
 -- public interface of this library.
 module Test.DejaFu.STM.Internal where
 
-import           Control.DeepSeq    (NFData(..))
-import           Control.Exception  (Exception, SomeException, fromException,
-                                     toException)
-import           Control.Monad.Ref  (MonadRef, newRef, readRef, writeRef)
-import           Data.List          (nub)
+import           Control.DeepSeq      (NFData(..))
+import           Control.Exception    (Exception, SomeException, fromException,
+                                       toException)
+import           Control.Monad.Ref    (MonadRef, newRef, readRef, writeRef)
+import           Data.List            (nub)
 
-import           Test.DejaFu.Common
+import           Test.DejaFu.Internal
+import           Test.DejaFu.Types
 
 #if MIN_VERSION_base(4,9,0)
-import qualified Control.Monad.Fail as Fail
+import qualified Control.Monad.Fail   as Fail
 #endif
 
 --------------------------------------------------------------------------------
@@ -133,7 +134,7 @@ instance Foldable Result where
 -- * Execution
 
 -- | Run a STM transaction, returning an action to undo its effects.
-doTransaction :: MonadRef r n => M n r a -> IdSource -> n (Result a, n (), IdSource, TTrace)
+doTransaction :: MonadRef r n => M n r a -> IdSource -> n (Result a, n (), IdSource, [TAction])
 doTransaction ma idsource = do
   (c, ref) <- runRefCont SStop (Just . Right) (runCont ma)
   (idsource', undo, readen, written, trace) <- go ref c (pure ()) idsource [] [] []

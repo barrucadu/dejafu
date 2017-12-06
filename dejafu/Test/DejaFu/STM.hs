@@ -20,7 +20,6 @@ module Test.DejaFu.STM
 
   -- * Executing Transactions
   , Result(..)
-  , TTrace
   , TAction(..)
   , TVarId
   , runTransaction
@@ -35,8 +34,9 @@ import           Data.IORef               (IORef)
 import           Data.STRef               (STRef)
 
 import qualified Control.Monad.STM.Class  as C
-import           Test.DejaFu.Common
+import           Test.DejaFu.Internal
 import           Test.DejaFu.STM.Internal
+import           Test.DejaFu.Types
 
 #if MIN_VERSION_base(4,9,0)
 import qualified Control.Monad.Fail       as Fail
@@ -112,7 +112,7 @@ instance C.MonadSTM (STMLike n r) where
 --
 -- @since 0.4.0.0
 runTransaction :: MonadRef r n
-               => STMLike n r a -> IdSource -> n (Result a, IdSource, TTrace)
+  => STMLike n r a -> IdSource -> n (Result a, IdSource, [TAction])
 runTransaction ma tvid = do
   (res, undo, tvid', trace) <- doTransaction (runSTM ma) tvid
 

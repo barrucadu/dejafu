@@ -78,6 +78,7 @@ import           Test.DejaFu            hiding (Testable(..))
 import qualified Test.DejaFu.Conc       as Conc
 import qualified Test.DejaFu.Refinement as R
 import qualified Test.DejaFu.SCT        as SCT
+import qualified Test.DejaFu.Types      as D
 import           Test.Tasty             (TestName, TestTree, testGroup)
 import           Test.Tasty.Options     (IsOption(..), OptionDescription(..),
                                          lookupOption)
@@ -328,7 +329,7 @@ testconc discard way memtype tests concio = case map toTest tests of
 
   where
     toTest (name, p) =
-      let discarder = SCT.strengthenDiscard discard (pdiscard p)
+      let discarder = D.strengthenDiscard discard (pdiscard p)
           traces    = SCT.runSCTDiscard discarder way memtype concio
       in singleTest name $ ConcTest traces (peval p)
 

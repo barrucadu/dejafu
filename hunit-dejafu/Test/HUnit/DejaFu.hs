@@ -74,6 +74,7 @@ import           Test.DejaFu            hiding (Testable(..))
 import qualified Test.DejaFu.Conc       as Conc
 import qualified Test.DejaFu.Refinement as R
 import qualified Test.DejaFu.SCT        as SCT
+import qualified Test.DejaFu.Types      as D
 import           Test.HUnit             (Assertable(..), Test(..), Testable(..),
                                          assertFailure, assertString)
 import           Test.HUnit.Lang        (HUnitFailure(..))
@@ -264,7 +265,7 @@ testconc discard way memtype tests concio = case map toTest tests of
 
   where
     toTest (name, p) = TestLabel name . TestCase $ do
-      let discarder = SCT.strengthenDiscard discard (pdiscard p)
+      let discarder = D.strengthenDiscard discard (pdiscard p)
       traces <- SCT.runSCTDiscard discarder way memtype concio
       assertString . showErr $ peval p traces
 

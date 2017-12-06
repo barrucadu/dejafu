@@ -25,8 +25,6 @@ module Test.DejaFu.SCT
   , Discard(..)
   , runSCTDiscard
   , resultsSetDiscard
-  , weakenDiscard
-  , strengthenDiscard
 
   -- ** Strict variants
   , runSCT'
@@ -119,9 +117,10 @@ import           Data.Set                 (Set)
 import qualified Data.Set                 as S
 import           System.Random            (RandomGen, randomR)
 
-import           Test.DejaFu.Common
 import           Test.DejaFu.Conc
+import           Test.DejaFu.Internal
 import           Test.DejaFu.SCT.Internal
+import           Test.DejaFu.Types
 
 -------------------------------------------------------------------------------
 -- Running Concurrent Programs
@@ -236,58 +235,6 @@ resultsSet :: (MonadConc n, MonadRef r n, Ord a)
   -- ^ The computation to run many times.
   -> n (Set (Either Failure a))
 resultsSet = resultsSetDiscard (const Nothing)
-
--- | An @Either Failure a -> Maybe Discard@ value can be used to
--- selectively discard results.
---
--- @since 0.7.1.0
-data Discard
-  = DiscardTrace
-  -- ^ Discard the trace but keep the result.  The result will appear
-  -- to have an empty trace.
-  | DiscardResultAndTrace
-  -- ^ Discard the result and the trace.  It will simply not be
-  -- reported as a possible behaviour of the program.
-  deriving (Eq, Show, Read, Ord, Enum, Bounded)
-
-instance NFData Discard where
-  rnf d = d `seq` ()
-
--- | Combine two discard values, keeping the weaker.
---
--- @Nothing@ is weaker than @Just DiscardTrace@, which is weaker than
--- @Just DiscardResultAndTrace@.  This forms a commutative monoid
--- where the unit is @const (Just DiscardResultAndTrace)@.
---
--- @since 1.0.0.0
-weakenDiscard ::
-     (Either Failure a -> Maybe Discard)
-  -> (Either Failure a -> Maybe Discard)
-  -> Either Failure a -> Maybe Discard
-weakenDiscard d1 d2 efa = case (d1 efa, d2 efa) of
-  (Nothing, _) -> Nothing
-  (_, Nothing) -> Nothing
-  (Just DiscardTrace, _) -> Just DiscardTrace
-  (_, Just DiscardTrace) -> Just DiscardTrace
-  _ -> Just DiscardResultAndTrace
-
--- | Combine two discard functions, keeping the stronger.
---
--- @Just DiscardResultAndTrace@ is stronger than @Just DiscardTrace@,
--- which is stronger than @Nothing@.  This forms a commutative monoid
--- where the unit is @const Nothing@.
---
--- @since 1.0.0.0
-strengthenDiscard ::
-     (Either Failure a -> Maybe Discard)
-  -> (Either Failure a -> Maybe Discard)
-  -> Either Failure a -> Maybe Discard
-strengthenDiscard d1 d2 efa = case (d1 efa, d2 efa) of
-  (Just DiscardResultAndTrace, _) -> Just DiscardResultAndTrace
-  (_, Just DiscardResultAndTrace) -> Just DiscardResultAndTrace
-  (Just DiscardTrace, _) -> Just DiscardTrace
-  (_, Just DiscardTrace) -> Just DiscardTrace
-  _ -> Nothing
 
 -- | A variant of 'runSCT' which can selectively discard results.
 --

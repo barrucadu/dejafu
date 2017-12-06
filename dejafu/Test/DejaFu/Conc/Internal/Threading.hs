@@ -20,8 +20,9 @@ import           Data.List                        (intersect)
 import           Data.Map.Strict                  (Map)
 import           Data.Maybe                       (isJust)
 
-import           Test.DejaFu.Common
 import           Test.DejaFu.Conc.Internal.Common
+import           Test.DejaFu.Internal
+import           Test.DejaFu.Types
 
 import qualified Data.Map.Strict                  as M
 

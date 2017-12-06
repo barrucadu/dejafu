@@ -12,8 +12,9 @@ import qualified Data.Map as M
 import Data.Maybe (fromJust, isJust)
 import Data.Proxy (Proxy(..))
 import qualified Data.Sequence as S
-import Test.DejaFu.Common (ThreadAction, Lookahead)
-import qualified Test.DejaFu.Common as D
+import Test.DejaFu.Types (ThreadAction, Lookahead)
+import qualified Test.DejaFu.Types as D
+import qualified Test.DejaFu.Internal as D
 import qualified Test.DejaFu.Conc.Internal.Common as D
 import qualified Test.DejaFu.Conc.Internal.Memory as Mem
 import qualified Test.DejaFu.SCT.Internal as SCT

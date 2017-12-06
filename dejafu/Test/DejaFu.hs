@@ -386,16 +386,16 @@ import           Control.Monad.Conc.Class (MonadConc)
 import           Control.Monad.IO.Class   (MonadIO(..))
 import           Control.Monad.Ref        (MonadRef)
 import           Data.Function            (on)
-import           Data.List                (intercalate, intersperse, minimumBy)
+import           Data.List                (intercalate, intersperse)
 import           Data.Maybe               (catMaybes, isNothing, mapMaybe)
-import           Data.Ord                 (comparing)
 import           Data.Profunctor          (Profunctor(..))
 
-import           Test.DejaFu.Common
 import           Test.DejaFu.Conc
 import           Test.DejaFu.Defaults
 import           Test.DejaFu.Refinement
 import           Test.DejaFu.SCT
+import           Test.DejaFu.Types
+import           Test.DejaFu.Utils
 
 
 -------------------------------------------------------------------------------
@@ -941,25 +941,3 @@ moreThan n (_:rest) = moreThan (n-1) rest
 -- | Indent every line of a string.
 indent :: String -> String
 indent = intercalate "\n" . map ('\t':) . lines
-
--- | Find the \"simplest\" trace leading to each result.
-simplestsBy
-  :: (Either Failure a -> Either Failure a -> Bool)
-  -> [(Either Failure a, Trace)]
-  -> [(Either Failure a, Trace)]
-simplestsBy f = map choose . collect where
-  collect = groupBy' [] (\(a,_) (b,_) -> f a b)
-  choose  = minimumBy . comparing $ \(_, trc) ->
-    let switchTos = length . filter (\(d,_,_) -> case d of SwitchTo _ -> True; _ -> False)
-        starts    = length . filter (\(d,_,_) -> case d of Start    _ -> True; _ -> False)
-        commits   = length . filter (\(_,_,a) -> case a of CommitCRef _ _ -> True; _ -> False)
-    in (switchTos trc, commits trc, length trc, starts trc)
-
-  groupBy' res _ [] = res
-  groupBy' res eq (y:ys) = groupBy' (insert' eq y res) eq ys
-
-  insert' _ x [] = [[x]]
-  insert' eq x (ys@(y:_):yss)
-    | x `eq` y  = (x:ys) : yss
-    | otherwise = ys : insert' eq x yss
-  insert' _ _ ([]:_) = undefined
