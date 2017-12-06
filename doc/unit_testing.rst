@@ -108,6 +108,8 @@ to it from a different thread).
   :widths: 25, 75
 
   ``alwaysSame``,"checks that the computation is deterministic"
+  ``alwaysSameOn f``,"is like ``alwaysSame``, but transforms the results with ``f`` first"
+  ``alwaysSameBy f``,"is like ``alwaysSame``, but uses ``f`` instead of ``(==)`` to compare"
   ``notAlwaysSame``,"checks that the computation is nondeterministic"
 
 Checking for **determinism** will also find nondeterministic failures:
@@ -117,7 +119,6 @@ deadlocking (for instance) is still a result of a test!
   :widths: 25, 75
 
   ``alwaysTrue p``,"checks that ``p`` is true for every result"
-  ``alwaysTrue2 p``,"checks that ``p`` is true for every pair of results"
   ``somewhereTrue p``,"checks that ``p`` is true for at least one result"
 
 These can be used to check custom predicates.  For example, you might

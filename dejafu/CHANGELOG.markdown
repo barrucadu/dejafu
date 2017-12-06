@@ -38,6 +38,13 @@ This project is versioned according to the [Package Versioning Policy](https://p
 - New `alwaysNothing` and `somewhereNothing` functions, like `alwaysTrue` and `somewhereTrue`, to
   lift functions to `ProPredicate`s.
 
+- The `alwaysTrue2` function is gone, as its behaviour was unintuitive and easy to get wrong, and
+  has been replaced with new `alwaysSameOn` and `alwaysSameBy` predicates, which generalise
+  `alwaysSame`.
+
+- The `alwaysSame`, `alwaysSameOn`, and `alwaysSameBy` predicates now gives the simplest execution
+  trace leading to each distinct result.
+
 ### Test.DejaFu.Common
 
 - New `ForkOS` and `IsCurrentThreadBound` thread actions. (#126)

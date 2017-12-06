@@ -240,9 +240,10 @@ module Test.DejaFu
   -- ** Predicate Helpers
   , representative
   , alwaysSame
+  , alwaysSameOn
+  , alwaysSameBy
   , notAlwaysSame
   , alwaysTrue
-  , alwaysTrue2
   , somewhereTrue
   , alwaysNothing
   , somewhereNothing
@@ -556,24 +557,10 @@ instance Functor (ProPredicate x) where
 -- @since 1.0.0.0
 representative :: Eq b => ProPredicate a b -> ProPredicate a b
 representative p = p
-    { peval = \xs ->
-        let result = peval p xs
-        in result { _failures = choose . collect $ _failures result }
-    }
-  where
-    collect = groupBy' [] ((==) `on` fst)
-    choose  = map $ minimumBy (comparing $ \(_, trc) -> (preEmps trc, length trc))
-
-    preEmps trc = preEmpCount (map (\(d,_,a) -> (d, a)) trc) (Continue, WillStop)
-
-    groupBy' res _ [] = res
-    groupBy' res eq (y:ys) = groupBy' (insert' eq y res) eq ys
-
-    insert' _ x [] = [[x]]
-    insert' eq x (ys@(y:_):yss)
-      | x `eq` y  = (x:ys) : yss
-      | otherwise = ys : insert' eq x yss
-    insert' _ _ ([]:_) = undefined
+  { peval = \xs ->
+      let result = peval p xs
+      in result { _failures = simplestsBy (==) (_failures result) }
+  }
 
 -- | Check that a computation never aborts.
 --
@@ -633,9 +620,33 @@ exceptionsSometimes = somewhereTrue $ either isUncaughtException (const False)
 -- particular this means either: (a) it always fails in the same way,
 -- or (b) it never fails and the values returned are all equal.
 --
+-- > alwaysSame = alwaysSameBy (==)
+--
 -- @since 1.0.0.0
 alwaysSame :: Eq a => Predicate a
-alwaysSame = representative $ alwaysTrue2 (==)
+alwaysSame = alwaysSameBy (==)
+
+-- | Check that the result of a computation is always the same by
+-- comparing the result of a function on every result.
+--
+-- > alwaysSameOn = alwaysSameBy ((==) `on` f)
+--
+-- @since 1.0.0.0
+alwaysSameOn :: Eq b => (Either Failure a -> b) -> Predicate a
+alwaysSameOn f = alwaysSameBy ((==) `on` f)
+
+-- | Check that the result of a computation is always the same, using
+-- some transformation on results.
+--
+-- @since 1.0.0.0
+alwaysSameBy :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
+alwaysSameBy f = ProPredicate
+  { pdiscard = const Nothing
+  , peval = \xs -> case simplestsBy f xs of
+      []  -> defaultPass
+      [_] -> defaultPass
+      xs' -> defaultFail xs'
+  }
 
 -- | Check that the result of a computation is not always the same.
 --
@@ -673,41 +684,6 @@ alwaysNothing f = ProPredicate
 -- @since 1.0.0.0
 alwaysTrue :: (Either Failure a -> Bool) -> Predicate a
 alwaysTrue p = alwaysNothing (\efa -> if p efa then Nothing else Just efa)
-
--- | Check that the result of a binary boolean predicate is true
--- between all pairs of results. Only properties which are transitive
--- and symmetric should be used here.
---
--- If the predicate fails, /both/ (result,trace) tuples will be added
--- to the failures list.
---
--- @since 1.0.0.0
-alwaysTrue2 :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
-alwaysTrue2 p = ProPredicate
-    { pdiscard = const Nothing
-    , peval = \case
-      [_] -> defaultPass
-      xs  -> go xs $ defaultPass { _failures = failures xs }
-    }
-  where
-    go [y1,y2] res
-      | p (fst y1) (fst y2) = res
-      | otherwise = res { _pass = False }
-    go (y1:y2:ys) res
-      | p (fst y1) (fst y2) = go (y2:ys) res
-      | otherwise = go (y2:ys) res { _pass = False }
-    go _ res = res
-
-    failures = fgo where
-      fgo (y1:y2:ys)
-        | p (fst y1) (fst y2) = fgo (y2:ys)
-        | otherwise = y1 : y2 : fgo2 y2 ys
-      fgo _ = []
-
-      fgo2 y1 (y2:ys)
-        | p (fst y1) (fst y2) = fgo (y2:ys)
-        | otherwise = y2 : fgo2 y2 ys
-      fgo2 _ _ = []
 
 -- | Check that a @Maybe@-producing function returns 'Nothing' at
 -- least once.
@@ -794,3 +770,25 @@ moreThan n (_:rest) = moreThan (n-1) rest
 -- | Indent every line of a string.
 indent :: String -> String
 indent = intercalate "\n" . map ('\t':) . lines
+
+-- | Find the \"simplest\" trace leading to each result.
+simplestsBy
+  :: (Either Failure a -> Either Failure a -> Bool)
+  -> [(Either Failure a, Trace)]
+  -> [(Either Failure a, Trace)]
+simplestsBy f = map choose . collect where
+  collect = groupBy' [] (\(a,_) (b,_) -> f a b)
+  choose  = minimumBy . comparing $ \(_, trc) ->
+    let switchTos = length . filter (\(d,_,_) -> case d of SwitchTo _ -> True; _ -> False)
+        starts    = length . filter (\(d,_,_) -> case d of Start    _ -> True; _ -> False)
+        commits   = length . filter (\(_,_,a) -> case a of CommitCRef _ _ -> True; _ -> False)
+    in (switchTos trc, commits trc, length trc, starts trc)
+
+  groupBy' res _ [] = res
+  groupBy' res eq (y:ys) = groupBy' (insert' eq y res) eq ys
+
+  insert' _ x [] = [[x]]
+  insert' eq x (ys@(y:_):yss)
+    | x `eq` y  = (x:ys) : yss
+    | otherwise = ys : insert' eq x yss
+  insert' _ _ ([]:_) = undefined
