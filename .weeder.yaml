@@ -2,9 +2,19 @@
 # https://github.com/ndmitchell/weeder/issues/24
 
 - package:
+  - name: dejafu
+  - section:
+    - name: library
+    - message:
+      - name: Redundant build-depends entry
+      - depends: semigroups
+- package:
   - name: dejafu-tests
   - section:
     - name: exe:dejafu-tests
+    - message:
+      - name: Redundant build-depends entry
+      - depends: transformers
     - message:
       - name: Weeds exported
       - module:
