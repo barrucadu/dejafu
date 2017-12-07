@@ -19,7 +19,7 @@ import           Data.Function     (on)
 -------------------------------------------------------------------------------
 -- * Identifiers
 
--- | Every live thread has a unique identitifer.
+-- | Every thread has a unique identitifer.
 --
 -- @since 1.0.0.0
 newtype ThreadId = ThreadId Id
@@ -330,15 +330,14 @@ data TAction =
   | TRetry
   -- ^ Abort and discard effects.
   | TOrElse [TAction] (Maybe [TAction])
-  -- ^ Execute a transaction until it succeeds (@STMStop@) or aborts
-  -- (@STMRetry@) and, if it aborts, execute the other transaction.
+  -- ^ Execute a transaction.  If the transaction aborts by calling
+  -- @retry@, execute the other transaction.
   | TThrow
   -- ^ Throw an exception, abort, and discard effects.
   | TCatch [TAction] (Maybe [TAction])
-  -- ^ Execute a transaction until it succeeds (@STMStop@) or aborts
-  -- (@STMThrow@). If the exception is of the appropriate type, it is
-  -- handled and execution continues; otherwise aborts, propagating
-  -- the exception upwards.
+  -- ^ Execute a transaction.  If the transaction aborts by throwing
+  -- an exception of the appropriate type, it is handled and execution
+  -- continues; otherwise aborts, propagating the exception upwards.
   | TStop
   -- ^ Terminate successfully and commit effects.
   deriving (Eq, Show)
@@ -355,8 +354,8 @@ instance NFData TAction where
 -- * Traces
 
 -- | One of the outputs of the runner is a @Trace@, which is a log of
--- decisions made, all the unblocked threads and what they would do,
--- and the action a thread took in its step.
+-- decisions made, all the alternative unblocked threads and what they
+-- would do, and the action a thread took in its step.
 --
 -- @since 0.8.0.0
 type Trace
@@ -416,23 +415,27 @@ data Failure
   deriving Show
 
 instance Eq Failure where
-  (==) = (==) `on` _other
+  InternalError          == InternalError          = True
+  Abort                  == Abort                  = True
+  Deadlock               == Deadlock               = True
+  STMDeadlock            == STMDeadlock            = True
+  (UncaughtException e1) == (UncaughtException e2) = show e1 == show e2
+  IllegalSubconcurrency  == IllegalSubconcurrency  = True
+  _ == _ = False
 
 instance Ord Failure where
-  compare = compare `on` _other
+  compare = compare `on` transform where
+    transform :: Failure -> (Int, Maybe String)
+    transform InternalError = (0, Nothing)
+    transform Abort = (1, Nothing)
+    transform Deadlock = (2, Nothing)
+    transform STMDeadlock = (3, Nothing)
+    transform (UncaughtException e) = (4, Just (show e))
+    transform IllegalSubconcurrency = (5, Nothing)
 
 instance NFData Failure where
-  rnf = rnf . _other
-
--- | Convert failures into a different representation we can Eq / Ord
--- / NFData.
-_other :: Failure -> (Int, Maybe String)
-_other InternalError = (0, Nothing)
-_other Abort = (1, Nothing)
-_other Deadlock = (2, Nothing)
-_other STMDeadlock = (3, Nothing)
-_other (UncaughtException e) = (4, Just (show e))
-_other IllegalSubconcurrency = (5, Nothing)
+  rnf (UncaughtException e) = rnf (show e)
+  rnf f = f `seq` ()
 
 -- | Check if a failure is an @InternalError@.
 --
