@@ -25,8 +25,8 @@ showTrace :: Trace -> String
 showTrace []  = "<trace discarded>"
 showTrace trc = intercalate "\n" $ go False trc : strkey where
   go _ ((_,_,CommitCRef _ _):rest) = "C-" ++ go False rest
-  go _ ((Start    (ThreadId _ i),_,a):rest) = "S" ++ show i ++ "-" ++ go (didYield a) rest
-  go y ((SwitchTo (ThreadId _ i),_,a):rest) = (if y then "p" else "P") ++ show i ++ "-" ++ go (didYield a) rest
+  go _ ((Start    (ThreadId (Id _ i)),_,a):rest) = "S" ++ show i ++ "-" ++ go (didYield a) rest
+  go y ((SwitchTo (ThreadId (Id _ i)),_,a):rest) = (if y then "p" else "P") ++ show i ++ "-" ++ go (didYield a) rest
   go _ ((Continue,_,a):rest) = '-' : go (didYield a) rest
   go _ _ = ""
 
@@ -42,8 +42,8 @@ showTrace trc = intercalate "\n" $ go False trc : strkey where
 -- @since 0.7.3.0
 threadNames :: Trace -> [(Int, String)]
 threadNames = mapMaybe go where
-  go (_, _, Fork   (ThreadId (Just name) i)) = Just (i, name)
-  go (_, _, ForkOS (ThreadId (Just name) i)) = Just (i, name)
+  go (_, _, Fork   (ThreadId (Id (Just name) i))) = Just (i, name)
+  go (_, _, ForkOS (ThreadId (Id (Just name) i))) = Just (i, name)
   go _ = Nothing
 
 -- | Pretty-print a failure

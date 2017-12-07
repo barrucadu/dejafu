@@ -1,10 +1,12 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 -- |
 -- Module      : Test.DejaFu.Types
 -- Copyright   : (c) 2017 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : portable
+-- Portability : GeneralizedNewtypeDeriving
 --
 -- Common types and functions used throughout DejaFu.
 module Test.DejaFu.Types where
@@ -19,105 +21,64 @@ import           Data.Function     (on)
 
 -- | Every live thread has a unique identitifer.
 --
--- The @Eq@ and @Ord@ instances only consider the int, not the name.
---
--- @since 0.4.0.0
-data ThreadId = ThreadId (Maybe String) {-# UNPACK #-} !Int
-
--- | Previously this was a derived instance.
---
--- @since 0.7.2.0
-instance Eq ThreadId where
-  (ThreadId _ i) == (ThreadId _ j) = i == j
-
-instance Ord ThreadId where
-  compare (ThreadId _ i) (ThreadId _ j) = compare i j
+-- @since 1.0.0.0
+newtype ThreadId = ThreadId Id
+  deriving (Eq, Ord, NFData)
 
 instance Show ThreadId where
-  show (ThreadId (Just n) _) = n
-  show (ThreadId Nothing  i) = show i
-
--- | @since 0.5.1.0
-instance NFData ThreadId where
-  rnf (ThreadId n i) = rnf (n, i)
+  show (ThreadId id_) = show id_
 
 -- | Every @CRef@ has a unique identifier.
 --
--- The @Eq@ and @Ord@ instances only consider the int, not the name.
---
--- @since 0.4.0.0
-data CRefId = CRefId (Maybe String) {-# UNPACK #-} !Int
-
--- | Previously this was a derived instance.
---
--- @since 0.7.2.0
-instance Eq CRefId where
-  (CRefId _ i) == (CRefId _ j) = i == j
-
-instance Ord CRefId where
-  compare (CRefId _ i) (CRefId _ j) = compare i j
+-- @since 1.0.0.0
+newtype CRefId = CRefId Id
+  deriving (Eq, Ord, NFData)
 
 instance Show CRefId where
-  show (CRefId (Just n) _) = n
-  show (CRefId Nothing  i) = show i
-
--- | @since 0.5.1.0
-instance NFData CRefId where
-  rnf (CRefId n i) = rnf (n, i)
+  show (CRefId id_) = show id_
 
 -- | Every @MVar@ has a unique identifier.
 --
--- The @Eq@ and @Ord@ instances only consider the int, not the name.
---
--- @since 0.4.0.0
-data MVarId = MVarId (Maybe String) {-# UNPACK #-} !Int
-
--- | Previously this was a derived instance.
---
--- @since 0.7.2.0
-instance Eq MVarId where
-  (MVarId _ i) == (MVarId _ j) = i == j
-
-instance Ord MVarId where
-  compare (MVarId _ i) (MVarId _ j) = compare i j
+-- @since 1.0.0.0
+newtype MVarId = MVarId Id
+  deriving (Eq, Ord, NFData)
 
 instance Show MVarId where
-  show (MVarId (Just n) _) = n
-  show (MVarId Nothing  i) = show i
-
--- | @since 0.5.1.0
-instance NFData MVarId where
-  rnf (MVarId n i) = rnf (n, i)
+  show (MVarId id_) = show id_
 
 -- | Every @TVar@ has a unique identifier.
 --
--- The @Eq@ and @Ord@ instances only consider the int, not the name.
---
--- @since 0.4.0.0
-data TVarId = TVarId (Maybe String) {-# UNPACK #-} !Int
-
--- | Previously this was a derived instance.
---
--- @since 0.7.2.0
-instance Eq TVarId where
-  (TVarId _ i) == (TVarId _ j) = i == j
-
-instance Ord TVarId where
-  compare (TVarId _ i) (TVarId _ j) = compare i j
+-- @since 1.0.0.0
+newtype TVarId = TVarId Id
+  deriving (Eq, Ord, NFData)
 
 instance Show TVarId where
-  show (TVarId (Just n) _) = n
-  show (TVarId Nothing  i) = show i
+  show (TVarId id_) = show id_
 
--- | @since 0.5.1.0
-instance NFData TVarId where
-  rnf (TVarId n i) = rnf (n, i)
+-- | An identifier for a thread, @MVar@, @CRef@, or @TVar@.
+--
+-- The number is the important bit.  The string is to make execution
+-- traces easier to read, but is meaningless.
+data Id = Id (Maybe String) {-# UNPACK #-} !Int
+
+instance Eq Id where
+  (Id _ i) == (Id _ j) = i == j
+
+instance Ord Id where
+  compare (Id _ i) (Id _ j) = compare i j
+
+instance Show Id where
+  show (Id (Just n) _) = n
+  show (Id _ i) = show i
+
+instance NFData Id where
+  rnf (Id n i) = rnf (n, i)
 
 -- | The ID of the initial thread.
 --
 -- @since 0.4.0.0
 initialThread :: ThreadId
-initialThread = ThreadId (Just "main") 0
+initialThread = ThreadId (Id (Just "main") 0)
 
 -------------------------------------------------------------------------------
 -- * Actions

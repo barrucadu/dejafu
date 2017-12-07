@@ -26,11 +26,8 @@ import Common
 tests :: [Test]
 tests =
   [ testGroup "Class Laws"
-    [ testGroup "ThreadId" (eqord (Proxy :: Proxy D.ThreadId))
-    , testGroup "CRefId"   (eqord (Proxy :: Proxy D.CRefId))
-    , testGroup "MVarId"   (eqord (Proxy :: Proxy D.MVarId))
-    , testGroup "TVarId"   (eqord (Proxy :: Proxy D.TVarId))
-    , testGroup "Failure"  (eqord (Proxy :: Proxy D.Failure))
+    [ testGroup "Id"      (eqord (Proxy :: Proxy D.Id))
+    , testGroup "Failure" (eqord (Proxy :: Proxy D.Failure))
     ]
 
   , testGroup "Common"
@@ -163,16 +160,19 @@ eq_wb (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
 -- Typeclass instances
 
 instance Listable D.ThreadId where
-  tiers = mapT (D.ThreadId Nothing) tiers
+  tiers = mapT D.ThreadId tiers
 
 instance Listable D.CRefId where
-  tiers = mapT (D.CRefId Nothing) tiers
+  tiers = mapT D.CRefId tiers
 
 instance Listable D.MVarId where
-  tiers = mapT (D.MVarId Nothing) tiers
+  tiers = mapT D.MVarId tiers
 
 instance Listable D.TVarId where
-  tiers = mapT (D.TVarId Nothing) tiers
+  tiers = mapT D.TVarId tiers
+
+instance Listable D.Id where
+  tiers = mapT (D.Id Nothing) tiers
 
 instance Listable D.ThreadAction where
   tiers =

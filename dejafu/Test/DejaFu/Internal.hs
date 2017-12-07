@@ -25,63 +25,47 @@ import           Test.DejaFu.Types
 
 -- | The number of ID parameters was getting a bit unwieldy, so this
 -- hides them all away.
-data IdSource = Id
-  { _nextCRId  :: Int
-  , _nextMVId  :: Int
-  , _nextTVId  :: Int
-  , _nextTId   :: Int
-  , _usedCRNames :: [String]
-  , _usedMVNames :: [String]
-  , _usedTVNames :: [String]
-  , _usedTNames  :: [String]
+data IdSource = IdSource
+  { _crids :: (Int, [String])
+  , _mvids :: (Int, [String])
+  , _tvids :: (Int, [String])
+  , _tids  :: (Int, [String])
   } deriving (Eq, Ord, Show)
 
 instance NFData IdSource where
-  rnf idsource = rnf ( _nextCRId idsource
-                     , _nextMVId idsource
-                     , _nextTVId idsource
-                     , _nextTId  idsource
-                     , _usedCRNames idsource
-                     , _usedMVNames idsource
-                     , _usedTVNames idsource
-                     , _usedTNames  idsource
+  rnf idsource = rnf ( _crids idsource
+                     , _mvids idsource
+                     , _tvids idsource
+                     , _tids  idsource
                      )
 
 -- | Get the next free 'CRefId'.
 nextCRId :: String -> IdSource -> (IdSource, CRefId)
-nextCRId name idsource = (newIdSource, newCRId) where
-  newIdSource = idsource { _nextCRId = newId, _usedCRNames = newUsed }
-  newCRId     = CRefId newName newId
-  newId       = _nextCRId idsource + 1
-  (newName, newUsed) = nextId name (_usedCRNames idsource)
+nextCRId name idsource =
+  let (crid, crids') = nextId name (_crids idsource)
+  in (idsource { _crids = crids' }, CRefId crid)
 
 -- | Get the next free 'MVarId'.
 nextMVId :: String -> IdSource -> (IdSource, MVarId)
-nextMVId name idsource = (newIdSource, newMVId) where
-  newIdSource = idsource { _nextMVId = newId, _usedMVNames = newUsed }
-  newMVId     = MVarId newName newId
-  newId       = _nextMVId idsource + 1
-  (newName, newUsed) = nextId name (_usedMVNames idsource)
+nextMVId name idsource =
+  let (mvid, mvids') = nextId name (_mvids idsource)
+  in (idsource { _mvids = mvids' }, MVarId mvid)
 
 -- | Get the next free 'TVarId'.
 nextTVId :: String -> IdSource -> (IdSource, TVarId)
-nextTVId name idsource = (newIdSource, newTVId) where
-  newIdSource = idsource { _nextTVId = newId, _usedTVNames = newUsed }
-  newTVId     = TVarId newName newId
-  newId       = _nextTVId idsource + 1
-  (newName, newUsed) = nextId name (_usedTVNames idsource)
+nextTVId name idsource =
+  let (tvid, tvids') = nextId name (_tvids idsource)
+  in (idsource { _tvids = tvids' }, TVarId tvid)
 
 -- | Get the next free 'ThreadId'.
 nextTId :: String -> IdSource -> (IdSource, ThreadId)
-nextTId name idsource = (newIdSource, newTId) where
-  newIdSource = idsource { _nextTId = newId, _usedTNames = newUsed }
-  newTId      = ThreadId newName newId
-  newId       = _nextTId idsource + 1
-  (newName, newUsed) = nextId name (_usedTNames idsource)
+nextTId name idsource =
+  let (tid, tids') = nextId name (_tids idsource)
+  in (idsource { _tids = tids' }, ThreadId tid)
 
 -- | Helper for @next*@
-nextId :: String -> [String] -> (Maybe String, [String])
-nextId name used = (newName, newUsed) where
+nextId :: String -> (Int, [String]) -> (Id, (Int, [String]))
+nextId name (num, used) = (Id newName (num+1), (num+1, newUsed)) where
   newName
     | null name = Nothing
     | occurrences > 0 = Just (name ++ "-" ++ show occurrences)
@@ -93,7 +77,7 @@ nextId name used = (newName, newUsed) where
 
 -- | The initial ID source.
 initialIdSource :: IdSource
-initialIdSource = Id 0 0 0 0 [] [] [] []
+initialIdSource = IdSource (0, []) (0, []) (0, []) (0, [])
 
 -------------------------------------------------------------------------------
 -- * Actions

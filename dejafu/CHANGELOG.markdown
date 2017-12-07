@@ -61,6 +61,9 @@ This project is versioned according to the [Package Versioning Policy](https://p
 
 - The `Discard` type is now defined here and re-exported from Test.DejaFu.SCT.
 
+- The `ThreadId`, `CRefId`, `MVarId`, and `TVarId` types are now newtypes over a common `Id`
+  type. (#137)
+
 ### Test.DejaFu.Conc
 
 - The `ConcST` type alias is gone.
