@@ -106,7 +106,7 @@ module Test.DejaFu.Refinement
   ) where
 
 import           Control.Arrow            (first)
-import           Control.Monad.Conc.Class (fork, readMVar)
+import           Control.Monad.Conc.Class (fork)
 import           Data.Maybe               (isNothing)
 import           Data.Set                 (Set)
 import qualified Data.Set                 as S
