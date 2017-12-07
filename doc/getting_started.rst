@@ -56,7 +56,7 @@ Install from Hackage globally:
 
 .. code-block:: none
 
-  $ cabal-install dejafu
+  $ cabal install dejafu
 
 Or add it to your cabal file:
 

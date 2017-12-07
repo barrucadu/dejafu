@@ -164,6 +164,7 @@ dejafusIO = dejafusWayIO defaultWay defaultMemType
 - moving a definition to a different module is an API change
 - version numbers will be filled in when a release is made, using
   "@since unreleased" makes it easy to find the necessary places
+- internal things don't need an `@since` comment
 
 **If the change is visible to end-users** add an entry to the relevant
 change log in the "unreleased" section. if there is no "unreleased"

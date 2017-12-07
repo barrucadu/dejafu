@@ -10,7 +10,7 @@ Most tests will look something like this:
 
 .. code-block:: haskell
 
-  dejafu myAction ("Assert the thing holds", myPredicate)
+  dejafu "Assert the thing holds" myPredicate myAction
 
 The ``dejafu`` function comes from ``Test.DejaFu``.  It can't deal
 with testcases which need ``MonadIO``, use ``dejafuIO`` for that.
@@ -165,7 +165,7 @@ Our example from the start becomes:
 
 .. code-block:: haskell
 
-  testDejafu myAction "Assert the thing holds" myPredicate
+  testDejafu "Assert the thing holds" myPredicate myAction
 
 The ``autocheck`` and ``autocheckIO`` functions are exposed as
 ``testAuto`` and ``testAutoIO``.

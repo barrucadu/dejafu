@@ -189,19 +189,22 @@ Performance tuning
     and ``Test.{HUnit,Tasty}.DejaFu``.
 
 For example, let's say you want to know if your test case deadlocks,
-and are going to sacrifice completeness because your possible
-state-space is huge.  You could do it like this:
+but you don't care about the execution trace, and you are going to
+sacrifice completeness because your possible state-space is huge.  You
+could do it like this:
 
 .. code-block:: haskell
 
   dejafuDiscard
     -- "efa" == "either failure a", discard everything but deadlocks
-    (\efa -> if efa == Left Deadlock then Nothing else Just DiscardResultAndTrace)
+    (\efa -> Just (if either isDeadlock (const False) efa then DiscardTrace else DiscardResultAndTrace))
     -- try 10000 executions with random scheduling
     (randomly (mkStdGen 42) 10000)
     -- use the default memory model
     defaultMemType
+    -- the name of the test
+    "Never Deadlocks"
+    -- the predicate to check
+    deadlocksNever
     -- your test case
     testCase
-    -- the predicate to check (which is a bit redundant in this case)
-    ("Never Deadlocks", deadlocksNever)

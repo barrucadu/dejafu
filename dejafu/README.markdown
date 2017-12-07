@@ -32,7 +32,7 @@ Installation
 Install from Hackage globally:
 
 ```
-$ cabal-install dejafu
+$ cabal install dejafu
 ```
 
 Or add it to your cabal file:

@@ -34,14 +34,14 @@ Normally it's a bad idea to add primitives which only work when
 testing, as they can't be used in ``IO`` code.
 
 
-Trace elements
+Thread actions
 --------------
 
 Every primitive has a corresponding constructor in the
 ``ThreadAction`` and ``Lookahead`` types, which appear in execution
 traces.
 
-These types live in ``Test.DejaFu.Common``:
+These types live in ``Test.DejaFu.Types``:
 
 .. code-block:: haskell
 
@@ -150,7 +150,8 @@ We also need a ``Lookahead`` equivalent:
 Both ``ThreadAction`` and ``Lookahead`` have ``NFData`` instances,
 don't forget to add the extra cases in those.
 
-The ``rewind`` function converts between ``ThreadAction`` and
+Now we jump over to the ``Test.DejaFu.Internal`` module.  The
+``rewind`` function converts between ``ThreadAction`` and
 ``Lookahead`` values, so we need to add a case to that as well:
 
 .. code-block:: haskell
@@ -183,14 +184,14 @@ action.  Furthermore, as it writes to an ``MVar`` it is a
   ``simplifyLookahead``
 
 
-Actions
--------
+Primitive actions
+-----------------
 
-Now jump to the ``Test.DejaFu.Conc.Internal.Common`` module (yes,
-another "common").  The ``Action`` type defines the actual primitive
-actions which are used to implement all the concurrency primitives.
-An ``Action`` value contains the information needed to perform that
-action and a continuation to call when it is done:
+Now jump to the ``Test.DejaFu.Conc.Internal.Common`` module.  The
+``Action`` type defines the actual primitive actions which are used to
+implement all the concurrency primitives.  An ``Action`` value
+contains the information needed to perform that action and a
+continuation to call when it is done:
 
 .. code-block:: haskell
 

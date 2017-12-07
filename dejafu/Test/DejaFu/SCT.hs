@@ -59,37 +59,12 @@ module Test.DejaFu.SCT
   -- K. McKinley for more details.
 
   , Bounds(..)
+  , PreemptionBound(..)
+  , FairBound(..)
+  , LengthBound(..)
   , noBounds
   , sctBound
   , sctBoundDiscard
-
-  -- ** Pre-emption Bounding
-
-  -- | BPOR using pre-emption bounding. This adds conservative
-  -- backtracking points at the prior context switch whenever a
-  -- non-conervative backtracking point is added, as alternative
-  -- decisions can influence the reachability of different states.
-  --
-  -- See the BPOR paper for more details.
-
-  , PreemptionBound(..)
-
-  -- ** Fair Bounding
-
-  -- | BPOR using fair bounding. This bounds the maximum difference
-  -- between the number of yield operations different threads have
-  -- performed.
-  --
-  -- See the BPOR paper for more details.
-
-  , FairBound(..)
-
-  -- ** Length Bounding
-
-  -- | BPOR using length bounding. This bounds the maximum length (in
-  -- terms of primitive actions) of an execution.
-
-  , LengthBound(..)
 
   -- * Random Scheduling
 
@@ -375,7 +350,14 @@ cBacktrack _ = backtrackAt (\_ _ -> False)
 -------------------------------------------------------------------------------
 -- Pre-emption bounding
 
--- | @since 0.2.0.0
+-- | BPOR using pre-emption bounding. This adds conservative
+-- backtracking points at the prior context switch whenever a
+-- non-conervative backtracking point is added, as alternative
+-- decisions can influence the reachability of different states.
+--
+-- See the BPOR paper for more details.
+--
+-- @since 0.2.0.0
 newtype PreemptionBound = PreemptionBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
@@ -414,7 +396,13 @@ pBacktrack bs = backtrackAt (\_ _ -> False) bs . concatMap addConservative where
 -------------------------------------------------------------------------------
 -- Fair bounding
 
--- | @since 0.2.0.0
+-- | BPOR using fair bounding. This bounds the maximum difference
+-- between the number of yield operations different threads have
+-- performed.
+--
+-- See the BPOR paper for more details.
+--
+-- @since 0.2.0.0
 newtype FairBound = FairBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
@@ -441,7 +429,10 @@ fBacktrack = backtrackAt check where
 -------------------------------------------------------------------------------
 -- Length bounding
 
--- | @since 0.2.0.0
+-- | BPOR using length bounding. This bounds the maximum length (in
+-- terms of primitive actions) of an execution.
+--
+-- @since 0.2.0.0
 newtype LengthBound = LengthBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
