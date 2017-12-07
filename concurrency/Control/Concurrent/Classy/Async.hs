@@ -1,7 +1,15 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 
--- | This module is a version of the
+-- |
+-- Module      : Control.Concurrent.Classy.Async
+-- Copyright   : (c) 2016--2017 Michael Walker
+-- License     : MIT
+-- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+-- Stability   : stable
+-- Portability : CPP, RankNTypes
+--
+-- This module is a version of the
 -- <https://hackage.haskell.org/package/async async> package. It
 -- provides a set of operations for running @MonadConc@ operations
 -- asynchronously and waiting for their results.

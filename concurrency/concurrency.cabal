@@ -19,7 +19,7 @@ license:             MIT
 license-file:        LICENSE
 author:              Michael Walker
 maintainer:          mike@barrucadu.co.uk
--- copyright:           
+copyright:           (c) 2016--2017 Michael Walker
 category:            Concurrency
 build-type:          Simple
 extra-source-files:  README.markdown CHANGELOG.markdown

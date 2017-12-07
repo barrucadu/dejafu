@@ -2,7 +2,7 @@
 
 -- |
 -- Module      : Test.DejaFu.SCT.Internal
--- Copyright   : (c) 2016 Michael Walker
+-- Copyright   : (c) 2015--2017 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
