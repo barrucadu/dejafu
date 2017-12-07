@@ -77,6 +77,10 @@ This project is versioned according to the [Package Versioning Policy](https://p
 
 - If bound threads are supported, the main thread when testing is bound. (#126)
 
+- Each entry in an execution trace is now in the form `(decision, alternatives, action)`.  The
+  chosen thread is no longer in the list of alternatives, which makes raw traces easier to
+  read. (#121)
+
 ### Test.DejaFu.Refinement
 
 - A blocking interference function is no longer reported as a deadlocking execution.

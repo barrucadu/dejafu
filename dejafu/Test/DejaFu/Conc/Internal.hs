@@ -146,8 +146,10 @@ runThreads sched memtype ref = go Seq.empty Nothing where
             | (fst <$> prior) `notElem` map (Just . fst) runnable' = Start chosen
             | otherwise = SwitchTo chosen
 
-          getTrc (Single a)    = Seq.singleton (decision, runnable', a)
-          getTrc (SubC   as _) = (decision, runnable', Subconcurrency) <| as
+          getTrc (Single a)    = Seq.singleton (decision, alternatives, a)
+          getTrc (SubC   as _) = (decision, alternatives, Subconcurrency) <| as
+
+          alternatives = filter (\(t, _) -> t /= chosen) runnable'
 
           getPrior (Single a)      = Just (chosen, a)
           getPrior (SubC _ finalD) = finalD
