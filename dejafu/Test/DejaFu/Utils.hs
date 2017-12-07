@@ -16,6 +16,9 @@ import           Data.Ord          (comparing)
 
 import           Test.DejaFu.Types
 
+-------------------------------------------------------------------------------
+-- * Traces
+
 -- | Pretty-print a trace, including a key of the thread IDs (not
 -- including thread 0). Each line of the key is indented by two
 -- spaces.
@@ -46,17 +49,6 @@ threadNames = mapMaybe go where
   go (_, _, ForkOS (ThreadId (Id (Just name) i))) = Just (i, name)
   go _ = Nothing
 
--- | Pretty-print a failure
---
--- @since 0.4.0.0
-showFail :: Failure -> String
-showFail Abort = "[abort]"
-showFail Deadlock = "[deadlock]"
-showFail STMDeadlock = "[stm-deadlock]"
-showFail InternalError = "[internal-error]"
-showFail (UncaughtException exc) = "[" ++ displayException exc ++ "]"
-showFail IllegalSubconcurrency = "[illegal-subconcurrency]"
-
 -- | Find the \"simplest\" trace leading to each result.
 simplestsBy :: (x -> x -> Bool) -> [(x, Trace)] -> [(x, Trace)]
 simplestsBy f = map choose . collect where
@@ -75,3 +67,48 @@ simplestsBy f = map choose . collect where
     | x `eq` y  = (x:ys) : yss
     | otherwise = ys : insert' eq x yss
   insert' _ _ ([]:_) = undefined
+
+-------------------------------------------------------------------------------
+-- * Failures
+
+-- | Pretty-print a failure
+--
+-- @since 0.4.0.0
+showFail :: Failure -> String
+showFail Abort = "[abort]"
+showFail Deadlock = "[deadlock]"
+showFail STMDeadlock = "[stm-deadlock]"
+showFail InternalError = "[internal-error]"
+showFail (UncaughtException exc) = "[" ++ displayException exc ++ "]"
+showFail IllegalSubconcurrency = "[illegal-subconcurrency]"
+
+-------------------------------------------------------------------------------
+-- * Scheduling
+
+-- | Get the resultant thread identifier of a 'Decision', with a default case
+-- for 'Continue'.
+--
+-- @since 0.5.0.0
+tidOf :: ThreadId -> Decision -> ThreadId
+tidOf _ (Start t)    = t
+tidOf _ (SwitchTo t) = t
+tidOf tid _          = tid
+
+-- | Get the 'Decision' that would have resulted in this thread
+-- identifier, given a prior thread (if any) and collection of threads
+-- which are unblocked at this point.
+--
+-- @since 0.5.0.0
+decisionOf :: Foldable f
+  => Maybe ThreadId
+  -- ^ The prior thread.
+  -> f ThreadId
+  -- ^ The threads.
+  -> ThreadId
+  -- ^ The current thread.
+  -> Decision
+decisionOf Nothing _ chosen = Start chosen
+decisionOf (Just prior) runnable chosen
+  | prior == chosen = Continue
+  | prior `elem` runnable = SwitchTo chosen
+  | otherwise = Start chosen

@@ -121,6 +121,7 @@ import           Test.DejaFu.Conc
 import           Test.DejaFu.Internal
 import           Test.DejaFu.SCT.Internal
 import           Test.DejaFu.Types
+import           Test.DejaFu.Utils
 
 -------------------------------------------------------------------------------
 -- Running Concurrent Programs

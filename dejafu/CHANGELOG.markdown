@@ -81,9 +81,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
   chosen thread is no longer in the list of alternatives, which makes raw traces easier to
   read. (#121)
 
+- Due to changes in Test.DejaFu.Schedule, no longer re-exports `Decision`, `NonEmpty`, `tidOf`, or
+  `decisionOf`.
+
 ### Test.DejaFu.Refinement
 
 - A blocking interference function is no longer reported as a deadlocking execution.
+
+### Test.DejaFu.Schedule
+
+- No longer re-exports `Decision` or `NonEmpty`.
+
+- The `tidOf` and `decisionOf` functions have moved to Test.DejaFu.Utils.
 
 ### Test.DejaFu.SCT
 
