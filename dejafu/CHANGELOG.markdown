@@ -7,6 +7,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Miscellaneous
+
+- Fix an issue where nested masks nested inside unmasks would sometimes not be pre-empted in
+  systematic testing.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.9.1.0
 -------
 

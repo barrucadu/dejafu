@@ -234,7 +234,7 @@ findBacktrackSteps backtrack boundKill = go initialDepState S.empty initialThrea
           , bcktAction     = a
           , bcktRunnable   = M.fromList e
           , bcktBacktracks = M.fromList $ map (\i' -> (i', False)) i
-          , bcktState      = state'
+          , bcktState      = state
           }
         bs' = doBacktrack killsEarly allThreads' e (bs++[this])
         runnable = S.fromList (M.keys $ bcktRunnable this)

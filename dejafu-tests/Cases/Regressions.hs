@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Cases.Regressions where
 
 import Test.DejaFu (exceptionsAlways, gives')
@@ -5,6 +7,7 @@ import Test.Framework (Test)
 
 import Control.Concurrent.Classy hiding (newQSemN, signalQSemN, waitQSemN)
 import Control.Exception (AsyncException(..))
+import qualified Control.Monad.Catch as E
 import Test.DejaFu.Conc (subconcurrency)
 
 import Common
@@ -55,4 +58,12 @@ tests =
         (catchSomeException (throw ThreadKilled) (\_ -> pure ())
          >> throw ThreadKilled)
         (\_ -> pure ())
+
+  , djfu "https://github.com/barrucadu/dejafu/issues/161" (gives' [Just (), Nothing]) $ do
+      let try a = (a >> pure ()) `E.catch` (\(_ :: E.SomeException) -> pure ())
+      let act s = uninterruptibleMask_ (putMVar s ())
+      s <- newEmptyMVar
+      t <- mask $ \restore -> fork (try (restore (act s)) >> pure ())
+      killThread t
+      tryReadMVar s
   ]
