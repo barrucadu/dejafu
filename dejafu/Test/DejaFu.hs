@@ -593,7 +593,7 @@ dejafusWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -> n Bool
 dejafusWay way memtype tests conc = do
     traces  <- runSCTDiscard discarder way memtype conc
-    results <- mapM (\(name, test) -> liftIO . doTest name $ check test traces) tests
+    results <- mapM (\(name, test) -> liftIO . doTest name $ chk test traces) tests
     pure (and results)
   where
     discarder = foldr
@@ -606,7 +606,7 @@ dejafusWay way memtype tests conc = do
     -- include more than this if the different predicates have
     -- different discard functions, so we do another pass of
     -- discarding.
-    check p = peval p . mapMaybe go where
+    chk p = peval p . mapMaybe go where
       go r@(efa, _) = case pdiscard p efa of
         Just DiscardResultAndTrace -> Nothing
         Just DiscardTrace -> Just (efa, [])
