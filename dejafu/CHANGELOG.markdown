@@ -7,13 +7,19 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+0.9.1.1
+-------
+
+- **Date**    2017-12-08
+- **Git tag** [dejafu-0.9.1.1][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.9.1.1
 
 ### Miscellaneous
 
 - Fix an issue where nested masks nested inside unmasks would sometimes not be pre-empted in
   systematic testing.
+
+[dejafu-0.9.1.1]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.9.1.1
 
 
 ---------------------------------------------------------------------------------------------------
