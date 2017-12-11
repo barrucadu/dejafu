@@ -187,6 +187,12 @@ forkOSWithUnmaskN n ma
 -- state, returning a failure reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
 --
+-- If the RTS supports bound threads (ghc -threaded when linking) then
+-- the main thread of the concurrent computation will be bound, and
+-- @forkOS@ / @forkOSN@ will work during execution.  If not, then the
+-- main thread will not be found, and attempting to fork a bound
+-- thread will raise an error.
+--
 -- __Warning:__ Blocking on the action of another thread in 'liftIO'
 -- cannot be detected! So if you perform some potentially blocking
 -- action in a 'liftIO' the entire collection of threads may deadlock!
