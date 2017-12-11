@@ -91,7 +91,7 @@ data ThreadAction =
   -- ^ Start a new thread.
   | ForkOS ThreadId
   -- ^ Start a new bound thread.
-  | IsCurrentThreadBound
+  | IsCurrentThreadBound Bool
   -- ^ Check if the current thread is bound.
   | MyThreadId
   -- ^ Get the 'ThreadId' of the current thread.

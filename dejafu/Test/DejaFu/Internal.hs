@@ -127,7 +127,7 @@ tvarsRead act = S.fromList $ case act of
 rewind :: ThreadAction -> Maybe Lookahead
 rewind (Fork _) = Just WillFork
 rewind (ForkOS _) = Just WillForkOS
-rewind IsCurrentThreadBound = Just WillIsCurrentThreadBound
+rewind (IsCurrentThreadBound _) = Just WillIsCurrentThreadBound
 rewind MyThreadId = Just WillMyThreadId
 rewind (GetNumCapabilities _) = Just WillGetNumCapabilities
 rewind (SetNumCapabilities i) = Just (WillSetNumCapabilities i)
