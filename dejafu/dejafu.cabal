@@ -63,7 +63,7 @@ library
                      , containers        >=0.5 && <0.6
                      , deepseq           >=1.1 && <2
                      , exceptions        >=0.7 && <0.9
-                     , leancheck         >=0.6 && <0.7
+                     , leancheck         >=0.6 && <0.8
                      , random            >=1.0 && <1.2
                      , ref-fd            >=0.4 && <0.5
                      , transformers      >=0.4  && <0.6

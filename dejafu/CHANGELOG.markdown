@@ -7,6 +7,17 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Miscellaneous
+
+- The upper bound on leancheck was bumped to <0.8.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.9.1.1
 -------
 
