@@ -7,12 +7,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+0.9.1.2
+-------
+
+- **Date**    2017-12-12
+- **Git tag** [dejafu-0.9.1.2][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-0.9.1.2
 
 ### Miscellaneous
 
 - The upper bound on leancheck was bumped to <0.8.
+
+[dejafu-0.9.1.2]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.9.1.2
 
 
 ---------------------------------------------------------------------------------------------------
