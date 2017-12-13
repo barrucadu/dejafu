@@ -81,20 +81,21 @@ module Test.DejaFu.SCT
   , sctWeightedRandomDiscard
   ) where
 
-import           Control.Applicative      ((<|>))
-import           Control.DeepSeq          (NFData(..), force)
-import           Control.Monad.Conc.Class (MonadConc)
-import           Control.Monad.Ref        (MonadRef)
-import           Data.List                (foldl')
-import qualified Data.Map.Strict          as M
-import           Data.Maybe               (fromMaybe)
-import           Data.Set                 (Set)
-import qualified Data.Set                 as S
-import           System.Random            (RandomGen, randomR)
+import           Control.Applicative               ((<|>))
+import           Control.DeepSeq                   (NFData(..), force)
+import           Control.Monad.Conc.Class          (MonadConc)
+import           Control.Monad.Ref                 (MonadRef)
+import           Data.List                         (foldl')
+import qualified Data.Map.Strict                   as M
+import           Data.Maybe                        (fromMaybe)
+import           Data.Set                          (Set)
+import qualified Data.Set                          as S
+import           System.Random                     (RandomGen, randomR)
 
 import           Test.DejaFu.Conc
 import           Test.DejaFu.Internal
-import           Test.DejaFu.SCT.Internal
+import           Test.DejaFu.SCT.Internal.DPOR
+import           Test.DejaFu.SCT.Internal.Weighted
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
 

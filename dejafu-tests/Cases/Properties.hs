@@ -17,7 +17,7 @@ import qualified Test.DejaFu.Types as D
 import qualified Test.DejaFu.Internal as D
 import qualified Test.DejaFu.Conc.Internal.Common as D
 import qualified Test.DejaFu.Conc.Internal.Memory as Mem
-import qualified Test.DejaFu.SCT.Internal as SCT
+import qualified Test.DejaFu.SCT.Internal.DPOR as SCT
 import Test.Framework (Test)
 import Test.LeanCheck (Listable(..), (\/), (><), (==>), cons0, cons1, cons2, cons3, mapT)
 
