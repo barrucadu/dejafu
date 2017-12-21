@@ -632,6 +632,12 @@ dependentActions ds a1 a2 = case (a1, a2) of
   (PartiallySynchronisedCommit _, _) | isBarrier a2 -> True
   (_, PartiallySynchronisedCommit _) | isBarrier a1 -> True
 
+  -- Two @MVar@ puts are dependent if they're to the same empty
+  -- @MVar@, and two takes are dependent if they're to the same full
+  -- @MVar@.
+  (SynchronisedWrite v1, SynchronisedWrite v2) -> v1 == v2 && not (isFull ds v1)
+  (SynchronisedRead  v1, SynchronisedRead  v2) -> v1 == v2 && isFull ds v1
+
   (_, _) -> case getSame crefOf of
     -- Two actions on the same CRef where at least one is synchronised
     Just r -> synchronises a1 r || synchronises a2 r
@@ -654,6 +660,8 @@ dependentActions ds a1 a2 = case (a1, a2) of
 data DepState = DepState
   { depCRState :: Map CRefId Bool
   -- ^ Keep track of which @CRef@s have buffered writes.
+  , depMVState :: Set MVarId
+  -- ^ Keep track of which @MVar@s are full.
   , depMaskState :: Map ThreadId MaskingState
   -- ^ Keep track of thread masking states. If a thread isn't present,
   -- the masking state is assumed to be @Unmasked@. This nicely
@@ -663,22 +671,24 @@ data DepState = DepState
 
 instance NFData DepState where
   rnf depstate = rnf ( depCRState depstate
+                     , depMVState depstate
                      , [(t, m `seq` ()) | (t, m) <- M.toList (depMaskState depstate)]
                      )
 
 -- | Initial dependency state.
 initialDepState :: DepState
-initialDepState = DepState M.empty M.empty
+initialDepState = DepState M.empty S.empty M.empty
 
--- | Update the 'CRef' buffer state with the action that has just
+-- | Update the dependency state with the action that has just
 -- happened.
 updateDepState :: DepState -> ThreadId -> ThreadAction -> DepState
 updateDepState depstate tid act = DepState
   { depCRState   = updateCRState       act $ depCRState   depstate
+  , depMVState   = updateMVState       act $ depMVState   depstate
   , depMaskState = updateMaskState tid act $ depMaskState depstate
   }
 
--- | Update the 'CRef' buffer state with the action that has just
+-- | Update the @CRef@ buffer state with the action that has just
 -- happened.
 updateCRState :: ThreadAction -> Map CRefId Bool -> Map CRefId Bool
 updateCRState (CommitCRef _ r) = M.delete r
@@ -686,6 +696,15 @@ updateCRState (WriteCRef    r) = M.insert r True
 updateCRState ta
   | isBarrier $ simplifyAction ta = const M.empty
   | otherwise = id
+
+-- | Update the @MVar@ full/empty state with the action that has just
+-- happened.
+updateMVState :: ThreadAction -> Set MVarId -> Set MVarId
+updateMVState (PutMVar mvid _) = S.insert mvid
+updateMVState (TryPutMVar mvid True _) = S.insert mvid
+updateMVState (TakeMVar mvid _) = S.delete mvid
+updateMVState (TryTakeMVar mvid True _) = S.delete mvid
+updateMVState _ = id
 
 -- | Update the thread masking state with the action that has just
 -- happened.
@@ -698,9 +717,13 @@ updateMaskState tid (SetMasking   _ ms) = M.insert tid ms
 updateMaskState tid (ResetMasking _ ms) = M.insert tid ms
 updateMaskState _ _ = id
 
--- | Check if a 'CRef' has a buffered write pending.
+-- | Check if a @CRef@ has a buffered write pending.
 isBuffered :: DepState -> CRefId -> Bool
 isBuffered depstate r = M.findWithDefault False r (depCRState depstate)
+
+-- | Check if an @MVar@ is full.
+isFull :: DepState -> MVarId -> Bool
+isFull depstate v = S.member v (depMVState depstate)
 
 -- | Check if an exception can interrupt a thread (action).
 canInterrupt :: DepState -> ThreadId -> ThreadAction -> Bool

@@ -12,6 +12,8 @@ import qualified Data.Map as M
 import Data.Maybe (fromJust, isJust)
 import Data.Proxy (Proxy(..))
 import qualified Data.Sequence as S
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Test.DejaFu.Types (ThreadAction, Lookahead)
 import qualified Test.DejaFu.Types as D
 import qualified Test.DejaFu.Internal as D
@@ -248,10 +250,13 @@ instance Listable D.ActionType where
     \/ cons0 D.SynchronisedOther
 
 instance Listable SCT.DepState where
-  tiers = mapT (uncurry SCT.DepState) (tiers >< tiers)
+  tiers = mapT (\(a,(b,c)) -> SCT.DepState a b c) (tiers >< tiers >< tiers)
 
 instance (Ord k, Listable k, Listable v) => Listable (Map k v) where
   tiers = mapT M.fromList tiers
+
+instance (Ord v, Listable v) => Listable (Set v) where
+  tiers = mapT Set.fromList tiers
 
 instance Listable D.Failure where
   list =

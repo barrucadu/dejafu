@@ -104,6 +104,11 @@ This project is versioned according to the [Package Versioning Policy](https://p
 
 - This is now an internal module. (#155)
 
+### Performance
+
+- Significant resident memory reduction for most passing tests.
+- Improved dependency detection for `MVar` actions, leading to fewer executions.
+
 ### Miscellaneous
 
 - The minimum supported version of concurrency is now 1.3.0.0.
