@@ -8,7 +8,7 @@
 
 -- |
 -- Module      : Control.Monad.Conc.Class
--- Copyright   : (c) 2016 Michael Walker
+-- Copyright   : (c) 2016--2017 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -17,16 +17,16 @@
 -- This module captures in a typeclass the interface of concurrency
 -- monads.
 --
--- __Deviations:__ An instance of @MonadConc@ is not required to be
--- an instance of @MonadFix@, unlike @IO@. The @CRef@, @MVar@, and
+-- __Deviations:__ An instance of @MonadConc@ is not required to be an
+-- instance of @MonadFix@, unlike @IO@. The @CRef@, @MVar@, and
 -- @Ticket@ types are not required to be instances of @Show@ or @Eq@,
 -- unlike their normal counterparts. The @threadCapability@,
 -- @threadWaitRead@, @threadWaitWrite@, @threadWaitReadSTM@,
 -- @threadWaitWriteSTM@, and @mkWeakThreadId@ functions are not
 -- provided. The @threadDelay@ function is not required to delay the
--- thread, merely to yield it. Bound threads are not supported. The
--- @BlockedIndefinitelyOnMVar@ (and similar) exceptions are /not/
--- thrown during testing, so do not rely on them at all.
+-- thread, merely to yield it. The @BlockedIndefinitelyOnMVar@ (and
+-- similar) exceptions are /not/ thrown during testing, so do not rely
+-- on them at all.
 module Control.Monad.Conc.Class
   ( MonadConc(..)
 
@@ -35,17 +35,30 @@ module Control.Monad.Conc.Class
   , forkFinally
   , killThread
 
+  -- ** Bound threads
+
+  -- | Support for multiple operating system threads and bound threads
+  -- as described below is currently only available in the GHC runtime
+  -- system if you use the -threaded option when linking.
+  --
+  -- Other Haskell systems do not currently support multiple operating
+  -- system threads.
+  --
+  -- A bound thread is a haskell thread that is bound to an operating
+  -- system thread. While the bound thread is still scheduled by the
+  -- Haskell run-time system, the operating system thread takes care
+  -- of all the foreign calls made by the bound thread.
+  --
+  -- To a foreign library, the bound thread will look exactly like an
+  -- ordinary operating system thread created using OS functions like
+  -- pthread_create or CreateThread.
+  , IO.rtsSupportsBoundThreads
+  , runInBoundThread
+  , runInUnboundThread
+
   -- ** Named Threads
   , forkN
   , forkOnN
-
-  -- ** Bound Threads
-
-  -- | @MonadConc@ does not support bound threads, if you need that
-  -- sort of thing you will have to use regular @IO@.
-
-  , rtsSupportsBoundThreads
-  , isCurrentThreadBound
 
   -- * Exceptions
   , throw
@@ -109,7 +122,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Every @MonadConc@ has an associated 'MonadSTM', transactions of
 -- which can be run atomically.
 --
--- @since 1.0.0.0
+-- @since 1.3.0.0
 class ( Applicative m, Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -118,6 +131,8 @@ class ( Applicative m, Monad m
   {-# MINIMAL
         (forkWithUnmask | forkWithUnmaskN)
       , (forkOnWithUnmask | forkOnWithUnmaskN)
+      , (forkOS | forkOSN)
+      , isCurrentThreadBound
       , getNumCapabilities
       , setNumCapabilities
       , myThreadId
@@ -194,10 +209,6 @@ class ( Applicative m, Monad m
   -- | Like 'forkWithUnmask', but the thread is given a name which may
   -- be used to present more useful debugging information.
   --
-  -- If an empty name is given, the @ThreadId@ is used. If names
-  -- conflict, successive threads with the same name are given a
-  -- numeric suffix, counting up from 1.
-  --
   -- > forkWithUnmaskN _ = forkWithUnmask
   --
   -- @since 1.0.0.0
@@ -234,6 +245,35 @@ class ( Applicative m, Monad m
   forkOnWithUnmaskN :: String -> Int -> ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
   forkOnWithUnmaskN _ = forkOnWithUnmask
 
+  -- | Fork a computation to happen in a /bound thread/, which is
+  -- necessary if you need to call foreign (non-Haskell) libraries
+  -- that make use of thread-local state, such as OpenGL.
+  --
+  -- > forkOS = forkOSN ""
+  --
+  -- @since 1.3.0.0
+  forkOS :: m () -> m (ThreadId m)
+  forkOS = forkOSN ""
+
+  -- | Like 'forkOS', but the thread is given a name which may be used
+  -- to present more useful debugging information.
+  --
+  -- > forkOSN _ = forkOS
+  --
+  -- @since 1.3.0.0
+  forkOSN :: String -> m () -> m (ThreadId m)
+  forkOSN _ = forkOS
+
+  -- | Returns 'True' if the calling thread is bound, that is, if it
+  -- is safe to use foreign libraries that rely on thread-local state
+  -- from the calling thread.
+  --
+  -- This will always be false if your program is not compiled with
+  -- the threaded runtime.
+  --
+  -- @since 1.3.0.0
+  isCurrentThreadBound :: m Bool
+
   -- | Get the number of Haskell threads that can run simultaneously.
   --
   -- @since 1.0.0.0
@@ -249,8 +289,7 @@ class ( Applicative m, Monad m
   -- @since 1.0.0.0
   myThreadId :: m (ThreadId m)
 
-  -- | Allows a context-switch to any other currently runnable thread
-  -- (if any).
+  -- | Allows a context-switch to any other unblocked thread (if any).
   --
   -- @since 1.0.0.0
   yield :: m ()
@@ -278,10 +317,6 @@ class ( Applicative m, Monad m
 
   -- | Create a new empty @MVar@, but it is given a name which may be
   -- used to present more useful debugging information.
-  --
-  -- If an empty name is given, a counter starting from 0 is used. If
-  -- names conflict, successive @MVar@s with the same name are given a
-  -- numeric suffix, counting up from 1.
   --
   -- > newEmptyMVarN _ = newEmptyMVar
   --
@@ -342,10 +377,6 @@ class ( Applicative m, Monad m
 
   -- | Create a new reference, but it is given a name which may be
   -- used to present more useful debugging information.
-  --
-  -- If an empty name is given, a counter starting from 0 is used. If
-  -- names conflict, successive @CRef@s with the same name are given a
-  -- numeric suffix, counting up from 1.
   --
   -- > newCRefN _ = newCRef
   --
@@ -479,10 +510,6 @@ killThread tid = throwTo tid ThreadKilled
 -- | Like 'fork', but the thread is given a name which may be used to
 -- present more useful debugging information.
 --
--- If no name is given, the @ThreadId@ is used. If names conflict,
--- successive threads with the same name are given a numeric suffix,
--- counting up from 1.
---
 -- @since 1.0.0.0
 forkN :: MonadConc m => String -> m () -> m (ThreadId m)
 forkN name ma = forkWithUnmaskN name (const ma)
@@ -490,27 +517,57 @@ forkN name ma = forkWithUnmaskN name (const ma)
 -- | Like 'forkOn', but the thread is given a name which may be used
 -- to present more useful debugging information.
 --
--- If no name is given, the @ThreadId@ is used. If names conflict,
--- successive threads with the same name are given a numeric suffix,
--- counting up from 1.
---
 -- @since 1.0.0.0
 forkOnN :: MonadConc m => String -> Int -> m () -> m (ThreadId m)
 forkOnN name i ma = forkOnWithUnmaskN name i (const ma)
 
--- Bound Threads
-
--- | Provided for compatibility, always returns 'False'.
+-- | Run the computation passed as the first argument.  If the calling
+-- thread is not /bound/, a bound thread is created temporarily.
+-- @runInBoundThread@ doesn't finish until the inner computation
+-- finishes.
 --
--- @since 1.0.0.0
-rtsSupportsBoundThreads :: Bool
-rtsSupportsBoundThreads = False
-
--- | Provided for compatibility, always returns 'False'.
+-- You can wrap a series of foreign function calls that rely on
+-- thread-local state with @runInBoundThread@ so that you can use them
+-- without knowing whether the current thread is /bound/.
 --
--- @since 1.0.0.0
-isCurrentThreadBound :: MonadConc m => m Bool
-isCurrentThreadBound = pure False
+-- @since 1.3.0.0
+runInBoundThread :: MonadConc m => m a -> m a
+runInBoundThread =
+  runInThread (not <$> isCurrentThreadBound) (forkOSN "runInBoundThread")
+
+-- | Run the computation passed as the first argument. If the calling
+-- thread is /bound/, an unbound thread is created temporarily using
+-- @fork@.  @runInBoundThread@ doesn't finish until the inner
+-- computation finishes.
+--
+-- Use this function /only/ in the rare case that you have actually
+-- observed a performance loss due to the use of bound threads. A
+-- program that doesn't need its main thread to be bound and makes
+-- /heavy/ use of concurrency (e.g. a web server), might want to wrap
+-- its @main@ action in @runInUnboundThread@.
+--
+-- Note that exceptions which are thrown to the current thread are
+-- thrown in turn to the thread that is executing the given
+-- computation. This ensures there's always a way of killing the
+-- forked thread.
+--
+-- @since 1.3.0.0
+runInUnboundThread :: MonadConc m => m a -> m a
+runInUnboundThread =
+  runInThread isCurrentThreadBound (forkN "runInUnboundThread")
+
+-- | Helper for 'runInBoundThread' and 'runInUnboundThread'
+runInThread :: MonadConc m => m Bool -> (m () -> m (ThreadId m)) -> m a -> m a
+runInThread check dofork action = do
+  flag <- check
+  if flag
+    then do
+      mv <- newEmptyMVar
+      mask $ \restore -> do
+        tid <- dofork $ Ca.try (restore action) >>= putMVar mv
+        let wait = takeMVar mv `catch` \(e :: SomeException) -> throwTo tid e >> wait
+        wait >>= either (\(e :: SomeException) -> throw e) pure
+    else action
 
 -- Exceptions
 
@@ -575,10 +632,6 @@ newMVar a = do
 -- | Create a new @MVar@ containing a value, but it is given a name
 -- which may be used to present more useful debugging information.
 --
--- If no name is given, a counter starting from 0 is used. If names
--- conflict, successive @MVar@s with the same name are given a numeric
--- suffix, counting up from 1.
---
 -- @since 1.0.0.0
 newMVarN :: MonadConc m => String -> a -> m (MVar m a)
 newMVarN n a = do
@@ -620,9 +673,14 @@ instance MonadConc IO where
 
   fork   = IO.forkIO
   forkOn = IO.forkOn
+  forkOS = IO.forkOS
 
   forkWithUnmask   = IO.forkIOWithUnmask
   forkOnWithUnmask = IO.forkOnWithUnmask
+
+  forkOSN n ma = forkOS $ do
+    labelMe n
+    ma
 
   forkWithUnmaskN n ma = forkWithUnmask $ \umask -> do
     labelMe n
@@ -631,6 +689,8 @@ instance MonadConc IO where
   forkOnWithUnmaskN n i ma = forkOnWithUnmask i $ \umask -> do
     labelMe n
     ma umask
+
+  isCurrentThreadBound = IO.isCurrentThreadBound
 
   getNumCapabilities = IO.getNumCapabilities
   setNumCapabilities = IO.setNumCapabilities
@@ -698,10 +758,15 @@ instance MonadConc m => MonadConc (IsConc m) where
   fork     ma = toIsConc (fork     $ unIsConc ma)
   forkOn i ma = toIsConc (forkOn i $ unIsConc ma)
 
+  forkOS    ma = toIsConc (forkOS    $ unIsConc ma)
+  forkOSN n ma = toIsConc (forkOSN n $ unIsConc ma)
+
   forkWithUnmask        ma = toIsConc (forkWithUnmask        (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkWithUnmaskN   n   ma = toIsConc (forkWithUnmaskN   n   (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkOnWithUnmask    i ma = toIsConc (forkOnWithUnmask    i (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkOnWithUnmaskN n i ma = toIsConc (forkOnWithUnmaskN n i (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
+
+  isCurrentThreadBound = toIsConc isCurrentThreadBound
 
   getNumCapabilities = toIsConc getNumCapabilities
   setNumCapabilities = toIsConc . setNumCapabilities
@@ -744,11 +809,16 @@ instance C => MonadConc (T m) where                            { \
                                                                  \
   fork   = liftedF F fork                                      ; \
   forkOn = liftedF F . forkOn                                  ; \
+  forkOS = liftedF F forkOS                                    ; \
+                                                                 \
+  forkOSN = liftedF F . forkOSN                                ; \
                                                                  \
   forkWithUnmask        = liftedFork F forkWithUnmask          ; \
   forkWithUnmaskN   n   = liftedFork F (forkWithUnmaskN   n  ) ; \
   forkOnWithUnmask    i = liftedFork F (forkOnWithUnmask    i) ; \
   forkOnWithUnmaskN n i = liftedFork F (forkOnWithUnmaskN n i) ; \
+                                                                 \
+  isCurrentThreadBound = lift isCurrentThreadBound             ; \
                                                                  \
   getNumCapabilities = lift getNumCapabilities                 ; \
   setNumCapabilities = lift . setNumCapabilities               ; \

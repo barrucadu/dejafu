@@ -1,5 +1,4 @@
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE RankNTypes #-}
 
 module Common
   ( module Common
@@ -12,8 +11,8 @@ import qualified Control.Monad.Catch as C
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
 import System.Random (mkStdGen)
-import Test.DejaFu (Predicate, Failure, Result(..), alwaysTrue)
-import Test.DejaFu.Conc (ConcST)
+import Test.DejaFu (Predicate, ProPredicate(..), Failure, Result(..), alwaysTrue)
+import Test.DejaFu.Conc (ConcIO)
 import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import qualified Test.HUnit as TH
@@ -35,7 +34,7 @@ instance IsTest TH.Test where
 instance IsTest T where
   toTestList (T n c p) = toTestList (BT n c p defaultBounds)
   toTestList (BT n c p b) = toTestList . testGroup n $
-    let mk way name = testDejafuWay way defaultMemType c name p
+    let mk way name = testDejafuWay way defaultMemType name p c
         g = mkStdGen 0
     in [ mk (systematically b) "systematically"
        , mk (uniformly g 100) "uniformly"
@@ -47,16 +46,16 @@ instance IsTest t => IsTest [t] where
   toTestList = concatMap toTestList
 
 data T where
-  T  :: Show a => String -> (forall t. ConcST t a) -> Predicate a -> T
-  BT :: Show a => String -> (forall t. ConcST t a) -> Predicate a -> Bounds -> T
+  T  :: Show a => String -> ConcIO a -> Predicate a -> T
+  BT :: Show a => String -> ConcIO a -> Predicate a -> Bounds -> T
 
 testGroup :: IsTest t => String -> t -> TF.Test
 testGroup name = TF.testGroup name . toTestList
 
-djfu :: Show a => String -> Predicate a -> (forall t. ConcST t a) -> TF.Test
-djfu name p c = hunitTest $ testDejafu c name p
+djfu :: Show a => String -> Predicate a -> ConcIO a -> TF.Test
+djfu name p c = hunitTest $ testDejafu name p c
 
-djfuT :: Show a => String -> Predicate a -> (forall t. ConcST t a) -> [TF.Test]
+djfuT :: Show a => String -> Predicate a -> ConcIO a -> [TF.Test]
 djfuT name p c = toTestList $ T name c p
 
 alwaysFailsWith :: (Failure -> Bool) -> Predicate a
@@ -109,6 +108,8 @@ newTVarInt = newTVar
 
 -- | A test which should fail.
 failing :: Predicate a -> Predicate a
-failing p as =
-  let result = p as
-  in result { _pass = not (_pass result) }
+failing p = p
+  { peval = \xs ->
+      let result = peval p xs
+      in result { _pass = not (_pass result) }
+  }

@@ -2,29 +2,25 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                dejafu
-version:             0.9.1.2
-synopsis:            Systematic testing for Haskell concurrency.
+version:             1.0.0.0
+synopsis:            A library for unit-testing concurrent programs.
 
 description:
   /[Déjà Fu is] A martial art in which the user's limbs move in time as well as space, […] It is best described as "the feeling that you have been kicked in the head this way before"/ -- Terry Pratchett, Thief of Time
   .
-  Concurrency is nice, deadlocks and race conditions not so much. The
-  @Par@ monad family, as defined in
-  <https://hackage.haskell.org/package/abstract-par/docs/Control-Monad-Par-Class.html abstract-par>
-  provides deterministic parallelism, but sometimes we can tolerate a
-  bit of nondeterminism.
-  .
   This package builds on the
-  <https://hackage.haskell.org/package/concurrency concurrency>
-  package by enabling you to systematically and deterministically test
-  your concurrent programs.
+  [concurrency](https://hackage.haskell.org/package/concurrency)
+  package by enabling you to deterministically test your concurrent
+  programs.
+  .
+  See the [website](https://dejafu.readthedocs.io) or README for more.
 
 homepage:            https://github.com/barrucadu/dejafu
 license:             MIT
 license-file:        LICENSE
 author:              Michael Walker
 maintainer:          mike@barrucadu.co.uk
--- copyright:           
+copyright:           (c) 2015--2017 Michael Walker
 category:            Concurrency
 build-type:          Simple
 extra-source-files:  README.markdown CHANGELOG.markdown
@@ -37,37 +33,39 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      dejafu-0.9.1.2
+  tag:      dejafu-1.0.0.0
 
 library
   exposed-modules:     Test.DejaFu
                      , Test.DejaFu.Conc
-                     , Test.DejaFu.Common
                      , Test.DejaFu.Defaults
                      , Test.DejaFu.Refinement
-                     , Test.DejaFu.Schedule
                      , Test.DejaFu.SCT
-                     , Test.DejaFu.STM
+                     , Test.DejaFu.Schedule
+                     , Test.DejaFu.Types
+                     , Test.DejaFu.Utils
 
                      , Test.DejaFu.Conc.Internal
                      , Test.DejaFu.Conc.Internal.Common
                      , Test.DejaFu.Conc.Internal.Memory
+                     , Test.DejaFu.Conc.Internal.STM
                      , Test.DejaFu.Conc.Internal.Threading
-                     , Test.DejaFu.SCT.Internal
-                     , Test.DejaFu.STM.Internal
+                     , Test.DejaFu.Internal
+                     , Test.DejaFu.SCT.Internal.DPOR
+                     , Test.DejaFu.SCT.Internal.Weighted
 
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base              >=4.8 && <5
-                     , concurrency       >=1.1 && <1.3
+                     , concurrency       >=1.3 && <1.4
                      , containers        >=0.5 && <0.6
                      , deepseq           >=1.1 && <2
                      , exceptions        >=0.7 && <0.9
                      , leancheck         >=0.6 && <0.8
+                     , profunctors       >=4.0 && <6.0
                      , random            >=1.0 && <1.2
                      , ref-fd            >=0.4 && <0.5
-                     , transformers      >=0.4  && <0.6
-                     , transformers-base >=0.4  && <0.5
+                     , transformers      >=0.4 && <0.6
   -- hs-source-dirs:      
   default-language:    Haskell2010
   ghc-options:         -Wall

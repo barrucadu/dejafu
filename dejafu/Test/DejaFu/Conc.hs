@@ -4,15 +4,14 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 -- |
 -- Module      : Test.DejaFu.Conc
--- Copyright   : (c) 2016 Michael Walker
+-- Copyright   : (c) 2016--2017 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, RankNTypes, TypeFamilies, TypeSynonymInstances
+-- Portability : CPP, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, TypeFamilies
 --
 -- Deterministic traced execution of concurrent computations.
 --
@@ -22,7 +21,6 @@
 module Test.DejaFu.Conc
   ( -- * The @ConcT@ monad transformer
     ConcT
-  , ConcST
   , ConcIO
 
   -- * Executing computations
@@ -48,23 +46,22 @@ module Test.DejaFu.Conc
   ) where
 
 import           Control.Exception                (MaskingState(..))
-import qualified Control.Monad.Base               as Ba
 import qualified Control.Monad.Catch              as Ca
 import qualified Control.Monad.IO.Class           as IO
 import           Control.Monad.Ref                (MonadRef)
 import qualified Control.Monad.Ref                as Re
-import           Control.Monad.ST                 (ST)
 import           Control.Monad.Trans.Class        (MonadTrans(..))
 import qualified Data.Foldable                    as F
 import           Data.IORef                       (IORef)
-import           Data.STRef                       (STRef)
 import           Test.DejaFu.Schedule
 
 import qualified Control.Monad.Conc.Class         as C
-import           Test.DejaFu.Common
 import           Test.DejaFu.Conc.Internal
 import           Test.DejaFu.Conc.Internal.Common
-import           Test.DejaFu.STM
+import           Test.DejaFu.Conc.Internal.STM
+import           Test.DejaFu.Internal
+import           Test.DejaFu.Types
+import           Test.DejaFu.Utils
 
 #if MIN_VERSION_base(4,9,0)
 import qualified Control.Monad.Fail               as Fail
@@ -79,12 +76,6 @@ instance Fail.MonadFail (ConcT r n) where
   fail = C . fail
 #endif
 
--- | A 'MonadConc' implementation using @ST@, this should be preferred
--- if you do not need 'liftIO'.
---
--- @since 0.4.0.0
-type ConcST t = ConcT (STRef t) (ST t)
-
 -- | A 'MonadConc' implementation using @IO@.
 --
 -- @since 0.4.0.0
@@ -96,11 +87,9 @@ toConc = C . cont
 wrap :: (M n r a -> M n r a) -> ConcT r n a -> ConcT r n a
 wrap f = C . f . unC
 
-instance IO.MonadIO ConcIO where
-  liftIO ma = toConc (\c -> ALift (fmap c ma))
-
-instance Ba.MonadBase IO ConcIO where
-  liftBase = IO.liftIO
+-- | @since 1.0.0.0
+instance IO.MonadIO n => IO.MonadIO (ConcT r n) where
+  liftIO ma = toConc (\c -> ALift (fmap c (IO.liftIO ma)))
 
 instance Re.MonadRef (CRef r) (ConcT r n) where
   newRef a = toConc (ANewCRef "" a)
@@ -131,13 +120,16 @@ instance Monad n => C.MonadConc (ConcT r n) where
   type MVar     (ConcT r n) = MVar r
   type CRef     (ConcT r n) = CRef r
   type Ticket   (ConcT r n) = Ticket
-  type STM      (ConcT r n) = STMLike n r
+  type STM      (ConcT r n) = S n r
   type ThreadId (ConcT r n) = ThreadId
 
   -- ----------
 
-  forkWithUnmaskN   n ma = toConc (AFork n (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
+  forkWithUnmaskN   n ma = toConc (AFork   n (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
   forkOnWithUnmaskN n _  = C.forkWithUnmaskN n
+  forkOSN n ma = forkOSWithUnmaskN n (const ma)
+
+  isCurrentThreadBound = toConc AIsBound
 
   -- This implementation lies and returns 2 until a value is set. This
   -- will potentially avoid special-case behaviour for 1 capability,
@@ -185,9 +177,21 @@ instance Monad n => C.MonadConc (ConcT r n) where
 
   atomically = toConc . AAtom
 
+-- move this into the instance defn when forkOSWithUnmaskN is added to MonadConc in 2018
+forkOSWithUnmaskN :: Applicative n => String -> ((forall a. ConcT r n a -> ConcT r n a) -> ConcT r n ()) -> ConcT r n ThreadId
+forkOSWithUnmaskN n ma
+  | C.rtsSupportsBoundThreads = toConc (AForkOS n (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
+  | otherwise = fail "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
+
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
+--
+-- If the RTS supports bound threads (ghc -threaded when linking) then
+-- the main thread of the concurrent computation will be bound, and
+-- @forkOS@ / @forkOSN@ will work during execution.  If not, then the
+-- main thread will not be found, and attempting to fork a bound
+-- thread will raise an error.
 --
 -- __Warning:__ Blocking on the action of another thread in 'liftIO'
 -- cannot be detected! So if you perform some potentially blocking
@@ -202,8 +206,8 @@ instance Monad n => C.MonadConc (ConcT r n) where
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 --
--- @since 0.8.0.0
-runConcurrent :: MonadRef r n
+-- @since 1.0.0.0
+runConcurrent :: (C.MonadConc n, MonadRef r n)
   => Scheduler s
   -> MemType
   -> s

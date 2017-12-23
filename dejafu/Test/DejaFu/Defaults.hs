@@ -9,8 +9,8 @@
 -- Default parameters for test execution.
 module Test.DejaFu.Defaults where
 
-import           Test.DejaFu.Common
 import           Test.DejaFu.SCT
+import           Test.DejaFu.Types
 
 -- | A default way to execute concurrent programs: systematically
 -- using 'defaultBounds'.

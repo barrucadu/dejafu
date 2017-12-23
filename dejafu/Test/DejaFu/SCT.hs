@@ -4,7 +4,7 @@
 
 -- |
 -- Module      : Test.DejaFu.SCT
--- Copyright   : (c) 2016 Michael Walker
+-- Copyright   : (c) 2015--2017 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -59,37 +59,12 @@ module Test.DejaFu.SCT
   -- K. McKinley for more details.
 
   , Bounds(..)
+  , PreemptionBound(..)
+  , FairBound(..)
+  , LengthBound(..)
   , noBounds
   , sctBound
   , sctBoundDiscard
-
-  -- ** Pre-emption Bounding
-
-  -- | BPOR using pre-emption bounding. This adds conservative
-  -- backtracking points at the prior context switch whenever a
-  -- non-conervative backtracking point is added, as alternative
-  -- decisions can influence the reachability of different states.
-  --
-  -- See the BPOR paper for more details.
-
-  , PreemptionBound(..)
-
-  -- ** Fair Bounding
-
-  -- | BPOR using fair bounding. This bounds the maximum difference
-  -- between the number of yield operations different threads have
-  -- performed.
-  --
-  -- See the BPOR paper for more details.
-
-  , FairBound(..)
-
-  -- ** Length Bounding
-
-  -- | BPOR using length bounding. This bounds the maximum length (in
-  -- terms of primitive actions) of an execution.
-
-  , LengthBound(..)
 
   -- * Random Scheduling
 
@@ -106,19 +81,23 @@ module Test.DejaFu.SCT
   , sctWeightedRandomDiscard
   ) where
 
-import           Control.Applicative      ((<|>))
-import           Control.DeepSeq          (NFData(..), force)
-import           Control.Monad.Ref        (MonadRef)
-import           Data.List                (foldl')
-import qualified Data.Map.Strict          as M
-import           Data.Maybe               (fromMaybe)
-import           Data.Set                 (Set)
-import qualified Data.Set                 as S
-import           System.Random            (RandomGen, randomR)
+import           Control.Applicative               ((<|>))
+import           Control.DeepSeq                   (NFData(..), force)
+import           Control.Monad.Conc.Class          (MonadConc)
+import           Control.Monad.Ref                 (MonadRef)
+import           Data.List                         (foldl')
+import qualified Data.Map.Strict                   as M
+import           Data.Maybe                        (fromMaybe)
+import           Data.Set                          (Set)
+import qualified Data.Set                          as S
+import           System.Random                     (RandomGen, randomR)
 
-import           Test.DejaFu.Common
 import           Test.DejaFu.Conc
-import           Test.DejaFu.SCT.Internal
+import           Test.DejaFu.Internal
+import           Test.DejaFu.SCT.Internal.DPOR
+import           Test.DejaFu.SCT.Internal.Weighted
+import           Test.DejaFu.Types
+import           Test.DejaFu.Utils
 
 -------------------------------------------------------------------------------
 -- Running Concurrent Programs
@@ -207,8 +186,11 @@ swarmy = Weighted
 -- | Explore possible executions of a concurrent program according to
 -- the given 'Way'.
 --
--- @since 0.6.0.0
-runSCT :: MonadRef r n
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.
+--
+-- @since 1.0.0.0
+runSCT :: (MonadConc n, MonadRef r n)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
@@ -220,8 +202,8 @@ runSCT = runSCTDiscard (const Nothing)
 
 -- | Return the set of results of a concurrent program.
 --
--- @since 0.6.0.0
-resultsSet :: (MonadRef r n, Ord a)
+-- @since 1.0.0.0
+resultsSet :: (MonadConc n, MonadRef r n, Ord a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
@@ -231,26 +213,13 @@ resultsSet :: (MonadRef r n, Ord a)
   -> n (Set (Either Failure a))
 resultsSet = resultsSetDiscard (const Nothing)
 
--- | An @Either Failure a -> Maybe Discard@ value can be used to
--- selectively discard results.
---
--- @since 0.7.1.0
-data Discard
-  = DiscardTrace
-  -- ^ Discard the trace but keep the result.  The result will appear
-  -- to have an empty trace.
-  | DiscardResultAndTrace
-  -- ^ Discard the result and the trace.  It will simply not be
-  -- reported as a possible behaviour of the program.
-  deriving (Eq, Show, Read, Ord, Enum, Bounded)
-
-instance NFData Discard where
-  rnf d = d `seq` ()
-
 -- | A variant of 'runSCT' which can selectively discard results.
 --
--- @since 0.7.1.0
-runSCTDiscard :: MonadRef r n
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.
+--
+-- @since 1.0.0.0
+runSCTDiscard :: (MonadConc n, MonadRef r n)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
@@ -266,8 +235,8 @@ runSCTDiscard discard (Uniform  g lim)     memtype = sctUniformRandomDiscard  di
 
 -- | A variant of 'resultsSet' which can selectively discard results.
 --
--- @since 0.7.1.0
-resultsSetDiscard :: (MonadRef r n, Ord a)
+-- @since 1.0.0.0
+resultsSetDiscard :: (MonadConc n, MonadRef r n, Ord a)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.  Traces are always discarded.
   -> Way
@@ -286,8 +255,11 @@ resultsSetDiscard discard way memtype conc =
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since 0.6.0.0
-runSCT' :: (MonadRef r n, NFData a)
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.
+--
+-- @since 1.0.0.0
+runSCT' :: (MonadConc n, MonadRef r n, NFData a)
   => Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
 runSCT' = runSCTDiscard' (const Nothing)
 
@@ -296,8 +268,8 @@ runSCT' = runSCTDiscard' (const Nothing)
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since 0.6.0.0
-resultsSet' :: (MonadRef r n, Ord a, NFData a)
+-- @since 1.0.0.0
+resultsSet' :: (MonadConc n, MonadRef r n, Ord a, NFData a)
   => Way -> MemType -> ConcT r n a -> n (Set (Either Failure a))
 resultsSet' = resultsSetDiscard' (const Nothing)
 
@@ -306,8 +278,11 @@ resultsSet' = resultsSetDiscard' (const Nothing)
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since 0.7.1.0
-runSCTDiscard' :: (MonadRef r n, NFData a)
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.
+--
+-- @since 1.0.0.0
+runSCTDiscard' :: (MonadConc n, MonadRef r n, NFData a)
   => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcT r n a -> n [(Either Failure a, Trace)]
 runSCTDiscard' discard way memtype conc = do
   res <- runSCTDiscard discard way memtype conc
@@ -318,8 +293,8 @@ runSCTDiscard' discard way memtype conc = do
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since 0.7.1.0
-resultsSetDiscard' :: (MonadRef r n, Ord a, NFData a)
+-- @since 1.0.0.0
+resultsSetDiscard' :: (MonadConc n, MonadRef r n, Ord a, NFData a)
   => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcT r n a -> n (Set (Either Failure a))
 resultsSetDiscard' discard way memtype conc = do
   res <- resultsSetDiscard discard way memtype conc
@@ -376,7 +351,14 @@ cBacktrack _ = backtrackAt (\_ _ -> False)
 -------------------------------------------------------------------------------
 -- Pre-emption bounding
 
--- | @since 0.2.0.0
+-- | BPOR using pre-emption bounding. This adds conservative
+-- backtracking points at the prior context switch whenever a
+-- non-conervative backtracking point is added, as alternative
+-- decisions can influence the reachability of different states.
+--
+-- See the BPOR paper for more details.
+--
+-- @since 0.2.0.0
 newtype PreemptionBound = PreemptionBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
@@ -415,7 +397,13 @@ pBacktrack bs = backtrackAt (\_ _ -> False) bs . concatMap addConservative where
 -------------------------------------------------------------------------------
 -- Fair bounding
 
--- | @since 0.2.0.0
+-- | BPOR using fair bounding. This bounds the maximum difference
+-- between the number of yield operations different threads have
+-- performed.
+--
+-- See the BPOR paper for more details.
+--
+-- @since 0.2.0.0
 newtype FairBound = FairBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
@@ -432,8 +420,8 @@ fBound (FairBound fb) k prior lhead =
      then Just k'
      else Nothing
 
--- | Add a backtrack point. If the thread isn't runnable, or performs
--- a release operation, add all runnable threads.
+-- | Add a backtrack point. If the thread doesn't exist or is blocked,
+-- or performs a release operation, add all unblocked threads.
 fBacktrack :: BacktrackFunc
 fBacktrack = backtrackAt check where
   -- True if a release operation is performed.
@@ -442,7 +430,10 @@ fBacktrack = backtrackAt check where
 -------------------------------------------------------------------------------
 -- Length bounding
 
--- | @since 0.2.0.0
+-- | BPOR using length bounding. This bounds the maximum length (in
+-- terms of primitive actions) of an execution.
+--
+-- @since 0.2.0.0
 newtype LengthBound = LengthBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
@@ -457,8 +448,8 @@ lBound (LengthBound lb) len _ _ =
   let len' = maybe 1 (+1) len
   in if len' < lb then Just len' else Nothing
 
--- | Add a backtrack point. If the thread isn't runnable, add all
--- runnable threads.
+-- | Add a backtrack point. If the thread doesn't exist or is blocked,
+-- add all unblocked threads.
 lBacktrack :: BacktrackFunc
 lBacktrack = backtrackAt (\_ _ -> False)
 
@@ -477,8 +468,11 @@ lBacktrack = backtrackAt (\_ _ -> False)
 -- do some redundant work as the introduction of a bound can make
 -- previously non-interfering events interfere with each other.
 --
--- @since 0.5.0.0
-sctBound :: MonadRef r n
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.
+--
+-- @since 1.0.0.0
+sctBound :: (MonadConc n, MonadRef r n)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> Bounds
@@ -490,8 +484,11 @@ sctBound = sctBoundDiscard (const Nothing)
 
 -- | A variant of 'sctBound' which can selectively discard results.
 --
--- @since 0.7.1.0
-sctBoundDiscard :: MonadRef r n
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.
+--
+-- @since 1.0.0.0
+sctBoundDiscard :: (MonadConc n, MonadRef r n)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> MemType
@@ -533,8 +530,8 @@ sctBoundDiscard discard memtype cb conc = go initialState where
 --
 -- This is not guaranteed to find all distinct results.
 --
--- @since 0.7.0.0
-sctUniformRandom :: (MonadRef r n, RandomGen g)
+-- @since 1.0.0.0
+sctUniformRandom :: (MonadConc n, MonadRef r n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> g
@@ -549,8 +546,10 @@ sctUniformRandom = sctUniformRandomDiscard (const Nothing)
 -- | A variant of 'sctUniformRandom' which can selectively discard
 -- results.
 --
--- @since 0.7.1.0
-sctUniformRandomDiscard :: (MonadRef r n, RandomGen g)
+-- This is not guaranteed to find all distinct results.
+--
+-- @since 1.0.0.0
+sctUniformRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> MemType
@@ -578,8 +577,8 @@ sctUniformRandomDiscard discard memtype g0 lim0 conc = go g0 (max 0 lim0) where
 --
 -- This is not guaranteed to find all distinct results.
 --
--- @since 0.7.0.0
-sctWeightedRandom :: (MonadRef r n, RandomGen g)
+-- @since 1.0.0.0
+sctWeightedRandom :: (MonadConc n, MonadRef r n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> g
@@ -596,8 +595,10 @@ sctWeightedRandom = sctWeightedRandomDiscard (const Nothing)
 -- | A variant of 'sctWeightedRandom' which can selectively discard
 -- results.
 --
--- @since 0.7.1.0
-sctWeightedRandomDiscard :: (MonadRef r n, RandomGen g)
+-- This is not guaranteed to find all distinct results.
+--
+-- @since 1.0.0.0
+sctWeightedRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> MemType

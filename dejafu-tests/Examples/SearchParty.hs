@@ -21,34 +21,29 @@ import Data.Functor (void)
 import Data.Maybe (fromJust, isNothing)
 
 -- test imports
-import Data.List (permutations)
-import Test.DejaFu (Predicate, Result(..), alwaysTrue2)
+import Data.List (sort)
+import Test.DejaFu (Predicate, Result(..), alwaysSameOn)
 import Test.Framework (Test)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit (test)
 import Test.HUnit.DejaFu (testDejafu)
 
+import Common
+
 import Examples.SearchParty.Impredicative
 
 tests :: [Test]
 tests = hUnitTestToTests $ test
-  [ testDejafu concFilter "concurrent filter" (invPred checkResultLists)
+  [ testDejafu "concurrent filter" (failing checkResultLists) concFilter
   ]
 
 -- | Filter a list concurrently.
 concFilter :: MonadConc m => m [Int]
 concFilter = unsafeRunFind $ [0..5] @! const True
 
--- | Invert the result of a predicate.
-invPred :: Predicate a -> Predicate a
-invPred p xs = let r = p xs in r { _pass = not (_pass r) }
-
 -- | Check that two lists of results are equal, modulo order.
-checkResultLists :: Eq a => Predicate [a]
-checkResultLists = alwaysTrue2 checkLists where
-  checkLists (Right as) (Right bs) =
-    as `elem` permutations bs
-  checkLists a b = a == b
+checkResultLists :: Ord a => Predicate [a]
+checkResultLists = alwaysSameOn (fmap sort)
 
 -------------------------------------------------------------------------------
 

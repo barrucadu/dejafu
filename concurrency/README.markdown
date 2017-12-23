@@ -3,16 +3,15 @@ concurrency
 
 A typeclass abstraction over much of Control.Concurrent (and some
 extras!). If you're looking for a general introduction to Haskell
-concurrency, you should check out the excellent
-[Parallel and Concurrent Programming in Haskell][parconc], by Simon
-Marlow. If you are already familiar with concurrent Haskell, just
-change all the imports from Control.Concurrent.* to
-Control.Concurrent.Classy.* and fix the type errors.
+concurrency, you should check out the excellent [Parallel and
+Concurrent Programming in Haskell][parconc], by Simon Marlow. If you
+are already familiar with concurrent Haskell, just change all the
+imports from Control.Concurrent.* to Control.Concurrent.Classy.* and
+fix the type errors.
 
 A brief list of supported functionality:
 
-- Threads: the `forkIO*` and `forkOn*` functions, although bound
-  threads are not supported.
+- Threads: both unbound and bound.
 - Getting and setting capablities.
 - Yielding and delaying.
 - Mutable state: STM, `MVar`, and `IORef`.

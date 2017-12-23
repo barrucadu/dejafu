@@ -12,11 +12,14 @@ import qualified Data.Map as M
 import Data.Maybe (fromJust, isJust)
 import Data.Proxy (Proxy(..))
 import qualified Data.Sequence as S
-import Test.DejaFu.Common (ThreadAction, Lookahead)
-import qualified Test.DejaFu.Common as D
+import Data.Set (Set)
+import qualified Data.Set as Set
+import Test.DejaFu.Types (ThreadAction, Lookahead)
+import qualified Test.DejaFu.Types as D
+import qualified Test.DejaFu.Internal as D
 import qualified Test.DejaFu.Conc.Internal.Common as D
 import qualified Test.DejaFu.Conc.Internal.Memory as Mem
-import qualified Test.DejaFu.SCT.Internal as SCT
+import qualified Test.DejaFu.SCT.Internal.DPOR as SCT
 import Test.Framework (Test)
 import Test.LeanCheck (Listable(..), (\/), (><), (==>), cons0, cons1, cons2, cons3, mapT)
 
@@ -25,11 +28,8 @@ import Common
 tests :: [Test]
 tests =
   [ testGroup "Class Laws"
-    [ testGroup "ThreadId" (eqord (Proxy :: Proxy D.ThreadId))
-    , testGroup "CRefId"   (eqord (Proxy :: Proxy D.CRefId))
-    , testGroup "MVarId"   (eqord (Proxy :: Proxy D.MVarId))
-    , testGroup "TVarId"   (eqord (Proxy :: Proxy D.TVarId))
-    , testGroup "Failure"  (eqord (Proxy :: Proxy D.Failure))
+    [ testGroup "Id"      (eqord (Proxy :: Proxy D.Id))
+    , testGroup "Failure" (eqord (Proxy :: Proxy D.Failure))
     ]
 
   , testGroup "Common"
@@ -162,16 +162,19 @@ eq_wb (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
 -- Typeclass instances
 
 instance Listable D.ThreadId where
-  tiers = mapT (D.ThreadId Nothing) tiers
+  tiers = mapT D.ThreadId tiers
 
 instance Listable D.CRefId where
-  tiers = mapT (D.CRefId Nothing) tiers
+  tiers = mapT D.CRefId tiers
 
 instance Listable D.MVarId where
-  tiers = mapT (D.MVarId Nothing) tiers
+  tiers = mapT D.MVarId tiers
 
 instance Listable D.TVarId where
-  tiers = mapT (D.TVarId Nothing) tiers
+  tiers = mapT D.TVarId tiers
+
+instance Listable D.Id where
+  tiers = mapT (D.Id Nothing) tiers
 
 instance Listable D.ThreadAction where
   tiers =
@@ -247,10 +250,13 @@ instance Listable D.ActionType where
     \/ cons0 D.SynchronisedOther
 
 instance Listable SCT.DepState where
-  tiers = mapT (uncurry SCT.DepState) (tiers >< tiers)
+  tiers = mapT (\(a,(b,c)) -> SCT.DepState a b c) (tiers >< tiers >< tiers)
 
 instance (Ord k, Listable k, Listable v) => Listable (Map k v) where
   tiers = mapT M.fromList tiers
+
+instance (Ord v, Listable v) => Listable (Set v) where
+  tiers = mapT Set.fromList tiers
 
 instance Listable D.Failure where
   list =

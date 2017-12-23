@@ -4,7 +4,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.Common
--- Copyright   : (c) 2016 Michael Walker
+-- Copyright   : (c) 2016--2017 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -12,15 +12,16 @@
 --
 -- Common types and utility functions for deterministic execution of
 -- 'MonadConc' implementations. This module is NOT considered to form
+-- part of the public interface of this library.
 module Test.DejaFu.Conc.Internal.Common where
 
-import           Control.Exception  (Exception, MaskingState(..))
-import           Data.Map.Strict    (Map)
-import           Test.DejaFu.Common
-import           Test.DejaFu.STM    (STMLike)
+import           Control.Exception             (Exception, MaskingState(..))
+import           Data.Map.Strict               (Map)
+import           Test.DejaFu.Conc.Internal.STM (S)
+import           Test.DejaFu.Types
 
 #if MIN_VERSION_base(4,9,0)
-import qualified Control.Monad.Fail as Fail
+import qualified Control.Monad.Fail            as Fail
 #endif
 
 --------------------------------------------------------------------------------
@@ -109,7 +110,9 @@ runCont = runM
 -- primitives of the concurrency. 'spawn' is absent as it is
 -- implemented in terms of 'newEmptyMVar', 'fork', and 'putMVar'.
 data Action n r =
-    AFork  String ((forall b. M n r b -> M n r b) -> Action n r) (ThreadId -> Action n r)
+    AFork   String ((forall b. M n r b -> M n r b) -> Action n r) (ThreadId -> Action n r)
+  | AForkOS String ((forall b. M n r b -> M n r b) -> Action n r) (ThreadId -> Action n r)
+  | AIsBound (Bool -> Action n r)
   | AMyTId (ThreadId -> Action n r)
 
   | AGetNumCapabilities (Int -> Action n r)
@@ -138,7 +141,7 @@ data Action n r =
   | forall a. AMasking MaskingState ((forall b. M n r b -> M n r b) -> M n r a) (a -> Action n r)
   | AResetMask Bool Bool MaskingState (Action n r)
 
-  | forall a. AAtom (STMLike n r a) (a -> Action n r)
+  | forall a. AAtom (S n r a) (a -> Action n r)
   | ALift (n (Action n r))
   | AYield  (Action n r)
   | ADelay Int (Action n r)
@@ -155,6 +158,8 @@ data Action n r =
 -- | Look as far ahead in the given continuation as possible.
 lookahead :: Action n r -> Lookahead
 lookahead (AFork _ _ _) = WillFork
+lookahead (AForkOS _ _ _) = WillForkOS
+lookahead (AIsBound _) = WillIsCurrentThreadBound
 lookahead (AMyTId _) = WillMyThreadId
 lookahead (AGetNumCapabilities _) = WillGetNumCapabilities
 lookahead (ASetNumCapabilities i _) = WillSetNumCapabilities i

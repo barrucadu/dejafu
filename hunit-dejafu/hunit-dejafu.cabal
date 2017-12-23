@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                hunit-dejafu
-version:             0.7.1.1
+version:             1.0.0.0
 synopsis:            Deja Fu support for the HUnit test framework.
 
 description:
@@ -17,7 +17,7 @@ license:             MIT
 license-file:        LICENSE
 author:              Michael Walker
 maintainer:          mike@barrucadu.co.uk
--- copyright:           
+copyright:           (c) 2015--2017 Michael Walker
 category:            Testing
 build-type:          Simple
 extra-source-files:  README.markdown CHANGELOG.markdown
@@ -30,7 +30,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      hunit-dejafu-0.7.1.1
+  tag:      hunit-dejafu-1.0.0.0
 
 library
   exposed-modules:     Test.HUnit.DejaFu
@@ -38,7 +38,7 @@ library
   -- other-extensions:    
   build-depends:       base       >=4.8 && <5
                      , exceptions >=0.7 && <0.9
-                     , dejafu     >=0.7.1 && <0.10
+                     , dejafu     >=1.0 && <1.1
                      , HUnit      >=1.2 && <1.7
   -- hs-source-dirs:      
   default-language:    Haskell2010

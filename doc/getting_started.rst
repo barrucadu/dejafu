@@ -35,10 +35,10 @@ There are a few different packages under the Déjà Fu umbrella:
 .. csv-table::
    :header: "Package", "Version", "Summary"
 
-   "concurrency_",  "1.2.3.0", "Typeclasses, functions, and data types for concurrency and STM"
-   "dejafu_",       "0.9.1.2", "Systematic testing for Haskell concurrency"
-   "hunit-dejafu_", "0.7.1.1", "Déjà Fu support for the HUnit test framework"
-   "tasty-dejafu_", "0.7.1.1", "Déjà Fu support for the tasty test framework"
+   "concurrency_",  "1.3.0.0", "Typeclasses, functions, and data types for concurrency and STM"
+   "dejafu_",       "1.0.0.0", "Systematic testing for Haskell concurrency"
+   "hunit-dejafu_", "1.0.0.0", "Déjà Fu support for the HUnit test framework"
+   "tasty-dejafu_", "1.0.0.0", "Déjà Fu support for the tasty test framework"
 
 .. _concurrency:  https://hackage.haskell.org/package/concurrency
 .. _dejafu:       https://hackage.haskell.org/package/dejafu
@@ -56,7 +56,7 @@ Install from Hackage globally:
 
 .. code-block:: none
 
-  $ cabal-install dejafu
+  $ cabal install dejafu
 
 Or add it to your cabal file:
 
@@ -98,12 +98,12 @@ we'll get onto that shortly.  First, the result of testing:
 .. code-block:: none
 
   > autocheck myFunction
-  [pass] Never Deadlocks (checked: 12)
-  [pass] No Exceptions (checked: 12)
-  [fail] Consistent Result (checked: 11)
-          "hello" S0----S1-P2-S0--
+  [pass] Never Deadlocks
+  [pass] No Exceptions
+  [fail] Consistent Result
+          "hello" S0----S1--S0--
 
-          "world" S0----S2--S0-P1-S0-
+          "world" S0----S2--S0--
   False
 
 There are no deadlocks or uncaught exceptions, which is good; but the

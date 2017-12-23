@@ -1,6 +1,8 @@
 module Cases.MultiThreaded where
 
 import Control.Exception (ArithException(..))
+import Control.Monad.IO.Class (liftIO)
+import qualified Control.Concurrent as C
 import Test.DejaFu (Failure(..), gives, gives', isUncaughtException)
 import Test.Framework (Test)
 
@@ -36,6 +38,41 @@ threadingTests = toTestList
       x <- newCRef Nothing
       _ <- fork . writeCRef x $ Just ()
       readCRef x
+
+  , djfuT "The main thread is bound" (gives' [(True, True)]) $ do
+      b1 <- isCurrentThreadBound
+      -- check the thread is *really* bound
+      b2 <- liftIO C.isCurrentThreadBound
+      pure (b1, b2)
+
+  , djfuT "A thread started with forkOS is bound" (gives' [(True, True)]) $ do
+      v <- newEmptyMVar
+      forkOS $ do
+        b1 <- isCurrentThreadBound
+        b2 <- liftIO C.isCurrentThreadBound
+        putMVar v (b1, b2)
+      readMVar v
+
+  , djfuT "A thread started with fork is not bound" (gives' [False]) $ do
+      v <- newEmptyMVar
+      fork $ putMVar v =<< isCurrentThreadBound
+      readMVar v
+
+  , djfuT "An action can be run in an unbound thread" (gives' [(True, False)]) $ do
+      v <- newEmptyMVar
+      forkOS $ do
+        b1 <- isCurrentThreadBound
+        b2 <- runInUnboundThread isCurrentThreadBound
+        putMVar v (b1, b2)
+      readMVar v
+
+  , djfuT "An action can be run in a bound thread" (gives' [(False, True)]) $ do
+      v <- newEmptyMVar
+      fork $ do
+        b1 <- isCurrentThreadBound
+        b2 <- runInBoundThread isCurrentThreadBound
+        putMVar v (b1, b2)
+      readMVar v
   ]
 
 --------------------------------------------------------------------------------

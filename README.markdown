@@ -45,10 +45,10 @@ There are a few different packages under the Déjà Fu umbrella:
 
 |   | Version | Summary |
 | - | ------- | ------- |
-| [concurrency][h:conc]    | 1.2.3.0 | Typeclasses, functions, and data types for concurrency and STM. |
-| [dejafu][h:dejafu]       | 0.9.1.2 | Systematic testing for Haskell concurrency. |
-| [hunit-dejafu][h:hunit]  | 0.7.1.1 | Deja Fu support for the HUnit test framework. |
-| [tasty-dejafu][h:tasty]  | 0.7.1.1 | Deja Fu support for the Tasty test framework. |
+| [concurrency][h:conc]    | 1.3.0.0 | Typeclasses, functions, and data types for concurrency and STM. |
+| [dejafu][h:dejafu]       | 1.0.0.0 | Systematic testing for Haskell concurrency. |
+| [hunit-dejafu][h:hunit]  | 1.0.0.0 | Deja Fu support for the HUnit test framework. |
+| [tasty-dejafu][h:tasty]  | 1.0.0.0 | Deja Fu support for the Tasty test framework. |
 
 Each package has its own README and CHANGELOG in its subdirectory.
 
@@ -71,7 +71,7 @@ Installation
 Install from Hackage globally:
 
 ```
-$ cabal-install dejafu
+$ cabal install dejafu
 ```
 
 Or add it to your cabal file:
@@ -112,12 +112,12 @@ we'll get onto that shortly.  First, the result of testing:
 
 ```
 > autocheck myFunction
-[pass] Never Deadlocks (checked: 12)
-[pass] No Exceptions (checked: 12)
-[fail] Consistent Result (checked: 11)
-        "hello" S0----S1-P2-S0--
+[pass] Never Deadlocks
+[pass] No Exceptions
+[fail] Consistent Result
+        "hello" S0----S1--S0--
 
-        "world" S0----S2--S0-P1-S0-
+        "world" S0----S2--S0--
 False
 ```
 
@@ -145,10 +145,10 @@ These approaches are inadequate for a few reasons:
 - **How do you know if you've fixed a bug you saw previously?**
   Because the scheduler is a black box, you don't know if the
   previously buggy schedule has been re-run.
-- **You won't actually get that much scheduling variety!** Operating
-  systems and language runtimes like to run threads for long periods
-  of time, which reduces the variety you get (and so drives up the
-  number of runs you need).
+- **You won't get that much scheduling variety!** Operating systems
+  and language runtimes like to run threads for long periods of time,
+  which reduces the variety you get (and so drives up the number of
+  runs you need).
 
 Déjà Fu addresses these points by offering *complete* testing.  You
 can run a test case and be guaranteed to find all results with some

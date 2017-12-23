@@ -106,8 +106,7 @@ module Test.DejaFu.Refinement
   ) where
 
 import           Control.Arrow            (first)
-import           Control.Monad            (void)
-import           Control.Monad.Conc.Class (readMVar, spawn)
+import           Control.Monad.Conc.Class (fork)
 import           Data.Maybe               (isNothing)
 import           Data.Set                 (Set)
 import qualified Data.Set                 as S
@@ -410,9 +409,9 @@ evalSigWithSeed sig x = do
   results <- runSCT defaultWay defaultMemType $ do
     s <- initialise sig x
     r <- subconcurrency $ do
-      j <- spawn (interfere sig s x)
-      void (expression sig s)
-      void (readMVar j)
+      _ <- fork (interfere sig s x)
+      _ <- expression sig s
+      pure ()
     o <- observe sig s x
     pure (either Just (const Nothing) r, o)
   pure . S.fromList $ map (\(Right a, _) -> a) results

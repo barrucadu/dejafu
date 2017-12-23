@@ -4,7 +4,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.Memory
--- Copyright   : (c) 2016 Michael Walker
+-- Copyright   : (c) 2016--2017 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -26,16 +26,16 @@ module Test.DejaFu.Conc.Internal.Memory where
 import           Control.Monad.Ref                   (MonadRef, readRef,
                                                       writeRef)
 import           Data.Map.Strict                     (Map)
+import qualified Data.Map.Strict                     as M
 import           Data.Maybe                          (maybeToList)
 import           Data.Monoid                         ((<>))
 import           Data.Sequence                       (Seq, ViewL(..), singleton,
                                                       viewl, (><))
 
-import           Test.DejaFu.Common
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.Conc.Internal.Threading
-
-import qualified Data.Map.Strict                     as M
+import           Test.DejaFu.Internal
+import           Test.DejaFu.Types
 
 --------------------------------------------------------------------------------
 -- * Manipulating @CRef@s
@@ -129,7 +129,7 @@ writeBarrier (WriteBuffer wb) = mapM_ flush $ M.elems wb where
 -- | Add phantom threads to the thread list to commit pending writes.
 addCommitThreads :: WriteBuffer r -> Threads n r -> Threads n r
 addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
-  phantoms = [ (ThreadId Nothing $ negate tid, mkthread c)
+  phantoms = [ (ThreadId (Id Nothing $ negate tid), mkthread c)
              | ((_, b), tid) <- zip (M.toList wb) [1..]
              , c <- maybeToList (go $ viewl b)
              ]

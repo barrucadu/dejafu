@@ -1,17 +1,15 @@
-{-# LANGUAGE TupleSections #-}
-
 -- |
--- Module      : Test.DejaFu.SCT.Internal
--- Copyright   : (c) 2016 Michael Walker
+-- Module      : Test.DejaFu.SCT.Internal.DPOR
+-- Copyright   : (c) 2015--2017 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : TupleSections
+-- Portability : portable
 --
--- Internal types and functions for dynamic partial-order
--- reduction. This module is NOT considered to form part of the public
--- interface of this library.
-module Test.DejaFu.SCT.Internal where
+-- Internal types and functions for SCT via dynamic partial-order
+-- reduction.  This module is NOT considered to form part of the
+-- public interface of this library.
+module Test.DejaFu.SCT.Internal.DPOR where
 
 import           Control.Applicative  ((<|>))
 import           Control.DeepSeq      (NFData(..))
@@ -22,16 +20,16 @@ import           Data.List            (nubBy, partition, sortOn)
 import           Data.List.NonEmpty   (toList)
 import           Data.Map.Strict      (Map)
 import qualified Data.Map.Strict      as M
-import           Data.Maybe           (fromMaybe, isJust, isNothing,
-                                       listToMaybe)
+import           Data.Maybe           (isJust, isNothing, listToMaybe)
 import           Data.Sequence        (Seq, (|>))
 import qualified Data.Sequence        as Sq
 import           Data.Set             (Set)
 import qualified Data.Set             as S
-import           System.Random        (RandomGen, randomR)
 
-import           Test.DejaFu.Common
-import           Test.DejaFu.Schedule (Scheduler(..), decisionOf, tidOf)
+import           Test.DejaFu.Internal
+import           Test.DejaFu.Schedule (Scheduler(..))
+import           Test.DejaFu.Types
+import           Test.DejaFu.Utils    (decisionOf, tidOf)
 
 -------------------------------------------------------------------------------
 -- * Dynamic partial-order reduction
@@ -529,51 +527,7 @@ dporSched boundf = Scheduler $ \prior threads s ->
           (Nothing, (nextState []) { schedIgnore = signore', schedBoundKill = sbkill', schedBState = Nothing })
 
 -------------------------------------------------------------------------------
--- Weighted random scheduler
-
--- | The scheduler state
-data RandSchedState g = RandSchedState
-  { schedWeights :: Map ThreadId Int
-  -- ^ The thread weights: used in determining which to run.
-  , schedGen     :: g
-  -- ^ The random number generator.
-  } deriving (Eq, Show)
-
-instance NFData g => NFData (RandSchedState g) where
-  rnf s = rnf ( schedWeights s
-              , schedGen     s
-              )
-
--- | Initial weighted random scheduler state.
-initialRandSchedState :: Maybe (Map ThreadId Int) -> g -> RandSchedState g
-initialRandSchedState = RandSchedState . fromMaybe M.empty
-
--- | Weighted random scheduler: assigns to each new thread a weight,
--- and makes a weighted random choice out of the runnable threads at
--- every step.
-randSched :: RandomGen g => (g -> (Int, g)) -> Scheduler (RandSchedState g)
-randSched weightf = Scheduler $ \_ threads s ->
-  let
-    -- Select a thread
-    pick idx ((x, f):xs)
-      | idx < f = Just x
-      | otherwise = pick (idx - f) xs
-    pick _ [] = Nothing
-    (choice, g'') = randomR (0, sum (map snd enabled) - 1) g'
-    enabled = M.toList $ M.filterWithKey (\tid _ -> tid `elem` tids) weights'
-
-    -- The weights, with any new threads added.
-    (weights', g') = foldr assignWeight (M.empty, schedGen s) tids
-    assignWeight tid ~(ws, g0) =
-      let (w, g) = maybe (weightf g0) (,g0) (M.lookup tid (schedWeights s))
-      in (M.insert tid w ws, g)
-
-    -- The runnable threads.
-    tids = map fst (toList threads)
-  in (pick choice enabled, RandSchedState weights' g'')
-
--------------------------------------------------------------------------------
--- Dependency function
+-- * Dependency function
 
 -- | Check if an action is dependent on another.
 --
@@ -678,6 +632,12 @@ dependentActions ds a1 a2 = case (a1, a2) of
   (PartiallySynchronisedCommit _, _) | isBarrier a2 -> True
   (_, PartiallySynchronisedCommit _) | isBarrier a1 -> True
 
+  -- Two @MVar@ puts are dependent if they're to the same empty
+  -- @MVar@, and two takes are dependent if they're to the same full
+  -- @MVar@.
+  (SynchronisedWrite v1, SynchronisedWrite v2) -> v1 == v2 && not (isFull ds v1)
+  (SynchronisedRead  v1, SynchronisedRead  v2) -> v1 == v2 && isFull ds v1
+
   (_, _) -> case getSame crefOf of
     -- Two actions on the same CRef where at least one is synchronised
     Just r -> synchronises a1 r || synchronises a2 r
@@ -695,11 +655,13 @@ dependentActions ds a1 a2 = case (a1, a2) of
       in if f1 == f2 then f1 else Nothing
 
 -------------------------------------------------------------------------------
--- Dependency function state
+-- ** Dependency function state
 
 data DepState = DepState
   { depCRState :: Map CRefId Bool
   -- ^ Keep track of which @CRef@s have buffered writes.
+  , depMVState :: Set MVarId
+  -- ^ Keep track of which @MVar@s are full.
   , depMaskState :: Map ThreadId MaskingState
   -- ^ Keep track of thread masking states. If a thread isn't present,
   -- the masking state is assumed to be @Unmasked@. This nicely
@@ -709,22 +671,24 @@ data DepState = DepState
 
 instance NFData DepState where
   rnf depstate = rnf ( depCRState depstate
+                     , depMVState depstate
                      , [(t, m `seq` ()) | (t, m) <- M.toList (depMaskState depstate)]
                      )
 
 -- | Initial dependency state.
 initialDepState :: DepState
-initialDepState = DepState M.empty M.empty
+initialDepState = DepState M.empty S.empty M.empty
 
--- | Update the 'CRef' buffer state with the action that has just
+-- | Update the dependency state with the action that has just
 -- happened.
 updateDepState :: DepState -> ThreadId -> ThreadAction -> DepState
 updateDepState depstate tid act = DepState
   { depCRState   = updateCRState       act $ depCRState   depstate
+  , depMVState   = updateMVState       act $ depMVState   depstate
   , depMaskState = updateMaskState tid act $ depMaskState depstate
   }
 
--- | Update the 'CRef' buffer state with the action that has just
+-- | Update the @CRef@ buffer state with the action that has just
 -- happened.
 updateCRState :: ThreadAction -> Map CRefId Bool -> Map CRefId Bool
 updateCRState (CommitCRef _ r) = M.delete r
@@ -732,6 +696,15 @@ updateCRState (WriteCRef    r) = M.insert r True
 updateCRState ta
   | isBarrier $ simplifyAction ta = const M.empty
   | otherwise = id
+
+-- | Update the @MVar@ full/empty state with the action that has just
+-- happened.
+updateMVState :: ThreadAction -> Set MVarId -> Set MVarId
+updateMVState (PutMVar mvid _) = S.insert mvid
+updateMVState (TryPutMVar mvid True _) = S.insert mvid
+updateMVState (TakeMVar mvid _) = S.delete mvid
+updateMVState (TryTakeMVar mvid True _) = S.delete mvid
+updateMVState _ = id
 
 -- | Update the thread masking state with the action that has just
 -- happened.
@@ -744,9 +717,13 @@ updateMaskState tid (SetMasking   _ ms) = M.insert tid ms
 updateMaskState tid (ResetMasking _ ms) = M.insert tid ms
 updateMaskState _ _ = id
 
--- | Check if a 'CRef' has a buffered write pending.
+-- | Check if a @CRef@ has a buffered write pending.
 isBuffered :: DepState -> CRefId -> Bool
 isBuffered depstate r = M.findWithDefault False r (depCRState depstate)
+
+-- | Check if an @MVar@ is full.
+isFull :: DepState -> MVarId -> Bool
+isFull depstate v = S.member v (depMVState depstate)
 
 -- | Check if an exception can interrupt a thread (action).
 canInterrupt :: DepState -> ThreadId -> ThreadAction -> Bool

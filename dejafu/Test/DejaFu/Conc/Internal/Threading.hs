@@ -3,7 +3,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.Threading
--- Copyright   : (c) 2016 Michael Walker
+-- Copyright   : (c) 2016--2017 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -13,14 +13,16 @@
 -- form part of the public interface of this library.
 module Test.DejaFu.Conc.Internal.Threading where
 
+import qualified Control.Concurrent.Classy        as C
 import           Control.Exception                (Exception, MaskingState(..),
                                                    SomeException, fromException)
 import           Data.List                        (intersect)
 import           Data.Map.Strict                  (Map)
 import           Data.Maybe                       (isJust)
 
-import           Test.DejaFu.Common
 import           Test.DejaFu.Conc.Internal.Common
+import           Test.DejaFu.Internal
+import           Test.DejaFu.Types
 
 import qualified Data.Map.Strict                  as M
 
@@ -40,11 +42,23 @@ data Thread n r = Thread
   -- ^ Stack of exception handlers
   , _masking      :: MaskingState
   -- ^ The exception masking state.
+  , _bound        :: Maybe (BoundThread n r)
+  -- ^ State for the associated bound thread, if it exists.
+  }
+
+-- | The state of a bound thread.
+data BoundThread n r = BoundThread
+  { _runboundIO :: C.MVar n (n (Action n r))
+  -- ^ Run an @IO@ action in the bound thread by writing to this.
+  , _getboundIO :: C.MVar n (Action n r)
+  -- ^ Get the result of the above by reading from this.
+  , _boundTId   :: C.ThreadId n
+  -- ^ Thread ID
   }
 
 -- | Construct a thread with just one action
 mkthread :: Action n r -> Thread n r
-mkthread c = Thread c Nothing [] Unmasked
+mkthread c = Thread c Nothing [] Unmasked Nothing
 
 --------------------------------------------------------------------------------
 -- * Blocking
@@ -122,14 +136,10 @@ launch parent tid a threads = launch' ms tid a threads where
 -- | Start a thread with the given ID and masking state. This must not already be in use!
 launch' :: MaskingState -> ThreadId -> ((forall b. M n r b -> M n r b) -> Action n r) -> Threads n r -> Threads n r
 launch' ms tid a = M.insert tid thread where
-  thread = Thread { _continuation = a umask, _blocking = Nothing, _handlers = [], _masking = ms }
+  thread = Thread (a umask) Nothing [] ms Nothing
 
   umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False ms >> pure b
   resetMask typ m = cont $ \k -> AResetMask typ True m $ k ()
-
--- | Kill a thread.
-kill :: ThreadId -> Threads n r -> Threads n r
-kill = M.delete
 
 -- | Block a thread.
 block :: BlockedOn -> ThreadId -> Threads n r -> Threads n r
@@ -147,3 +157,44 @@ wake blockedOn threads = (unblock <$> threads, M.keys $ M.filter isBlocked threa
   isBlocked thread = case (_blocking thread, blockedOn) of
     (Just (OnTVar tvids), OnTVar blockedOn') -> tvids `intersect` blockedOn' /= []
     (theblock, _) -> theblock == Just blockedOn
+
+-------------------------------------------------------------------------------
+-- ** Bound threads
+
+-- | Turn a thread into a bound thread.
+makeBound :: C.MonadConc n => ThreadId -> Threads n r -> n (Threads n r)
+makeBound tid threads = do
+    runboundIO <- C.newEmptyMVar
+    getboundIO <- C.newEmptyMVar
+    btid <- C.forkOSN ("bound worker for '" ++ show tid ++ "'") (go runboundIO getboundIO)
+    let bt = BoundThread runboundIO getboundIO btid
+    pure (M.adjust (\t -> t { _bound = Just bt }) tid threads)
+  where
+    go runboundIO getboundIO =
+      let loop = do
+            na <- C.takeMVar runboundIO
+            C.putMVar getboundIO =<< na
+            loop
+      in loop
+
+-- | Kill a thread and remove it from the thread map.
+--
+-- If the thread is bound, the worker thread is cleaned up.
+kill :: C.MonadConc n => ThreadId -> Threads n r -> n (Threads n r)
+kill tid threads = case M.lookup tid threads of
+  Just thread -> case _bound thread of
+    Just bt -> do
+      C.killThread (_boundTId bt)
+      pure (M.delete tid threads)
+    Nothing -> pure (M.delete tid threads)
+  Nothing -> pure threads
+
+-- | Run an action.
+--
+-- If the thread is bound, the action is run in the worker thread.
+runLiftedAct :: C.MonadConc n => ThreadId -> Threads n r -> n (Action n r) -> n (Action n r)
+runLiftedAct tid threads ma = case _bound =<< M.lookup tid threads of
+  Just bt -> do
+    C.putMVar (_runboundIO bt) ma
+    C.takeMVar (_getboundIO bt)
+  Nothing -> ma

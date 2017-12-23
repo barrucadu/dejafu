@@ -10,14 +10,14 @@ Most tests will look something like this:
 
 .. code-block:: haskell
 
-  dejafu myAction ("Assert the thing holds", myPredicate)
+  dejafu "Assert the thing holds" myPredicate myAction
 
 The ``dejafu`` function comes from ``Test.DejaFu``.  It can't deal
 with testcases which need ``MonadIO``, use ``dejafuIO`` for that.
 
 
 Actions
-----------
+-------
 
 An action is just something with the type ``MonadConc m => m a``, or
 ``(MonadConc m, MonadIO m) => m a`` for some ``a`` that your chosen
@@ -65,6 +65,13 @@ want to see the full code. [#]_
        predicates are checking that the bug is found, not that the
        code is correct.
 
+If the RTS supports bound threads (the ``-threaded`` flag was passed
+to GHC when linking), then the main thread of an action given to Déjà
+Fu will be bound, and further bound threads can be forked with the
+``forkOS`` functions.  If not, then attempting to fork a bound thread
+will raise an error.
+
+
 Predicates
 ----------
 
@@ -108,6 +115,8 @@ to it from a different thread).
   :widths: 25, 75
 
   ``alwaysSame``,"checks that the computation is deterministic"
+  ``alwaysSameOn f``,"is like ``alwaysSame``, but transforms the results with ``f`` first"
+  ``alwaysSameBy f``,"is like ``alwaysSame``, but uses ``f`` instead of ``(==)`` to compare"
   ``notAlwaysSame``,"checks that the computation is nondeterministic"
 
 Checking for **determinism** will also find nondeterministic failures:
@@ -117,7 +126,6 @@ deadlocking (for instance) is still a result of a test!
   :widths: 25, 75
 
   ``alwaysTrue p``,"checks that ``p`` is true for every result"
-  ``alwaysTrue2 p``,"checks that ``p`` is true for every pair of results"
   ``somewhereTrue p``,"checks that ``p`` is true for at least one result"
 
 These can be used to check custom predicates.  For example, you might
@@ -164,7 +172,7 @@ Our example from the start becomes:
 
 .. code-block:: haskell
 
-  testDejafu myAction "Assert the thing holds" myPredicate
+  testDejafu "Assert the thing holds" myPredicate myAction
 
 The ``autocheck`` and ``autocheckIO`` functions are exposed as
 ``testAuto`` and ``testAutoIO``.

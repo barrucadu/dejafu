@@ -7,6 +7,118 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+1.0.0.0
+-------
+
+- **Date**    unreleased
+- **Git tag** [dejafu-1.0.0.0][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-1.0.0.0
+
+### Test.DejaFu
+
+- All testing functions now require a `MonadConc`, `MonadRef`, and `MonadIO` constraint:
+
+    It is no longer possible to test things in `ST`.
+
+- All testing functions now take the action to test as the last parameter.
+
+- The `autocheckIO`, `dejafuIO`, `dejafusIO`, `autocheckWayIO`, `dejafuWayIO`, `dejafusWayIO`,
+  `dejafuDiscardIO`, `runTestM`, and `runTestWayM` functions are now gone.
+
+- The `Predicate` type has been replaced with a more general `ProPredicate` type which is a
+  profunctor and (b) can discard results not needed to determine if the predicate passes. (#124)
+
+    All testing functions have been generalised to take a `ProPredicate` instead.  The `Predicate a`
+    type remains as an alias for `ProPredicate a a`.  Passing tests have their resident memory usage
+    significantly decreased.
+
+- The `Result` type no longer includes a number of cases checked, as this is not meaningful with
+  predicates including discard functions.
+
+- New `alwaysNothing` and `somewhereNothing` functions, like `alwaysTrue` and `somewhereTrue`, to
+  lift functions to `ProPredicate`s.
+
+- The `alwaysTrue2` function is gone, as its behaviour was unintuitive and easy to get wrong, and
+  has been replaced with new `alwaysSameOn` and `alwaysSameBy` predicates, which generalise
+  `alwaysSame`.
+
+- The `alwaysSame`, `alwaysSameOn`, and `alwaysSameBy` predicates now gives the simplest execution
+  trace leading to each distinct result.
+
+### Test.DejaFu.Common
+
+- This module has been split up into new Test.DejaFu.Internal, Types, and Utils modules. (#155)
+
+- New `ForkOS` and `IsCurrentThreadBound` thread actions. (#126)
+
+- New `WillForkOS` and `WillIsCurrentThreadBound` lookaheads. (#126)
+
+- The `TTrace` type synonym for `[TAction]` has been removed.
+
+- The `preEmpCount` function has been removed.
+
+- New functions `strengthenDiscard` and `weakenDiscard` to combine discard functions.
+
+- The `Discard` type is now defined here and re-exported from Test.DejaFu.SCT.
+
+- The `ThreadId`, `CRefId`, `MVarId`, and `TVarId` types are now newtypes over a common `Id`
+  type. (#137)
+
+### Test.DejaFu.Conc
+
+- The `ConcST` type alias is gone.
+
+- The `MonadBase IO ConcIO` instance is gone.
+
+- The `MonadIO ConcIO` instance is replaces with a more general `MonadIO n => MonadIO (ConcT r n)`
+  instance.
+
+- The `runConcurrent` function now has a `MonadConc` constraint.
+
+- If bound threads are supported, the main thread when testing is bound. (#126)
+
+- Each entry in an execution trace is now in the form `(decision, alternatives, action)`.  The
+  chosen thread is no longer in the list of alternatives, which makes raw traces easier to
+  read. (#121)
+
+- Due to changes in Test.DejaFu.Schedule, no longer re-exports `Decision`, `NonEmpty`, `tidOf`, or
+  `decisionOf`.
+
+### Test.DejaFu.Refinement
+
+- A blocking interference function is no longer reported as a deadlocking execution.
+
+### Test.DejaFu.Schedule
+
+- No longer re-exports `Decision` or `NonEmpty`.
+
+- The `tidOf` and `decisionOf` functions have moved to Test.DejaFu.Utils.
+
+### Test.DejaFu.SCT
+
+- All testing functions now require a `MonadConc` constraint:
+
+    It is no longer possible to test things in `ST`.
+
+### Test.DejaFu.STM
+
+- This is now an internal module. (#155)
+
+### Performance
+
+- Significant resident memory reduction for most passing tests.
+- Improved dependency detection for `MVar` actions, leading to fewer executions.
+
+### Miscellaneous
+
+- The minimum supported version of concurrency is now 1.3.0.0.
+
+[dejafu-1.0.0.0]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-1.0.0.0
+
+
+---------------------------------------------------------------------------------------------------
+
+
 0.9.1.2
 -------
 

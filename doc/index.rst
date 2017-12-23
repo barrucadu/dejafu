@@ -28,6 +28,12 @@ This is Déjà Fu
 
 .. toctree::
    :maxdepth: 2
+   :caption: Migration Guides
+
+   migration_0x_1x
+
+.. toctree::
+   :maxdepth: 2
    :caption: Developer Documentation
 
    adding_a_new_primitive

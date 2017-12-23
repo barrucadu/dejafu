@@ -7,6 +7,36 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+1.3.0.0
+-------
+
+- **Date**    unreleased
+- **Git tag** [concurrency-1.3.0.0][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.3.0.0
+
+### Control.Concurrent.Classy.Async
+
+- New `asyncBound`, `asyncBoundN`, `withAsyncBound`, and `withAsyncBoundN` functions for doing
+  asynchronous actions on bound threads. (#126)
+
+### Control.Monad.Conc.Class
+
+- `MonadConc` now supports bound threads with new `forkOS`, `forkOSN`, and `isCurrentThreadBound`
+  functions. (#126)
+
+- New `runInBoundThread` and `runInUnboundThread` functions. (#126)
+
+- The `rtsSupportsBoundThreads` definition is now the definition from Control.Concurrent
+  re-exported, not just `False`. (#126)
+
+Note that bound threads are only supported if you compile with GHC and link with -threaded.
+
+[concurrency-1.3.0.0]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.3.0.0
+
+
+---------------------------------------------------------------------------------------------------
+
+
 1.2.3.0
 -------
 

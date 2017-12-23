@@ -1,198 +1,160 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TupleSections #-}
 
--- |
--- Module      : Test.DejaFu
--- Copyright   : (c) 2016 Michael Walker
--- License     : MIT
--- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
--- Stability   : experimental
--- Portability : RankNTypes
---
--- Deterministic testing for concurrent computations.
---
--- As an example, consider this program, which has two locks and a
--- shared variable. Two threads are spawned, which claim the locks,
--- update the shared variable, and release the locks. The main thread
--- waits for them both to terminate, and returns the final result.
---
--- > example1 :: MonadConc m => m Int
--- > example1 = do
--- >   a <- newEmptyMVar
--- >   b <- newEmptyMVar
--- >
--- >   c <- newMVar 0
--- >
--- >   let lock m = putMVar m ()
--- >   let unlock = takeMVar
--- >
--- >   j1 <- spawn $ lock a >> lock b >> modifyMVar_ c (return . succ) >> unlock b >> unlock a
--- >   j2 <- spawn $ lock b >> lock a >> modifyMVar_ c (return . pred) >> unlock a >> unlock b
--- >
--- >   takeMVar j1
--- >   takeMVar j2
--- >
--- >   takeMVar c
---
--- The correct result is 0, as it starts out as 0 and is incremented
--- and decremented by threads 1 and 2, respectively. However, note the
--- order of acquisition of the locks in the two threads. If thread 2
--- pre-empts thread 1 between the acquisition of the locks (or if
--- thread 1 pre-empts thread 2), a deadlock situation will arise, as
--- thread 1 will have lock @a@ and be waiting on @b@, and thread 2
--- will have @b@ and be waiting on @a@.
---
--- Here is what Deja Fu has to say about it:
---
--- > > autocheck example1
--- > [fail] Never Deadlocks (checked: 5)
--- >         [deadlock] S0------------S1-P2--S1-
--- > [pass] No Exceptions (checked: 12)
--- > [fail] Consistent Result (checked: 11)
--- >         0 S0------------S2-----------------S1-----------------S0----
--- >
--- >         [deadlock] S0------------S1-P2--S1-
--- > False
---
--- It identifies the deadlock, and also the possible results the
--- computation can produce, and displays a simplified trace leading to
--- each failing outcome. The trace contains thread numbers, and the
--- names (which can be set by the programmer) are displayed beneath.
--- It also returns @False@ as there are test failures. The automatic
--- testing functionality is good enough if you only want to check your
--- computation is deterministic, but if you have more specific
--- requirements (or have some expected and tolerated level of
--- nondeterminism), you can write tests yourself using the @dejafu*@
--- functions.
---
--- __Warning:__ If your computation under test does @IO@, the @IO@
--- will be executed lots of times! Be sure that it is deterministic
--- enough not to invalidate your test results. Mocking may be useful
--- where possible.
+{- |
+Module      : Test.DejaFu
+Copyright   : (c) 2015--2017 Michael Walker
+License     : MIT
+Maintainer  : Michael Walker <mike@barrucadu.co.uk>
+Stability   : experimental
+Portability : LambdaCase, MultiParamTypeClasses, TupleSections
+
+dejafu is a library for unit-testing concurrent Haskell programs,
+written using the [concurrency](https://hackage.haskell.org/package/concurrency)
+package's 'MonadConc' typeclass.
+
+__A first test:__ This is a simple concurrent program which forks two
+threads and each races to write to the same @MVar@:
+
+> example = do
+>   var <- newEmptyMVar
+>   fork (putMVar var "hello")
+>   fork (putMVar var "world")
+>   readMVar var
+
+We can test it with dejafu like so:
+
+> > autocheck example
+> [pass] Never Deadlocks
+> [pass] No Exceptions
+> [fail] Consistent Result
+>         "hello" S0----S1--S0--
+>
+>         "world" S0----S2--S0--
+
+The 'autocheck' function takes a concurrent program to test and looks
+for some common unwanted behaviours: deadlocks, uncaught exceptions in
+the main thread, and nondeterminism.  Here we see the program is
+nondeterministic, dejafu gives us all the distinct results it found
+and, for each, a summarised execution trace leading to that result:
+
+ * \"Sn\" means that thread \"n\" started executing after the previous
+   thread terminated or blocked.
+
+ * \"Pn\" means that thread \"n\" started executing, even though the
+   previous thread could have continued running.
+
+ * Each \"-\" represents one \"step\" of the computation.
+
+__Failures:__ If a program doesn't terminate successfully, we say it
+has /failed/.  dejafu can detect a few different types of failure:
+
+ * 'Deadlock', if every thread is blocked.
+
+ * 'STMDeadlock', if every thread is blocked /and/ the main thread is
+   blocked in an STM transaction.
+
+ * 'UncaughtException', if the main thread is killed by an exception.
+
+There are two types of failure which dejafu itself may raise:
+
+ * 'Abort', used in systematic testing (the default) if there are no
+   allowed decisions remaining.  For example, by default any test case
+   which takes more than 250 scheduling points to finish will be
+   aborted.  You can use the 'systematically' function to supply (or
+   disable) your own bounds.
+
+ * 'InternalError', used if something goes wrong.  If you get this and
+   aren't using a scheduler you wrote yourself, please [file a
+   bug](https://github.com/barrucadu/dejafu/issues).
+
+Finally, there is one failure which can arise through improper use of
+dejafu:
+
+ * 'IllegalSubconcurrency', the "Test.DejaFu.Conc.subconcurrency"
+   function is used when multiple threads exist, or is used inside
+   another @subconcurrency@ call.
+
+__Beware of 'liftIO':__ dejafu works by running your test case lots of
+times with different schedules.  If you use 'liftIO' at all, make sure
+that any @IO@ you perform is deterministic when executed in the same
+order.
+
+If you need to test things with /nondeterministc/ @IO@, see the
+'autocheckWay', 'dejafuWay', and 'dejafusWay' functions: the
+'randomly', 'uniformly', and 'swarmy' testing modes can cope with
+nondeterminism.
+-}
 module Test.DejaFu
-  ( -- * Testing
-
-  -- | Testing in Deja Fu is similar to unit testing, the programmer
-  -- produces a self-contained monadic action to execute under
-  -- different schedules, and supplies a list of predicates to apply
-  -- to the list of results produced.
-  --
-  -- If you simply wish to check that something is deterministic, see
-  -- the 'autocheck' and 'autocheckIO' functions.
-  --
-  -- These functions use a Total Store Order (TSO) memory model for
-  -- unsynchronised actions, see \"Testing under Alternative Memory
-  -- Models\" for some explanation of this.
+  ( -- * Unit testing
 
     autocheck
   , dejafu
   , dejafus
-  , autocheckIO
-  , dejafuIO
-  , dejafusIO
 
-  -- * Testing with different settings
+  -- ** Configuration
+
+  {- |
+
+There are a few knobs to tweak to control the behaviour of dejafu.
+The defaults should generally be good enough, but if not you have a
+few tricks available.
+
+ * The 'Way', which controls how schedules are explored.
+
+ * The 'MemType', which controls how reads and writes to @CRef@s (or
+   @IORef@s) behave.
+
+ * The 'Discard' function, which saves memory by throwing away
+   uninteresting results during exploration.
+
+-}
+
+  , autocheckWay
+  , dejafuWay
+  , dejafusWay
+  , dejafuDiscard
+
+  -- *** Defaults
+
+  , defaultWay
+  , defaultMemType
+  , defaultDiscarder
+
+  -- *** Exploration
 
   , Way
-  , defaultWay
   , systematically
   , randomly
   , uniformly
   , swarmy
 
-  , autocheckWay
-  , autocheckWayIO
-  , dejafuWay
-  , dejafuWayIO
-  , dejafusWay
-  , dejafusWayIO
+  -- **** Schedule bounding
 
-  , Discard(..)
-  , defaultDiscarder
+  {- |
 
-  , dejafuDiscard
-  , dejafuDiscardIO
+Schedule bounding is used by the 'systematically' approach to limit
+the search-space, which in general will be huge.
 
-  -- ** Memory Models
+There are three types of bounds used:
 
-  -- | Threads running under modern multicore processors do not behave
-  -- as a simple interleaving of the individual thread
-  -- actions. Processors do all sorts of complex things to increase
-  -- speed, such as buffering writes. For concurrent programs which
-  -- make use of non-synchronised functions (such as 'readCRef'
-  -- coupled with 'writeCRef') different memory models may yield
-  -- different results.
-  --
-  -- As an example, consider this program (modified from the
-  -- Data.IORef documentation). Two @CRef@s are created, and two
-  -- threads spawned to write to and read from both. Each thread
-  -- returns the value it observes.
-  --
-  -- > example2 :: MonadConc m => m (Bool, Bool)
-  -- > example2 = do
-  -- >   r1 <- newCRef False
-  -- >   r2 <- newCRef False
-  -- >
-  -- >   x <- spawn $ writeCRef r1 True >> readCRef r2
-  -- >   y <- spawn $ writeCRef r2 True >> readCRef r1
-  -- >
-  -- >   (,) <$> readMVar x <*> readMVar y
-  --
-  -- Under a sequentially consistent memory model the possible results
-  -- are @(True, True)@, @(True, False)@, and @(False, True)@. Under
-  -- total or partial store order, @(False, False)@ is also a possible
-  -- result, even though there is no interleaving of the threads which
-  -- can lead to this.
-  --
-  -- We can see this by testing with different memory models:
-  --
-  -- > > autocheckWay defaultWay SequentialConsistency example2
-  -- > [pass] Never Deadlocks (checked: 6)
-  -- > [pass] No Exceptions (checked: 6)
-  -- > [fail] Consistent Result (checked: 5)
-  -- >         (False,True) S0-------S1-----S0--S2-----S0---
-  -- >         (True,False) S0-------S1-P2-----S1----S0----
-  -- >         (True,True) S0-------S1--P2-----S1---S0----
-  -- >         (False,True) S0-------S1---P2-----S1--S0----
-  -- >         (True,False) S0-------S2-----S1-----S0----
-  -- >         ...
-  -- > False
-  --
-  -- > > autocheckWay defaultWay TotalStoreOrder example2
-  -- > [pass] Never Deadlocks (checked: 303)
-  -- > [pass] No Exceptions (checked: 303)
-  -- > [fail] Consistent Result (checked: 302)
-  -- >         (False,True) S0-------S1-----C-S0--S2-----C-S0---
-  -- >         (True,False) S0-------S1-P2-----C-S1----S0----
-  -- >         (True,True) S0-------S1-P2--C-S1----C-S0--S2---S0---
-  -- >         (False,True) S0-------S1-P2--P1--C-C-S1--S0--S2---S0---
-  -- >         (False,False) S0-------S1-P2--P1----S2---C-C-S0----
-  -- >         ...
-  -- > False
-  --
-  -- Traces for non-sequentially-consistent memory models show where
-  -- writes to @CRef@s are /committed/, which makes a write visible to
-  -- all threads rather than just the one which performed the
-  -- write. Only 'writeCRef' is broken up into separate write and
-  -- commit steps, 'atomicModifyCRef' is still atomic and imposes a
-  -- memory barrier.
+ * The 'PreemptionBound', which bounds the number of pre-emptive
+   context switches.  Empirical evidence suggests @2@ is a good value
+   for this, if you have a small test case.
 
-  , MemType(..)
-  , defaultMemType
+ * The 'FairBound', which bounds the difference between how many times
+   threads can yield.  This is necessary to test certain kinds of
+   potentially non-terminating behaviour, such as spinlocks.
 
-  -- ** Schedule Bounding
+ * The 'LengthBound', which bounds how long a test case can run, in
+   terms of scheduling decisions.  This is necessary to test certain
+   kinds of potentially non-terminating behaviour, such as livelocks.
 
-  -- | Schedule bounding is an optimisation which only considers
-  -- schedules within some /bound/. This sacrifices completeness
-  -- outside of the bound, but can drastically reduce the number of
-  -- schedules to test, and is in fact necessary for non-terminating
-  -- programs.
-  --
-  -- The standard testing mechanism uses a combination of pre-emption
-  -- bounding, fair bounding, and length bounding. Pre-emption + fair
-  -- bounding is useful for programs which use loop/yield control
-  -- flows but are otherwise terminating. Length bounding makes it
-  -- possible to test potentially non-terminating programs.
+Schedule bounding is not used by the non-systematic exploration
+behaviours.
+
+-}
 
   , Bounds(..)
   , defaultBounds
@@ -204,36 +166,112 @@ module Test.DejaFu
   , LengthBound(..)
   , defaultLengthBound
 
-  -- * Results
+  -- *** Memory model
 
-  -- | The results of a test can be pretty-printed to the console, as
-  -- with the above functions, or used in their original, much richer,
-  -- form for debugging purposes. These functions provide full access
-  -- to this data type which, most usefully, contains a detailed trace
-  -- of execution, showing what each thread did at each point.
+  {- |
+
+When executed on a multi-core processor some @CRef@ / @IORef@ programs
+can exhibit \"relaxed memory\" behaviours, where the apparent
+behaviour of the program is not a simple interleaving of the actions
+of each thread.
+
+__Example:__ This is a simple program which creates two @CRef@s
+containing @False@, and forks two threads.  Each thread writes @True@
+to one of the @CRef@s and reads the other.  The value that each thread
+reads is communicated back through an @MVar@:
+
+> relaxed = do
+>   r1 <- newCRef False
+>   r2 <- newCRef False
+>   x <- spawn $ writeCRef r1 True >> readCRef r2
+>   y <- spawn $ writeCRef r2 True >> readCRef r1
+>   (,) <$> readMVar x <*> readMVar y
+
+We see something surprising if we ask for the results:
+
+> > autocheck relaxed
+> [pass] Never Deadlocks
+> [pass] No Exceptions
+> [fail] Consistent Result
+>         (False,True) S0---------S1----S0--S2----S0--
+>
+>         (False,False) S0---------S1--P2----S1--S0---
+>
+>         (True,False) S0---------S2----S1----S0---
+>
+>         (True,True) S0---------S1-C-S2----S1---S0---
+
+It's possible for both threads to read the value @False@, even though
+each writes @True@ to the other @CRef@ before reading.  This is
+because processors are free to re-order reads and writes to
+independent memory addresses in the name of performance.
+
+Execution traces for relaxed memory computations can include \"C\"
+actions, as above, which show where @CRef@ writes were explicitly
+/committed/, and made visible to other threads.
+
+However, modelling this behaviour can require more executions.  If you
+do not care about the relaxed-memory behaviour of your program, use
+the 'SequentialConsistency' model.
+
+-}
+
+  , MemType(..)
+
+  -- *** Reducing memory usage
+
+  {- |
+
+Sometimes we know that a result is uninteresting and cannot affect the
+result of a test, in which case there is no point in keeping it
+around.  Execution traces can be large, so any opportunity to get rid
+of them early is possibly a great saving of memory.
+
+A discard function, which has type @Either Failure a -> Maybe
+Discard@, can selectively discard results or execution traces before
+the schedule exploration finishes, allowing them to be garbage
+collected sooner.
+
+__Note:__ This is only relevant if you are producing your own
+predicates.  The predicates and helper functions provided by this
+module do discard results and traces wherever possible.
+
+-}
+
+  , Discard(..)
+
+  -- ** Manual testing
+
+  {- |
+
+The standard testing functions print their result to stdout, and throw
+away some information.  The traces are pretty-printed, and if there
+are many failures, only the first few are shown.
+
+If you need more information, use these functions.
+
+-}
 
   , Result(..)
   , Failure(..)
   , runTest
   , runTestWay
-  , runTestM
-  , runTestWayM
 
-  -- * Predicates
+  -- ** Predicates
 
-  -- | Predicates evaluate a list of results of execution and decide
-  -- whether some test case has passed or failed. They can be lazy and
-  -- make use of short-circuit evaluation to avoid needing to examine
-  -- the entire list of results, and can check any property which can
-  -- be defined for the return type of your monadic action.
-  --
-  -- A collection of common predicates are provided, along with the
-  -- helper functions 'alwaysTrue', 'alwaysTrue2' and 'somewhereTrue'
-  -- to lfit predicates over a single result to over a collection of
-  -- results.
+  {- |
+
+A dejafu test has two parts: the concurrent program to test, and a
+predicate to determine if the test passes, based on the results of the
+schedule exploration.
+
+All of these predicates discard results and traces as eagerly as
+possible, to reduce memory usage.
+
+-}
 
   , Predicate
-  , representative
+  , ProPredicate(..)
   , abortsNever
   , abortsAlways
   , abortsSometimes
@@ -243,15 +281,36 @@ module Test.DejaFu
   , exceptionsNever
   , exceptionsAlways
   , exceptionsSometimes
+
+  -- *** Helpers
+
+  {- |
+
+Helper functions to produce your own predicates.  Such predicates
+discard results and traces as eagerly as possible, to reduce memory
+usage.
+
+-}
+
+  , representative
   , alwaysSame
+  , alwaysSameOn
+  , alwaysSameBy
   , notAlwaysSame
   , alwaysTrue
-  , alwaysTrue2
   , somewhereTrue
+  , alwaysNothing
+  , somewhereNothing
   , gives
   , gives'
 
-  -- ** Failures
+  -- *** Failures
+
+  {- |
+
+Helper functions to identify failures.
+
+-}
 
   , isInternalError
   , isAbort
@@ -259,104 +318,144 @@ module Test.DejaFu
   , isUncaughtException
   , isIllegalSubconcurrency
 
-  -- * Refinement property testing
+  -- * Property testing
 
-  -- | Consider this statement about @MVar@s: \"using @readMVar@ is
-  -- better than @takeMVar@ followed by @putMVar@ because the former
-  -- is atomic but the latter is not.\"
-  --
-  -- Deja Fu can test properties like that:
-  --
-  -- @
-  -- sig e = Sig
-  --   { initialise = maybe newEmptyMVar newMVar
-  --   , observe    = \\v _ -> tryReadMVar v
-  --   , interfere  = \\v s -> tryTakeMVar v >> maybe (pure ()) (void . tryPutMVar v) s
-  --   , expression = e
-  --   }
-  --
-  -- > check $ sig (void . readMVar) \`equivalentTo\` sig (\\v -> takeMVar v >>= putMVar v)
-  -- *** Failure: (seed Just ())
-  --     left:  [(Nothing,Just ())]
-  --     right: [(Nothing,Just ()),(Just Deadlock,Just ())]
-  -- @
-  --
-  -- The two expressions are not equivalent, and we get given the
-  -- counterexample!
+  {- |
+
+dejafu can also use a property-testing style to test stateful
+operations for a variety of inputs.  Inputs are generated using the
+[leancheck](https://hackage.haskell.org/package/leancheck) library for
+enumerative testing.
+
+__Testing @MVar@ operations with multiple producers__:
+
+These are a little different to the property tests you may be familiar
+with from libraries like QuickCheck (and leancheck).  As we're testing
+properties of /stateful/ and /concurrent/ things, we need to provide
+some extra information.
+
+A property consists of two /signatures/ and a relation between them.
+A signature contains:
+
+ * An initialisation function, to construct the initial state.
+
+ * An observation function, to take a snapshot of the state at the
+   end.
+
+ * An interference function, to mess with the state in some way.
+
+ * The expression to evaluate, as a function over the state.
+
+> sig e = Sig
+>  { initialise = maybe newEmptyMVar newMVar
+>  , observe    = \v _ -> tryReadMVar v
+>  , interfere  = \v _ -> putMVar v 42
+>  , expression = void . e
+>  }
+
+This is a signature for operations over @Num n => MVar n@ values where
+there are multiple producers.  The initialisation function takes a
+@Maybe n@ and constructs an @MVar n@, empty if it gets @Nothing@; the
+observation function reads the @MVar@; and the interference function
+puts a new value in.
+
+Given this signature, we can check if @readMVar@ is the same as a
+@takeMVar@ followed by a @putMVar@:
+
+> > check $ sig readMVar === sig (\v -> takeMVar v >>= putMVar v)
+> *** Failure: (seed Just 0)
+>     left:  [(Nothing,Just 0)]
+>     right: [(Nothing,Just 0),(Just Deadlock,Just 42)]
+
+The two expressions are not equivalent, and we get a counterexample:
+if the @MVar@ is nonempty, then the left expression (@readMVar@) will
+preserve the value, but the right expression (@\v -> takeMVar v >>=
+putMVar v@) may cause it to change.  This is because of the concurrent
+interference we have provided: the left term never empties a full
+@MVar@, but the Right term does.
+
+-}
+
   , module Test.DejaFu.Refinement
   ) where
 
-import           Control.Arrow          (first)
-import           Control.DeepSeq        (NFData(..))
-import           Control.Monad          (unless, when)
-import           Control.Monad.Ref      (MonadRef)
-import           Control.Monad.ST       (runST)
-import           Data.Function          (on)
-import           Data.List              (intercalate, intersperse, minimumBy)
-import           Data.Ord               (comparing)
+import           Control.Arrow            (first)
+import           Control.DeepSeq          (NFData(..))
+import           Control.Monad            (unless, when)
+import           Control.Monad.Conc.Class (MonadConc)
+import           Control.Monad.IO.Class   (MonadIO(..))
+import           Control.Monad.Ref        (MonadRef)
+import           Data.Function            (on)
+import           Data.List                (intercalate, intersperse)
+import           Data.Maybe               (catMaybes, isNothing, mapMaybe)
+import           Data.Profunctor          (Profunctor(..))
 
-import           Test.DejaFu.Common
 import           Test.DejaFu.Conc
 import           Test.DejaFu.Defaults
 import           Test.DejaFu.Refinement
 import           Test.DejaFu.SCT
+import           Test.DejaFu.Types
+import           Test.DejaFu.Utils
 
 
 -------------------------------------------------------------------------------
 -- DejaFu
 
--- | Automatically test a computation. In particular, look for
--- deadlocks, uncaught exceptions, and multiple return values.
+-- | Automatically test a computation.
 --
--- This uses the 'Conc' monad for testing, which is an instance of
--- 'MonadConc'. If you need to test something which also uses
--- 'MonadIO', use 'autocheckIO'.
+-- In particular, look for deadlocks, uncaught exceptions, and
+-- multiple return values.  Returns @True@ if all tests pass
 --
--- @since 0.1.0.0
-autocheck :: (Eq a, Show a)
-  => (forall t. ConcST t a)
-  -- ^ The computation to test
-  -> IO Bool
+-- > > autocheck example
+-- > [pass] Never Deadlocks
+-- > [pass] No Exceptions
+-- > [fail] Consistent Result
+-- >         "hello" S0----S1--S0--
+-- >
+-- >         "world" S0----S2--S0--
+--
+-- @since 1.0.0.0
+autocheck :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
+  => ConcT r n a
+  -- ^ The computation to test.
+  -> n Bool
 autocheck = autocheckWay defaultWay defaultMemType
 
 -- | Variant of 'autocheck' which takes a way to run the program and a
 -- memory model.
 --
--- Schedule bounding is used to filter the large number of possible
--- schedules, and can be iteratively increased for further coverage
--- guarantees. Empirical studies (/Concurrency Testing Using Schedule
--- Bounding: an Empirical Study/, P. Thompson, A. Donaldson, and
--- A. Betts) have found that many concurrency bugs can be exhibited
--- with as few as two threads and two pre-emptions, which is part of
--- what 'dejafus' uses.
+-- > > autocheckWay defaultWay defaultMemType relaxed
+-- > [pass] Never Deadlocks
+-- > [pass] No Exceptions
+-- > [fail] Consistent Result
+-- >         (False,True) S0---------S1----S0--S2----S0--
+-- >
+-- >         (False,False) S0---------S1--P2----S1--S0---
+-- >
+-- >         (True,False) S0---------S2----S1----S0---
+-- >
+-- >         (True,True) S0---------S1-C-S2----S1---S0---
+-- >
+-- > > autocheckWay defaultWay SequentialConsistency relaxed
+-- > [pass] Never Deadlocks
+-- > [pass] No Exceptions
+-- > [fail] Consistent Result
+-- >         (False,True) S0---------S1----S0--S2----S0--
+-- >
+-- >         (True,True) S0---------S1-P2----S1---S0---
+-- >
+-- >         (True,False) S0---------S2----S1----S0---
 --
--- __Warning:__ Using largers bounds will almost certainly
--- significantly increase the time taken to test!
---
--- @since 0.6.0.0
-autocheckWay :: (Eq a, Show a)
+-- @since 1.0.0.0
+autocheckWay :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> (forall t. ConcST t a)
-  -- ^ The computation to test
-  -> IO Bool
-autocheckWay way memtype conc =
-  dejafusWay way memtype conc autocheckCases
-
--- | Variant of 'autocheck' for computations which do 'IO'.
---
--- @since 0.2.0.0
-autocheckIO :: (Eq a, Show a) => ConcIO a -> IO Bool
-autocheckIO = autocheckWayIO defaultWay defaultMemType
-
--- | Variant of 'autocheckWay' for computations which do 'IO'.
---
--- @since 0.6.0.0
-autocheckWayIO :: (Eq a, Show a) => Way -> MemType -> ConcIO a -> IO Bool
-autocheckWayIO way memtype concio =
-  dejafusWayIO way memtype concio autocheckCases
+  -> ConcT r n a
+  -- ^ The computation to test.
+  -> n Bool
+autocheckWay way memtype = dejafusWay way memtype autocheckCases
 
 -- | Predicates for the various autocheck functions.
 autocheckCases :: Eq a => [(String, Predicate a)]
@@ -369,116 +468,149 @@ autocheckCases =
 -- | Check a predicate and print the result to stdout, return 'True'
 -- if it passes.
 --
--- @since 0.1.0.0
-dejafu :: Show a
-  => (forall t. ConcST t a)
-  -- ^ The computation to test
-  -> (String, Predicate a)
-  -- ^ The predicate (with a name) to check
-  -> IO Bool
+-- A dejafu test has two parts: the program you are testing, and a
+-- predicate to determine if the test passes.  Predicates can look for
+-- anything, including checking for some expected nondeterminism.
+--
+-- > > dejafu "Test Name" alwaysSame example
+-- > [fail] Test Name
+-- >         "hello" S0----S1--S0--
+-- >
+-- >         "world" S0----S2--S0--
+--
+-- @since 1.0.0.0
+dejafu :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
+  => String
+  -- ^ The name of the test.
+  -> ProPredicate a b
+  -- ^ The predicate to check.
+  -> ConcT r n a
+  -- ^ The computation to test.
+  -> n Bool
 dejafu = dejafuWay defaultWay defaultMemType
 
 -- | Variant of 'dejafu' which takes a way to run the program and a
 -- memory model.
 --
--- @since 0.6.0.0
-dejafuWay :: Show a
+-- > > import System.Random
+-- >
+-- > > dejafuWay (randomly (mkStdGen 0) 100) defaultMemType "Randomly!" alwaysSame example
+-- > [fail] Randomly!
+-- >         "hello" S0----S1--S0--
+-- >
+-- >         "world" S0----S2--S0--
+-- >
+-- > > dejafuWay (randomly (mkStdGen 1) 100) defaultMemType "Randomly!" alwaysSame example
+-- > [fail] Randomly!
+-- >         "hello" S0----S1--S0--
+-- >
+-- >         "world" S0----S2--S1-S0--
+--
+-- @since 1.0.0.0
+dejafuWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> (forall t. ConcST t a)
-  -- ^ The computation to test
-  -> (String, Predicate a)
-  -- ^ The predicate (with a name) to check
-  -> IO Bool
+  -> String
+  -- ^ The name of the test.
+  -> ProPredicate a b
+  -- ^ The predicate to check.
+  -> ConcT r n a
+  -- ^ The computation to test.
+  -> n Bool
 dejafuWay = dejafuDiscard (const Nothing)
 
 -- | Variant of 'dejafuWay' which can selectively discard results.
 --
--- @since 0.7.1.0
-dejafuDiscard :: Show a
+-- > > dejafuDiscard (\_ -> Just DiscardTrace) defaultWay defaultMemType "Discarding" alwaysSame example
+-- > [fail] Discarding
+-- >         "hello" <trace discarded>
+-- >
+-- >         "world" <trace discarded>
+--
+-- @since 1.0.0.0
+dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> (forall t. ConcST t a)
-  -- ^ The computation to test
-  -> (String, Predicate a)
-  -- ^ The predicate (with a name) to check
-  -> IO Bool
-dejafuDiscard discard way memtype conc (name, test) = do
-  let traces = runST (runSCTDiscard discard way memtype conc)
-  doTest name (test traces)
+  -> String
+  -- ^ The name of the test.
+  -> ProPredicate a b
+  -- ^ The predicate to check.
+  -> ConcT r n a
+  -- ^ The computation to test.
+  -> n Bool
+dejafuDiscard discard way memtype name test conc = do
+  let discarder = strengthenDiscard discard (pdiscard test)
+  traces <- runSCTDiscard discarder way memtype conc
+  liftIO $ doTest name (peval test traces)
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
 --
--- @since 0.1.0.0
-dejafus :: Show a
-  => (forall t. ConcST t a)
-  -- ^ The computation to test
-  -> [(String, Predicate a)]
-  -- ^ The list of predicates (with names) to check
-  -> IO Bool
+-- > > dejafus [("A", alwaysSame), ("B", deadlocksNever)] example
+-- > [fail] A
+-- >         "hello" S0----S1--S0--
+-- >
+-- >         "world" S0----S2--S0--
+-- > [pass] B
+--
+-- @since 1.0.0.0
+dejafus :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
+  => [(String, ProPredicate a b)]
+  -- ^ The list of predicates (with names) to check.
+  -> ConcT r n a
+  -- ^ The computation to test.
+  -> n Bool
 dejafus = dejafusWay defaultWay defaultMemType
 
 -- | Variant of 'dejafus' which takes a way to run the program and a
 -- memory model.
 --
--- @since 0.6.0.0
-dejafusWay :: Show a
+-- > > dejafusWay defaultWay SequentialConsistency [("A", alwaysSame), ("B", exceptionsNever)] relaxed
+-- > [fail] A
+-- >         (False,True) S0---------S1----S0--S2----S0--
+-- >
+-- >         (True,True) S0---------S1-P2----S1---S0---
+-- >
+-- >         (True,False) S0---------S2----S1----S0---
+-- > [pass] B
+--
+-- @since 1.0.0.0
+dejafusWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> (forall t. ConcST t a)
-  -- ^ The computation to test
-  -> [(String, Predicate a)]
-  -- ^ The list of predicates (with names) to check
-  -> IO Bool
-dejafusWay way memtype conc tests = do
-  let traces = runST (runSCT way memtype conc)
-  results <- mapM (\(name, test) -> doTest name $ test traces) tests
-  pure (and results)
+  -> [(String, ProPredicate a b)]
+  -- ^ The list of predicates (with names) to check.
+  -> ConcT r n a
+  -- ^ The computation to test.
+  -> n Bool
+dejafusWay way memtype tests conc = do
+    traces  <- runSCTDiscard discarder way memtype conc
+    results <- mapM (\(name, test) -> liftIO . doTest name $ chk test traces) tests
+    pure (and results)
+  where
+    discarder = foldr
+      (weakenDiscard . pdiscard . snd)
+      (const (Just DiscardResultAndTrace))
+      tests
 
--- | Variant of 'dejafu' for computations which do 'IO'.
---
--- @since 0.2.0.0
-dejafuIO :: Show a => ConcIO a -> (String, Predicate a) -> IO Bool
-dejafuIO = dejafuWayIO defaultWay defaultMemType
-
--- | Variant of 'dejafuWay' for computations which do 'IO'.
---
--- @since 0.6.0.0
-dejafuWayIO :: Show a => Way -> MemType -> ConcIO a -> (String, Predicate a) -> IO Bool
-dejafuWayIO = dejafuDiscardIO (const Nothing)
-
--- | Variant of 'dejafuDiscard' for computations which do 'IO'.
---
--- @since 0.7.1.0
-dejafuDiscardIO :: Show a => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcIO a -> (String, Predicate a) -> IO Bool
-dejafuDiscardIO discard way memtype concio (name, test) = do
-  traces <- runSCTDiscard discard way memtype concio
-  doTest name (test traces)
-
--- | Variant of 'dejafus' for computations which do 'IO'.
---
--- @since 0.2.0.0
-dejafusIO :: Show a => ConcIO a -> [(String, Predicate a)] -> IO Bool
-dejafusIO = dejafusWayIO defaultWay defaultMemType
-
--- | Variant of 'dejafusWay' for computations which do 'IO'.
---
--- @since 0.6.0.0
-dejafusWayIO :: Show a => Way -> MemType -> ConcIO a -> [(String, Predicate a)] -> IO Bool
-dejafusWayIO way memtype concio tests = do
-  traces  <- runSCT way memtype concio
-  results <- mapM (\(name, test) -> doTest name $ test traces) tests
-  pure (and results)
-
+    -- for evaluating each individual predicate, we only want the
+    -- results/traces it would not discard, but the traces set may
+    -- include more than this if the different predicates have
+    -- different discard functions, so we do another pass of
+    -- discarding.
+    chk p = peval p . mapMaybe go where
+      go r@(efa, _) = case pdiscard p efa of
+        Just DiscardResultAndTrace -> Nothing
+        Just DiscardTrace -> Just (efa, [])
+        Nothing -> Just r
 
 -------------------------------------------------------------------------------
 -- Test cases
@@ -486,33 +618,29 @@ dejafusWayIO way memtype concio tests = do
 -- | The results of a test, including the number of cases checked to
 -- determine the final boolean outcome.
 --
--- @since 0.2.0.0
+-- @since 1.0.0.0
 data Result a = Result
-  { _pass         :: Bool
+  { _pass :: Bool
   -- ^ Whether the test passed or not.
-  , _casesChecked :: Int
-  -- ^ The number of cases checked.
-  , _failures     :: [(Either Failure a, Trace)]
+  , _failures :: [(Either Failure a, Trace)]
   -- ^ The failing cases, if any.
-  , _failureMsg   :: String
+  , _failureMsg :: String
   -- ^ A message to display on failure, if nonempty
   } deriving (Eq, Show)
 
--- | @since 0.5.1.0
 instance NFData a => NFData (Result a) where
-  rnf r = rnf ( _pass         r
-              , _casesChecked r
-              , _failures     r
-              , _failureMsg   r
+  rnf r = rnf ( _pass r
+              , _failures r
+              , _failureMsg r
               )
 
 -- | A failed result, taking the given list of failures.
 defaultFail :: [(Either Failure a, Trace)] -> Result a
-defaultFail failures = Result False 0 failures ""
+defaultFail failures = Result False failures ""
 
 -- | A passed result.
 defaultPass :: Result a
-defaultPass = Result True 0 [] ""
+defaultPass = Result True [] ""
 
 instance Functor Result where
   fmap f r = r { _failures = map (first $ fmap f) $ _failures r }
@@ -523,134 +651,139 @@ instance Foldable Result where
 -- | Run a predicate over all executions within the default schedule
 -- bounds.
 --
--- @since 0.1.0.0
-runTest ::
-    Predicate a
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.  This may
+-- affect which failing traces are reported, when there is a failure.
+--
+-- @since 1.0.0.0
+runTest :: (MonadConc n, MonadRef r n)
+  => ProPredicate a b
   -- ^ The predicate to check
-  -> (forall t. ConcST t a)
+  -> ConcT r n a
   -- ^ The computation to test
-  -> Result a
-runTest test conc =
-  runST (runTestM test conc)
+  -> n (Result b)
+runTest = runTestWay defaultWay defaultMemType
 
 -- | Variant of 'runTest' which takes a way to run the program and a
 -- memory model.
 --
--- @since 0.6.0.0
-runTestWay
-  :: Way
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.  This may
+-- affect which failing traces are reported, when there is a failure.
+--
+-- @since 1.0.0.0
+runTestWay :: (MonadConc n, MonadRef r n)
+  => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> Predicate a
+  -> ProPredicate a b
   -- ^ The predicate to check
-  -> (forall t. ConcST t a)
+  -> ConcT r n a
   -- ^ The computation to test
-  -> Result a
-runTestWay way memtype predicate conc =
-  runST (runTestWayM way memtype predicate conc)
-
--- | Monad-polymorphic variant of 'runTest'.
---
--- @since 0.4.0.0
-runTestM :: MonadRef r n
-         => Predicate a -> ConcT r n a -> n (Result a)
-runTestM = runTestWayM defaultWay defaultMemType
-
--- | Monad-polymorphic variant of 'runTest''.
---
--- @since 0.6.0.0
-runTestWayM :: MonadRef r n
-            => Way -> MemType -> Predicate a -> ConcT r n a -> n (Result a)
-runTestWayM way memtype predicate conc =
-  predicate <$> runSCT way memtype conc
+  -> n (Result b)
+runTestWay way memtype p conc =
+  peval p <$> runSCTDiscard (pdiscard p) way memtype conc
 
 
 -------------------------------------------------------------------------------
 -- Predicates
 
 -- | A @Predicate@ is a function which collapses a list of results
--- into a 'Result'.
+-- into a 'Result', possibly discarding some on the way.
 --
--- @since 0.1.0.0
-type Predicate a = [(Either Failure a, Trace)] -> Result a
+-- @Predicate@ cannot be a functor as the type parameter is used both
+-- co- and contravariantly.
+--
+-- @since 1.0.0.0
+type Predicate a = ProPredicate a a
 
--- | Reduce the list of failures in a @Predicate@ to one
+-- | A @ProPredicate@ is a function which collapses a list of results
+-- into a 'Result', possibly discarding some on the way.
+--
+-- @since 1.0.0.0
+data ProPredicate a b = ProPredicate
+  { pdiscard :: Either Failure a -> Maybe Discard
+  -- ^ Selectively discard results before computing the result.
+  , peval :: [(Either Failure a, Trace)] -> Result b
+  -- ^ Compute the result with the un-discarded results.
+  }
+
+instance Profunctor ProPredicate where
+  dimap f g p = ProPredicate
+    { pdiscard = pdiscard p . fmap f
+    , peval = fmap g . peval p . map (first (fmap f))
+    }
+
+instance Functor (ProPredicate x) where
+  fmap = dimap id
+
+-- | Reduce the list of failures in a @ProPredicate@ to one
 -- representative trace for each unique result.
 --
 -- This may throw away \"duplicate\" failures which have a unique
 -- cause but happen to manifest in the same way. However, it is
 -- convenient for filtering out true duplicates.
 --
--- @since 0.2.0.0
-representative :: Eq a => Predicate a -> Predicate a
-representative p xs = result { _failures = choose . collect $ _failures result } where
-  result  = p xs
-  collect = groupBy' [] ((==) `on` fst)
-  choose  = map $ minimumBy (comparing $ \(_, trc) -> (preEmps trc, length trc))
-
-  preEmps trc = preEmpCount (map (\(d,_,a) -> (d, a)) trc) (Continue, WillStop)
-
-  groupBy' res _ [] = res
-  groupBy' res eq (y:ys) = groupBy' (insert' eq y res) eq ys
-
-  insert' _ x [] = [[x]]
-  insert' eq x (ys@(y:_):yss)
-    | x `eq` y  = (x:ys) : yss
-    | otherwise = ys : insert' eq x yss
-  insert' _ _ ([]:_) = undefined
+-- @since 1.0.0.0
+representative :: Eq b => ProPredicate a b -> ProPredicate a b
+representative p = p
+  { peval = \xs ->
+      let result = peval p xs
+      in result { _failures = simplestsBy (==) (_failures result) }
+  }
 
 -- | Check that a computation never aborts.
 --
--- @since 0.2.0.0
+-- @since 1.0.0.0
 abortsNever :: Predicate a
 abortsNever = alwaysTrue (not . either (==Abort) (const False))
 
 -- | Check that a computation always aborts.
 --
--- @since 0.2.0.0
+-- @since 1.0.0.0
 abortsAlways :: Predicate a
 abortsAlways = alwaysTrue $ either (==Abort) (const False)
 
 -- | Check that a computation aborts at least once.
 --
--- @since 0.2.0.0
+-- @since 1.0.0.0
 abortsSometimes :: Predicate a
 abortsSometimes = somewhereTrue $ either (==Abort) (const False)
 
 -- | Check that a computation never deadlocks.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 deadlocksNever :: Predicate a
 deadlocksNever = alwaysTrue (not . either isDeadlock (const False))
 
 -- | Check that a computation always deadlocks.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 deadlocksAlways :: Predicate a
 deadlocksAlways = alwaysTrue $ either isDeadlock (const False)
 
 -- | Check that a computation deadlocks at least once.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 deadlocksSometimes :: Predicate a
 deadlocksSometimes = somewhereTrue $ either isDeadlock (const False)
 
 -- | Check that a computation never fails with an uncaught exception.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 exceptionsNever :: Predicate a
 exceptionsNever = alwaysTrue (not . either isUncaughtException (const False))
 
 -- | Check that a computation always fails with an uncaught exception.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 exceptionsAlways :: Predicate a
 exceptionsAlways = alwaysTrue $ either isUncaughtException (const False)
 
 -- | Check that a computation fails with an uncaught exception at least once.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 exceptionsSometimes :: Predicate a
 exceptionsSometimes = somewhereTrue $ either isUncaughtException (const False)
 
@@ -658,105 +791,117 @@ exceptionsSometimes = somewhereTrue $ either isUncaughtException (const False)
 -- particular this means either: (a) it always fails in the same way,
 -- or (b) it never fails and the values returned are all equal.
 --
--- @since 0.1.0.0
+-- > alwaysSame = alwaysSameBy (==)
+--
+-- @since 1.0.0.0
 alwaysSame :: Eq a => Predicate a
-alwaysSame = representative $ alwaysTrue2 (==)
+alwaysSame = alwaysSameBy (==)
+
+-- | Check that the result of a computation is always the same by
+-- comparing the result of a function on every result.
+--
+-- > alwaysSameOn = alwaysSameBy ((==) `on` f)
+--
+-- @since 1.0.0.0
+alwaysSameOn :: Eq b => (Either Failure a -> b) -> Predicate a
+alwaysSameOn f = alwaysSameBy ((==) `on` f)
+
+-- | Check that the result of a computation is always the same, using
+-- some transformation on results.
+--
+-- @since 1.0.0.0
+alwaysSameBy :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
+alwaysSameBy f = ProPredicate
+  { pdiscard = const Nothing
+  , peval = \xs -> case simplestsBy f xs of
+      []  -> defaultPass
+      [_] -> defaultPass
+      xs' -> defaultFail xs'
+  }
 
 -- | Check that the result of a computation is not always the same.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 notAlwaysSame :: Eq a => Predicate a
-notAlwaysSame [x] = (defaultFail [x]) { _casesChecked = 1 }
-notAlwaysSame xs = go xs $ defaultFail [] where
-  go [y1,y2] res
-    | fst y1 /= fst y2 = incCC res { _pass = True }
-    | otherwise = incCC res { _failures = y1 : y2 : _failures res }
-  go (y1:y2:ys) res
-    | fst y1 /= fst y2 = go (y2:ys) . incCC $ res { _pass = True }
-    | otherwise = go (y2:ys) . incCC $ res { _failures = y1 : y2 : _failures res }
-  go _ res = res
+notAlwaysSame = ProPredicate
+    { pdiscard = const Nothing
+    , peval = \case
+        [x] -> defaultFail [x]
+        xs  -> go xs (defaultFail [])
+    }
+  where
+    go [y1,y2] res
+      | fst y1 /= fst y2 = res { _pass = True }
+      | otherwise = res { _failures = y1 : y2 : _failures res }
+    go (y1:y2:ys) res
+      | fst y1 /= fst y2 = go (y2:ys) res { _pass = True }
+      | otherwise = go (y2:ys) res { _failures = y1 : y2 : _failures res }
+    go _ res = res
+
+-- | Check that a @Maybe@-producing function always returns 'Nothing'.
+--
+-- @since 1.0.0.0
+alwaysNothing :: (Either Failure a -> Maybe (Either Failure b)) -> ProPredicate a b
+alwaysNothing f = ProPredicate
+  { pdiscard = maybe (Just DiscardResultAndTrace) (const Nothing) . f
+  , peval = \xs ->
+      let failures = mapMaybe (\(efa,trc) -> (,trc) <$> f efa) xs
+      in Result (null failures) failures ""
+  }
 
 -- | Check that the result of a unary boolean predicate is always
 -- true.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 alwaysTrue :: (Either Failure a -> Bool) -> Predicate a
-alwaysTrue p xs = go xs $ (defaultFail failures) { _pass = True } where
-  go (y:ys) res
-    | p (fst y) = go ys . incCC $ res
-    | otherwise = incCC $ res { _pass = False }
-  go [] res = res
+alwaysTrue p = alwaysNothing (\efa -> if p efa then Nothing else Just efa)
 
-  failures = filter (not . p . fst) xs
-
--- | Check that the result of a binary boolean predicate is true
--- between all pairs of results. Only properties which are transitive
--- and symmetric should be used here.
+-- | Check that a @Maybe@-producing function returns 'Nothing' at
+-- least once.
 --
--- If the predicate fails, /both/ (result,trace) tuples will be added
--- to the failures list.
---
--- @since 0.1.0.0
-alwaysTrue2 :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
-alwaysTrue2 _ [_] = defaultPass { _casesChecked = 1 }
-alwaysTrue2 p xs = go xs $ defaultPass { _failures = failures } where
-  go [y1,y2] res
-    | p (fst y1) (fst y2) = incCC res
-    | otherwise = incCC res { _pass = False }
-  go (y1:y2:ys) res
-    | p (fst y1) (fst y2) = go (y2:ys) . incCC $ res
-    | otherwise = go (y2:ys) . incCC $ res { _pass = False }
-  go _ res = res
-
-  failures = fgo xs where
-    fgo (y1:y2:ys)
-      | p (fst y1) (fst y2) = fgo (y2:ys)
-      | otherwise = y1 : y2 : fgo2 y2 ys
-    fgo _ = []
-
-    fgo2 y1 (y2:ys)
-      | p (fst y1) (fst y2) = fgo (y2:ys)
-      | otherwise = y2 : fgo2 y2 ys
-    fgo2 _ _ = []
+-- @since 1.0.0.0
+somewhereNothing :: (Either Failure a -> Maybe (Either Failure b)) -> ProPredicate a b
+somewhereNothing f = ProPredicate
+  { pdiscard = maybe (Just DiscardTrace) (const Nothing) . f
+  , peval = \xs ->
+      let failures = map (\(efa,trc) -> (,trc) <$> f efa) xs
+      in Result (any isNothing failures) (catMaybes failures) ""
+  }
 
 -- | Check that the result of a unary boolean predicate is true at
 -- least once.
 --
--- @since 0.1.0.0
+-- @since 1.0.0.0
 somewhereTrue :: (Either Failure a -> Bool) -> Predicate a
-somewhereTrue p xs = go xs $ defaultFail failures where
-  go (y:ys) res
-    | p (fst y) = incCC $ res { _pass = True }
-    | otherwise = go ys . incCC $ res { _failures = y : _failures res }
-  go [] res = res
-
-  failures = filter (not . p . fst) xs
+somewhereTrue p = somewhereNothing (\efa -> if p efa then Nothing else Just efa)
 
 -- | Predicate for when there is a known set of results where every
 -- result must be exhibited at least once.
 --
--- @since 0.2.0.0
+-- @since 1.0.0.0
 gives :: (Eq a, Show a) => [Either Failure a] -> Predicate a
-gives expected results = go expected [] results $ defaultFail failures where
-  go waitingFor alreadySeen ((x, _):xs) res
-    -- If it's a result we're waiting for, move it to the
-    -- @alreadySeen@ list and continue.
-    | x `elem` waitingFor  = go (filter (/=x) waitingFor) (x:alreadySeen) xs res { _casesChecked = _casesChecked res + 1 }
+gives expected = ProPredicate
+    { pdiscard = \efa -> if efa `elem` expected then Just DiscardTrace else Nothing
+    , peval = \xs -> go expected [] xs $ defaultFail (failures xs)
+    }
+  where
+    go waitingFor alreadySeen ((x, _):xs) res
+      -- If it's a result we're waiting for, move it to the
+      -- @alreadySeen@ list and continue.
+      | x `elem` waitingFor  = go (filter (/=x) waitingFor) (x:alreadySeen) xs res
+      -- If it's a result we've already seen, continue.
+      | x `elem` alreadySeen = go waitingFor alreadySeen xs res
+      -- If it's not a result we expected, fail.
+      | otherwise = res
 
-    -- If it's a result we've already seen, continue.
-    | x `elem` alreadySeen = go waitingFor alreadySeen xs res { _casesChecked = _casesChecked res + 1 }
+    go [] _ [] res = res { _pass = True }
+    go es _ [] res = res { _failureMsg = unlines $ map (\e -> "Expected: " ++ show e) es }
 
-    -- If it's not a result we expected, fail.
-    | otherwise = res { _casesChecked = _casesChecked res + 1 }
-
-  go [] _ [] res = res { _pass = True }
-  go es _ [] res = res { _failureMsg = unlines $ map (\e -> "Expected: " ++ show e) es }
-
-  failures = filter (\(r, _) -> r `notElem` expected) results
+    failures = filter (\(r, _) -> r `notElem` expected)
 
 -- | Variant of 'gives' that doesn't allow for expected failures.
 --
--- @since 0.2.0.0
+-- @since 1.0.0.0
 gives' :: (Eq a, Show a) => [a] -> Predicate a
 gives' = gives . map Right
 
@@ -770,10 +915,10 @@ doTest name result = do
   if _pass result
   then
     -- Display a pass message.
-    putStrLn $ "\27[32m[pass]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")"
+    putStrLn ("\27[32m[pass]\27[0m " ++ name)
   else do
     -- Display a failure message, and the first 5 (simplified) failed traces
-    putStrLn ("\27[31m[fail]\27[0m " ++ name ++ " (checked: " ++ show (_casesChecked result) ++ ")")
+    putStrLn ("\27[31m[fail]\27[0m " ++ name)
 
     unless (null $ _failureMsg result) $
       putStrLn $ _failureMsg result
@@ -792,10 +937,6 @@ moreThan :: Int -> [a] -> Bool
 moreThan n [] = n < 0
 moreThan 0 _ = True
 moreThan n (_:rest) = moreThan (n-1) rest
-
--- | Increment the cases
-incCC :: Result a -> Result a
-incCC r = r { _casesChecked = _casesChecked r + 1 }
 
 -- | Indent every line of a string.
 indent :: String -> String

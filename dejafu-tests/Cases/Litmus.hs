@@ -6,7 +6,7 @@ import Control.Monad (replicateM)
 import Control.Monad.ST (runST)
 import Data.List (nub, sort)
 import Test.DejaFu (MemType(..), defaultWay, gives')
-import Test.DejaFu.Conc (ConcST)
+import Test.DejaFu.Conc (ConcIO)
 import Test.DejaFu.SCT (runSCT)
 import Test.Framework (Test, testGroup)
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
@@ -46,11 +46,11 @@ tests =
     in litmusTest "Independent Read Independent Write" intelWP28 out out out
   ]
 
-litmusTest :: (Eq a, Show a) => String -> (forall t. ConcST t a) -> [a] -> [a] -> [a] -> Test
+litmusTest :: (Eq a, Show a) => String -> ConcIO a -> [a] -> [a] -> [a] -> Test
 litmusTest name act sq tso pso = testGroup name . hUnitTestToTests $ test
-  [ testDejafuWay defaultWay SequentialConsistency act "SQ"  (gives' sq)
-  , testDejafuWay defaultWay TotalStoreOrder       act "TSO" (gives' tso)
-  , testDejafuWay defaultWay PartialStoreOrder     act "PSO" (gives' pso)
+  [ testDejafuWay defaultWay SequentialConsistency "SQ"  (gives' sq)  act
+  , testDejafuWay defaultWay TotalStoreOrder       "TSO" (gives' tso) act
+  , testDejafuWay defaultWay PartialStoreOrder     "PSO" (gives' pso) act
   ]
 
 -- | Run a litmus test against the three different memory models, and
@@ -62,14 +62,14 @@ litmusTest name act sq tso pso = testGroup name . hUnitTestToTests $ test
 -- possible results. This is why dejafu is good!
 compareTest :: forall a. (Ord a, Show a) => (forall m. MonadConc m => m a) -> IO ()
 compareTest act = do
-  putStrLn $ "DejaFu-SQ:  " ++ results SequentialConsistency
-  putStrLn $ "DejaFu-TSO: " ++ results TotalStoreOrder
-  putStrLn $ "DejaFu-PSO: " ++ results PartialStoreOrder
-  putStr     "IO:         " >> ioResults >>= putStrLn
+  putStr "DejaFu-SQ:  " >> results SequentialConsistency
+  putStr "DejaFu-TSO: " >> results TotalStoreOrder
+  putStr "DejaFu-PSO: " >> results PartialStoreOrder
+  putStr "IO:         " >> ioResults >>= putStrLn
 
   where
-    results memtype = show . nub . sort . map (\(Right a,_) -> a) $
-      runST (runSCT defaultWay memtype act)
+    results memtype = show . nub . sort . map (\(Right a,_) -> a) <$>
+      runSCT defaultWay memtype act
 
     ioResults = show . nub . sort <$> replicateM 99999 act
 
