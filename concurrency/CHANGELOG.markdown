@@ -10,7 +10,7 @@ This project is versioned according to the [Package Versioning Policy](https://p
 1.3.0.0
 -------
 
-- **Date**    unreleased
+- **Date**    2017-12-23
 - **Git tag** [concurrency-1.3.0.0][]
 - **Hackage** https://hackage.haskell.org/package/concurrency-1.3.0.0
 
