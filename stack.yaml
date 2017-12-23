@@ -1,4 +1,4 @@
-resolver: nightly-2016-06-20
+resolver: lts-10.0
 
 packages:
 - concurrency
@@ -6,12 +6,6 @@ packages:
 - dejafu-tests
 - hunit-dejafu
 - tasty-dejafu
-
-extra-deps:
-- call-stack-0.1.0
-- HUnit-1.6.0.0
-- test-framework-hunit-0.3.0.2
-- leancheck-0.7.0
 
 nix:
   packages: [git]

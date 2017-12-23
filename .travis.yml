@@ -22,7 +22,7 @@ matrix:
     addons: {apt: {packages: [libgmp-dev]}}
   - env: MODE=test RESOLVER=nightly
     addons: {apt: {packages: [libgmp-dev]}}
-  - env: MODE=style RESOLVER=lts-9
+  - env: MODE=style RESOLVER=lts-10
     addons: {apt: {packages: [libgmp-dev]}}
   allow_failures:
   - env: MODE=test RESOLVER=nightly
