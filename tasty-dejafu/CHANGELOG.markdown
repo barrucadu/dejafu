@@ -7,6 +7,17 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Miscellaneous
+
+- Bump upper bound of tasty to 1.1.
+
+
+---------------------------------------------------------------------------------------------------
+
+
 1.0.0.0
 -------
 
