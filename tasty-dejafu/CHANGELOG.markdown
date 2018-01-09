@@ -7,12 +7,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+1.0.0.1
+-------
+
+- **Date**    2018-01-09
+- **Git tag** [tasty-dejafu-1.0.0.1][]
+- **Hackage** https://hackage.haskell.org/package/tasty-dejafu-1.0.0.1
 
 ### Miscellaneous
 
 - Bump upper bound of tasty to 1.1.
+
+[tasty-dejafu-1.0.0.1]: https://github.com/barrucadu/dejafu/releases/tag/tasty-dejafu-1.0.0.1
 
 
 ---------------------------------------------------------------------------------------------------
