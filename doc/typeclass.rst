@@ -72,3 +72,47 @@ To test ``IO``-using code, there are some rules you need to follow:
 .. [#] This is only essential if you're using the systematic testing
        (the default).  Nondeterministic ``IO`` won't break the random
        testing, it'll just make things more confusing.
+
+
+Deriving your own instances
+---------------------------
+
+There are ``MonadConc`` and ``MonadSTM`` instances for many common
+monad transformers.  In the simple case, where you want an instance
+for a newtype wrapper around a type that has an instance, you may be
+able to derive it.  For example:
+
+.. code-block:: haskell
+
+  {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+  {-# LANGUAGE StandaloneDeriving #-}
+  {-# LANGUAGE UndecidableInstances #-}
+
+  data Env = Env
+
+  newtype MyMonad m a = MyMonad { runMyMonad :: ReaderT Env m a }
+    deriving (Functor, Applicative, Monad)
+
+  deriving instance MonadThrow m => MonadThrow (MyMonad m)
+  deriving instance MonadCatch m => MonadCatch (MyMonad m)
+  deriving instance MonadMask  m => MonadMask  (MyMonad m)
+
+  deriving instance MonadConc m => MonadConc (MyMonad m)
+
+``MonadSTM`` needs a slightly different set of classes:
+
+.. code-block:: haskell
+
+  {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+  {-# LANGUAGE StandaloneDeriving #-}
+  {-# LANGUAGE UndecidableInstances #-}
+
+  data Env = Env
+
+  newtype MyMonad m a = MyMonad { runMyMonad :: ReaderT Env m a }
+    deriving (Functor, Applicative, Monad, Alternative, MonadPlus)
+
+  deriving instance MonadThrow m => MonadThrow (MyMonad m)
+  deriving instance MonadCatch m => MonadCatch (MyMonad m)
+
+  deriving instance MonadSTM m => MonadSTM (MyMonad m)
