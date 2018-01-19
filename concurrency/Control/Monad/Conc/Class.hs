@@ -146,7 +146,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Do not be put off by the use of @UndecidableInstances@, it is safe
 -- here.
 --
--- @since unreleased
+-- @since 1.4.0.0
 class ( Applicative m, Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -447,7 +447,7 @@ class ( Applicative m, Monad m
   --
   -- The @Proxy m@ is to determine the @m@ in the @Ticket@ type.
   --
-  -- @since unreleased
+  -- @since 1.4.0.0
   peekTicket' :: Proxy m -> Ticket m a -> a
 
   -- | Perform a machine-level compare-and-swap (CAS) operation on a

@@ -7,8 +7,12 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+1.4.0.0
+-------
+
+- **Date**    2017-01-19
+- **Git tag** [concurrency-1.4.0.0][]
+- **Hackage** https://hackage.haskell.org/package/concurrency-1.4.0.0
 
 ### Control.Monad.Conc.Class
 
@@ -17,6 +21,8 @@ unreleased
 
     - Old: `MonadConc m => proxy m -> Ticket m a -> a`
     - New: `MonadConc m => Proxy m -> Ticket m a -> a`
+
+[concurrency-1.4.0.0]: https://github.com/barrucadu/dejafu/releases/tag/concurrency-1.4.0.0
 
 
 ---------------------------------------------------------------------------------------------------

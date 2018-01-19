@@ -7,6 +7,23 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+1.0.0.1
+-------
+
+- **Date**    2017-01-19
+- **Git tag** [dejafu-1.0.0.1][]
+- **Hackage** https://hackage.haskell.org/package/dejafu-1.0.0.1
+
+### Miscellaneous
+
+- The upper bound on concurrency was bumped to <1.5.
+
+[dejafu-1.0.0.1]: https://github.com/barrucadu/dejafu/releases/tag/dejafu-1.0.0.1
+
+
+---------------------------------------------------------------------------------------------------
+
+
 1.0.0.0
 -------
 
