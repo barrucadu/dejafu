@@ -7,6 +7,21 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Control.Monad.Conc.Class
+
+- The `peekTicket'` now has a more concrete type, to make deriving newtype instances of `MonadConc`
+  possible.
+
+    - Old: `MonadConc m => proxy m -> Ticket m a -> a`
+    - New: `MonadConc m => Proxy m -> Ticket m a -> a`
+
+
+---------------------------------------------------------------------------------------------------
+
+
 1.3.0.0
 -------
 

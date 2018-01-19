@@ -122,7 +122,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Every @MonadConc@ has an associated 'MonadSTM', transactions of
 -- which can be run atomically.
 --
--- @since 1.3.0.0
+-- @since unreleased
 class ( Applicative m, Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -421,10 +421,10 @@ class ( Applicative m, Monad m
 
   -- | Extract the actual Haskell value from a @Ticket@.
   --
-  -- The @proxy m@ is to determine the @m@ in the @Ticket@ type.
+  -- The @Proxy m@ is to determine the @m@ in the @Ticket@ type.
   --
-  -- @since 1.0.0.0
-  peekTicket' :: proxy m -> Ticket m a -> a
+  -- @since unreleased
+  peekTicket' :: Proxy m -> Ticket m a -> a
 
   -- | Perform a machine-level compare-and-swap (CAS) operation on a
   -- @CRef@. Returns an indication of success and a @Ticket@ for the
