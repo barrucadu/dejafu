@@ -18,6 +18,29 @@
 -- import "Control.Concurrent.Classy.STM" (which exports
 -- "Control.Monad.STM.Class").
 --
+-- __Deriving instances:__ If you have a newtype wrapper around a type
+-- with an existing @MonadSTM@ instance, you should be able to derive
+-- an instance for your type automatically, in simple cases.
+--
+-- For example:
+--
+-- > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+-- > {-# LANGUAGE StandaloneDeriving #-}
+-- > {-# LANGUAGE UndecidableInstances #-}
+-- >
+-- > data Env = Env
+-- >
+-- > newtype MyMonad m a = MyMonad { runMyMonad :: ReaderT Env m a }
+-- >   deriving (Functor, Applicative, Monad, Alternative, MonadPlus)
+-- >
+-- > deriving instance MonadThrow m => MonadThrow (MyMonad m)
+-- > deriving instance MonadCatch m => MonadCatch (MyMonad m)
+-- >
+-- > deriving instance MonadSTM m => MonadSTM (MyMonad m)
+--
+-- Do not be put off by the use of @UndecidableInstances@, it is safe
+-- here.
+--
 -- __Deviations:__ An instance of @MonadSTM@ is not required to be a
 -- @MonadFix@, unlike @STM@. The @always@ and @alwaysSucceeds@
 -- functions are not provided; if you need these file an issue and

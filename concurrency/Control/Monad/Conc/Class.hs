@@ -122,6 +122,30 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Every @MonadConc@ has an associated 'MonadSTM', transactions of
 -- which can be run atomically.
 --
+-- __Deriving instances:__ If you have a newtype wrapper around a type
+-- with an existing @MonadConc@ instance, you should be able to derive
+-- an instance for your type automatically, in simple cases.
+--
+-- For example:
+--
+-- > {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+-- > {-# LANGUAGE StandaloneDeriving #-}
+-- > {-# LANGUAGE UndecidableInstances #-}
+-- >
+-- > data Env = Env
+-- >
+-- > newtype MyMonad m a = MyMonad { runMyMonad :: ReaderT Env m a }
+-- >   deriving (Functor, Applicative, Monad)
+-- >
+-- > deriving instance MonadThrow m => MonadThrow (MyMonad m)
+-- > deriving instance MonadCatch m => MonadCatch (MyMonad m)
+-- > deriving instance MonadMask  m => MonadMask  (MyMonad m)
+-- >
+-- > deriving instance MonadConc m => MonadConc (MyMonad m)
+--
+-- Do not be put off by the use of @UndecidableInstances@, it is safe
+-- here.
+--
 -- @since unreleased
 class ( Applicative m, Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
