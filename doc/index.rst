@@ -19,15 +19,6 @@ This is Déjà Fu
 
 .. toctree::
    :maxdepth: 2
-   :caption: Release Notes
-
-   concurrency <changelog_concurrency>
-   dejafu <changelog_dejafu>
-   hunit-dejafu <changelog_hunit-dejafu>
-   tasty-dejafu <changelog_tasty-dejafu>
-
-.. toctree::
-   :maxdepth: 2
    :caption: Migration Guides
 
    migration_0x_1x
@@ -40,3 +31,12 @@ This is Déjà Fu
    contributing
    roadmap
    release_process
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Release Notes
+
+   concurrency <changelog_concurrency>
+   dejafu <changelog_dejafu>
+   hunit-dejafu <changelog_hunit-dejafu>
+   tasty-dejafu <changelog_tasty-dejafu>
