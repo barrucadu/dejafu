@@ -1,25 +1,20 @@
 0.x to 1.x
 ==========
 
-`dejafu-1.0.0.0`__ is a super-major release which breaks compatibility
-with `dejafu-0.x`__ quite significantly, but brings with it support
-for bound threads, and significantly improves memory usage in the
-general case.
-
-.. __: https://hackage.haskell.org/package/dejafu-1.0.0.0
-.. __: https://hackage.haskell.org/package/dejafu-0.9.1.1
+:hackage:`dejafu-1.0.0.0` is a super-major release which breaks
+compatibility with :hackage:`dejafu-0.x <dejafu-0.9.1.1>` quite
+significantly, but brings with it support for bound threads, and
+significantly improves memory usage in the general case.
 
 Highlights reel:
 
 * Most predicates now only need to keep around the failures, rather
   than all results.
-* Support for bound threads (with `concurrency-1.3.0.0`__).
+* Support for bound threads (with :hackage:`concurrency-1.3.0.0`).
 * The ``ST`` / ``IO`` interface duplication is gone, everything is now
   monadic.
 * Function parameter order is closer to other testing libraries.
 * Much improved API documentation.
-
-.. __: https://hackage.haskell.org/package/concurrency-1.3.0.0
 
 See the changelogs for the full details.
 
@@ -32,7 +27,7 @@ requires being able to fork actual threads, so testing with ``ST`` is
 no longer possible.  The ``ConcST`` type is gone, there is only
 ``ConcIO``.
 
-For dejafu_ change:
+For :hackage:`dejafu` change:
 
 * ``autocheckIO`` to ``autocheck``
 * ``dejafuIO`` to ``dejafu``
@@ -47,7 +42,7 @@ For dejafu_ change:
 If you relied on being able to get a pure result from the ``ConcST``
 functions, you can no longer do this.
 
-For hunit-dejafu_ and tasty-dejafu_ change:
+For :hackage:`hunit-dejafu` and :hackage:`tasty-dejafu` change:
 
 * ``testAutoIO`` to ``testAuto``
 * ``testDejafuIO`` to ``testDejafu``
@@ -61,13 +56,11 @@ For hunit-dejafu_ and tasty-dejafu_ change:
 Function parameter order
 ------------------------
 
-Like HUnit_, the monadic action to test is now the last parameter of
-the testing functions.  This makes it convenient to write tests
-without needing to define the action elsewhere.
+Like :hackage:`HUnit`, the monadic action to test is now the last
+parameter of the testing functions.  This makes it convenient to write
+tests without needing to define the action elsewhere.
 
-.. _HUnit: https://hackage.haskell.org/package/HUnit
-
-For dejafu_ change:
+For :hackage:`dejafu` change:
 
 * ``dejafu ma (s, p)`` to ``dejafu s p ma``
 * ``dejafus ma ps`` to ``dejafus ps ma``
@@ -75,17 +68,13 @@ For dejafu_ change:
 * ``dejafusWay way mem ma ps`` to ``dejafuWay way mem ps ma``
 * ``dejafuDiscard d way mem ma (s, p)`` to ``dejafuDiscard d way mem s p ma``
 
-For hunit-dejafu_ and tasty-dejafu_ change:
+For :hackage:`hunit-dejafu` and :hackage:`tasty-dejafu` change:
 
 * ``testDejafu ma s p`` to ``testDejafu s p ma``
 * ``testDejafus ma ps`` to ``testDejafus ps ma``
 * ``testDejafuWay way mem ma s p`` to ``testDejafuWay way mem s p ma``
 * ``testDejafusWay way mem ma ps`` to ``testDejafusWay way mem ps ma``
 * ``testDejafuDiscard d way mem ma s p`` to ``testDejafuDiscard d way mem s p ma``
-
-.. _dejafu: https://hackage.haskell.org/package/dejafu
-.. _hunit-dejafu: https://hackage.haskell.org/package/hunit-dejafu
-.. _tasty-dejafu: https://hackage.haskell.org/package/tasty-dejafu
 
 
 Predicates
@@ -125,6 +114,4 @@ Need help?
 
 * For general help talk to me in IRC (barrucadu in #haskell) or shoot
   me an email (mike@barrucadu.co.uk)
-* For bugs, issues, or requests, please `file an issue`__.
-
-.. __:  https://github.com/barrucadu/dejafu/issues
+* For bugs, issues, or requests, please :issue:`file an issue <>`.

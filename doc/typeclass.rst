@@ -3,10 +3,8 @@ Typeclasses
 
 We don't use the regular ``Control.Concurrent`` and
 ``Control.Exception`` modules, we use typeclass-generalised ones
-instead from the `concurrency`_ and `exceptions`_ packages.
-
-.. _concurrency: https://hackage.haskell.org/package/concurrency
-.. _exceptions: https://hackage.haskell.org/package/exceptions
+instead from the :hackage:`concurrency` and :hackage:`exceptions`
+packages.
 
 
 Porting guide

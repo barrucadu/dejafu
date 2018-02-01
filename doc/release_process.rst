@@ -37,12 +37,10 @@ Release Process
 
 11. Upload updated packages to Hackage.
 
-See the dejafu-0.7.1.3 `commit`__ and `tag`__ if any of this is
+See :commit:`44181e6` and :tag:`dejafu-0.7.1.3` if any of this is
 unclear.
 
 .. _PVP: https://pvp.haskell.org/
-.. __: https://github.com/barrucadu/dejafu/commit/44181e6018f1ffdfba2c7a71f6a2adfa314cc49d
-.. __: https://github.com/barrucadu/dejafu/releases/tag/dejafu-0.7.1.3
 
 
 Pro tips

@@ -32,7 +32,7 @@ from recommonmark.parser import CommonMarkParser
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = []
+extensions = ['sphinx.ext.extlinks']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -52,6 +52,17 @@ master_doc = 'index'
 project = u'Déjà Fu'
 copyright = u'2017, Michael Walker'
 author = u'Michael Walker'
+
+# External link destinations
+_repo = 'https://github.com/barrucadu/dejafu/'
+extlinks = {
+    'commit': (_repo + 'commit/%s', 'commit '),
+    'issue': (_repo + 'issues/%s', 'issue #'),
+    'tag': (_repo + 'releases/tag/%s', 'tag '),
+    'github': (_repo + '%s', ''),
+    'hackage': ('https://hackage.haskell.org/package/%s', ''),
+    'stackage': ('https://www.stackage.org/package/%s', ''),
+}
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

@@ -24,8 +24,8 @@ An action is just something with the type ``MonadConc m => m a``, or
 predicate can deal with.
 
 For example, some users on Reddit found a couple of apparent bugs in
-the auto-update_ package a while ago (`thread here`__).  As the
-package is simple and self-contained, I translated it to the
+the :hackage:`auto-update` package a while ago (`thread here`__).  As
+the package is simple and self-contained, I translated it to the
 ``MonadConc`` abstraction and wrote a couple of tests to replicate the
 bugs.  Here they are:
 
@@ -45,7 +45,6 @@ bugs.  Here they are:
     auto
     auto
 
-.. _auto-update: https://hackage.haskell.org/package/auto-update
 .. __: https://www.reddit.com/r/haskell/comments/2i5d7m/updating_autoupdate/
 
 These actions action could be tested with ``autocheck``, and the
@@ -55,10 +54,9 @@ becomes more polymorphic.  But other than that, note how there is no
 special mention of Déjà Fu in the actions: it's just normal concurrent
 Haskell, simply written against a different interface.
 
-The modified package is included `in the Déjà Fu testsuite`__, if you
-want to see the full code. [#]_
-
-.. __: https://github.com/barrucadu/dejafu/blob/2a15549d97c2fa12f5e8b92ab918fdb34da78281/dejafu-tests/Examples/AutoUpdate.hs
+The modified package is included :github:`in the test suite
+<blob/2a15549d97c2fa12f5e8b92ab918fdb34da78281/dejafu-tests/Examples/AutoUpdate.hs>`,
+if you want to see the full code. [#]_
 
 .. [#] The predicates in dejafu-tests are a little confusing, as
        they're the opposite of what you would normally write!  These
@@ -151,17 +149,12 @@ Using HUnit and Tasty
 
 By itself, Déjà Fu has no framework in place for named test groups and
 parallel execution or anything like that.  It does one thing and does
-it well, which is running test cases for concurrent programs.  HUnit_
-and tasty_ integration is provided to get more of the features you'd
-expect from a testing framework.
+it well, which is running test cases for concurrent programs.
+:hackage:`HUnit` and :hackage:`tasty` integration is provided to get
+more of the features you'd expect from a testing framework.
 
-.. _HUnit: https://hackage.haskell.org/package/HUnit
-.. _Tasty: https://hackage.haskell.org/package/tasty
-
-The integration is provided by the hunit-dejafu_ and tasty-dejafu_ packages.
-
-.. _hunit-dejafu: https://hackage.haskell.org/package/hunit-dejafu
-.. _tasty-dejafu: https://hackage.haskell.org/package/tasty-dejafu
+The integration is provided by the :hackage:`hunit-dejafu` and
+:hackage:`tasty-dejafu` packages.
 
 There's a simple naming convention used: the ``Test.DejaFu`` function
 ``dejafuFoo`` is wrapped in the appropriate way and exposed as

@@ -112,11 +112,9 @@ Properties can have parameters, given in the obvious way:
   check $ \a b c -> sig1 ... `op` sig2 ...
 
 Under the hood, seed and parameter values are generated using the
-LeanCheck_ package, an enumerative property-based testing library.
-This means that any types you use will need to have a ``Listable``
-instance.
-
-.. _LeanCheck: https://hackage.haskell.org/package/leancheck
+:hackage:`leancheck` package, an enumerative property-based testing
+library.  This means that any types you use will need to have a
+``Listable`` instance.
 
 You can also think about the three functions in terms of sets of
 results, where a result is a ``(Maybe Failure, o)`` value.  A
@@ -134,23 +132,18 @@ made, even if execution of the expression fails.
 Finally, there is an ``expectFailure`` function, which inverts the
 expected result of a property.
 
-The Déjà Fu testsuite has `a collection of refinement properties`__,
+The Déjà Fu testsuite has :github:`a collection of refinement
+properties
+<blob/2a15549d97c2fa12f5e8b92ab918fdb34da78281/dejafu-tests/Cases/Refinement.hs>`,
 which may help you get a feel for this sort of testing.
-
-.. __: https://github.com/barrucadu/dejafu/blob/2a15549d97c2fa12f5e8b92ab918fdb34da78281/dejafu-tests/Cases/Refinement.hs
 
 
 Using HUnit and Tasty
 ---------------------
 
-As for unit testing, HUnit_ and tasty_ integration is provided for
-refinement testing in the hunit-dejafu_ and tasty-dejafu_ packages.
-
-.. _HUnit: https://hackage.haskell.org/package/HUnit
-.. _Tasty: https://hackage.haskell.org/package/tasty
-
-.. _hunit-dejafu: https://hackage.haskell.org/package/hunit-dejafu
-.. _tasty-dejafu: https://hackage.haskell.org/package/tasty-dejafu
+As for unit testing, :hackage:`HUnit` and :hackage:`tasty` integration
+is provided for refinement testing in the :hackage:`hunit-dejafu` and
+:hackage:`tasty-dejafu` packages.
 
 The ``testProperty`` function is used to check properties.  Our example from the start becomes:
 

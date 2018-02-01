@@ -9,12 +9,8 @@ Getting Started
 
 Déjà Fu is a unit-testing library for concurrent Haskell programs.
 Tests are deterministic and expressive, making it easy and convenient
-to test your threaded code.  Available on GitHub_, Hackage_, and
-Stackage_.
-
-.. _GitHub:   https://github.com/barrucadu/dejafu
-.. _Hackage:  https://hackage.haskell.org/package/dejafu
-.. _Stackage: https://www.stackage.org/package/dejafu
+to test your threaded code.  Available on :github:`GitHub <>`,
+:hackage:`Hackage <dejafu>`, and :stackage:`Stackage <dejafu>`.
 
 Features:
 
@@ -24,26 +20,17 @@ Features:
 * A unit-testing-like approach to writing test cases
 * A property-testing-like approach to comparing stateful operations
 * Testing of potentially nonterminating programs
-* Integration with HUnit_ and tasty_
-
-.. _HUnit: https://hackage.haskell.org/package/HUnit
-.. _Tasty: https://hackage.haskell.org/package/tasty
-
+* Integration with :hackage:`HUnit` and :hackage:`tasty`
 
 There are a few different packages under the Déjà Fu umbrella:
 
 .. csv-table::
    :header: "Package", "Version", "Summary"
 
-   "concurrency_",  "1.4.0.0", "Typeclasses, functions, and data types for concurrency and STM"
-   "dejafu_",       "1.0.0.1", "Systematic testing for Haskell concurrency"
-   "hunit-dejafu_", "1.0.0.0", "Déjà Fu support for the HUnit test framework"
-   "tasty-dejafu_", "1.0.0.1", "Déjà Fu support for the tasty test framework"
-
-.. _concurrency:  https://hackage.haskell.org/package/concurrency
-.. _dejafu:       https://hackage.haskell.org/package/dejafu
-.. _hunit-dejafu: https://hackage.haskell.org/package/hunit-dejafu
-.. _tasty-dejafu: https://hackage.haskell.org/package/tasty-dejafu
+   ":hackage:`concurrency`",  "1.4.0.0", "Typeclasses, functions, and data types for concurrency and STM"
+   ":hackage:`dejafu`",       "1.0.0.1", "Systematic testing for Haskell concurrency"
+   ":hackage:`hunit-dejafu`", "1.0.0.0", "Déjà Fu support for the HUnit test framework"
+   ":hackage:`tasty-dejafu`", "1.0.0.1", "Déjà Fu support for the tasty test framework"
 
 Everything is on Hackage and Stackage, and the last three major GHC
 versions (currently 8.2, 8.0, and 7.10) are supported.
@@ -149,10 +136,9 @@ will tend to crop up sooner.  Furthermore, as you get execution traces
 out, you can be certain that a bug has been fixed by simply following
 the trace by eye.
 
-**If you'd like to get involved with Déjà Fu**, check out `the
-"good first issue" label on the issue tracker`__.
-
-.. __: https://github.com/barrucadu/dejafu/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+**If you'd like to get involved with Déjà Fu**, check out :github:`the
+"good first issue" label on the issue tracker
+<issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22>`.
 
 
 Questions, feedback, discussion
@@ -160,9 +146,7 @@ Questions, feedback, discussion
 
 * For general help talk to me in IRC (barrucadu in #haskell) or shoot
   me an email (mike@barrucadu.co.uk)
-* For bugs, issues, or requests, please `file an issue`__.
-
-.. __:  https://github.com/barrucadu/dejafu/issues
+* For bugs, issues, or requests, please :issue:`file an issue <>`.
 
 
 Bibliography
