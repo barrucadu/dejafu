@@ -115,9 +115,9 @@ we'll get onto that shortly.  First, the result of testing:
 [pass] Never Deadlocks
 [pass] No Exceptions
 [fail] Consistent Result
-        "hello" S0----S1--S0--
+    "hello" S0----S1--S0--
 
-        "world" S0----S2--S0--
+    "world" S0----S2--S0--
 False
 ```
 

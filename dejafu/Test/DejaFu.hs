@@ -31,9 +31,9 @@ We can test it with dejafu like so:
 [pass] Never Deadlocks
 [pass] No Exceptions
 [fail] Consistent Result
-        "hello" S0----S1--S0--
+    "hello" S0----S1--S0--
 <BLANKLINE>
-        "world" S0----S2--S0--
+    "world" S0----S2--S0--
 False
 
 The 'autocheck' function takes a concurrent program to test and looks
@@ -198,13 +198,13 @@ We see something surprising if we ask for the results:
 [pass] Never Deadlocks
 [pass] No Exceptions
 [fail] Consistent Result
-        (False,True) S0---------S1----S0--S2----S0--
+    (False,True) S0---------S1----S0--S2----S0--
 <BLANKLINE>
-        (False,False) S0---------S1--P2----S1--S0---
+    (False,False) S0---------S1--P2----S1--S0---
 <BLANKLINE>
-        (True,False) S0---------S2----S1----S0---
+    (True,False) S0---------S2----S1----S0---
 <BLANKLINE>
-        (True,True) S0---------S1-C-S2----S1---S0---
+    (True,True) S0---------S1-C-S2----S1---S0---
 False
 
 It's possible for both threads to read the value @False@, even though
@@ -444,9 +444,9 @@ let relaxed = do
 -- [pass] Never Deadlocks
 -- [pass] No Exceptions
 -- [fail] Consistent Result
---         "hello" S0----S1--S0--
+--     "hello" S0----S1--S0--
 -- <BLANKLINE>
---         "world" S0----S2--S0--
+--     "world" S0----S2--S0--
 -- False
 --
 -- @since 1.0.0.0
@@ -463,24 +463,24 @@ autocheck = autocheckWay defaultWay defaultMemType
 -- [pass] Never Deadlocks
 -- [pass] No Exceptions
 -- [fail] Consistent Result
---         (False,True) S0---------S1----S0--S2----S0--
+--     (False,True) S0---------S1----S0--S2----S0--
 -- <BLANKLINE>
---         (False,False) S0---------S1--P2----S1--S0---
+--     (False,False) S0---------S1--P2----S1--S0---
 -- <BLANKLINE>
---         (True,False) S0---------S2----S1----S0---
+--     (True,False) S0---------S2----S1----S0---
 -- <BLANKLINE>
---         (True,True) S0---------S1-C-S2----S1---S0---
+--     (True,True) S0---------S1-C-S2----S1---S0---
 -- False
 --
 -- >>> autocheckWay defaultWay SequentialConsistency relaxed
 -- [pass] Never Deadlocks
 -- [pass] No Exceptions
 -- [fail] Consistent Result
---         (False,True) S0---------S1----S0--S2----S0--
+--     (False,True) S0---------S1----S0--S2----S0--
 -- <BLANKLINE>
---         (True,True) S0---------S1-P2----S1---S0---
+--     (True,True) S0---------S1-P2----S1---S0---
 -- <BLANKLINE>
---         (True,False) S0---------S2----S1----S0---
+--     (True,False) S0---------S2----S1----S0---
 -- False
 --
 -- @since 1.0.0.0
@@ -511,9 +511,9 @@ autocheckCases =
 --
 -- >>> dejafu "Test Name" alwaysSame example
 -- [fail] Test Name
---         "hello" S0----S1--S0--
+--     "hello" S0----S1--S0--
 -- <BLANKLINE>
---         "world" S0----S2--S0--
+--     "world" S0----S2--S0--
 -- False
 --
 -- @since 1.0.0.0
@@ -534,16 +534,16 @@ dejafu = dejafuWay defaultWay defaultMemType
 --
 -- >>> dejafuWay (randomly (mkStdGen 0) 100) defaultMemType "Randomly!" alwaysSame example
 -- [fail] Randomly!
---         "hello" S0----S1--S0--
+--     "hello" S0----S1--S0--
 -- <BLANKLINE>
---         "world" S0----S2--S0--
+--     "world" S0----S2--S0--
 -- False
 --
 -- >>> dejafuWay (randomly (mkStdGen 1) 100) defaultMemType "Randomly!" alwaysSame example
 -- [fail] Randomly!
---         "hello" S0----S1--S0--
+--     "hello" S0----S1--S0--
 -- <BLANKLINE>
---         "world" S0----S2--S1-S0--
+--     "world" S0----S2--S1-S0--
 -- False
 --
 -- @since 1.0.0.0
@@ -565,9 +565,9 @@ dejafuWay = dejafuDiscard (const Nothing)
 --
 -- >>> dejafuDiscard (\_ -> Just DiscardTrace) defaultWay defaultMemType "Discarding" alwaysSame example
 -- [fail] Discarding
---         "hello" <trace discarded>
+--     "hello" <trace discarded>
 -- <BLANKLINE>
---         "world" <trace discarded>
+--     "world" <trace discarded>
 -- False
 --
 -- @since 1.0.0.0
@@ -595,9 +595,9 @@ dejafuDiscard discard way memtype name test conc = do
 --
 -- >>> dejafus [("A", alwaysSame), ("B", deadlocksNever)] example
 -- [fail] A
---         "hello" S0----S1--S0--
+--     "hello" S0----S1--S0--
 -- <BLANKLINE>
---         "world" S0----S2--S0--
+--     "world" S0----S2--S0--
 -- [pass] B
 -- False
 --
@@ -615,11 +615,11 @@ dejafus = dejafusWay defaultWay defaultMemType
 --
 -- >>> dejafusWay defaultWay SequentialConsistency [("A", alwaysSame), ("B", exceptionsNever)] relaxed
 -- [fail] A
---         (False,True) S0---------S1----S0--S2----S0--
+--     (False,True) S0---------S1----S0--S2----S0--
 -- <BLANKLINE>
---         (True,True) S0---------S1-P2----S1---S0---
+--     (True,True) S0---------S1-P2----S1---S0---
 -- <BLANKLINE>
---         (True,False) S0---------S2----S1----S0---
+--     (True,False) S0---------S2----S1----S0---
 -- [pass] B
 -- False
 --
@@ -966,10 +966,10 @@ doTest name result = do
         putStrLn $ _failureMsg result
 
       let failures = _failures result
-      let output = map (\(r, t) -> putStrLn . indent doctest $ either showFail show r ++ " " ++ showTrace t) $ take 5 failures
+      let output = map (\(r, t) -> putStrLn . indent $ either showFail show r ++ " " ++ showTrace t) $ take 5 failures
       sequence_ $ intersperse (putStrLn "") output
       when (moreThan 5 failures) $
-        putStrLn (indent doctest "...")
+        putStrLn (indent "...")
 
     pure (_pass result)
   where
@@ -987,7 +987,5 @@ moreThan 0 _ = True
 moreThan n (_:rest) = moreThan (n-1) rest
 
 -- | Indent every line of a string.
-indent :: Bool -> String -> String
-indent doctest = intercalate "\n" . map (s++) . lines where
-  s | doctest = "        "
-    | otherwise = "\t"
+indent :: String -> String
+indent = intercalate "\n" . map ("    "++) . lines
