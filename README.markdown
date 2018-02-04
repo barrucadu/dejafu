@@ -168,7 +168,7 @@ the trace by eye.
 Contributing
 ------------
 
-See the CONTRIBUTING.markdown file.
+See the "contributing" page on [the website](http://dejafu.readthedocs.io/en/latest/contributing.html).
 
 **If you'd like to get involved with Déjà Fu**, check out [the
 "good first issue" label on the issue tracker][beginners].
