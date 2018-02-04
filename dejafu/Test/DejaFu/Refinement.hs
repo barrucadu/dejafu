@@ -22,19 +22,21 @@
 --
 -- This module can test properties like that:
 --
--- @
--- sig e = Sig
---   { initialise = maybe newEmptyMVar newMVar
---   , observe    = \\v _ -> tryReadMVar v
---   , interfere  = \\v s -> tryTakeMVar v >> maybe (pure ()) (void . tryPutMVar v) s
---   , expression = e
---   }
+-- >>> import Control.Monad (void)
+-- >>> :{
+-- let sig e = Sig
+--       { initialise = maybe newEmptyMVar newMVar
+--       , observe    = \v _ -> tryReadMVar v
+--       , interfere  = \v _ -> putMVar v 42
+--       , expression = void . e
+--       }
+-- :}
 --
--- > check $ sig (void . readMVar) \`equivalentTo\` sig (\\v -> takeMVar v >>= putMVar v)
--- *** Failure: (seed Just ())
---     left:  [(Nothing,Just ())]
---     right: [(Nothing,Just ()),(Just Deadlock,Just ())]
--- @
+-- >>> check $ sig readMVar === sig (\v -> takeMVar v >>= putMVar v)
+-- *** Failure: (seed Just 0)
+--     left:  [(Nothing,Just 0)]
+--     right: [(Nothing,Just 0),(Just Deadlock,Just 42)]
+-- False
 --
 -- The two expressions are not equivalent, and we get given the
 -- counterexample!
@@ -115,6 +117,9 @@ import           Test.LeanCheck           (Listable(..), concatMapT, mapT)
 import           Test.DejaFu.Conc         (ConcIO, Failure, subconcurrency)
 import           Test.DejaFu.Defaults     (defaultMemType, defaultWay)
 import           Test.DejaFu.SCT          (runSCT)
+
+-- $setup
+-- >>> import Control.Concurrent.Classy hiding (check)
 
 -------------------------------------------------------------------------------
 -- Specifying properties
