@@ -17,21 +17,25 @@ package's 'MonadConc' typeclass.
 __A first test:__ This is a simple concurrent program which forks two
 threads and each races to write to the same @MVar@:
 
-> example = do
->   var <- newEmptyMVar
->   fork (putMVar var "hello")
->   fork (putMVar var "world")
->   readMVar var
+>>> import Control.Concurrent.Classy
+>>> :{
+let example = do
+    var <- newEmptyMVar
+    fork (putMVar var "hello")
+    fork (putMVar var "world")
+    readMVar var
+:}
 
 We can test it with dejafu like so:
 
-> > autocheck example
-> [pass] Never Deadlocks
-> [pass] No Exceptions
-> [fail] Consistent Result
->         "hello" S0----S1--S0--
->
->         "world" S0----S2--S0--
+>>> autocheck example
+[pass] Never Deadlocks
+[pass] No Exceptions
+[fail] Consistent Result
+        "hello" S0----S1--S0--
+<BLANKLINE>
+        "world" S0----S2--S0--
+False
 
 The 'autocheck' function takes a concurrent program to test and looks
 for some common unwanted behaviours: deadlocks, uncaught exceptions in
@@ -387,8 +391,10 @@ import           Control.Monad.IO.Class   (MonadIO(..))
 import           Control.Monad.Ref        (MonadRef)
 import           Data.Function            (on)
 import           Data.List                (intercalate, intersperse)
-import           Data.Maybe               (catMaybes, isNothing, mapMaybe)
+import           Data.Maybe               (catMaybes, isJust, isNothing,
+                                           mapMaybe)
 import           Data.Profunctor          (Profunctor(..))
+import           System.Environment       (lookupEnv)
 
 import           Test.DejaFu.Conc
 import           Test.DejaFu.Defaults
@@ -912,24 +918,29 @@ gives' = gives . map Right
 -- | Run a test and print to stdout
 doTest :: Show a => String -> Result a -> IO Bool
 doTest name result = do
-  if _pass result
-  then
-    -- Display a pass message.
-    putStrLn ("\27[32m[pass]\27[0m " ++ name)
-  else do
-    -- Display a failure message, and the first 5 (simplified) failed traces
-    putStrLn ("\27[31m[fail]\27[0m " ++ name)
+    doctest <- isJust <$> lookupEnv "DEJAFU_DOCTEST"
+    if _pass result
+    then putStrLn (passmsg doctest)
+    else do
+      -- Display a failure message, and the first 5 (simplified) failed traces
+      putStrLn (failmsg doctest)
 
-    unless (null $ _failureMsg result) $
-      putStrLn $ _failureMsg result
+      unless (null $ _failureMsg result) $
+        putStrLn $ _failureMsg result
 
-    let failures = _failures result
-    let output = map (\(r, t) -> putStrLn . indent $ either showFail show r ++ " " ++ showTrace t) $ take 5 failures
-    sequence_ $ intersperse (putStrLn "") output
-    when (moreThan 5 failures) $
-      putStrLn (indent "...")
+      let failures = _failures result
+      let output = map (\(r, t) -> putStrLn . indent doctest $ either showFail show r ++ " " ++ showTrace t) $ take 5 failures
+      sequence_ $ intersperse (putStrLn "") output
+      when (moreThan 5 failures) $
+        putStrLn (indent doctest "...")
 
-  pure (_pass result)
+    pure (_pass result)
+  where
+    passmsg True = "[pass] " ++ name
+    passmsg False = "\27[32m[pass]\27[0m " ++ name
+
+    failmsg True = "[fail] " ++ name
+    failmsg False = "\27[31m[fail]\27[0m " ++ name
 
 -- | Check if a list is longer than some value, without needing to
 -- compute the entire length.
@@ -939,5 +950,7 @@ moreThan 0 _ = True
 moreThan n (_:rest) = moreThan (n-1) rest
 
 -- | Indent every line of a string.
-indent :: String -> String
-indent = intercalate "\n" . map ('\t':) . lines
+indent :: Bool -> String -> String
+indent doctest = intercalate "\n" . map (s++) . lines where
+  s | doctest = "        "
+    | otherwise = "\t"
