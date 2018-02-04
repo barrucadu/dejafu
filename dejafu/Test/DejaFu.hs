@@ -17,13 +17,12 @@ package's 'MonadConc' typeclass.
 __A first test:__ This is a simple concurrent program which forks two
 threads and each races to write to the same @MVar@:
 
->>> import Control.Concurrent.Classy
 >>> :{
 let example = do
-    var <- newEmptyMVar
-    fork (putMVar var "hello")
-    fork (putMVar var "world")
-    readMVar var
+      var <- newEmptyMVar
+      fork (putMVar var "hello")
+      fork (putMVar var "world")
+      readMVar var
 :}
 
 We can test it with dejafu like so:
@@ -184,26 +183,29 @@ containing @False@, and forks two threads.  Each thread writes @True@
 to one of the @CRef@s and reads the other.  The value that each thread
 reads is communicated back through an @MVar@:
 
-> relaxed = do
->   r1 <- newCRef False
->   r2 <- newCRef False
->   x <- spawn $ writeCRef r1 True >> readCRef r2
->   y <- spawn $ writeCRef r2 True >> readCRef r1
->   (,) <$> readMVar x <*> readMVar y
+>>> :{
+let relaxed = do
+      r1 <- newCRef False
+      r2 <- newCRef False
+      x <- spawn $ writeCRef r1 True >> readCRef r2
+      y <- spawn $ writeCRef r2 True >> readCRef r1
+      (,) <$> readMVar x <*> readMVar y
+:}
 
 We see something surprising if we ask for the results:
 
-> > autocheck relaxed
-> [pass] Never Deadlocks
-> [pass] No Exceptions
-> [fail] Consistent Result
->         (False,True) S0---------S1----S0--S2----S0--
->
->         (False,False) S0---------S1--P2----S1--S0---
->
->         (True,False) S0---------S2----S1----S0---
->
->         (True,True) S0---------S1-C-S2----S1---S0---
+>>> autocheck relaxed
+[pass] Never Deadlocks
+[pass] No Exceptions
+[fail] Consistent Result
+        (False,True) S0---------S1----S0--S2----S0--
+<BLANKLINE>
+        (False,False) S0---------S1--P2----S1--S0---
+<BLANKLINE>
+        (True,False) S0---------S2----S1----S0---
+<BLANKLINE>
+        (True,True) S0---------S1-C-S2----S1---S0---
+False
 
 It's possible for both threads to read the value @False@, even though
 each writes @True@ to the other @CRef@ before reading.  This is
@@ -350,12 +352,15 @@ A signature contains:
 
  * The expression to evaluate, as a function over the state.
 
-> sig e = Sig
->  { initialise = maybe newEmptyMVar newMVar
->  , observe    = \v _ -> tryReadMVar v
->  , interfere  = \v _ -> putMVar v 42
->  , expression = void . e
->  }
+>>> import Control.Monad (void)
+>>> :{
+let sig e = Sig
+      { initialise = maybe newEmptyMVar newMVar
+      , observe    = \v _ -> tryReadMVar v
+      , interfere  = \v _ -> putMVar v 42
+      , expression = void . e
+      }
+:}
 
 This is a signature for operations over @Num n => MVar n@ values where
 there are multiple producers.  The initialisation function takes a
@@ -366,10 +371,11 @@ puts a new value in.
 Given this signature, we can check if @readMVar@ is the same as a
 @takeMVar@ followed by a @putMVar@:
 
-> > check $ sig readMVar === sig (\v -> takeMVar v >>= putMVar v)
-> *** Failure: (seed Just 0)
->     left:  [(Nothing,Just 0)]
->     right: [(Nothing,Just 0),(Just Deadlock,Just 42)]
+>>> check $ sig readMVar === sig (\v -> takeMVar v >>= putMVar v)
+*** Failure: (seed Just 0)
+    left:  [(Nothing,Just 0)]
+    right: [(Nothing,Just 0),(Just Deadlock,Just 42)]
+False
 
 The two expressions are not equivalent, and we get a counterexample:
 if the @MVar@ is nonempty, then the left expression (@readMVar@) will
@@ -403,6 +409,28 @@ import           Test.DejaFu.SCT
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
 
+{- $setup
+
+>>> import Control.Concurrent.Classy hiding (check)
+
+>>> :{
+let example = do
+      var <- newEmptyMVar
+      fork (putMVar var "hello")
+      fork (putMVar var "world")
+      readMVar var
+:}
+
+>>> :{
+let relaxed = do
+      r1 <- newCRef False
+      r2 <- newCRef False
+      x <- spawn $ writeCRef r1 True >> readCRef r2
+      y <- spawn $ writeCRef r2 True >> readCRef r1
+      (,) <$> readMVar x <*> readMVar y
+:}
+
+-}
 
 -------------------------------------------------------------------------------
 -- DejaFu
@@ -412,13 +440,14 @@ import           Test.DejaFu.Utils
 -- In particular, look for deadlocks, uncaught exceptions, and
 -- multiple return values.  Returns @True@ if all tests pass
 --
--- > > autocheck example
--- > [pass] Never Deadlocks
--- > [pass] No Exceptions
--- > [fail] Consistent Result
--- >         "hello" S0----S1--S0--
--- >
--- >         "world" S0----S2--S0--
+-- >>> autocheck example
+-- [pass] Never Deadlocks
+-- [pass] No Exceptions
+-- [fail] Consistent Result
+--         "hello" S0----S1--S0--
+-- <BLANKLINE>
+--         "world" S0----S2--S0--
+-- False
 --
 -- @since 1.0.0.0
 autocheck :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
@@ -430,27 +459,29 @@ autocheck = autocheckWay defaultWay defaultMemType
 -- | Variant of 'autocheck' which takes a way to run the program and a
 -- memory model.
 --
--- > > autocheckWay defaultWay defaultMemType relaxed
--- > [pass] Never Deadlocks
--- > [pass] No Exceptions
--- > [fail] Consistent Result
--- >         (False,True) S0---------S1----S0--S2----S0--
--- >
--- >         (False,False) S0---------S1--P2----S1--S0---
--- >
--- >         (True,False) S0---------S2----S1----S0---
--- >
--- >         (True,True) S0---------S1-C-S2----S1---S0---
--- >
--- > > autocheckWay defaultWay SequentialConsistency relaxed
--- > [pass] Never Deadlocks
--- > [pass] No Exceptions
--- > [fail] Consistent Result
--- >         (False,True) S0---------S1----S0--S2----S0--
--- >
--- >         (True,True) S0---------S1-P2----S1---S0---
--- >
--- >         (True,False) S0---------S2----S1----S0---
+-- >>> autocheckWay defaultWay defaultMemType relaxed
+-- [pass] Never Deadlocks
+-- [pass] No Exceptions
+-- [fail] Consistent Result
+--         (False,True) S0---------S1----S0--S2----S0--
+-- <BLANKLINE>
+--         (False,False) S0---------S1--P2----S1--S0---
+-- <BLANKLINE>
+--         (True,False) S0---------S2----S1----S0---
+-- <BLANKLINE>
+--         (True,True) S0---------S1-C-S2----S1---S0---
+-- False
+--
+-- >>> autocheckWay defaultWay SequentialConsistency relaxed
+-- [pass] Never Deadlocks
+-- [pass] No Exceptions
+-- [fail] Consistent Result
+--         (False,True) S0---------S1----S0--S2----S0--
+-- <BLANKLINE>
+--         (True,True) S0---------S1-P2----S1---S0---
+-- <BLANKLINE>
+--         (True,False) S0---------S2----S1----S0---
+-- False
 --
 -- @since 1.0.0.0
 autocheckWay :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
@@ -478,11 +509,12 @@ autocheckCases =
 -- predicate to determine if the test passes.  Predicates can look for
 -- anything, including checking for some expected nondeterminism.
 --
--- > > dejafu "Test Name" alwaysSame example
--- > [fail] Test Name
--- >         "hello" S0----S1--S0--
--- >
--- >         "world" S0----S2--S0--
+-- >>> dejafu "Test Name" alwaysSame example
+-- [fail] Test Name
+--         "hello" S0----S1--S0--
+-- <BLANKLINE>
+--         "world" S0----S2--S0--
+-- False
 --
 -- @since 1.0.0.0
 dejafu :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
@@ -498,19 +530,21 @@ dejafu = dejafuWay defaultWay defaultMemType
 -- | Variant of 'dejafu' which takes a way to run the program and a
 -- memory model.
 --
--- > > import System.Random
--- >
--- > > dejafuWay (randomly (mkStdGen 0) 100) defaultMemType "Randomly!" alwaysSame example
--- > [fail] Randomly!
--- >         "hello" S0----S1--S0--
--- >
--- >         "world" S0----S2--S0--
--- >
--- > > dejafuWay (randomly (mkStdGen 1) 100) defaultMemType "Randomly!" alwaysSame example
--- > [fail] Randomly!
--- >         "hello" S0----S1--S0--
--- >
--- >         "world" S0----S2--S1-S0--
+-- >>> import System.Random
+--
+-- >>> dejafuWay (randomly (mkStdGen 0) 100) defaultMemType "Randomly!" alwaysSame example
+-- [fail] Randomly!
+--         "hello" S0----S1--S0--
+-- <BLANKLINE>
+--         "world" S0----S2--S0--
+-- False
+--
+-- >>> dejafuWay (randomly (mkStdGen 1) 100) defaultMemType "Randomly!" alwaysSame example
+-- [fail] Randomly!
+--         "hello" S0----S1--S0--
+-- <BLANKLINE>
+--         "world" S0----S2--S1-S0--
+-- False
 --
 -- @since 1.0.0.0
 dejafuWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
@@ -529,11 +563,12 @@ dejafuWay = dejafuDiscard (const Nothing)
 
 -- | Variant of 'dejafuWay' which can selectively discard results.
 --
--- > > dejafuDiscard (\_ -> Just DiscardTrace) defaultWay defaultMemType "Discarding" alwaysSame example
--- > [fail] Discarding
--- >         "hello" <trace discarded>
--- >
--- >         "world" <trace discarded>
+-- >>> dejafuDiscard (\_ -> Just DiscardTrace) defaultWay defaultMemType "Discarding" alwaysSame example
+-- [fail] Discarding
+--         "hello" <trace discarded>
+-- <BLANKLINE>
+--         "world" <trace discarded>
+-- False
 --
 -- @since 1.0.0.0
 dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
@@ -558,12 +593,13 @@ dejafuDiscard discard way memtype name test conc = do
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
 --
--- > > dejafus [("A", alwaysSame), ("B", deadlocksNever)] example
--- > [fail] A
--- >         "hello" S0----S1--S0--
--- >
--- >         "world" S0----S2--S0--
--- > [pass] B
+-- >>> dejafus [("A", alwaysSame), ("B", deadlocksNever)] example
+-- [fail] A
+--         "hello" S0----S1--S0--
+-- <BLANKLINE>
+--         "world" S0----S2--S0--
+-- [pass] B
+-- False
 --
 -- @since 1.0.0.0
 dejafus :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
@@ -577,14 +613,15 @@ dejafus = dejafusWay defaultWay defaultMemType
 -- | Variant of 'dejafus' which takes a way to run the program and a
 -- memory model.
 --
--- > > dejafusWay defaultWay SequentialConsistency [("A", alwaysSame), ("B", exceptionsNever)] relaxed
--- > [fail] A
--- >         (False,True) S0---------S1----S0--S2----S0--
--- >
--- >         (True,True) S0---------S1-P2----S1---S0---
--- >
--- >         (True,False) S0---------S2----S1----S0---
--- > [pass] B
+-- >>> dejafusWay defaultWay SequentialConsistency [("A", alwaysSame), ("B", exceptionsNever)] relaxed
+-- [fail] A
+--         (False,True) S0---------S1----S0--S2----S0--
+-- <BLANKLINE>
+--         (True,True) S0---------S1-P2----S1---S0---
+-- <BLANKLINE>
+--         (True,False) S0---------S2----S1----S0---
+-- [pass] B
+-- False
 --
 -- @since 1.0.0.0
 dejafusWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
