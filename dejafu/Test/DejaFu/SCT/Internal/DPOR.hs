@@ -69,6 +69,28 @@ instance NFData DPOR where
                  , dporTaken    dpor
                  )
 
+-- | Check the DPOR data invariants and raise an error if any are
+-- broken.
+--
+-- This is a reasonable thing to do, because if the state is corrupted
+-- then nothing sensible can happen anyway.
+validateDPOR :: String -> DPOR -> DPOR
+validateDPOR src dpor
+    | not (todo `S.isSubsetOf` runnable) = fatal src "thread exists in todo set but not runnable set"
+    | not (done `S.isSubsetOf` runnable) = fatal src "thread exists in done set but not runnable set"
+    | not (taken `S.isSubsetOf` done) = fatal src "thread exists in taken set but not done set"
+    | not (todo `disjoint` done) = fatal src "thread exists in both taken set and done set"
+    | not (maybe True (`S.member` done) next) = fatal src "taken thread does not exist in done set"
+    | otherwise = dpor
+  where
+    done = dporDone dpor
+    next = fst <$> dporNext dpor
+    runnable = dporRunnable dpor
+    taken = S.fromList (M.keys (dporTaken dpor))
+    todo = S.fromList (M.keys (dporTodo dpor))
+
+    disjoint s1 s2 = S.null (S.intersection s1 s2)
+
 -- | One step of the execution, including information for backtracking
 -- purposes. This backtracking information is used to generate new
 -- schedules.
@@ -154,9 +176,10 @@ incorporateTrace conservative trace dpor0 = grow initialDepState (initialDPORThr
         state' = updateDepState state tid' a
     in case dporNext dpor of
          Just (t, child)
-           | t == tid'      -> dpor { dporNext = Just (tid', grow state' tid' rest child) }
+           | t == tid' ->
+             validateDPOR "incorporateTrace (grow / Just)" $ dpor { dporNext = Just (tid', grow state' tid' rest child) }
            | hasTodos child -> fatal "incorporateTrace" "replacing child with todos!"
-         _ ->
+         _ -> validateDPOR "incorporateTrace (grow / Nothing)" $
            let taken = M.insert tid' a (dporTaken dpor)
                sleep = dporSleep dpor `M.union` dporTaken dpor
            in dpor { dporTaken = if conservative then dporTaken dpor else taken
@@ -170,7 +193,7 @@ incorporateTrace conservative trace dpor0 = grow initialDepState (initialDPORThr
   hasTodos dpor = not (M.null (dporTodo dpor)) || (case dporNext dpor of Just (_, dpor') -> hasTodos dpor'; _ -> False)
 
   -- Construct a new subtree corresponding to a trace suffix.
-  subtree state tid sleep ((_, _, a):rest) =
+  subtree state tid sleep ((_, _, a):rest) = validateDPOR "incorporateTrace (subtree)" $
     let state' = updateDepState state tid a
         sleep' = M.filterWithKey (\t a' -> not $ dependent state' tid a t a') sleep
     in DPOR
@@ -286,7 +309,7 @@ findBacktrackSteps backtrack boundKill = go initialDepState S.empty initialThrea
 -- | Add new backtracking points, if they have not already been
 -- visited and aren't in the sleep set.
 incorporateBacktrackSteps :: [BacktrackStep] -> DPOR -> DPOR
-incorporateBacktrackSteps (b:bs) dpor = dpor' where
+incorporateBacktrackSteps (b:bs) dpor = validateDPOR "incorporateBacktrackSteps" dpor' where
   tid = bcktThreadid b
 
   dpor' = dpor
