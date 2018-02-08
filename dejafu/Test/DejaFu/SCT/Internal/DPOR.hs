@@ -175,7 +175,7 @@ incorporateTrace conservative trace dpor0 = grow initialDepState (initialDPORThr
         sleep' = M.filterWithKey (\t a' -> not $ dependent state' tid a t a') sleep
     in DPOR
         { dporRunnable = S.fromList $ case rest of
-            ((_, runnable, _):_) -> map fst runnable
+            ((d', runnable, _):_) -> tidOf tid d' : map fst runnable
             [] -> []
         , dporTodo = M.empty
         , dporNext = case rest of
