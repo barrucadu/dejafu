@@ -56,24 +56,24 @@ We can see this by testing with different memory models:
   [pass] Never Deadlocks
   [pass] No Exceptions
   [fail] Consistent Result
-          (False,True) S0---------S1----S0--S2----S0--
+      (False,True) S0---------S1----S0--S2----S0--
 
-          (True,True) S0---------S1-P2----S1---S0---
+      (True,True) S0---------S1-P2----S1---S0---
 
-          (True,False) S0---------S2----S1----S0---
+      (True,False) S0---------S2----S1----S0---
   False
 
   > autocheckWay defaultWay TotalStoreOrder example
   [pass] Never Deadlocks
   [pass] No Exceptions
   [fail] Consistent Result
-          (False,True) S0---------S1----S0--S2----S0--
+      (False,True) S0---------S1----S0--S2----S0--
 
-          (False,False) S0---------S1--P2----S1--S0---
+      (False,False) S0---------S1--P2----S1--S0---
 
-          (True,False) S0---------S2----S1----S0---
+      (True,False) S0---------S2----S1----S0---
 
-          (True,True) S0---------S1-C-S2----S1---S0---
+      (True,True) S0---------S1-C-S2----S1---S0---
   False
 
 Traces for non-sequentially-consistent memory models show where

@@ -22,6 +22,8 @@ matrix:
     addons: {apt: {packages: [libgmp-dev]}}
   - env: MODE=test RESOLVER=nightly
     addons: {apt: {packages: [libgmp-dev]}}
+  - env: MODE=doctest RESOLVER=lts-10
+    addons: {apt: {packages: [libgmp-dev]}}
   - env: MODE=style RESOLVER=lts-10
     addons: {apt: {packages: [libgmp-dev]}}
   allow_failures:
@@ -36,6 +38,7 @@ before_install:
 - if [[ -e .travis/$RESOLVER.yaml ]]; then mv .travis/$RESOLVER.yaml stack.yaml; else stack init --resolver=$RESOLVER; fi
 - stack --no-terminal setup
 - if [[ "$MODE" == "style" ]]; then stack --no-terminal install stylish-haskell; fi
+- if [[ "$MODE" == "doctest" ]]; then stack --no-terminal install doctest; fi
 
 # Run tests
 script:
@@ -57,6 +60,9 @@ script:
       ;;
     test)
       stack exec -- dejafu-tests --plain
+      ;;
+    doctest)
+      stack exec -- bash -c "DEJAFU_DOCTEST=y doctest dejafu/Test"
       ;;
   esac
   set +ex
