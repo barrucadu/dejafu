@@ -14,11 +14,11 @@ cache:
 matrix:
   fast_finish: true
   include:
-  - env: MODE=test RESOLVER=lts-6 # GHC 7.10
+  - env: MODE=test RESOLVER=lts-6.0 # GHC 7.10
     addons: {apt: {packages: [libgmp-dev]}}
-  - env: MODE=test RESOLVER=lts-9 # GHC 8.0
+  - env: MODE=test RESOLVER=lts-9.0 # GHC 8.0
     addons: {apt: {packages: [libgmp-dev]}}
-  - env: MODE=test RESOLVER=lts-10 # GHC 8.2
+  - env: MODE=test RESOLVER=lts-10.0 # GHC 8.2
     addons: {apt: {packages: [libgmp-dev]}}
   - env: MODE=test RESOLVER=nightly
     addons: {apt: {packages: [libgmp-dev]}}
