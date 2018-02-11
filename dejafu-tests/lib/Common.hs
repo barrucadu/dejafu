@@ -11,7 +11,7 @@ import qualified Control.Monad.Catch as C
 import Control.Monad.Conc.Class
 import Control.Monad.STM.Class
 import System.Random (mkStdGen)
-import Test.DejaFu (Predicate, ProPredicate(..), Failure, Result(..), alwaysTrue)
+import Test.DejaFu (Predicate, ProPredicate(..), Failure, Result(..), Way, alwaysTrue)
 import Test.DejaFu.Conc (ConcIO)
 import qualified Test.Framework as TF
 import Test.Framework.Providers.HUnit (hUnitTestToTests)
@@ -33,6 +33,8 @@ instance IsTest TH.Test where
 
 instance IsTest T where
   toTestList (T n c p) = toTestList (BT n c p defaultBounds)
+  toTestList (W n c p w) = toTestList . testGroup n $
+    [ testDejafuWay w defaultMemType "(way)" p c ]
   toTestList (BT n c p b) = toTestList . testGroup n $
     let mk way name = testDejafuWay way defaultMemType name p c
         g = mkStdGen 0
@@ -47,6 +49,7 @@ instance IsTest t => IsTest [t] where
 
 data T where
   T  :: Show a => String -> ConcIO a -> Predicate a -> T
+  W  :: Show a => String -> ConcIO a -> Predicate a -> Way -> T
   BT :: Show a => String -> ConcIO a -> Predicate a -> Bounds -> T
 
 testGroup :: IsTest t => String -> t -> TF.Test

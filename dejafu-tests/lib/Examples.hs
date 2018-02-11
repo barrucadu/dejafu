@@ -5,6 +5,7 @@ import qualified Examples.ClassLaws    as C
 import qualified Examples.Logger       as L
 import qualified Examples.Philosophers as P
 import qualified Examples.SearchParty  as S
+import qualified Examples.ParMonad     as PM
 
 import Common
 
@@ -16,4 +17,5 @@ testExamples =
   , testGroup "Dining Philosophers" P.tests
   , testGroup "Message Logger"      L.tests
   , testGroup "Search Party"        S.tests
+  , testGroup "Par Monad (Direct Scheduler)" PM.tests
   ]

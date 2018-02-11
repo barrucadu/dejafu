@@ -31,6 +31,9 @@ library
                      , Examples.AutoUpdate
                      , Examples.ClassLaws
                      , Examples.Logger
+                     , Examples.ParMonad
+                     , Examples.ParMonad.Direct
+                     , Examples.ParMonad.DirectInternal
                      , Examples.Philosophers
                      , Examples.SearchParty
                      , Examples.SearchParty.Impredicative
@@ -40,18 +43,24 @@ library
                      , QSemN
 
   build-depends:       base
+                     , abstract-deque
+                     , abstract-par
                      , concurrency
                      , containers
+                     , deepseq
                      , dejafu
                      , exceptions
                      , HUnit
                      , hunit-dejafu
                      , leancheck
+                     , mtl
+                     , mwc-random
                      , QuickCheck
                      , random
                      , test-framework
                      , test-framework-hunit
                      , test-framework-quickcheck2
+                     , vector
   if impl(ghc < 8.0.1)
     build-depends: transformers
   hs-source-dirs:      lib
