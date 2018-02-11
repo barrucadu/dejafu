@@ -13,13 +13,14 @@ import Common
 
 tests :: [Test]
 tests =
-    [ testGroup "Threading" threadingTests
-    , testGroup "MVar" mvarTests
-    , testGroup "CRef" crefTests
-    , testGroup "STM" stmTests
-    , testGroup "Exceptions" exceptionTests
-    , testGroup "Subconcurrency" subconcurrencyTests
-    ]
+  [ testGroup "Threading" threadingTests
+  , testGroup "MVar" mvarTests
+  , testGroup "CRef" crefTests
+  , testGroup "STM" stmTests
+  , testGroup "Exceptions" exceptionTests
+  , testGroup "Capabilities" capabilityTests
+  , testGroup "Subconcurrency" subconcurrencyTests
+  ]
 
 --------------------------------------------------------------------------------
 
@@ -214,6 +215,16 @@ exceptionTests = toTestList
       catchArithException
         (spawn (throwTo tid Overflow) >>= readMVar)
         (\_ -> pure ())
+  ]
+
+--------------------------------------------------------------------------------
+
+capabilityTests :: [Test]
+capabilityTests =
+  [ djfu "get/setNumCapabilities are dependent" (gives' [1,3]) $ do
+      setNumCapabilities 1
+      fork (setNumCapabilities 3)
+      getNumCapabilities
   ]
 
 --------------------------------------------------------------------------------
