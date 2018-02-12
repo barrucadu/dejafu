@@ -3,16 +3,18 @@ module Main where
 import qualified Test.Tasty as T
 import qualified Test.Tasty.QuickCheck as T
 
-import Cases
-import Examples
+import qualified Unit as U
+import qualified Integration as I
+import qualified Examples as E
 
 main :: IO ()
-main = T.defaultMain $ T.adjustOption reduceQCTests allTests
+main = T.defaultMain $ T.adjustOption reduceQCTests tests
 
-allTests :: T.TestTree
-allTests = T.testGroup "Tests"
-  [ T.testGroup "Cases"    testCases
-  , T.testGroup "Examples" testExamples
+tests :: T.TestTree
+tests = T.testGroup "Tests"
+  [ T.testGroup "Unit" U.tests
+  , T.testGroup "Integration" I.tests
+  , T.testGroup "Examples" E.tests
   ]
 
 -- | Reduce the default number of quickcheck runs.

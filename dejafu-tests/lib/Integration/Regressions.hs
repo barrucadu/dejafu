@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cases.Regressions where
+module Integration.Regressions where
 
 import Test.DejaFu (exceptionsAlways, gives')
 

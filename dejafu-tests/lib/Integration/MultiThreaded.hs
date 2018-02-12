@@ -1,4 +1,4 @@
-module Cases.MultiThreaded where
+module Integration.MultiThreaded where
 
 import Control.Exception (ArithException(..))
 import Control.Monad.IO.Class (liftIO)

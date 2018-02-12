@@ -1,6 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Cases.Properties where
+module Unit.Properties where
 
 import Control.Monad (zipWithM, liftM2)
 import qualified Control.Monad.ST as ST
@@ -27,24 +27,50 @@ import Common
 
 tests :: [TestTree]
 tests =
-  [ testGroup "Class Laws"
+  [ testGroup "ClassLaw" classLawProps
+  , testGroup "Common"   commonProps
+  , testGroup "Memory"   memoryProps
+  , testGroup "SCT"      sctProps
+  ]
+
+-------------------------------------------------------------------------------
+
+classLawProps :: [TestTree]
+classLawProps = toTestList
     [ testGroup "Id"      (eqord (Proxy :: Proxy D.Id))
     , testGroup "Failure" (eqord (Proxy :: Proxy D.Failure))
     ]
+  where
+    eqord :: forall a. (Eq a, Ord a, Listable a, Show a) => Proxy a -> [TestTree]
+    eqord _ =
+      [ testProperty "Reflexivity (==)"     $ \(x :: a)     -> x == x
+      , testProperty "Symmetry (==)"        $ \(x :: a) y   -> (x == y) == (y == x)
+      , testProperty "Transitivity (==)"    $ \(x :: a) y z -> x == y && y == z ==> x == z
+      , testProperty "Reflexivity (<=)"     $ \(x :: a)     -> x <= x
+      , testProperty "Antisymmetry (<=)"    $ \(x :: a) y   -> x <= y && y <= x ==> x == y
+      , testProperty "Transitivity (<=)"    $ \(x :: a) y z -> x <= y && y <= z ==> x <= z
+      , testProperty "Eq / Ord Consistency" $ \(x :: a) y   -> x == y ==> x <= y
+      ]
 
-  , testGroup "Common"
-    [ testProperty "simplifyAction a == simplifyLookahead (rewind a)" $
-      \act -> canRewind act ==>
-      D.simplifyAction act == D.simplifyLookahead (rewind' act)
+-------------------------------------------------------------------------------
 
-    , testProperty "isBarrier a ==> synchronises a r" $
-      \a r -> D.isBarrier a ==> D.synchronises a r
+commonProps :: [TestTree]
+commonProps = toTestList
+  [ testProperty "simplifyAction a == simplifyLookahead (rewind a)" $
+    \act -> canRewind act ==>
+    D.simplifyAction act == D.simplifyLookahead (rewind' act)
 
-    , testProperty "isCommit a r ==> synchronises a r" $
-      \a r -> D.isCommit a r ==> D.synchronises a r
-    ]
+  , testProperty "isBarrier a ==> synchronises a r" $
+    \a r -> D.isBarrier a ==> D.synchronises a r
 
-  , testGroup "Memory"
+  , testProperty "isCommit a r ==> synchronises a r" $
+    \a r -> D.isCommit a r ==> D.synchronises a r
+  ]
+
+-------------------------------------------------------------------------------
+
+memoryProps :: [TestTree]
+memoryProps = toTestList
     [ testProperty "bufferWrite emptyBuffer k c a /= emptyBuffer" $
       \k a -> crefProp $ \cref -> do
         wb <- Mem.bufferWrite Mem.emptyBuffer k cref a
@@ -79,42 +105,33 @@ tests =
         a' <- Mem.readCRef cref tid1
         pure (tid1 /= tid2 ==> a' == a1)
     ]
-
-  , testGroup "SCT"
-    [ testProperty "canInterrupt ==> canInterruptL" $
-      \ds tid act ->
-        canRewind act && SCT.canInterrupt ds tid act ==>
-        SCT.canInterruptL ds tid (rewind' act)
-
-    , testProperty "dependent ==> dependent'" $
-      \ds tid1 tid2 ta1 ta2 ->
-        canRewind ta2 && SCT.dependent ds tid1 ta1 tid2 ta2 ==>
-        SCT.dependent' ds tid1 ta1 tid2 (rewind' ta2)
-
-    , testProperty "dependent x y == dependent y x" $
-      \ds tid1 tid2 ta1 ta2 ->
-        SCT.dependent ds tid1 ta1 tid2 ta2 ==
-        SCT.dependent ds tid2 ta2 tid1 ta1
-
-    , testProperty "dependentActions x y == dependentActions y x" $
-      \ds a1 a2 ->
-        SCT.dependentActions ds a1 a2 == SCT.dependentActions ds a2 a1
-    ]
-  ]
   where
-    eqord :: forall a. (Eq a, Ord a, Listable a, Show a) => Proxy a -> [TestTree]
-    eqord _ =
-      [ testProperty "Reflexivity (==)"     $ \(x :: a)     -> x == x
-      , testProperty "Symmetry (==)"        $ \(x :: a) y   -> (x == y) == (y == x)
-      , testProperty "Transitivity (==)"    $ \(x :: a) y z -> x == y && y == z ==> x == z
-      , testProperty "Reflexivity (<=)"     $ \(x :: a)     -> x <= x
-      , testProperty "Antisymmetry (<=)"    $ \(x :: a) y   -> x <= y && y <= x ==> x == y
-      , testProperty "Transitivity (<=)"    $ \(x :: a) y z -> x <= y && y <= z ==> x <= z
-      , testProperty "Eq / Ord Consistency" $ \(x :: a) y   -> x == y ==> x <= y
-      ]
-
     crefProp :: (forall s. D.CRef (ST.STRef s) Int -> ST.ST s Bool) -> D.CRefId -> Bool
     crefProp prop crid = ST.runST $ makeCRef crid >>= prop
+
+-------------------------------------------------------------------------------
+
+sctProps :: [TestTree]
+sctProps = toTestList
+  [ testProperty "canInterrupt ==> canInterruptL" $
+    \ds tid act ->
+      canRewind act && SCT.canInterrupt ds tid act ==>
+      SCT.canInterruptL ds tid (rewind' act)
+
+  , testProperty "dependent ==> dependent'" $
+    \ds tid1 tid2 ta1 ta2 ->
+      canRewind ta2 && SCT.dependent ds tid1 ta1 tid2 ta2 ==>
+      SCT.dependent' ds tid1 ta1 tid2 (rewind' ta2)
+
+  , testProperty "dependent x y == dependent y x" $
+    \ds tid1 tid2 ta1 ta2 ->
+      SCT.dependent ds tid1 ta1 tid2 ta2 ==
+      SCT.dependent ds tid2 ta2 tid1 ta1
+
+  , testProperty "dependentActions x y == dependentActions y x" $
+    \ds a1 a2 ->
+      SCT.dependentActions ds a1 a2 == SCT.dependentActions ds a2 a1
+  ]
 
 -------------------------------------------------------------------------------
 -- Utils

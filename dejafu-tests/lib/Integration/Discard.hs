@@ -1,4 +1,4 @@
-module Cases.Discard where
+module Integration.Discard where
 
 import Control.Concurrent.Classy
 import Test.DejaFu (gives')

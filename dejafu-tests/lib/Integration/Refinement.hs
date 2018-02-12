@@ -1,4 +1,4 @@
-module Cases.Refinement where
+module Integration.Refinement where
 
 import Control.Concurrent.Classy.MVar
 import Control.Monad (void)

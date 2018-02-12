@@ -1,6 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
 
-module Cases.Litmus where
+module Integration.Litmus where
 
 import Control.Monad (replicateM)
 import Control.Monad.ST (runST)

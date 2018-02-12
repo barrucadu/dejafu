@@ -10,12 +10,12 @@ import qualified Examples.ParMonad     as PM
 import Common
 
 -- | Run all the example tests.
-testExamples :: [TestTree]
-testExamples =
-  [ testGroup "auto-update"         A.tests
-  , testGroup "Class Laws"          C.tests
-  , testGroup "Dining Philosophers" P.tests
-  , testGroup "Message Logger"      L.tests
-  , testGroup "Search Party"        S.tests
-  , testGroup "Par Monad (Direct Scheduler)" PM.tests
+tests :: [TestTree]
+tests =
+  [ testGroup "AutoUpdate"   A.tests
+  , testGroup "ClassLaws"    C.tests
+  , testGroup "Logger"       L.tests
+  , testGroup "ParMonad"     PM.tests
+  , testGroup "Philosophers" P.tests
+  , testGroup "SearchParty"  S.tests
   ]

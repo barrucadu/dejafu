@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Cases.Async where
+module Integration.Async where
 
 import Control.Concurrent.Classy.Async
 import Control.Concurrent.Classy.CRef

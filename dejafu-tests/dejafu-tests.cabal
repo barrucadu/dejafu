@@ -17,15 +17,17 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Cases
-                     , Cases.Async
-                     , Cases.SingleThreaded
-                     , Cases.MultiThreaded
-                     , Cases.Refinement
-                     , Cases.Litmus
-                     , Cases.Discard
-                     , Cases.Regressions
-                     , Cases.Properties
+  exposed-modules:     Unit
+                     , Unit.Properties
+
+                     , Integration
+                     , Integration.Async
+                     , Integration.SingleThreaded
+                     , Integration.MultiThreaded
+                     , Integration.Refinement
+                     , Integration.Litmus
+                     , Integration.Discard
+                     , Integration.Regressions
 
                      , Examples
                      , Examples.AutoUpdate

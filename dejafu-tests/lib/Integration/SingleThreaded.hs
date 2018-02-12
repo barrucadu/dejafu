@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 
-module Cases.SingleThreaded where
+module Integration.SingleThreaded where
 
 import Control.Exception (ArithException(..), ArrayException(..))
 import Test.DejaFu (Failure(..), gives, gives', isUncaughtException)
