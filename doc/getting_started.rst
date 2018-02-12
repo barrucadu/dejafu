@@ -32,9 +32,6 @@ There are a few different packages under the Déjà Fu umbrella:
    ":hackage:`hunit-dejafu`", "1.0.0.0", "Déjà Fu support for the HUnit test framework"
    ":hackage:`tasty-dejafu`", "1.0.0.1", "Déjà Fu support for the tasty test framework"
 
-Everything is on Hackage and Stackage, and the last three major GHC
-versions (currently 8.2, 8.0, and 7.10) are supported.
-
 
 Installation
 ------------

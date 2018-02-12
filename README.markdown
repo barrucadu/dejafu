@@ -61,9 +61,6 @@ dependencies.
 [h:hunit]:  https://hackage.haskell.org/package/hunit-dejafu
 [h:tasty]:  https://hackage.haskell.org/package/tasty-dejafu
 
-Everything is on Hackage and Stackage, and the last three major GHC
-versions (currently 8.2, 8.0, and 7.10) are supported.
-
 
 Installation
 ------------

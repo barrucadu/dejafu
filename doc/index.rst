@@ -29,6 +29,7 @@ This is Déjà Fu
 
    adding_a_new_primitive
    contributing
+   ghc
    release_process
 
 .. toctree::

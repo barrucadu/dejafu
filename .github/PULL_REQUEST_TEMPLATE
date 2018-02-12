@@ -14,15 +14,16 @@ If this pull request is related to any other issues, list them here.
 
 ## Checklist
 
-- [ ] Travis builds the PR successfully
+**If this is fixing a bug or adding a feature:**
 
-**If this is fixing a bug:**
+- [ ] Add new tests to dejafu-tests
 
-- [ ] You have added a regression test to dejafu-tests
+**If this is removing an unsupported GHC version:**
 
-**If this is adding a feature:**
-
-- [ ] You have added new tests to dejafu-tests
+- [ ] Bump the lower bound on `base`
+- [ ] Go through the other dependencies and bump any appropriate lower
+  bounds
+- [ ] Remove any now-unnecessary conditional compilation
 
 
 ## Benchmark results (for performance issues)
