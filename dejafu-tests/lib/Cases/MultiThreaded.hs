@@ -7,6 +7,7 @@ import Test.DejaFu (Failure(..), gives, gives', isUncaughtException)
 
 import Control.Concurrent.Classy hiding (newQSemN, signalQSemN, waitQSemN)
 import Test.DejaFu.Conc (subconcurrency)
+import qualified Data.IORef as IORef
 
 import Common
 
@@ -19,6 +20,7 @@ tests =
   , testGroup "Exceptions" exceptionTests
   , testGroup "Capabilities" capabilityTests
   , testGroup "Subconcurrency" subconcurrencyTests
+  , testGroup "IO" ioTests
   ]
 
 --------------------------------------------------------------------------------
@@ -255,4 +257,15 @@ subconcurrencyTests = toTestList
       _ <- fork $ readMVar var
       _ <- subconcurrency $ pure ()
       pure ()
+  ]
+
+-------------------------------------------------------------------------------
+
+ioTests :: [TestTree]
+ioTests = toTestList
+  [ djfu "Lifted IO actions are dependent" (gives' [0,1,2]) $ do
+      r <- liftIO (IORef.newIORef 0)
+      fork $ liftIO (IORef.atomicWriteIORef r 1)
+      fork $ liftIO (IORef.atomicWriteIORef r 2)
+      liftIO (IORef.readIORef r)
   ]

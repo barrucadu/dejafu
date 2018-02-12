@@ -5,8 +5,11 @@ module Cases.SingleThreaded where
 import Control.Exception (ArithException(..), ArrayException(..))
 import Test.DejaFu (Failure(..), gives, gives', isUncaughtException)
 
+import Control.Monad (replicateM_)
 import Control.Concurrent.Classy
+import Control.Monad.IO.Class (liftIO)
 import Test.DejaFu.Conc (subconcurrency)
+import qualified Data.IORef as IORef
 
 import Common
 
@@ -18,6 +21,7 @@ tests =
   , testGroup "Exceptions" exceptionTests
   , testGroup "Capabilities" capabilityTests
   , testGroup "Subconcurrency" subconcurrencyTests
+  , testGroup "IO" ioTests
   ]
 
 --------------------------------------------------------------------------------
@@ -240,4 +244,14 @@ subconcurrencyTests = toTestList
       var <- newMVarInt 3
       x <- subconcurrency (takeMVar var)
       pure (either (const False) (==3) x)
+  ]
+
+-------------------------------------------------------------------------------
+
+ioTests :: [TestTree]
+ioTests = toTestList
+  [ djfu "Lifted IO is performed" (gives' [3]) $ do
+      r <- liftIO (IORef.newIORef 0)
+      replicateM_ 3 (liftIO (IORef.atomicModifyIORef r (\i -> (i+1, ()))))
+      liftIO (IORef.readIORef r)
   ]
