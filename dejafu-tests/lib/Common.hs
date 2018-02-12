@@ -24,25 +24,32 @@ instance IsTest T.TestTree where
   toTestList t = [t]
 
 instance IsTest T where
-  toTestList (T n c p) = toTestList (BT n c p defaultBounds)
-  toTestList (W n c p w) = toTestList . testGroup n $
-    toTestList (testDejafuWay w defaultMemType "(way)" p c)
-  toTestList (BT n c p b) = toTestList . testGroup n $
-    let mk way name = testDejafuWay way defaultMemType name p c
-        g = mkStdGen 0
-    in toTestList ([ mk (systematically b) "systematically"
-                   , mk (uniformly g 100) "uniformly"
-                   , mk (randomly  g 100) "randomly"
-                   , mk (swarmy g 100 10) "swarmy"
-                   ])
+  toTestList (T n c p) = toTestList (TEST n c p defaultWays)
+  toTestList (W n c p w) = toTestList (TEST n c p [w])
+  toTestList (B n c p b) = toTestList (TEST n c p (defaultWaysFor b))
+  toTestList (TEST n c p w) = toTestList . testGroup n $
+    let mk (name, way) = testDejafuWay way defaultMemType name p c
+    in map mk w
 
 instance IsTest t => IsTest [t] where
   toTestList = concatMap toTestList
 
 data T where
-  T  :: Show a => String -> ConcIO a -> Predicate a -> T
-  W  :: Show a => String -> ConcIO a -> Predicate a -> Way -> T
-  BT :: Show a => String -> ConcIO a -> Predicate a -> Bounds -> T
+  T :: Show a => String -> ConcIO a -> Predicate a -> T
+  W :: Show a => String -> ConcIO a -> Predicate a -> (String, Way) -> T
+  B :: Show a => String -> ConcIO a -> Predicate a -> Bounds -> T
+  TEST :: Show a => String -> ConcIO a -> Predicate a -> [(String, Way)] -> T
+
+defaultWays :: [(String, Way)]
+defaultWays = defaultWaysFor defaultBounds
+
+defaultWaysFor :: Bounds -> [(String, Way)]
+defaultWaysFor b =
+  [ ("systematically", systematically b)
+  , ("uniformly", uniformly (mkStdGen 0) 100)
+  , ("randomly", randomly (mkStdGen 0) 100)
+  , ("swarmy", swarmy (mkStdGen 0) 100 10)
+  ]
 
 testGroup :: IsTest t => String -> t -> T.TestTree
 testGroup name = T.testGroup name . toTestList
