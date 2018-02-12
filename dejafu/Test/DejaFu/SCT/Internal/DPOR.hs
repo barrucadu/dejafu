@@ -707,6 +707,7 @@ updateMaskState tid (Fork tid2) = \masks -> case M.lookup tid masks of
   Nothing -> masks
 updateMaskState tid (SetMasking   _ ms) = M.insert tid ms
 updateMaskState tid (ResetMasking _ ms) = M.insert tid ms
+updateMaskState tid Stop = M.delete tid
 updateMaskState _ _ = id
 
 -- | Check if a @CRef@ has a buffered write pending.
