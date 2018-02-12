@@ -4,11 +4,11 @@ import Control.Concurrent.Classy.MVar
 import Control.Monad (void)
 import Test.DejaFu.Conc (ConcIO)
 import Test.DejaFu.Refinement
-import Test.HUnit.DejaFu (testProperty)
+import Test.Tasty.DejaFu (testProperty)
 
 import Common
 
-tests :: [Test]
+tests :: [TestTree]
 tests = [ testGroup "MVar" mvarProps ]
 
 -------------------------------------------------------------------------------
@@ -21,7 +21,7 @@ mvar e = Sig
   , expression = void . e
   }
 
-mvarProps :: [Test]
+mvarProps :: [TestTree]
 mvarProps = toTestList
   [ testProperty "readMVar is idempotent when composed sequentially" $
       mvar readMVar === mvar (\v -> readMVar v >> readMVar v)

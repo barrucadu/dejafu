@@ -12,7 +12,7 @@ import qualified Cases.Properties     as P
 import Common
 
 -- | Run all the test cases.
-testCases :: [Test]
+testCases :: [TestTree]
 testCases =
   [ testGroup "Single Threaded" S.tests
   , testGroup "Multi Threaded"  M.tests

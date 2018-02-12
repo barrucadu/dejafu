@@ -15,11 +15,13 @@ import Data.Set (fromList)
 import Test.DejaFu (defaultBounds, defaultMemType)
 import Test.DejaFu.Conc (ConcIO)
 import Test.DejaFu.SCT (sctBound)
-import Test.Framework (Test, testGroup)
-import Test.Framework.Providers.QuickCheck2 (testProperty)
-import Test.QuickCheck (Arbitrary(..), Property, expectFailure, monomorphic)
+import Test.QuickCheck (Arbitrary(..), Property, monomorphic)
+import qualified Test.QuickCheck as QC
 import Test.QuickCheck.Function (Fun, apply)
 import Test.QuickCheck.Monadic (assert, monadicIO, run)
+import Test.Tasty.QuickCheck (testProperty)
+
+import Common
 
 -- Tests at bottom of file due to Template Haskell silliness.
 
@@ -228,7 +230,7 @@ return []
 -- be some better way than just having all exceptions be dependent
 -- with everything ever, except Stop.
 
-tests :: [Test]
+tests :: [TestTree]
 tests =
   [ testGroup "Functor Laws"
    [ testProperty "identity"    $(monomorphic 'prop_functor_id)
@@ -248,7 +250,7 @@ tests =
     , testProperty "fmap" $(monomorphic 'prop_monad_fmap)
     , testProperty "pure" $(monomorphic 'prop_monad_pure)
     , testProperty "ap"   $(monomorphic 'prop_monad_ap)
-    , testProperty "ap (side effects)" $ expectFailure $(monomorphic 'prop_monad_ap')
+    , testProperty "ap (side effects)" $ QC.expectFailure $(monomorphic 'prop_monad_ap')
     ]
   , testGroup "Alternative Laws"
     [ testProperty "left identity"  $(monomorphic 'prop_alternative_left_id)

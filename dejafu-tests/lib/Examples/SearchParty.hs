@@ -23,17 +23,13 @@ import Data.Maybe (fromJust, isNothing)
 -- test imports
 import Data.List (sort)
 import Test.DejaFu (Predicate, Result(..), alwaysSameOn)
-import Test.Framework (Test)
-import Test.Framework.Providers.HUnit (hUnitTestToTests)
-import Test.HUnit (test)
-import Test.HUnit.DejaFu (testDejafu)
 
 import Common
 
 import Examples.SearchParty.Impredicative
 
-tests :: [Test]
-tests = hUnitTestToTests $ test
+tests :: [TestTree]
+tests =
   [ testDejafu "concurrent filter" (failing checkResultLists) concFilter
   ]
 

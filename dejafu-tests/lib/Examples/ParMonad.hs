@@ -9,7 +9,7 @@ import qualified Examples.ParMonad.Direct as Par
 
 import Common
 
-tests :: [Test]
+tests :: [TestTree]
 tests = toTestList
   [ W "random testing exposes a deadlock" parFilter deadlocksSometimes (randomly (mkStdGen 0) 150)
   , W "systematic testing does not" parFilter deadlocksNever defaultWay

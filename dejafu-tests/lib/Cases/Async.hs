@@ -30,7 +30,7 @@ The following are omitted:
     race+failure, cancel, withAsync: because they rely on timing
 -}
 
-tests :: [Test]
+tests :: [TestTree]
 tests =
   [ testGroup "async"
     [ testCase "async_wait" async_wait
@@ -179,7 +179,7 @@ assertEqual err a1 a2
   | a1 == a2  = pure ()
   | otherwise = assertFailure err
 
-testCase :: String -> ConcIO () -> Test
+testCase :: String -> ConcIO () -> TestTree
 testCase name c = djfu name (alwaysTrue p) (try c) where
   p (Right (Left (e::SomeException))) = False
   p (Right _) = True

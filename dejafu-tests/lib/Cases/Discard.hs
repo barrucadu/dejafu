@@ -2,11 +2,10 @@ module Cases.Discard where
 
 import Control.Concurrent.Classy
 import Test.DejaFu (gives')
-import Test.HUnit.DejaFu (Discard(..), defaultMemType, defaultWay, testDejafuDiscard)
 
 import Common
 
-tests :: [Test]
+tests :: [TestTree]
 tests = toTestList
   [ check "All results are kept when none are discarded" [1, 2, 3] $
       const Nothing

@@ -38,8 +38,8 @@ library
                      , Examples.SearchParty
                      , Examples.SearchParty.Impredicative
 
+                     , Test.Tasty.LeanCheck
                      , Common
-
                      , QSemN
 
   build-depends:       base
@@ -50,16 +50,14 @@ library
                      , deepseq
                      , dejafu
                      , exceptions
-                     , HUnit
-                     , hunit-dejafu
                      , leancheck
                      , mtl
                      , mwc-random
                      , QuickCheck
                      , random
-                     , test-framework
-                     , test-framework-hunit
-                     , test-framework-quickcheck2
+                     , tasty
+                     , tasty-dejafu
+                     , tasty-quickcheck
                      , vector
   if impl(ghc < 8.0.1)
     build-depends: transformers
@@ -71,7 +69,8 @@ executable dejafu-tests
 
   build-depends:       base
                      , dejafu-tests
-                     , test-framework
+                     , tasty
+                     , tasty-quickcheck
   hs-source-dirs:      exe
   default-language:    Haskell2010
   ghc-options:         -threaded -rtsopts

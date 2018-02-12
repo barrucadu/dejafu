@@ -46,7 +46,7 @@ import Control.Monad.Conc.Class
 import Test.DejaFu (Failure(..), gives)
 import Common
 
-tests :: [Test]
+tests :: [TestTree]
 tests = toTestList
   [ T "deadlocks"        deadlocks        (gives [Left Deadlock, Right ()])
   , T "nondeterministic" nondeterministic (gives [Left Deadlock, Right 0, Right 1])

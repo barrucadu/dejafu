@@ -1,9 +1,6 @@
 {-# LANGUAGE GADTs #-}
 
-module Common
-  ( module Common
-  , TF.Test
-  ) where
+module Common (module Common, module Test.Tasty.DejaFu, T.TestTree) where
 
 import Control.Exception (ArithException, ArrayException, SomeException)
 import Control.Monad (void)
@@ -13,36 +10,31 @@ import Control.Monad.STM.Class
 import System.Random (mkStdGen)
 import Test.DejaFu (Predicate, ProPredicate(..), Failure, Result(..), Way, alwaysTrue)
 import Test.DejaFu.Conc (ConcIO)
-import qualified Test.Framework as TF
-import Test.Framework.Providers.HUnit (hUnitTestToTests)
-import qualified Test.HUnit as TH
-import Test.HUnit.DejaFu (Bounds, defaultBounds, defaultMemType, uniformly, randomly, swarmy, systematically, testDejafu, testDejafuWay)
-import qualified Test.LeanCheck as LeanCheck
+import qualified Test.Tasty as T
+import Test.Tasty.DejaFu hiding (testProperty)
+import qualified Test.Tasty.LeanCheck as T
 
 -------------------------------------------------------------------------------
 -- Tests
 
 class IsTest t where
-  toTestList :: t -> [TF.Test]
+  toTestList :: t -> [T.TestTree]
 
-instance IsTest TF.Test where
+instance IsTest T.TestTree where
   toTestList t = [t]
-
-instance IsTest TH.Test where
-  toTestList = hUnitTestToTests
 
 instance IsTest T where
   toTestList (T n c p) = toTestList (BT n c p defaultBounds)
   toTestList (W n c p w) = toTestList . testGroup n $
-    [ testDejafuWay w defaultMemType "(way)" p c ]
+    toTestList (testDejafuWay w defaultMemType "(way)" p c)
   toTestList (BT n c p b) = toTestList . testGroup n $
     let mk way name = testDejafuWay way defaultMemType name p c
         g = mkStdGen 0
-    in [ mk (systematically b) "systematically"
-       , mk (uniformly g 100) "uniformly"
-       , mk (randomly  g 100) "randomly"
-       , mk (swarmy g 100 10) "swarmy"
-       ]
+    in toTestList ([ mk (systematically b) "systematically"
+                   , mk (uniformly g 100) "uniformly"
+                   , mk (randomly  g 100) "randomly"
+                   , mk (swarmy g 100 10) "swarmy"
+                   ])
 
 instance IsTest t => IsTest [t] where
   toTestList = concatMap toTestList
@@ -52,25 +44,17 @@ data T where
   W  :: Show a => String -> ConcIO a -> Predicate a -> Way -> T
   BT :: Show a => String -> ConcIO a -> Predicate a -> Bounds -> T
 
-testGroup :: IsTest t => String -> t -> TF.Test
-testGroup name = TF.testGroup name . toTestList
+testGroup :: IsTest t => String -> t -> T.TestTree
+testGroup name = T.testGroup name . toTestList
 
-djfu :: Show a => String -> Predicate a -> ConcIO a -> TF.Test
-djfu name p c = hunitTest $ testDejafu name p c
+djfu :: Show a => String -> Predicate a -> ConcIO a -> T.TestTree
+djfu name p c = testDejafu name p c
 
-djfuT :: Show a => String -> Predicate a -> ConcIO a -> [TF.Test]
+djfuT :: Show a => String -> Predicate a -> ConcIO a -> [T.TestTree]
 djfuT name p c = toTestList $ T name c p
 
 alwaysFailsWith :: (Failure -> Bool) -> Predicate a
 alwaysFailsWith p = alwaysTrue (either p (const False))
-
-leancheck :: LeanCheck.Testable a => String -> a -> TF.Test
-leancheck name = hunitTest . TH.TestLabel name . lcheck . LeanCheck.counterExamples 2500 where
-  lcheck = TH.TestCase . TH.assertString . unlines . map showf
-  showf xs = "Failed for " ++ unwords xs
-
-hunitTest :: TH.Test -> TF.Test
-hunitTest = head . toTestList
 
 -------------------------------------------------------------------------------
 -- Exceptions

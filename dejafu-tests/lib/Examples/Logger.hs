@@ -8,7 +8,7 @@ import Test.DejaFu hiding (MemType(..))
 
 import Common
 
-tests :: [Test]
+tests :: [TestTree]
 tests = toTestList
   [ T "allowed"        raceyLogger validResult
   , T "correct occurs" raceyLogger isGood

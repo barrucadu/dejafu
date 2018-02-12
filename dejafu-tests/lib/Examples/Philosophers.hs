@@ -5,13 +5,11 @@ module Examples.Philosophers where
 import Control.Monad (replicateM, forever)
 import Control.Monad.Conc.Class
 import Test.DejaFu
-import Test.Framework (Test)
-import Test.Framework.Providers.HUnit (hUnitTestToTests)
-import Test.HUnit (test)
-import Test.HUnit.DejaFu
 
-tests :: [Test]
-tests = hUnitTestToTests $ test
+import Common
+
+tests :: [TestTree]
+tests =
   [ testDejafuWay way defaultMemType "deadlocks" deadlocksSometimes (philosophers 3)
   , testDejafuWay way defaultMemType "loops"     abortsSometimes    (philosophers 3)
   ]

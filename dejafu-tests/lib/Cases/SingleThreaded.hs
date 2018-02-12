@@ -10,7 +10,7 @@ import Test.DejaFu.Conc (subconcurrency)
 
 import Common
 
-tests :: [Test]
+tests :: [TestTree]
 tests =
   [ testGroup "MVar" mvarTests
   , testGroup "CRef" crefTests
@@ -22,7 +22,7 @@ tests =
 
 --------------------------------------------------------------------------------
 
-mvarTests :: [Test]
+mvarTests :: [TestTree]
 mvarTests =
   [ djfu "Taking from an empty MVar blocks" (gives [Left Deadlock]) $ do
       var <- newEmptyMVarInt
@@ -77,7 +77,7 @@ mvarTests =
 
 --------------------------------------------------------------------------------
 
-crefTests :: [Test]
+crefTests :: [TestTree]
 crefTests =
   [ djfu "Reading a non-updated CRef gives its initial value" (gives' [True]) $ do
       ref <- newCRefInt 5
@@ -123,7 +123,7 @@ crefTests =
 
 --------------------------------------------------------------------------------
 
-stmTests :: [Test]
+stmTests :: [TestTree]
 stmTests =
   [ djfu "When a TVar is updated, its new value is visible later in same transaction" (gives' [True]) $
       (6==) <$> atomically (do { v <- newTVarInt 5; writeTVar v 6; readTVar v })
@@ -162,7 +162,7 @@ stmTests =
 
 --------------------------------------------------------------------------------
 
-exceptionTests :: [Test]
+exceptionTests :: [TestTree]
 exceptionTests =
   [ djfu "An exception thrown can be caught" (gives' [True]) $
       catchArithException
@@ -209,7 +209,7 @@ exceptionTests =
 
 --------------------------------------------------------------------------------
 
-capabilityTests :: [Test]
+capabilityTests :: [TestTree]
 capabilityTests =
   [ djfu "Reading the capabilities twice without update gives the same result" (gives' [True]) $ do
       c1 <- getNumCapabilities
@@ -224,7 +224,7 @@ capabilityTests =
 
 --------------------------------------------------------------------------------
 
-subconcurrencyTests :: [Test]
+subconcurrencyTests :: [TestTree]
 subconcurrencyTests =
   [ djfu "Failures in subconcurrency can be observed" (gives' [True]) $ do
       x <- subconcurrency (newEmptyMVar >>= readMVar)

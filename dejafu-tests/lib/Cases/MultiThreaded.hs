@@ -4,14 +4,13 @@ import Control.Exception (ArithException(..))
 import Control.Monad.IO.Class (liftIO)
 import qualified Control.Concurrent as C
 import Test.DejaFu (Failure(..), gives, gives', isUncaughtException)
-import Test.Framework (Test)
 
 import Control.Concurrent.Classy hiding (newQSemN, signalQSemN, waitQSemN)
 import Test.DejaFu.Conc (subconcurrency)
 
 import Common
 
-tests :: [Test]
+tests :: [TestTree]
 tests =
   [ testGroup "Threading" threadingTests
   , testGroup "MVar" mvarTests
@@ -24,7 +23,7 @@ tests =
 
 --------------------------------------------------------------------------------
 
-threadingTests :: [Test]
+threadingTests :: [TestTree]
 threadingTests = toTestList
   [ djfuT "Fork reports the thread ID of the child" (gives' [True]) $ do
       var <- newEmptyMVar
@@ -78,7 +77,7 @@ threadingTests = toTestList
 
 --------------------------------------------------------------------------------
 
-mvarTests :: [Test]
+mvarTests :: [TestTree]
 mvarTests = toTestList
   [ djfuT "Racey MVar computations may deadlock" (gives [Left Deadlock, Right 0]) $ do
       a <- newEmptyMVar
@@ -101,7 +100,7 @@ mvarTests = toTestList
 
 --------------------------------------------------------------------------------
 
-crefTests :: [Test]
+crefTests :: [TestTree]
 crefTests = toTestList
   [ djfuT "Racey CRef computations are nondeterministic" (gives' [0,1]) $ do
       x  <- newCRefInt 0
@@ -152,7 +151,7 @@ crefTests = toTestList
 
 --------------------------------------------------------------------------------
 
-stmTests :: [Test]
+stmTests :: [TestTree]
 stmTests = toTestList
   [ djfuT "Transactions are atomic" (gives' [0,2]) $ do
       x <- atomically $ newTVarInt 0
@@ -174,7 +173,7 @@ stmTests = toTestList
 
 --------------------------------------------------------------------------------
 
-exceptionTests :: [Test]
+exceptionTests :: [TestTree]
 exceptionTests = toTestList
   [ djfuT "Exceptions can kill unmasked threads" (gives [Left Deadlock, Right ()]) $ do
       x <- newEmptyMVar
@@ -219,7 +218,7 @@ exceptionTests = toTestList
 
 --------------------------------------------------------------------------------
 
-capabilityTests :: [Test]
+capabilityTests :: [TestTree]
 capabilityTests =
   [ djfu "get/setNumCapabilities are dependent" (gives' [1,3]) $ do
       setNumCapabilities 1
@@ -229,7 +228,7 @@ capabilityTests =
 
 --------------------------------------------------------------------------------
 
-subconcurrencyTests :: [Test]
+subconcurrencyTests :: [TestTree]
 subconcurrencyTests = toTestList
   [ djfuT "Failure is observable" (gives' [Left Deadlock, Right ()]) $ do
       var <- newEmptyMVar

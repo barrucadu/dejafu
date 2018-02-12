@@ -20,12 +20,12 @@ import qualified Test.DejaFu.Internal as D
 import qualified Test.DejaFu.Conc.Internal.Common as D
 import qualified Test.DejaFu.Conc.Internal.Memory as Mem
 import qualified Test.DejaFu.SCT.Internal.DPOR as SCT
-import Test.Framework (Test)
 import Test.LeanCheck (Listable(..), (\/), (><), (==>), cons0, cons1, cons2, cons3, mapT)
+import Test.Tasty.LeanCheck (testProperty)
 
 import Common
 
-tests :: [Test]
+tests :: [TestTree]
 tests =
   [ testGroup "Class Laws"
     [ testGroup "Id"      (eqord (Proxy :: Proxy D.Id))
@@ -33,46 +33,46 @@ tests =
     ]
 
   , testGroup "Common"
-    [ leancheck "simplifyAction a == simplifyLookahead (rewind a)" $
+    [ testProperty "simplifyAction a == simplifyLookahead (rewind a)" $
       \act -> canRewind act ==>
       D.simplifyAction act == D.simplifyLookahead (rewind' act)
 
-    , leancheck "isBarrier a ==> synchronises a r" $
+    , testProperty "isBarrier a ==> synchronises a r" $
       \a r -> D.isBarrier a ==> D.synchronises a r
 
-    , leancheck "isCommit a r ==> synchronises a r" $
+    , testProperty "isCommit a r ==> synchronises a r" $
       \a r -> D.isCommit a r ==> D.synchronises a r
     ]
 
   , testGroup "Memory"
-    [ leancheck "bufferWrite emptyBuffer k c a /= emptyBuffer" $
+    [ testProperty "bufferWrite emptyBuffer k c a /= emptyBuffer" $
       \k a -> crefProp $ \cref -> do
         wb <- Mem.bufferWrite Mem.emptyBuffer k cref a
         not <$> wb `eq_wb` Mem.emptyBuffer
 
-    , leancheck "commitWrite emptyBuffer k == emptyBuffer" $
+    , testProperty "commitWrite emptyBuffer k == emptyBuffer" $
       \k -> ST.runST $ do
         wb <- Mem.commitWrite Mem.emptyBuffer k
         wb `eq_wb` Mem.emptyBuffer
 
-    , leancheck "commitWrite (bufferWrite emptyBuffer k a) k == emptyBuffer" $
+    , testProperty "commitWrite (bufferWrite emptyBuffer k a) k == emptyBuffer" $
       \k a -> crefProp $ \cref -> do
         wb1 <- Mem.bufferWrite Mem.emptyBuffer k cref a
         wb2 <- Mem.commitWrite wb1 k
         wb2 `eq_wb` Mem.emptyBuffer
 
-    , leancheck "Single buffered write/read from same thread" $
+    , testProperty "Single buffered write/read from same thread" $
       \k@(tid, _) a -> crefProp $ \cref -> do
         Mem.bufferWrite Mem.emptyBuffer k cref a
         (a ==) <$> Mem.readCRef cref tid
 
-    , leancheck "Overriding buffered write/read from same thread" $
+    , testProperty "Overriding buffered write/read from same thread" $
       \k@(tid, _) a1 a2 -> crefProp $ \cref -> do
         Mem.bufferWrite Mem.emptyBuffer k cref a1
         Mem.bufferWrite Mem.emptyBuffer k cref a2
         (a2 ==) <$> Mem.readCRef cref tid
 
-    , leancheck "Buffered write/read from different thread" $
+    , testProperty "Buffered write/read from different thread" $
       \k1@(tid1, _) k2@(tid2, _) a1 a2 -> crefProp $ \cref -> do
         Mem.bufferWrite Mem.emptyBuffer k1 cref a1
         Mem.bufferWrite Mem.emptyBuffer k2 cref a2
@@ -81,36 +81,36 @@ tests =
     ]
 
   , testGroup "SCT"
-    [ leancheck "canInterrupt ==> canInterruptL" $
+    [ testProperty "canInterrupt ==> canInterruptL" $
       \ds tid act ->
         canRewind act && SCT.canInterrupt ds tid act ==>
         SCT.canInterruptL ds tid (rewind' act)
 
-    , leancheck "dependent ==> dependent'" $
+    , testProperty "dependent ==> dependent'" $
       \ds tid1 tid2 ta1 ta2 ->
         canRewind ta2 && SCT.dependent ds tid1 ta1 tid2 ta2 ==>
         SCT.dependent' ds tid1 ta1 tid2 (rewind' ta2)
 
-    , leancheck "dependent x y == dependent y x" $
+    , testProperty "dependent x y == dependent y x" $
       \ds tid1 tid2 ta1 ta2 ->
         SCT.dependent ds tid1 ta1 tid2 ta2 ==
         SCT.dependent ds tid2 ta2 tid1 ta1
 
-    , leancheck "dependentActions x y == dependentActions y x" $
+    , testProperty "dependentActions x y == dependentActions y x" $
       \ds a1 a2 ->
         SCT.dependentActions ds a1 a2 == SCT.dependentActions ds a2 a1
     ]
   ]
   where
-    eqord :: forall a. (Eq a, Ord a, Listable a, Show a) => Proxy a -> [Test]
+    eqord :: forall a. (Eq a, Ord a, Listable a, Show a) => Proxy a -> [TestTree]
     eqord _ =
-      [ leancheck "Reflexivity (==)"     $ \(x :: a)     -> x == x
-      , leancheck "Symmetry (==)"        $ \(x :: a) y   -> (x == y) == (y == x)
-      , leancheck "Transitivity (==)"    $ \(x :: a) y z -> x == y && y == z ==> x == z
-      , leancheck "Reflexivity (<=)"     $ \(x :: a)     -> x <= x
-      , leancheck "Antisymmetry (<=)"    $ \(x :: a) y   -> x <= y && y <= x ==> x == y
-      , leancheck "Transitivity (<=)"    $ \(x :: a) y z -> x <= y && y <= z ==> x <= z
-      , leancheck "Eq / Ord Consistency" $ \(x :: a) y   -> x == y ==> x <= y
+      [ testProperty "Reflexivity (==)"     $ \(x :: a)     -> x == x
+      , testProperty "Symmetry (==)"        $ \(x :: a) y   -> (x == y) == (y == x)
+      , testProperty "Transitivity (==)"    $ \(x :: a) y z -> x == y && y == z ==> x == z
+      , testProperty "Reflexivity (<=)"     $ \(x :: a)     -> x <= x
+      , testProperty "Antisymmetry (<=)"    $ \(x :: a) y   -> x <= y && y <= x ==> x == y
+      , testProperty "Transitivity (<=)"    $ \(x :: a) y z -> x <= y && y <= z ==> x <= z
+      , testProperty "Eq / Ord Consistency" $ \(x :: a) y   -> x == y ==> x <= y
       ]
 
     crefProp :: (forall s. D.CRef (ST.STRef s) Int -> ST.ST s Bool) -> D.CRefId -> Bool

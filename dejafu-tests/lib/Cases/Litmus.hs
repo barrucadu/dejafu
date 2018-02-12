@@ -8,14 +8,12 @@ import Data.List (nub, sort)
 import Test.DejaFu (MemType(..), defaultWay, gives')
 import Test.DejaFu.Conc (ConcIO)
 import Test.DejaFu.SCT (runSCT)
-import Test.Framework (Test, testGroup)
-import Test.Framework.Providers.HUnit (hUnitTestToTests)
-import Test.HUnit (test)
-import Test.HUnit.DejaFu (testDejafuWay)
 
 import Control.Monad.Conc.Class
 
-tests :: [Test]
+import Common
+
+tests :: [TestTree]
 tests =
   [ let sq  = [(a,b) | a <- [0..1], b <- [0..1], (a,b) /= (1,0)]
         tso = sq
@@ -46,8 +44,8 @@ tests =
     in litmusTest "Independent Read Independent Write" intelWP28 out out out
   ]
 
-litmusTest :: (Eq a, Show a) => String -> ConcIO a -> [a] -> [a] -> [a] -> Test
-litmusTest name act sq tso pso = testGroup name . hUnitTestToTests $ test
+litmusTest :: (Eq a, Show a) => String -> ConcIO a -> [a] -> [a] -> [a] -> TestTree
+litmusTest name act sq tso pso = testGroup name
   [ testDejafuWay defaultWay SequentialConsistency "SQ"  (gives' sq)  act
   , testDejafuWay defaultWay TotalStoreOrder       "TSO" (gives' tso) act
   , testDejafuWay defaultWay PartialStoreOrder     "PSO" (gives' pso) act

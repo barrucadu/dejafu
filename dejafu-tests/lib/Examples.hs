@@ -10,7 +10,7 @@ import qualified Examples.ParMonad     as PM
 import Common
 
 -- | Run all the example tests.
-testExamples :: [Test]
+testExamples :: [TestTree]
 testExamples =
   [ testGroup "auto-update"         A.tests
   , testGroup "Class Laws"          C.tests

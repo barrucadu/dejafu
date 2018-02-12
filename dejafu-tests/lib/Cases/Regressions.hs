@@ -3,7 +3,6 @@
 module Cases.Regressions where
 
 import Test.DejaFu (exceptionsAlways, gives')
-import Test.Framework (Test)
 
 import Control.Concurrent.Classy hiding (newQSemN, signalQSemN, waitQSemN)
 import Control.Exception (AsyncException(..))
@@ -13,7 +12,7 @@ import Test.DejaFu.Conc (subconcurrency)
 import Common
 import QSemN
 
-tests :: [Test]
+tests :: [TestTree]
 tests =
   [ djfu "https://github.com/barrucadu/dejafu/issues/40" (gives' [0,1]) $ do
       x <- newCRefInt 0

@@ -58,7 +58,7 @@ script:
       git diff --exit-code concurrency dejafu hunit-dejafu tasty-dejafu
       ;;
     test)
-      stack exec -- dejafu-tests --plain
+      stack exec -- dejafu-tests
       ;;
     doctest)
       stack exec -- bash -c "DEJAFU_DOCTEST=y doctest dejafu/Test"
