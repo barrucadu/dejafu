@@ -536,13 +536,6 @@ dporSched boundf = Scheduler $ \prior threads s ->
 -- in a few cases.
 dependent :: DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
 dependent ds t1 a1 t2 a2 = case (a1, a2) of
-  -- @SetNumCapabilities@ and @GetNumCapabilities@ are NOT dependent
-  -- IF the value read is the same as the value written. 'dependent''
-  -- can not see the value read (as it hasn't happened yet!), and so
-  -- is more pessimistic here.
-  (SetNumCapabilities a, GetNumCapabilities b) | a == b -> False
-  (GetNumCapabilities a, SetNumCapabilities b) | a == b -> False
-
   -- When masked interruptible, a thread can only be interrupted when
   -- actually blocked. 'dependent'' has to assume that all
   -- potentially-blocking operations can block, and so is more
@@ -592,9 +585,8 @@ dependent' ds t1 a1 t2 l2 = case (a1, l2) of
   -- This is a bit pessimistic: Set/Get are only dependent if the
   -- value set is not the same as the value that will be got, but we
   -- can't know that here. 'dependent' optimises this case.
-  (GetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
+  (GetNumCapabilities _, WillSetNumCapabilities _) -> True
   (SetNumCapabilities _, WillGetNumCapabilities)   -> True
-  (SetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
 
   _ -> dependentActions ds (simplifyAction a1) (simplifyLookahead l2)
 

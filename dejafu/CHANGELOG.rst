@@ -7,6 +7,16 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Fixed
+~~~~~
+
+* (:issue:`189`) Remove an incorrect optimisation in systematic
+  testing for ``getNumCapabilities`` and ``setNumCapabilities``.
+
+
 1.0.0.1 (2017-01-19)
 --------------------
 
