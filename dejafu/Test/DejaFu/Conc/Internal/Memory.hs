@@ -129,12 +129,15 @@ writeBarrier (WriteBuffer wb) = mapM_ flush $ M.elems wb where
 -- | Add phantom threads to the thread list to commit pending writes.
 addCommitThreads :: WriteBuffer r -> Threads n r -> Threads n r
 addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
-  phantoms = [ (ThreadId (Id Nothing $ negate tid), mkthread c)
-             | ((_, b), tid) <- zip (M.toList wb) [1..]
+  phantoms = [ (ThreadId (Id Nothing . negate $ commitTidOf k), mkthread c)
+             | (k, b) <- M.toList wb
              , c <- maybeToList (go $ viewl b)
              ]
   go (BufferedWrite tid (CRef crid _) _ :< _) = Just $ ACommit tid crid
   go EmptyL = Nothing
+
+  commitTidOf (ThreadId (Id _ t), Nothing) = t + 1
+  commitTidOf (ThreadId (Id _ t), Just (CRefId (Id _ c))) = t + 1 + c * 10000
 
 -- | Remove phantom threads.
 delCommitThreads :: Threads n r -> Threads n r

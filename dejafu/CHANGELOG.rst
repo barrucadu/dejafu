@@ -10,6 +10,11 @@ standard Haskell versioning scheme.
 unreleased
 ----------
 
+Changed
+~~~~~~~
+
+* (:issue:`193`) Deterministically assign commit thread IDs.
+
 Fixed
 ~~~~~
 
