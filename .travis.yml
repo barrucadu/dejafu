@@ -26,8 +26,6 @@ matrix:
     addons: {apt: {packages: [libgmp-dev]}}
   - env: MODE=style
     addons: {apt: {packages: [libgmp-dev]}}
-  allow_failures:
-  - env: MODE=test RESOLVER=nightly
 
 # Download and unpack the stack executable
 before_install:
