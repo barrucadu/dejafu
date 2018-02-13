@@ -247,7 +247,8 @@ testDejafusWay :: Show b
   -> TestTree
 testDejafusWay = testconc (const Nothing)
 
--- | Variant of 'testDejafusWay' which can selectively discard results.
+-- | Variant of 'testDejafusWay' which can selectively discard
+-- results, beyond what each predicate already discards.
 --
 -- @since unreleased
 testDejafusDiscard :: Show b
