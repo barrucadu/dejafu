@@ -213,6 +213,24 @@ testDejafusWay :: Show b
   -> Test
 testDejafusWay = testconc (const Nothing)
 
+-- | Variant of 'testDejafusWay' which can selectively discard
+-- results, beyond what each predicate already discards.
+--
+-- @since unreleased
+testDejafusDiscard :: Show b
+  => (Either Failure a -> Maybe Discard)
+  -- ^ Selectively discard results.
+  -> Way
+  -- ^ How to execute the concurrent program.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -> [(String, ProPredicate a b)]
+  -- ^ The list of predicates (with names) to check.
+  -> Conc.ConcIO a
+  -- ^ The computation to test.
+  -> Test
+testDejafusDiscard = testconc
+
 
 -------------------------------------------------------------------------------
 -- Refinement property testing
