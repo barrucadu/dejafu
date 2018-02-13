@@ -7,6 +7,17 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
+unreleased
+----------
+
+### Test.HUnit.DejaFu
+
+- New `testDejafusDiscard` function (#200).
+
+
+---------------------------------------------------------------------------------------------------
+
+
 1.0.0.0
 -------
 
