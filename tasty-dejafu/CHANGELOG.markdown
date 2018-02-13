@@ -7,12 +7,18 @@ This project is versioned according to the [Package Versioning Policy](https://p
 *de facto* standard Haskell versioning scheme.
 
 
-unreleased
-----------
+1.0.1.0
+-------
+
+- **Date**    2018-02-13
+- **Git tag** [tasty-dejafu-1.0.1.0][]
+- **Hackage** https://hackage.haskell.org/package/tasty-dejafu-1.0.1.0
 
 ### Test.Tasty.DejaFu
 
 - New `testDejafusDiscard` function (#195).
+
+[tasty-dejafu-1.0.1.0]: https://github.com/barrucadu/dejafu/releases/tag/tasty-dejafu-1.0.1.0
 
 
 ---------------------------------------------------------------------------------------------------
