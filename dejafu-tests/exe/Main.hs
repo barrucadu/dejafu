@@ -1,11 +1,11 @@
 module Main where
 
-import qualified Test.Tasty as T
+import qualified Test.Tasty            as T
 import qualified Test.Tasty.QuickCheck as T
 
-import qualified Unit as U
-import qualified Integration as I
-import qualified Examples as E
+import qualified Examples              as E
+import qualified Integration           as I
+import qualified Unit                  as U
 
 main :: IO ()
 main = T.defaultMain $ T.adjustOption reduceQCTests tests

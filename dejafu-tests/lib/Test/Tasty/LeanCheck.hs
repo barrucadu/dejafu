@@ -3,12 +3,12 @@
 
 module Test.Tasty.LeanCheck where
 
-import Data.Proxy (Proxy(..))
-import Test.Tasty.Providers
-import Test.Tasty.Options
-import qualified Test.LeanCheck as LeanCheck
-import Text.Printf (printf)
-import Text.Read (readMaybe)
+import           Data.Proxy           (Proxy(..))
+import qualified Test.LeanCheck       as LeanCheck
+import           Test.Tasty.Options
+import           Test.Tasty.Providers
+import           Text.Printf          (printf)
+import           Text.Read            (readMaybe)
 
 -- | Create a 'Test' for a LeanCheck 'LeanCheck.Testable' property.
 testProperty :: LeanCheck.Testable p => TestName -> p -> TestTree
@@ -26,7 +26,7 @@ instance IsOption LeanCheckTests where
   defaultValue = 2500
   parseValue = fmap LeanCheckTests . readMaybe
   optionName = pure "leancheck-tests"
-  optionHelp = return "Tests to use for leancheck tests"
+  optionHelp = pure "Tests to use for leancheck tests"
 
 instance IsTest LeanCheckTest where
   testOptions = pure [Option (Proxy :: Proxy LeanCheckTests)]

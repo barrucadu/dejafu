@@ -2,17 +2,16 @@
 
 module Integration.Litmus where
 
-import Control.Monad (replicateM)
-import Control.Monad.ST (runST)
-import Data.List (nub, sort)
-import Test.DejaFu (MemType(..), defaultWay, gives')
-import Test.DejaFu.Conc (ConcIO)
-import Test.DejaFu.SCT (runSCT)
-import qualified Test.Tasty.Hedgehog as H
+import           Control.Monad            (replicateM, void)
+import           Data.List                (nub, sort)
+import           Test.DejaFu              (MemType(..), defaultWay, gives')
+import           Test.DejaFu.Conc         (ConcIO)
+import           Test.DejaFu.SCT          (runSCT)
+import qualified Test.Tasty.Hedgehog      as H
 
-import Control.Monad.Conc.Class
+import           Control.Monad.Conc.Class
 
-import Common
+import           Common
 
 tests :: [TestTree]
 tests =
@@ -62,10 +61,10 @@ litmusTest name act sq tso pso = testGroup name
 -- possible results. This is why dejafu is good!
 compareTest :: forall a. (Ord a, Show a) => (forall m. MonadConc m => m a) -> IO ()
 compareTest act = do
-  putStr "DejaFu-SQ:  " >> results SequentialConsistency
-  putStr "DejaFu-TSO: " >> results TotalStoreOrder
-  putStr "DejaFu-PSO: " >> results PartialStoreOrder
-  putStr "IO:         " >> ioResults >>= putStrLn
+  void $ putStr "DejaFu-SQ:  " >> results SequentialConsistency
+  void $ putStr "DejaFu-TSO: " >> results TotalStoreOrder
+  void $ putStr "DejaFu-PSO: " >> results PartialStoreOrder
+  void $ putStr "IO:         " >> ioResults >>= putStrLn
 
   where
     results memtype = show . nub . sort . map (\(Right a,_) -> a) <$>

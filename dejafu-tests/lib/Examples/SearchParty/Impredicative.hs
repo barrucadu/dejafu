@@ -5,9 +5,9 @@
 -- SearchParty module.
 module Examples.SearchParty.Impredicative where
 
-import Control.Concurrent.Classy.STM.TMVar (TMVar, newTMVar)
-import Control.Monad.Conc.Class
-import Unsafe.Coerce (unsafeCoerce)
+import           Control.Concurrent.Classy.STM.TMVar (TMVar, newTMVar)
+import           Control.Monad.Conc.Class
+import           Unsafe.Coerce                       (unsafeCoerce)
 
 -- | A unit of work in a monad @m@ which will produce a final result
 -- of type @a@.

@@ -2,11 +2,11 @@
 -- as it show-cases testing a non-terminating program.
 module Examples.Philosophers where
 
-import Control.Monad (replicateM, forever)
-import Control.Monad.Conc.Class
-import Test.DejaFu
+import           Control.Monad            (forever, replicateM)
+import           Control.Monad.Conc.Class
+import           Test.DejaFu
 
-import Common
+import           Common
 
 tests :: [TestTree]
 tests =

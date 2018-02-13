@@ -2,26 +2,28 @@
 
 module Common (module Common, module Test.Tasty.DejaFu, T.TestTree) where
 
-import Data.List.NonEmpty (NonEmpty(..), toList)
-import Control.Exception (ArithException, ArrayException, SomeException, displayException)
-import Control.Monad (void)
-import qualified Control.Monad.Catch as C
-import Control.Monad.Conc.Class
-import Control.Monad.STM.Class
-import System.Random (mkStdGen)
-import Test.DejaFu (Predicate, ProPredicate(..), Failure, Result(..), Way, alwaysTrue)
-import Test.DejaFu.Conc (ConcIO, Scheduler(..), randomSched, runConcurrent)
-import qualified Test.Tasty as T
-import Test.Tasty.DejaFu hiding (testProperty)
-import qualified Hedgehog as H
-import qualified Hedgehog.Gen as HGen
-import qualified Hedgehog.Range as HRange
-import qualified Test.Tasty.Hedgehog as H
-import Control.Monad.IO.Class (liftIO)
-import Test.DejaFu.SCT.Internal.DPOR
-import Test.DejaFu.Types
-import Test.DejaFu.Utils
-import Test.DejaFu.Internal (ActionType(UnsynchronisedWrite), isBarrier, simplifyAction)
+import           Control.Exception             (ArithException, ArrayException,
+                                                SomeException, displayException)
+import           Control.Monad                 (void)
+import qualified Control.Monad.Catch           as C
+import           Control.Monad.Conc.Class
+import           Control.Monad.IO.Class        (liftIO)
+import           Control.Monad.STM.Class
+import qualified Hedgehog                      as H
+import qualified Hedgehog.Gen                  as HGen
+import qualified Hedgehog.Range                as HRange
+import           System.Random                 (mkStdGen)
+import           Test.DejaFu                   (Failure, Predicate,
+                                                ProPredicate(..), Result(..),
+                                                Way, alwaysTrue)
+import           Test.DejaFu.Conc              (ConcIO, Scheduler(..),
+                                                randomSched, runConcurrent)
+import           Test.DejaFu.SCT.Internal.DPOR
+import           Test.DejaFu.Types
+import           Test.DejaFu.Utils
+import qualified Test.Tasty                    as T
+import           Test.Tasty.DejaFu             hiding (testProperty)
+import qualified Test.Tasty.Hedgehog           as H
 
 -------------------------------------------------------------------------------
 -- Tests

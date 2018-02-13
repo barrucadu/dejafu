@@ -3,20 +3,21 @@
 
 module Integration.Async where
 
-import Control.Concurrent.Classy.Async
-import Control.Concurrent.Classy.CRef
-import Control.Exception (AsyncException(..), Exception, SomeException, fromException)
-import Control.Monad (forever, when)
-import Control.Monad.Catch (finally, try)
-import Control.Monad.Conc.Class hiding (threadDelay)
-import qualified Control.Monad.Conc.Class as C
-import Data.List (sort)
-import Data.Maybe (isJust, isNothing)
-import Data.Typeable (Typeable)
-import Test.DejaFu (alwaysTrue)
-import Test.DejaFu.Conc (ConcIO)
+import           Control.Concurrent.Classy.Async
+import           Control.Concurrent.Classy.CRef
+import           Control.Exception               (AsyncException(..), Exception,
+                                                  SomeException, fromException)
+import           Control.Monad                   (when)
+import           Control.Monad.Catch             (try)
+import           Control.Monad.Conc.Class        hiding (threadDelay)
+import qualified Control.Monad.Conc.Class        as C
+import           Data.List                       (sort)
+import           Data.Maybe                      (isJust, isNothing)
+import           Data.Typeable                   (Typeable)
+import           Test.DejaFu                     (alwaysTrue)
+import           Test.DejaFu.Conc                (ConcIO)
 
-import Common
+import           Common
 
 {-
 Tests from https://github.com/simonmar/async/blob/master/test/test-async.hs
@@ -62,7 +63,7 @@ instance Exception TestException
 
 async_waitCatch :: MonadConc m => m ()
 async_waitCatch = do
-  a <- async (return value)
+  a <- async (pure value)
   r <- waitCatch a
   case r of
     Left _  -> assertFailure ""
@@ -70,7 +71,7 @@ async_waitCatch = do
 
 async_wait :: MonadConc m => m ()
 async_wait = do
-  a <- async (return value)
+  a <- async (pure value)
   r <- wait a
   assertEqual "async_wait" r value
 
@@ -88,8 +89,8 @@ async_exwait = do
   (wait a >> assertFailure "") `catch` \e -> e @?= TestException
 
 withasync_waitCatch :: MonadConc m => m ()
-withasync_waitCatch = do
-  withAsync (return value) $ \a -> do
+withasync_waitCatch =
+  withAsync (pure value) $ \a -> do
     r <- waitCatch a
     case r of
       Left _  -> assertFailure ""
@@ -97,7 +98,7 @@ withasync_waitCatch = do
 
 withasync_wait2 :: MonadConc m => m ()
 withasync_wait2 = do
-  a <- withAsync (threadDelay 1000000) $ return
+  a <- withAsync (threadDelay 1000000) pure
   r <- waitCatch a
   case r of
     Left e  -> fromException e @?= Just ThreadKilled
@@ -105,33 +106,33 @@ withasync_wait2 = do
 
 async_cancel :: MonadConc m => m ()
 async_cancel = do
-  a <- async (return value)
+  a <- async (pure value)
   cancelWith a TestException
   r <- waitCatch a
   case r of
     Left e -> fromException e @?= Just TestException
-    Right r -> r @?= value
+    Right r_ -> r_ @?= value
 
 async_poll :: MonadConc m => m ()
 async_poll = do
   a <- async (threadDelay 1000000)
-  r <- poll a
-  when (isJust r) $ assertFailure ""
-  r <- poll a   -- poll twice, just to check we don't deadlock
-  when (isJust r) $ assertFailure ""
+  r1 <- poll a
+  when (isJust r1) $ assertFailure ""
+  r2 <- poll a   -- poll twice, just to check we don't deadlock
+  when (isJust r2) $ assertFailure ""
 
 async_poll2 :: MonadConc m => m ()
 async_poll2 = do
-  a <- async (return value)
-  wait a
-  r <- poll a
-  when (isNothing r) $ assertFailure ""
-  r <- poll a   -- poll twice, just to check we don't deadlock
-  when (isNothing r) $ assertFailure ""
+  a <- async (pure value)
+  _ <- wait a
+  r1 <- poll a
+  when (isNothing r1) $ assertFailure ""
+  r2 <- poll a   -- poll twice, just to check we don't deadlock
+  when (isNothing r2) $ assertFailure ""
 
 case_concurrently_ :: MonadConc m => m ()
 case_concurrently_ = do
-  ref <- newCRef 0
+  ref <- newCRefInt 0
   () <- concurrently_
     (atomicModifyCRef ref (\x -> (x + 1, True)))
     (atomicModifyCRef ref (\x -> (x + 2, 'x')))
@@ -140,7 +141,7 @@ case_concurrently_ = do
 
 case_replicateConcurrently :: MonadConc m => m ()
 case_replicateConcurrently = do
-  ref <- newCRef 0
+  ref <- newCRefInt 0
   let action = atomicModifyCRef ref (\x -> (x + 1, x + 1))
   resList <- replicateConcurrently 4 action
   resVal <- readCRef ref
@@ -149,7 +150,7 @@ case_replicateConcurrently = do
 
 case_replicateConcurrently_ :: MonadConc m => m ()
 case_replicateConcurrently_ = do
-  ref <- newCRef 0
+  ref <- newCRefInt 0
   let action = atomicModifyCRef ref (\x -> (x + 1, x + 1))
   () <- replicateConcurrently_ 4 action
   resVal <- readCRef ref
@@ -157,7 +158,7 @@ case_replicateConcurrently_ = do
 
 -------------------------------------------------------------------------------
 
-data TestFailed = TestFailed String deriving (Eq,Show,Typeable)
+newtype TestFailed = TestFailed String deriving (Eq,Show,Typeable)
 instance Exception TestFailed
 
 assertFailure :: MonadConc m => String -> m b
@@ -181,6 +182,6 @@ assertEqual err a1 a2
 
 testCase :: String -> ConcIO () -> [TestTree]
 testCase name c = djfu name (alwaysTrue p) (try c) where
-  p (Right (Left (e::SomeException))) = False
+  p (Right (Left (_::SomeException))) = False
   p (Right _) = True
   p (Left _)  = False

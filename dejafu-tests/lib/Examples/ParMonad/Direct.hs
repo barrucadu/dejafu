@@ -1,16 +1,8 @@
-#line 1 "monad-par/Control/Monad/Par/Scheds/Direct.hs"
-{-# LANGUAGE RankNTypes, NamedFieldPuns, BangPatterns,
-             ExistentialQuantification, CPP, ScopedTypeVariables,
-             TypeSynonymInstances, MultiParamTypeClasses,
-             GeneralizedNewtypeDeriving, PackageImports,
-             ParallelListComp #-}
-
-
-{- OPTIONS_GHC -Wall -fno-warn-name-shadowing -fno-warn-unused-do-bind -}
-
--- {- LANGUAGE Trustworthy -}
--- TODO: Before declaring this module TRUSTWORTHY/SAFE, we need to
--- make the IVar type abstract.
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE ParallelListComp #-}
 
 {-
 The monad-par package:
@@ -76,40 +68,40 @@ module Examples.ParMonad.Direct (
 --   yield,
  ) where
 
-import qualified Data.Vector as V
+import qualified Data.Vector                                   as V
 
-import Control.Applicative
-import Control.Concurrent.Classy hiding (fork, spawn)
-import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.Trans (MonadTrans(lift))
-import Text.Printf        (printf, hPrintf)
-import           "mtl" Control.Monad.Cont as C
-import qualified "mtl" Control.Monad.Reader as RD
-import qualified       System.Random.MWC as Random
-import                 System.IO  (stderr)
-import                 System.IO.Unsafe (unsafePerformIO)
-import                 System.Mem.StableName (makeStableName, hashStableName)
-import qualified       Control.Monad.Par.Class  as PC
-import qualified       Control.Monad.Par.Unsafe as UN
-import                 Examples.ParMonad.DirectInternal
-                       (Par(..), Sched(..), HotVar, SessionID, Session(Session),
-                        newHotVar, readHotVar, modifyHotVar, modifyHotVar_, writeHotVarRaw)
+import           Control.Applicative
+import           Control.Concurrent.Classy                     hiding (fork,
+                                                                spawn)
+import           "mtl" Control.Monad.Cont                      as C
+import           Control.Monad.IO.Class                        (MonadIO(..))
+import qualified "mtl" Control.Monad.Reader                    as RD
+import           Control.Monad.Trans                           (MonadTrans(lift))
+import           Examples.ParMonad.DirectInternal              (HotVar, Par(..),
+                                                                Sched(..),
+                                                                Session(Session),
+                                                                SessionID,
+                                                                modifyHotVar,
+                                                                modifyHotVar_,
+                                                                newHotVar,
+                                                                readHotVar,
+                                                                writeHotVarRaw)
+import           System.IO.Unsafe                              (unsafePerformIO)
+import qualified System.Random.MWC                             as Random
 
-import Control.DeepSeq
-import qualified Data.Map as M
-import qualified Data.Set as S
-import Data.Maybe (catMaybes)
-import Data.Word (Word64)
+import           Control.DeepSeq
+import           Control.Monad                                 (replicateM)
+import qualified Data.Set                                      as S
+import           Data.Word                                     (Word64)
 
-import Data.Concurrent.Deque.Class (WSDeque)
-import Data.Concurrent.Deque.Reference.DequeInstance
-import Data.Concurrent.Deque.Reference as R
+import           Data.Concurrent.Deque.Reference               as R
+import           Data.Concurrent.Deque.Reference.DequeInstance ()
 
 
-import qualified Control.Monad.Catch as E
-import qualified Control.Exception as E (AsyncException(..), BlockedIndefinitelyOnMVar(..))
+import qualified Control.Exception                             as E (AsyncException(..))
+import qualified Control.Monad.Catch                           as E
 
-import Prelude hiding (null)
+import           Prelude                                       hiding (null)
 import qualified Prelude
 
 _PARPUTS :: Bool
@@ -154,9 +146,9 @@ amINested :: Monad m => ThreadId m -> m (Maybe (Sched m))
 registerWorker :: Monad m => ThreadId m -> Sched m -> m ()
 unregisterWorker :: Monad m => ThreadId m -> m ()
 
-amINested      _      = return Nothing
-registerWorker _ _    = return ()
-unregisterWorker _tid = return ()
+amINested      _      = pure Nothing
+registerWorker _ _    = pure ()
+unregisterWorker _tid = pure ()
 
 
 -----------------------------------------------------------------------------
@@ -165,30 +157,25 @@ unregisterWorker _tid = return ()
 
 {-# INLINE popWork  #-}
 popWork :: (MonadConc m, MonadIO m) => Sched m -> m (Maybe (Par m ()))
-popWork Sched{ workpool, no } = do
-  mb <- liftIO $ R.tryPopL workpool
-  return mb
+popWork Sched{ workpool } = liftIO $ R.tryPopL workpool
 
 {-# INLINE pushWork #-}
 pushWork :: (MonadConc m, MonadIO m) => Sched m -> Par m () -> m ()
-pushWork Sched { workpool, idle, no, isMain } task = do
+pushWork Sched { workpool, idle } task = do
   liftIO $ R.pushL workpool task
   --when isMain$    -- Experimenting with reducing contention by doing this only from a single thread.
                     -- TODO: We need to have a proper binary wakeup-tree.
   tryWakeIdle idle
-
-  return ()
 
 tryWakeIdle :: MonadConc m => HotVar m [MVar m Bool] -> m ()
 tryWakeIdle idle = do
 -- NOTE: I worry about having the idle var hammmered by all threads on their spawn-path:
   -- If any worker is idle, wake one up and give it work to do.
   idles <- readHotVar idle -- Optimistically do a normal read first.
-  when (not (Prelude.null idles)) $ do
-    r <- modifyHotVar idle (\is -> case is of
-                             []      -> ([], return ())
-                             (i:ils) -> (ils, putMVar i False))
-    r -- wake an idle worker up by putting an MVar.
+  unless (Prelude.null idles) . join $
+    modifyHotVar idle (\case
+                          []      -> ([], pure ())
+                          (i:ils) -> (ils, putMVar i False))
 
 rand :: (MonadConc m, MonadIO m) => HotVar m Random.GenIO -> m Int
 rand ref = do
@@ -221,7 +208,7 @@ runNewSessionAndWait name sched userComp = do
     ref <- newCRef (error$ "Empty session-result ref ("++name++") should never be touched (sid "++ show sid++", "++show tid ++")")
     newFlag <- newHotVar False
     -- Push the new session:
-    _ <- modifyHotVar (sessions sched) (\ ls -> ((Session sid newFlag) : ls, ()))
+    _ <- modifyHotVar (sessions sched) (\ ls -> (Session sid newFlag : ls, ()))
 
     let userComp' = do ans <- userComp
                        -- This add-on to userComp will run only after userComp has completed successfully,
@@ -236,8 +223,8 @@ runNewSessionAndWait name sched userComp = do
                       loop (n+1)
 
     -- THIS IS RETURNING TOO EARLY!!:
-    runReaderWith sched (C.runContT (unPar userComp') (kont 0))  -- Does this ASSUME child stealing?
-    runReaderWith sched (loop 1)
+    runReaderWith sched (C.runContT (unPar userComp') (kont (0::Int)))  -- Does this ASSUME child stealing?
+    runReaderWith sched (loop (1::Int))
 
     -- TODO: Ideally we would wait for ALL outstanding (stolen) work on this "team" to complete.
 
@@ -269,11 +256,11 @@ runParIO userComp = do
    maybSched <- amINested tid
    tidorig <- myThreadId -- TODO: remove when done debugging
    case maybSched of
-     Just (sched) -> do
+     Just sched -> do
        -- Here the current thread is ALREADY a worker.  All we need to
        -- do is plug the users new computation in.
 
-       sid0 <- readHotVar (sessionCounter sched)
+       _ <- readHotVar (sessionCounter sched)
        runNewSessionAndWait "nested runPar" sched userComp
 
      ------------------------------------------------------------
@@ -284,19 +271,18 @@ runParIO userComp = do
        [Session _ topSessFlag] <- readHotVar$ sessions$ head allscheds
 
        mfin <- newEmptyMVar
-       doneFlags <- forM (zip [0..] allscheds) $ \(cpu,sched) -> do
+       forM_ (zip [0..] allscheds) $ \(cpu,sched) -> do
             workerDone <- newEmptyMVar
             ----------------------------------------
-            let wname = ("(worker "++show cpu++" of originator "++show tidorig++")")
+            let wname = "(worker "++show cpu++" of originator "++show tidorig++")"
 --            forkOn cpu $ do
             _ <- forkWithExceptions (forkOn cpu) wname $ do
             ------------------------------------------------------------STRT WORKER THREAD
               tid2 <- myThreadId
               registerWorker tid2 sched
-              if (cpu /= main_cpu)
+              if cpu /= main_cpu
                  then do runReaderWith sched $ rescheduleR 0 (trivialCont (wname++show tid2))
                          putMVar workerDone cpu
-                         return ()
                  else do x <- runNewSessionAndWait "top-lvl main worker" sched userComp
                          -- When the main worker finishes we can tell the anonymous "system" workers:
                          writeCRef topSessFlag True
@@ -304,7 +290,7 @@ runParIO userComp = do
 
               unregisterWorker tid
             ------------------------------------------------------------END WORKER THREAD
-            return (if cpu == main_cpu then Nothing else Just workerDone)
+            pure (if cpu == main_cpu then Nothing else Just workerDone)
 
        takeMVar mfin -- Final value.
 
@@ -319,23 +305,21 @@ makeScheds main = do
    idle      <- newHotVar []
    -- The STACKs are per-worker.. but the root finished flag is shared between all anonymous system workers:
    sessionFinished <- newHotVar False
-   sessionStacks   <- mapM newHotVar (replicate numCapabilities [Session baseSessionID sessionFinished])
+   sessionStacks   <- replicateM numCapabilities (newHotVar [Session baseSessionID sessionFinished])
    activeSessions  <- newHotVar S.empty
    sessionCounter  <- newHotVar (baseSessionID + 1)
-   let allscheds = [ Sched { no=x, idle, isMain= (x==main),
+   let allscheds = [ Sched { no=x, idle, isMain= x==main,
                              workpool=wp, scheds=allscheds, rng=rng,
                              sessions = stck,
                              activeSessions=activeSessions,
                              sessionCounter=sessionCounter
                            }
-                   --  | (x,wp,rng,stck) <- zip4 [0..] workpools rngs sessionStacks
                    | x   <- [0 .. numCapabilities-1]
                    | wp  <- workpools
                    | rng <- rngs
                    | stck <- sessionStacks
                    ]
-   return allscheds
-
+   pure allscheds
 
 -- The ID of top-level runPar sessions.
 baseSessionID :: SessionID
@@ -350,42 +334,28 @@ baseSessionID = 1000
 -- | Creates a new @IVar@
 new :: MonadConc m => Par m (IVar m a)
 new  = io$ do r <- newCRef Empty
-              return (IVar r)
+              pure (IVar r)
 
 {-# INLINE get  #-}
 -- | Read the value in an @IVar@.  The 'get' operation can only return when the
 -- value has been written by a prior or parallel @put@ to the same
 -- @IVar@.
-get (IVar vr) =  do
+get (IVar vr) =
   callCC $ \kont ->
     do
        e  <- io$ readCRef vr
        case e of
-          Full a -> return a
+          Full a -> pure a
           _ -> do
             sch <- RD.ask
 
-            let resched =
-
-                          longjmpSched -- Invariant: kont must not be lost.
+            let resched = longjmpSched -- Invariant: kont must not be lost.
             -- Because we continue on the same processor the Sched stays the same:
             -- TODO: Try NOT using monadic values as first class.  Check for performance effect:
-            r <- io$ atomicModifyCRef vr $ \x -> case x of
+            join . io$ atomicModifyCRef vr $ \case
                       Empty      -> (Blocked [pushWork sch . kont], resched)
-                      Full a     -> (Full a, return a) -- kont is implicit here.
+                      Full a     -> (Full a, pure a) -- kont is implicit here.
                       Blocked ks -> (Blocked (pushWork sch . kont:ks), resched)
-            r
-
--- | NOTE unsafePeek is NOT exposed directly through this module.  (So
--- this module remains SAFE in the Safe Haskell sense.)  It can only
--- be accessed by importing Control.Monad.Par.Unsafe.
-{-# INLINE unsafePeek #-}
-unsafePeek :: MonadConc m => IVar m a -> Par m (Maybe a)
-unsafePeek (IVar v) = do
-  e  <- io$ readCRef v
-  case e of
-    Full a -> return (Just a)
-    _      -> return Nothing
 
 ------------------------------------------------------------
 {-# INLINE put_ #-}
@@ -394,35 +364,19 @@ unsafePeek (IVar v) = do
 put_ (IVar vr) !content = do
    sched <- RD.ask
    ks <- io$ do
-      ks <- atomicModifyCRef vr $ \e -> case e of
+      ks <- atomicModifyCRef vr $ \case
                Empty      -> (Full content, [])
                Full _     -> error "multiple put"
                Blocked ks -> (Full content, ks)
-      return ks
+      pure ks
    wakeUp sched ks content
-
--- | NOTE unsafeTryPut is NOT exposed directly through this module.  (So
--- this module remains SAFE in the Safe Haskell sense.)  It can only
--- be accessed by importing Control.Monad.Par.Unsafe.
-{-# INLINE unsafeTryPut #-}
-unsafeTryPut (IVar vr) !content = do
-   -- Head strict rather than fully strict.
-   sched <- RD.ask
-   (ks,res) <- io$ do
-      pr <- atomicModifyCRef vr $ \e -> case e of
-                   Empty      -> (Full content, ([], content))
-                   Full x     -> (Full x, ([], x))
-                   Blocked ks -> (Full content, (ks, content))
-      return pr
-   wakeUp sched ks content
-   return res
 
 -- | When an IVar is filled in, continuations wake up.
 {-# INLINE wakeUp #-}
 wakeUp :: (MonadConc m, MonadIO m) => Sched m -> [a -> m ()]-> a -> Par m ()
 wakeUp _sched ks arg = loop ks
  where
-   loop [] = return ()
+   loop [] = pure ()
    loop (kont:rest) = do
      -- FIXME -- without strict firewalls keeping ivars from moving
      -- between runPar sessions, if we allow nested scheduler use
@@ -431,8 +385,8 @@ wakeUp _sched ks arg = loop ks
      -- continuation until its completion.
      if _PARPUTS then
        -- We do NOT force the putting thread to postpone its continuation.
-       do spawn_$ pMap kont rest
-          return ()
+       do _ <- spawn_$ pMap kont rest
+          pure ()
        -- case rest of
        --   [] -> spawn_$ io$ kont arg
        --   _  -> spawn_$ do spawn_$ io$ kont arg
@@ -447,11 +401,11 @@ wakeUp _sched ks arg = loop ks
        -- mapM_ ($arg) ks
        do io$ kont arg
           loop rest
-     return ()
+     pure ()
 
    pMap kont [] = io$ kont arg
    pMap kont (more:rest) =
-     do spawn_$ io$ kont arg
+     do _ <- spawn_$ io$ kont arg
         pMap more rest
 
    -- parchain [kont] = kont arg
@@ -465,8 +419,8 @@ fork :: (MonadConc m, MonadIO m) => Par m () -> Par m ()
 fork task =
   -- Forking the "parent" means offering up the continuation of the
   -- fork rather than the task argument for stealing:
-  case _FORKPARENT of
-    True -> do
+  if _FORKPARENT
+    then do
       sched <- RD.ask
       callCC$ \parent -> do
          let wrapped = parent ()
@@ -477,7 +431,7 @@ fork task =
          longjmpSched -- We reschedule to pop the cont we pushed.
          -- TODO... OPTIMIZATION: we could also try the pop directly, and if it succeeds return normally....
 
-    False -> do
+    else do
       sch <- RD.ask
       io$ pushWork sch task
 
@@ -494,20 +448,18 @@ rescheduleR cnt kont = do
   mtask  <- lift $ popWork mysched
   case mtask of
     Nothing -> do
-                  (Session _ finRef):_ <- lift $ readCRef $ sessions mysched
+                  Session _ finRef:_ <- lift $ readCRef $ sessions mysched
                   fin <- lift $ readCRef finRef
                   if fin
                    then kont (error "Direct.hs: The result value from rescheduleR should not be used.")
                    else do
                      lift $ steal mysched
-                     lift $ yield
+                     lift   yield
                      rescheduleR (cnt+1) kont
     Just task -> do
        let C.ContT fn = unPar task
        -- Run the stolen task with a continuation that returns to the scheduler if the task exits normally:
-       fn (\ _ -> do
-           sch <- RD.ask
-           rescheduleR 0 kont)
+       fn (\ _ -> rescheduleR 0 kont)
 
 
 -- | Attempt to steal work or, failing that, give up and go idle.
@@ -532,19 +484,19 @@ steal mysched@Sched{ idle, scheds, rng, no=my_no } = do
                r <- modifyHotVar idle $ \is -> (m:is, is)
                numCapabilities <- getNumCapabilities
                if length r == numCapabilities - 1
-                  then do
-                     mapM_ (\vr -> putMVar vr True) r
+                  then
+                     mapM_ (`putMVar` True) r
                   else do
                     done <- takeMVar m
                     if done
-                       then do
-                         return ()
+                       then
+                         pure ()
                        else do
                          i <- getnext (-1::Int)
                          go (maxtries numCapabilities) i
 
     -- We need to return from this loop to check sessionFinished and exit the scheduler if necessary.
-    go 0 _i | _IDLING_ON == False = yield
+    go 0 _i | not _IDLING_ON = yield
 
     ----------------------------------------
     go tries i
@@ -560,24 +512,16 @@ steal mysched@Sched{ idle, scheds, rng, no=my_no } = do
          r <- liftIO $ R.tryPopR dq
 
          case r of
-           Just task  -> do
+           Just task  ->
               runReaderWith mysched $
                 C.runContT (unPar task)
-                 (\_ -> do
-                   return ())
+                 (\_ -> pure ())
 
            Nothing -> do i' <- getnext i
                          go (tries-1) i'
 
--- | The continuation which should not be called.
-errK :: t
-errK = error "Error cont: this closure shouldn't be used"
-
 trivialCont :: Monad m => String -> a -> ROnly m ()
-trivialCont str _ = do
-                return ()
-
-----------------------------------------------------------------------------------------------------
+trivialCont _ _ = pure ()
 
 
 --------------------------------------------------------------------------------
@@ -593,16 +537,16 @@ spawn1_ f x =
 -- The following is usually inefficient!
 newFull_ a = do v <- new
                 put_ v a
-                return v
+                pure v
 
 newFull a = deepseq a (newFull_ a)
 
 {-# INLINE put  #-}
 put v a = deepseq a (put_ v a)
 
-spawn p  = do r <- new;  fork (p >>= put r);   return r
-spawn_ p = do r <- new;  fork (p >>= put_ r);  return r
-spawnP a = spawn (return a)
+spawn p  = do r <- new;  fork (p >>= put r);   pure r
+spawn_ p = do r <- new;  fork (p >>= put_ r);  pure r
+spawnP a = spawn (pure a)
 
 spawn  :: (MonadConc m, MonadIO m, NFData a) => Par m a -> Par m (IVar m a)
 spawn_ :: (MonadConc m, MonadIO m) => Par m a -> Par m (IVar m a)
@@ -615,26 +559,6 @@ runPar :: Par IO a -> a
 runParIO :: (MonadConc m, MonadIO m) => Par m a -> m a
 newFull :: (MonadConc m, MonadIO m, NFData a) => a -> Par m (IVar m a)
 newFull_ ::  (MonadConc m, MonadIO m) => a -> Par m (IVar m a)
-unsafeTryPut :: (MonadConc m, MonadIO m) => IVar m b -> b -> Par m b
-
--- We can't make proper instances with the extra Show constraints:
-instance (MonadConc m, MonadIO m) => PC.ParFuture (IVar m) (Par m)  where
-  get    = get
-  spawn  = spawn
-  spawn_ = spawn_
-  spawnP = spawnP
-
-instance (MonadConc m, MonadIO m) => PC.ParIVar (IVar m) (Par m)  where
-  fork = fork
-  new  = new
-  put_ = put_
-  newFull = newFull
-  newFull_ = newFull_
-
-instance UN.ParUnsafe (IVar IO) (Par IO)  where
-  unsafePeek   = unsafePeek
-  unsafeTryPut = unsafeTryPut
-  unsafeParIO  = unsafeParIO
 
 -- </boilerplate>
 --------------------------------------------------------------------------------
@@ -653,10 +577,9 @@ runReaderWith state m = RD.runReaderT m state
 
 -- | Exceptions that walk up the fork tree of threads:
 forkWithExceptions :: MonadConc m => (m () -> m (ThreadId m)) -> String -> m () -> m (ThreadId m)
-forkWithExceptions forkit descr action = do
+forkWithExceptions forkit _ action = do
    parent <- myThreadId
-   forkit $ do
-      tid <- myThreadId
+   forkit $
       E.catch action
          (\ e ->
            case E.fromException e of

@@ -2,16 +2,18 @@
 
 module Integration.SingleThreaded where
 
-import Control.Exception (ArithException(..), ArrayException(..))
-import Test.DejaFu (Failure(..), gives, gives', isUncaughtException)
+import           Control.Exception         (ArithException(..),
+                                            ArrayException(..))
+import           Test.DejaFu               (Failure(..), gives, gives',
+                                            isUncaughtException)
 
-import Control.Monad (replicateM_)
-import Control.Concurrent.Classy
-import Control.Monad.IO.Class (liftIO)
-import Test.DejaFu.Conc (subconcurrency)
-import qualified Data.IORef as IORef
+import           Control.Concurrent.Classy
+import           Control.Monad             (replicateM_)
+import           Control.Monad.IO.Class    (liftIO)
+import qualified Data.IORef                as IORef
+import           Test.DejaFu.Conc          (subconcurrency)
 
-import Common
+import           Common
 
 tests :: [TestTree]
 tests =
@@ -114,7 +116,7 @@ crefTests = toTestList
       tick <- readForCAS ref
       (suc, _) <- casCRef ref tick 6
       val <- readCRef ref
-      return (suc && (6 == val))
+      pure (suc && (6 == val))
 
   , djfu "Compare-and-swap on a modified CRef fails" (gives' [True]) $ do
       ref  <- newCRefInt 5
@@ -122,7 +124,7 @@ crefTests = toTestList
       writeCRef ref 6
       (suc, _) <- casCRef ref tick 7
       val <- readCRef ref
-      return (not suc && not (7 == val))
+      pure (not suc && 7 /= val)
   ]
 
 --------------------------------------------------------------------------------
@@ -136,7 +138,7 @@ stmTests = toTestList
       ctv <- atomically $ newTVarInt 5
       (5==) <$> atomically (readTVar ctv)
 
-  , djfu "Aborting a transaction blocks the thread" (gives [Left STMDeadlock]) $
+  , djfu "Aborting a transaction blocks the thread" (gives [Left STMDeadlock])
       (atomically retry :: MonadConc m => m ()) -- avoid an ambiguous type
 
   , djfu "Aborting a transaction can be caught and recovered from" (gives' [True]) $ do
@@ -160,7 +162,7 @@ stmTests = toTestList
         (\_ -> writeTVar ctv 6)
       (6==) <$> atomically (readTVar ctv)
 
-  , djfu "MonadSTM is a MonadFail" (alwaysFailsWith isUncaughtException) $
+  , djfu "MonadSTM is a MonadFail" (alwaysFailsWith isUncaughtException)
       (atomically $ fail "hello world" :: MonadConc m => m ())  -- avoid an ambiguous type
   ]
 
@@ -171,33 +173,33 @@ exceptionTests = toTestList
   [ djfu "An exception thrown can be caught" (gives' [True]) $
       catchArithException
         (throw Overflow)
-        (\_ -> return True)
+        (\_ -> pure True)
 
   , djfu "Nested exception handlers work" (gives' [True]) $
       catchArithException
         (catchArrayException
           (throw Overflow)
-          (\_ -> return False))
-        (\_ -> return True)
+          (\_ -> pure False))
+        (\_ -> pure True)
 
   , djfu "Uncaught exceptions kill the computation" (alwaysFailsWith isUncaughtException) $
       catchArithException
         (throw $ IndexOutOfBounds "")
-        (\_ -> return False)
+        (\_ -> pure False)
 
   , djfu "SomeException matches all exception types" (gives' [True]) $ do
       a <- catchSomeException
            (throw Overflow)
-           (\_ -> return True)
+           (\_ -> pure True)
       b <- catchSomeException
            (throw $ IndexOutOfBounds "")
-           (\_ -> return True)
-      return (a && b)
+           (\_ -> pure True)
+      pure (a && b)
 
   , djfu "Exceptions thrown in a transaction can be caught outside it" (gives' [True]) $
       catchArithException
         (atomically $ throwSTM Overflow)
-        (\_ -> return True)
+        (\_ -> pure True)
 
   , djfu "Throwing an unhandled exception to the main thread kills it" (alwaysFailsWith isUncaughtException) $ do
       tid <- myThreadId
@@ -207,7 +209,7 @@ exceptionTests = toTestList
       tid <- myThreadId
       catchArithException (throwTo tid Overflow >> pure False) (\_ -> pure True)
 
-  , djfu "MonadConc is a MonadFail" (alwaysFailsWith isUncaughtException) $
+  , djfu "MonadConc is a MonadFail" (alwaysFailsWith isUncaughtException)
       (fail "hello world" :: MonadConc m => m ())  -- avoid an ambiguous type
   ]
 
@@ -218,7 +220,7 @@ capabilityTests = toTestList
   [ djfu "Reading the capabilities twice without update gives the same result" (gives' [True]) $ do
       c1 <- getNumCapabilities
       c2 <- getNumCapabilities
-      return (c1 == c2)
+      pure (c1 == c2)
 
   , djfu "Getting the updated capabilities gives the new value" (gives' [True]) $ do
       caps <- getNumCapabilities
@@ -251,7 +253,7 @@ subconcurrencyTests = toTestList
 ioTests :: [TestTree]
 ioTests = toTestList
   [ djfu "Lifted IO is performed" (gives' [3]) $ do
-      r <- liftIO (IORef.newIORef 0)
+      r <- liftIO (IORef.newIORef (0::Int))
       replicateM_ 3 (liftIO (IORef.atomicModifyIORef r (\i -> (i+1, ()))))
       liftIO (IORef.readIORef r)
   ]

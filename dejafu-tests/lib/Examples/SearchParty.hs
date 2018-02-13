@@ -13,20 +13,23 @@ most of the functions not essential to exhbiting the bug removed.
 -- | Concurrent nondeterministic search.
 module Examples.SearchParty where
 
-import Control.Concurrent.Classy.STM.TMVar (TMVar, newEmptyTMVar, readTMVar, isEmptyTMVar, putTMVar, tryPutTMVar, tryTakeTMVar)
-import Control.Monad (unless, when)
-import Control.Monad.Conc.Class
-import Control.Monad.STM.Class
-import Data.Functor (void)
-import Data.Maybe (fromJust, isNothing)
+import           Control.Concurrent.Classy.STM.TMVar (TMVar, isEmptyTMVar,
+                                                      newEmptyTMVar, putTMVar,
+                                                      readTMVar, tryPutTMVar,
+                                                      tryTakeTMVar)
+import           Control.Monad                       (unless, when)
+import           Control.Monad.Conc.Class
+import           Control.Monad.STM.Class
+import           Data.Functor                        (void)
+import           Data.Maybe                          (fromJust, isNothing)
 
 -- test imports
-import Data.List (sort)
-import Test.DejaFu (Predicate, Result(..), alwaysSameOn)
+import           Data.List                           (sort)
+import           Test.DejaFu                         (Predicate, alwaysSameOn)
 
-import Common
+import           Common
 
-import Examples.SearchParty.Impredicative
+import           Examples.SearchParty.Impredicative
 
 tests :: [TestTree]
 tests =
@@ -72,9 +75,9 @@ instance MonadConc m => Applicative (Find m) where
     f <- mf
     a <- ma
 
-    success <- blockOn [void f, void a]
+    success_ <- blockOn [void f, void a]
 
-    if success
+    if success_
     then do
       fres <- unsafeResult f
       ares <- unsafeResult a
@@ -127,7 +130,7 @@ allOf :: MonadConc m => [Find m a] -> Find m [a]
 allOf [] = success []
 allOf as = Find $ do
   (var, kill) <- work False $ map unFind as
-  return $ workItem var id kill
+  pure $ workItem var id kill
 
 -------------------------------------------------------------------------------
 -- Combinators
@@ -148,17 +151,17 @@ allOf as = Find $ do
 blockOn :: MonadConc m => [WorkItem m ()] -> m Bool
 blockOn fs = do
   -- Block until one thing fails, or everything succeeds.
-  success <- atomically $ do
+  success_ <- atomically $ do
     states <- mapM getState fs
     case (HasFailed `elem` states, all (==HasSucceeded) states) of
-      (True, _) -> return False
-      (_, True) -> return True
+      (True, _) -> pure False
+      (_, True) -> pure True
       _ -> retry
 
   -- Kill everything if something failed.
-  unless success $ mapM_ (_killme . unWrap) fs
+  unless success_ $ mapM_ (_killme . unWrap) fs
 
-  return success
+  pure success_
 
 -- | Get the result of a computation, this blocks until the result is
 -- present, so be careful not to lose parallelism.
@@ -176,10 +179,10 @@ getState :: MonadConc m => WorkItem m a -> STM m WorkState
 getState f = do
   empty <- isEmptyTMVar . _result $ unWrap f
   if empty
-  then return StillComputing
+  then pure StillComputing
   else do
     failed <- hasFailed f
-    return $ if failed then HasFailed else HasSucceeded
+    pure $ if failed then HasFailed else HasSucceeded
 
 -- | Check if a work item has failed. If the computation has not
 -- terminated, this immediately returns 'False'.
@@ -187,7 +190,7 @@ hasFailed :: MonadConc m => WorkItem m a -> STM m Bool
 hasFailed f = do
   working <- isEmptyTMVar . _result $ unWrap f
   if working
-  then return False
+  then pure False
   else isNothing <$> readTMVar (_result $ unWrap f)
 
 -------------------------------------------------------------------------------
@@ -206,7 +209,7 @@ work shortcircuit workitems = do
   dtid   <- fork $ driver caps res kill
   killme <- atomically $ readTMVar kill
 
-  return (res, killme >> killThread dtid)
+  pure (res, killme >> killThread dtid)
 
   where
     -- If there's only one capability don't bother with threads.

@@ -1,27 +1,27 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell     #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | Typeclass laws for @Concurrently@ from the async package.
 module Examples.ClassLaws where
 
-import Control.Applicative
-import Control.Exception (SomeException)
-import Control.Monad ((>=>), ap, liftM, forever)
-import Control.Monad.Catch (onException)
-import Control.Monad.Conc.Class
-import Data.Maybe (isJust)
-import Data.Set (fromList)
-import Test.DejaFu (defaultBounds, defaultMemType)
-import Test.DejaFu.Conc (ConcIO)
-import Test.DejaFu.SCT (sctBound)
-import Test.QuickCheck (Arbitrary(..), Property, monomorphic)
-import qualified Test.QuickCheck as QC
-import Test.QuickCheck.Function (Fun, apply)
-import Test.QuickCheck.Monadic (assert, monadicIO, run)
-import Test.Tasty.QuickCheck (testProperty)
+import           Control.Applicative
+import           Control.Exception        (SomeException)
+import           Control.Monad            (ap, forever, liftM, (>=>))
+import           Control.Monad.Catch      (onException)
+import           Control.Monad.Conc.Class
+import           Data.Maybe               (isJust)
+import           Data.Set                 (fromList)
+import           Test.DejaFu              (defaultBounds, defaultMemType)
+import           Test.DejaFu.Conc         (ConcIO)
+import           Test.DejaFu.SCT          (sctBound)
+import           Test.QuickCheck          (Arbitrary(..), Property, monomorphic)
+import qualified Test.QuickCheck          as QC
+import           Test.QuickCheck.Function (Fun, apply)
+import           Test.QuickCheck.Monadic  (assert, monadicIO, run)
+import           Test.Tasty.QuickCheck    (testProperty)
 
-import Common
+import           Common
 
 -- Tests at bottom of file due to Template Haskell silliness.
 
@@ -46,7 +46,7 @@ instance MonadConc m => Functor (Concurrently m) where
 
 -- fmap id a = a
 prop_functor_id :: Ord a => C a -> Property
-prop_functor_id ca = ca `eq` (fmap id ca)
+prop_functor_id ca = ca `eq` fmap id ca
 
 -- fmap f . fmap g = fmap (f . g)
 prop_functor_comp :: Ord c => C a -> Fun a b -> Fun b c -> Property
@@ -66,7 +66,7 @@ prop_applicative_id ca = ca `eq` (pure id <*> ca)
 
 -- pure f <*> pure x = pure (f x)
 prop_applicative_homo :: Ord b => a -> Fun a b -> Property
-prop_applicative_homo a (apply -> f) = (pure $ f a) `eq` (pure f <*> pure a)
+prop_applicative_homo a (apply -> f) = pure (f a) `eq` (pure f <*> pure a)
 
 -- u <*> pure y = pure ($ y) <*> u
 prop_applicative_inter :: Ord b => C (Fun a b) -> a -> Property
@@ -162,7 +162,7 @@ instance Monoid Integer where
 eq :: Ord a => C a -> C a -> Property
 eq left right = runConcurrently left `eq'` runConcurrently right
 
-eq' :: forall t a. Ord a => ConcIO a -> ConcIO a -> Property
+eq' :: forall a. Ord a => ConcIO a -> ConcIO a -> Property
 eq' left right = monadicIO $ do
   leftTraces  <- run $ sctBound defaultMemType defaultBounds left
   rightTraces <- run $ sctBound defaultMemType defaultBounds right
@@ -177,8 +177,8 @@ eqf left right a = left a `eq` right a
 
 concurrently :: MonadConc m => m a -> m b -> m (a, b)
 concurrently left right = concurrently' left right (collect []) where
-  collect [Left a, Right b] _ = return (a, b)
-  collect [Right b, Left a] _ = return (a, b)
+  collect [Left a, Right b] _ = pure (a, b)
+  collect [Right b, Left a] _ = pure (a, b)
   collect xs m = do
     e <- takeMVar m
     case e of
@@ -204,7 +204,7 @@ concurrently' left right collect = do
 
     stop
 
-    return r
+    pure r
 
 race :: MonadConc m => m a -> m b -> m (Either a b)
 race left right = concurrently' left right collect where
@@ -212,7 +212,7 @@ race left right = concurrently' left right collect where
     e <- takeMVar m
     case e of
       Left ex -> throw ex
-      Right r -> return r
+      Right r -> pure r
 
 --------------------------------------------------------------------------------
 

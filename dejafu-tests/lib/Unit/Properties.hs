@@ -2,28 +2,30 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Unit.Properties where
 
-import Control.Monad (zipWithM, liftM2)
-import qualified Control.Monad.ST as ST
-import qualified Data.STRef as ST
-import qualified Control.Exception as E
-import qualified Data.Foldable as F
-import Data.Map (Map)
-import qualified Data.Map as M
-import Data.Maybe (fromJust, isJust)
-import Data.Proxy (Proxy(..))
-import qualified Data.Sequence as S
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Test.DejaFu.Types (ThreadAction, Lookahead)
-import qualified Test.DejaFu.Types as D
-import qualified Test.DejaFu.Internal as D
+import qualified Control.Exception                as E
+import           Control.Monad                    (zipWithM)
+import qualified Control.Monad.ST                 as ST
+import qualified Data.Foldable                    as F
+import           Data.Map                         (Map)
+import qualified Data.Map                         as M
+import           Data.Maybe                       (fromJust, isJust)
+import           Data.Proxy                       (Proxy(..))
+import qualified Data.Sequence                    as S
+import           Data.Set                         (Set)
+import qualified Data.Set                         as Set
+import qualified Data.STRef                       as ST
 import qualified Test.DejaFu.Conc.Internal.Common as D
 import qualified Test.DejaFu.Conc.Internal.Memory as Mem
-import qualified Test.DejaFu.SCT.Internal.DPOR as SCT
-import Test.LeanCheck (Listable(..), (\/), (><), (==>), cons0, cons1, cons2, cons3, mapT)
-import Test.Tasty.LeanCheck (testProperty)
+import qualified Test.DejaFu.Internal             as D
+import qualified Test.DejaFu.SCT.Internal.DPOR    as SCT
+import           Test.DejaFu.Types                (Lookahead, ThreadAction)
+import qualified Test.DejaFu.Types                as D
+import           Test.LeanCheck                   (Listable(..), cons0, cons1,
+                                                   cons2, cons3, mapT, (==>),
+                                                   (><), (\/))
+import           Test.Tasty.LeanCheck             (testProperty)
 
-import Common
+import           Common
 
 tests :: [TestTree]
 tests =
@@ -74,34 +76,34 @@ memoryProps = toTestList
     [ testProperty "bufferWrite emptyBuffer k c a /= emptyBuffer" $
       \k a -> crefProp $ \cref -> do
         wb <- Mem.bufferWrite Mem.emptyBuffer k cref a
-        not <$> wb `eq_wb` Mem.emptyBuffer
+        not <$> wb `eqWB` Mem.emptyBuffer
 
     , testProperty "commitWrite emptyBuffer k == emptyBuffer" $
       \k -> ST.runST $ do
         wb <- Mem.commitWrite Mem.emptyBuffer k
-        wb `eq_wb` Mem.emptyBuffer
+        wb `eqWB` Mem.emptyBuffer
 
     , testProperty "commitWrite (bufferWrite emptyBuffer k a) k == emptyBuffer" $
       \k a -> crefProp $ \cref -> do
         wb1 <- Mem.bufferWrite Mem.emptyBuffer k cref a
         wb2 <- Mem.commitWrite wb1 k
-        wb2 `eq_wb` Mem.emptyBuffer
+        wb2 `eqWB` Mem.emptyBuffer
 
     , testProperty "Single buffered write/read from same thread" $
       \k@(tid, _) a -> crefProp $ \cref -> do
-        Mem.bufferWrite Mem.emptyBuffer k cref a
+        _ <- Mem.bufferWrite Mem.emptyBuffer k cref a
         (a ==) <$> Mem.readCRef cref tid
 
     , testProperty "Overriding buffered write/read from same thread" $
       \k@(tid, _) a1 a2 -> crefProp $ \cref -> do
-        Mem.bufferWrite Mem.emptyBuffer k cref a1
-        Mem.bufferWrite Mem.emptyBuffer k cref a2
+        _ <- Mem.bufferWrite Mem.emptyBuffer k cref a1
+        _ <- Mem.bufferWrite Mem.emptyBuffer k cref a2
         (a2 ==) <$> Mem.readCRef cref tid
 
     , testProperty "Buffered write/read from different thread" $
       \k1@(tid1, _) k2@(tid2, _) a1 a2 -> crefProp $ \cref -> do
-        Mem.bufferWrite Mem.emptyBuffer k1 cref a1
-        Mem.bufferWrite Mem.emptyBuffer k2 cref a2
+        _ <- Mem.bufferWrite Mem.emptyBuffer k1 cref a1
+        _ <- Mem.bufferWrite Mem.emptyBuffer k2 cref a2
         a' <- Mem.readCRef cref tid1
         pure (tid1 /= tid2 ==> a' == a1)
     ]
@@ -154,9 +156,9 @@ makeCRef crid = D.CRef crid <$> ST.newSTRef (M.empty, 0, 42)
 -- individual writes are compared like so:
 --  - the threadid and crefid must be the same
 --  - the cache and number of writes inside the ref must be the same
-eq_wb :: Mem.WriteBuffer (ST.STRef t) -> Mem.WriteBuffer (ST.STRef t) -> ST.ST t Bool
-eq_wb (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
-    [ (&&) (S.length ws1 == S.length ws2) <$> (and <$> zipWithM eq_bw (F.toList ws1) (F.toList ws2))
+eqWB :: Mem.WriteBuffer (ST.STRef t) -> Mem.WriteBuffer (ST.STRef t) -> ST.ST t Bool
+eqWB (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
+    [ (&&) (S.length ws1 == S.length ws2) <$> (and <$> zipWithM eqBW (F.toList ws1) (F.toList ws2))
     | k <- ks1
     , let (Just ws1) = M.lookup k wb1
     , let (Just ws2) = M.lookup k wb2
@@ -165,7 +167,7 @@ eq_wb (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
     ks1 = M.keys $ M.filter (not . S.null) wb1
     ks2 = M.keys $ M.filter (not . S.null) wb2
 
-    eq_bw (Mem.BufferedWrite t1 (D.CRef crid1 ref1) _) (Mem.BufferedWrite t2 (D.CRef crid2 ref2) _) = do
+    eqBW (Mem.BufferedWrite t1 (D.CRef crid1 ref1) _) (Mem.BufferedWrite t2 (D.CRef crid2 ref2) _) = do
       d1 <- (\(m,i,_) -> (M.keys m, i)) <$> ST.readSTRef ref1
       d2 <- (\(m,i,_) -> (M.keys m, i)) <$> ST.readSTRef ref2
       pure (t1 == t2 && crid1 == crid2 && d1 == d2)

@@ -1,5 +1,5 @@
-#line 1 "monad-par/Control/Monad/Par/Scheds/DirectInternal.hs"
-{-# LANGUAGE PackageImports, CPP, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PackageImports #-}
 
 {-
 The monad-par package:
@@ -49,21 +49,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 module Examples.ParMonad.DirectInternal where
 
-import Control.Applicative
-import "mtl" Control.Monad.Cont as C
-import qualified "mtl" Control.Monad.Reader as RD
+import           "mtl" Control.Monad.Cont    as C
+import qualified "mtl" Control.Monad.Reader  as RD
 
-import qualified System.Random.MWC as Random
+import qualified System.Random.MWC           as Random
 
-import Control.Concurrent.Classy hiding (yield)
-import GHC.Conc
-import Data.IORef
-import qualified Data.Set as S
-import Data.Word (Word64)
-import Data.Concurrent.Deque.Class (WSDeque)
-
-import Data.Concurrent.Deque.Reference.DequeInstance
-import Data.Concurrent.Deque.Reference as R
+import           Control.Concurrent.Classy
+import           Data.Concurrent.Deque.Class (WSDeque)
+import qualified Data.Set                    as S
+import           Data.Word                   (Word64)
 
 
 -- Our monad stack looks like this:
@@ -144,10 +138,6 @@ modifyHotVar  = atomicModifyCRef
 modifyHotVar_ v fn = atomicModifyCRef v (\a -> (fn a, ()))
 readHotVar    = readCRef
 writeHotVar   = writeCRef
-instance Show (IORef a) where
-  show ref = "<ioref>"
 
--- hotVarTransaction = id
-hotVarTransaction = error "Transactions not currently possible for IO refs"
 readHotVarRaw  = readHotVar
 writeHotVarRaw = writeHotVar

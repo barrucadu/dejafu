@@ -1,9 +1,9 @@
 module Integration.Discard where
 
-import Control.Concurrent.Classy
-import Test.DejaFu (gives')
+import           Control.Concurrent.Classy hiding (check)
+import           Test.DejaFu               (gives')
 
-import Common
+import           Common
 
 tests :: [TestTree]
 tests = toTestList
@@ -16,7 +16,7 @@ tests = toTestList
   ]
   where
     check name xs f = testDejafuDiscard f defaultWay defaultMemType name (gives' xs) $ do
-      mvar <- newEmptyMVar
+      mvar <- newEmptyMVarInt
       _ <- fork $ putMVar mvar 1
       _ <- fork $ putMVar mvar 2
       _ <- fork $ putMVar mvar 3

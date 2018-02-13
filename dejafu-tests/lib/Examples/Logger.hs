@@ -2,11 +2,11 @@
 -- Concurrent Programming in Haskell, chapter 7.
 module Examples.Logger where
 
-import Control.Concurrent.Classy
-import Data.Functor (void)
-import Test.DejaFu hiding (MemType(..))
+import           Control.Concurrent.Classy hiding (check)
+import           Data.Functor              (void)
+import           Test.DejaFu               hiding (MemType(..), check)
 
-import Common
+import           Common
 
 tests :: [TestTree]
 tests = toTestList
@@ -28,7 +28,7 @@ initLogger = do
   logg <- newMVar []
   let l = Logger cmd logg
   void . fork $ logger l
-  return l
+  pure l
 
 logger :: MonadConc m => Logger m -> m ()
 logger (Logger cmd logg) = loop where
@@ -39,7 +39,7 @@ logger (Logger cmd logg) = loop where
         strs <- takeMVar logg
         putMVar logg (strs ++ [str])
         loop
-      Stop -> return ()
+      Stop -> pure ()
 
 -- | Add a string to the log.
 logMessage :: MonadConc m => Logger m -> String -> m ()

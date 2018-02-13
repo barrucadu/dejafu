@@ -1,14 +1,14 @@
 module Integration where
 
-import qualified Integration.SingleThreaded as S
+import qualified Integration.Async          as A
+import qualified Integration.Discard        as D
+import qualified Integration.Litmus         as L
 import qualified Integration.MultiThreaded  as M
 import qualified Integration.Refinement     as R
 import qualified Integration.Regressions    as G
-import qualified Integration.Litmus         as L
-import qualified Integration.Async          as A
-import qualified Integration.Discard        as D
+import qualified Integration.SingleThreaded as S
 
-import Common
+import           Common
 
 -- | Run all the integration tests.
 tests :: [TestTree]

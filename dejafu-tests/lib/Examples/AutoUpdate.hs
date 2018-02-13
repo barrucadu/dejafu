@@ -38,13 +38,13 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 module Examples.AutoUpdate where
 
-import Control.Exception (SomeException)
-import Control.Monad
-import Control.Monad.Conc.Class
+import           Control.Exception        (SomeException)
+import           Control.Monad
+import           Control.Monad.Conc.Class
 
 -- test imports
-import Test.DejaFu (Failure(..), gives)
-import Common
+import           Common
+import           Test.DejaFu              (Failure(..), gives)
 
 tests :: [TestTree]
 tests = toTestList
@@ -64,7 +64,7 @@ nondeterministic = do
   let settings = (defaultUpdateSettings :: UpdateSettings m ())
         { updateAction = atomicModifyCRef var (\x -> (x+1, x)) }
   auto <- mkAutoUpdate settings
-  auto
+  void auto
   auto
 
 -------------------------------------------------------------------------------
@@ -79,7 +79,7 @@ defaultUpdateSettings :: MonadConc m => UpdateSettings m ()
 defaultUpdateSettings = UpdateSettings
     { updateFreq           = 1000000
     , updateSpawnThreshold = 3
-    , updateAction         = return ()
+    , updateAction         = pure ()
     }
 
 mkAutoUpdate :: MonadConc m => UpdateSettings m a -> m (m a)
@@ -102,10 +102,10 @@ mkAutoUpdate us = do
         writeCRef currRef Nothing
         void $ takeMVar lastValue
 
-    return $ do
+    pure $ do
         mval <- readCRef currRef
         case mval of
-            Just val -> return val
+            Just val -> pure val
             Nothing -> do
                 void $ tryPutMVar needsRunning ()
                 readMVar lastValue

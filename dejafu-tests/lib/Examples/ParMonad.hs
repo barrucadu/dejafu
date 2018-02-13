@@ -1,13 +1,13 @@
 module Examples.ParMonad where
 
-import Control.Monad.Conc.Class (MonadConc)
-import Control.Monad.IO.Class (MonadIO)
-import System.Random (mkStdGen)
-import Test.DejaFu (deadlocksNever, deadlocksSometimes)
+import           Control.Monad.Conc.Class (MonadConc)
+import           Control.Monad.IO.Class   (MonadIO)
+import           System.Random            (mkStdGen)
+import           Test.DejaFu              (deadlocksNever, deadlocksSometimes)
 
 import qualified Examples.ParMonad.Direct as Par
 
-import Common
+import           Common
 
 tests :: [TestTree]
 tests = toTestList
@@ -23,7 +23,7 @@ parFilter = do
     pure (s == filter p xs)
   where
     parfilter _ []  = pure []
-    parfilter f [x] = pure (if f x then [x] else [])
+    parfilter f [x] = pure [x | f x]
     parfilter f xs  = do
       let (as, bs) = halve xs
       v1 <- Par.spawn $ parfilter f as

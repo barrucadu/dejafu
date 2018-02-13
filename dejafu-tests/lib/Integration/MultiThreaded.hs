@@ -1,15 +1,16 @@
 module Integration.MultiThreaded where
 
-import Control.Exception (ArithException(..))
-import Control.Monad.IO.Class (liftIO)
-import qualified Control.Concurrent as C
-import Test.DejaFu (Failure(..), gives, gives', isUncaughtException)
+import qualified Control.Concurrent        as C
+import           Control.Exception         (ArithException(..))
+import           Control.Monad.IO.Class    (liftIO)
+import           Test.DejaFu               (Failure(..), gives, gives',
+                                            isUncaughtException)
 
-import Control.Concurrent.Classy hiding (newQSemN, signalQSemN, waitQSemN)
-import Test.DejaFu.Conc (subconcurrency)
-import qualified Data.IORef as IORef
+import           Control.Concurrent.Classy
+import qualified Data.IORef                as IORef
+import           Test.DejaFu.Conc          (subconcurrency)
 
-import Common
+import           Common
 
 tests :: [TestTree]
 tests =
@@ -49,7 +50,7 @@ threadingTests = toTestList
 
   , djfuT "A thread started with forkOS is bound" (gives' [(True, True)]) $ do
       v <- newEmptyMVar
-      forkOS $ do
+      _ <- forkOS $ do
         b1 <- isCurrentThreadBound
         b2 <- liftIO C.isCurrentThreadBound
         putMVar v (b1, b2)
@@ -57,12 +58,12 @@ threadingTests = toTestList
 
   , djfuT "A thread started with fork is not bound" (gives' [False]) $ do
       v <- newEmptyMVar
-      fork $ putMVar v =<< isCurrentThreadBound
+      _ <- fork $ putMVar v =<< isCurrentThreadBound
       readMVar v
 
   , djfuT "An action can be run in an unbound thread" (gives' [(True, False)]) $ do
       v <- newEmptyMVar
-      forkOS $ do
+      _ <- forkOS $ do
         b1 <- isCurrentThreadBound
         b2 <- runInUnboundThread isCurrentThreadBound
         putMVar v (b1, b2)
@@ -70,7 +71,7 @@ threadingTests = toTestList
 
   , djfuT "An action can be run in a bound thread" (gives' [(False, True)]) $ do
       v <- newEmptyMVar
-      fork $ do
+      _ <- fork $ do
         b1 <- isCurrentThreadBound
         b2 <- runInBoundThread isCurrentThreadBound
         putMVar v (b1, b2)
@@ -87,8 +88,8 @@ mvarTests = toTestList
       c <- newMVarInt 0
       let lock m = putMVar m ()
       let unlock = takeMVar
-      j1 <- spawn $ lock a >> lock b >> modifyMVar_ c (return . succ) >> unlock b >> unlock a
-      j2 <- spawn $ lock b >> lock a >> modifyMVar_ c (return . pred) >> unlock a >> unlock b
+      j1 <- spawn $ lock a >> lock b >> modifyMVar_ c (pure . succ) >> unlock b >> unlock a
+      j2 <- spawn $ lock b >> lock a >> modifyMVar_ c (pure . pred) >> unlock a >> unlock b
       takeMVar j1
       takeMVar j2
       takeMVar c
@@ -114,7 +115,7 @@ crefTests = toTestList
 
   , djfuT "CASing CRef changes its value" (gives' [0,1]) $ do
       x <- newCRefInt 0
-      _ <- fork $ modifyCRefCAS x (\_ -> (1, ()))
+      _ <- fork $ modifyCRefCAS x (const (1, ()))
       readCRef x
 
   , djfuT "Racey CAS computations are nondeterministic" (gives' [(True, 2), (False, 2)]) $ do
@@ -169,7 +170,7 @@ stmTests = toTestList
   , djfuT "'retry' is the right identity of 'orElse'" (gives' [()]) $ do
       x <- atomically $ newTVar Nothing
       let readJust var = maybe retry pure =<< readTVar var
-      fork . atomically . writeTVar x $ Just ()
+      _ <- fork . atomically . writeTVar x $ Just ()
       atomically $ readJust x `orElse` retry
   ]
 
@@ -224,7 +225,7 @@ capabilityTests :: [TestTree]
 capabilityTests = toTestList
   [ djfu "get/setNumCapabilities are dependent" (gives' [1,3]) $ do
       setNumCapabilities 1
-      fork (setNumCapabilities 3)
+      _ <- fork (setNumCapabilities 3)
       getNumCapabilities
   ]
 
@@ -264,8 +265,8 @@ subconcurrencyTests = toTestList
 ioTests :: [TestTree]
 ioTests = toTestList
   [ djfu "Lifted IO actions are dependent" (gives' [0,1,2]) $ do
-      r <- liftIO (IORef.newIORef 0)
-      fork $ liftIO (IORef.atomicWriteIORef r 1)
-      fork $ liftIO (IORef.atomicWriteIORef r 2)
+      r <- liftIO (IORef.newIORef (0::Int))
+      _ <- fork $ liftIO (IORef.atomicWriteIORef r 1)
+      _ <- fork $ liftIO (IORef.atomicWriteIORef r 2)
       liftIO (IORef.readIORef r)
   ]

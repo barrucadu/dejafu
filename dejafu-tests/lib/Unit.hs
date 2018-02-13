@@ -2,7 +2,7 @@ module Unit where
 
 import qualified Unit.Properties as P
 
-import Common
+import           Common
 
 -- | Run all the unit tests.
 tests :: [TestTree]
