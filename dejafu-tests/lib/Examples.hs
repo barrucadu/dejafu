@@ -1,5 +1,7 @@
 module Examples where
 
+import           Test.Tasty.Options    (OptionDescription)
+
 import qualified Examples.AutoUpdate   as A
 import qualified Examples.ClassLaws    as C
 import qualified Examples.Logger       as L
@@ -19,3 +21,7 @@ tests =
   , testGroup "Philosophers" P.tests
   , testGroup "SearchParty"  S.tests
   ]
+
+-- | Tasty options
+options :: [OptionDescription]
+options = []

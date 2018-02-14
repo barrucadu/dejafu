@@ -1,5 +1,7 @@
 module Integration where
 
+import           Test.Tasty.Options         (OptionDescription)
+
 import qualified Integration.Async          as A
 import qualified Integration.Discard        as D
 import qualified Integration.Litmus         as L
@@ -21,3 +23,7 @@ tests =
   , testGroup "Regressions"    G.tests
   , testGroup "SingleThreaded" S.tests
   ]
+
+-- | Tasty options
+options :: [OptionDescription]
+options = []

@@ -1,6 +1,8 @@
 module Unit where
 
-import qualified Unit.Properties as P
+import           Test.Tasty.Options (OptionDescription)
+
+import qualified Unit.Properties    as P
 
 import           Common
 
@@ -9,3 +11,7 @@ tests :: [TestTree]
 tests =
   [ testGroup "Properties" P.tests
   ]
+
+-- | Tasty options
+options :: [OptionDescription]
+options = []
