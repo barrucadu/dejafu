@@ -83,6 +83,9 @@ djfuTS name p c = toTestList $ TEST name c p defaultWays False
 alwaysFailsWith :: (Failure -> Bool) -> Predicate a
 alwaysFailsWith p = alwaysTrue (either p (const False))
 
+testProperty :: String -> H.PropertyT IO () -> T.TestTree
+testProperty name = H.testProperty name . H.property
+
 -------------------------------------------------------------------------------
 -- Dependency function
 

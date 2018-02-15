@@ -16,7 +16,6 @@ import qualified Hedgehog                 as H
 import           Test.DejaFu              (defaultBounds, defaultMemType)
 import           Test.DejaFu.Conc         (ConcIO)
 import           Test.DejaFu.SCT          (sctBound)
-import qualified Test.Tasty.Hedgehog      as H
 
 import           Common
 
@@ -49,11 +48,11 @@ instance MonadConc m => Functor (Concurrently m) where
 
 functorProps :: [TestTree]
 functorProps = toTestList
-  [ H.testProperty "fmap id a = a" . H.property $ do
+  [ testProperty "fmap id a = a" $ do
       (cval -> ca) <- H.forAll genA
       H.assert =<< ca `eq` fmap id ca
 
-  , H.testProperty "fmap f . fmap g = fmap (f . g)" . H.property $ do
+  , testProperty "fmap f . fmap g = fmap (f . g)" $ do
       (cval -> ca) <- H.forAll genA
       (fun -> f) <- H.forAll genFun
       (fun -> g) <- H.forAll genFun
@@ -70,31 +69,31 @@ instance MonadConc m => Applicative (Concurrently m) where
 
 applicativeProps :: [TestTree]
 applicativeProps =
-  [ H.testProperty "pure id <*> a = a" . H.property $ do
+  [ testProperty "pure id <*> a = a" $ do
       (cval -> ca) <- H.forAll genA
       H.assert =<< ca `eq` (pure id <*> ca)
 
-  , H.testProperty "pure f <*> pure x = pure (f x)" . H.property $ do
+  , testProperty "pure f <*> pure x = pure (f x)" $ do
       (fun -> f) <- H.forAll genFun
       a <- H.forAll genA
       H.assert =<< pure (f a) `eq` (pure f <*> pure a)
 
-  , H.testProperty "u <*> pure y = pure ($ y) <*> u" . H.property $ do
+  , testProperty "u <*> pure y = pure ($ y) <*> u" $ do
       (cfun -> u) <- H.forAll genFun
       y <- H.forAll genA
       H.assert =<< (u <*> pure y) `eq` (pure ($ y) <*> u)
 
   , testGroup "u <*> (v <*> w) = pure (.) <*> u <*> v <*> w"
-    [ H.testProperty "Without races" . H.property $ do
+    [ testProperty "Without races" $ do
         (cfun -> u) <- H.forAll genFun
         (cfun -> v) <- H.forAll genFun
         (cval -> w) <- H.forAll genA
         H.assert =<< (u <*> (v <*> w)) `eq` (pure (.) <*> u <*> v <*> w)
 
-    -- todo: H.testProperty "With races" ...
+    -- todo: testProperty "With races" ...
     ]
 
-  , H.testProperty "f <$> x = pure f <*> x" . H.property $ do
+  , testProperty "f <$> x = pure f <*> x" $ do
       (fun -> f) <- H.forAll genFun
       (cval -> a) <- H.forAll genA
       H.assert =<< (f <$> a) `eq` (pure f <*> a)
@@ -110,39 +109,39 @@ instance MonadConc m => Monad (Concurrently m) where
 
 monadProps :: [TestTree]
 monadProps =
-  [ H.testProperty "return >=> f = f" . H.property $ do
+  [ testProperty "return >=> f = f" $ do
       (func -> f) <- H.forAll genFun
       a <- H.forAll genA
       H.assert =<< f a `eq` (return >=> f) a
 
-  , H.testProperty "f >=> return = f" . H.property $ do
+  , testProperty "f >=> return = f" $ do
       (func -> f) <- H.forAll genFun
       a <- H.forAll genA
       H.assert =<< f a `eq` (f >=> return) a
 
-  , H.testProperty "(f >=> g) >=> h = f >=> (g >=> h)" . H.property $ do
+  , testProperty "(f >=> g) >=> h = f >=> (g >=> h)" $ do
       (func -> f) <- H.forAll genFun
       (func -> g) <- H.forAll genFun
       (func -> h) <- H.forAll genFun
       a <- H.forAll genA
       H.assert =<< ((f >=> g) >=> h) a `eq` (f >=> (g >=> h)) a
 
-  , H.testProperty "f <$> a = f `liftM` a" . H.property $ do
+  , testProperty "f <$> a = f `liftM` a" $ do
       (fun -> f) <- H.forAll genFun
       (cval -> a) <- H.forAll genA
       H.assert =<< (f <$> a) `eq` (f `liftM` a)
 
-  , H.testProperty "return = pure" . H.property $ do
+  , testProperty "return = pure" $ do
       a <- H.forAll genA
       H.assert =<< pure a `eq` return a
 
   , testGroup "(<*>) = ap"
-    [ H.testProperty "Without races" . H.property $ do
+    [ testProperty "Without races" $ do
         (fun -> f) <- H.forAll genFun
         a <- H.forAll genA
         H.assert =<< (pure f <*> pure a) `eq` (return f `ap` return a)
 
-    , expectFail . H.testProperty "With races" . H.property $ do
+    , expectFail . testProperty "With races" $ do
         (fun -> f1) <- H.forAll genFun
         (fun -> f2) <- H.forAll genFun
         a <- H.forAll genA
@@ -167,20 +166,20 @@ instance MonadConc m => Alternative (Concurrently m) where
 alternativeProps :: [TestTree]
 alternativeProps =
   [ testGroup "x <|> (y <|> z) = (x <|> y) <|> z"
-    [ H.testProperty "Without races" . H.property $ do
+    [ testProperty "Without races" $ do
         (cval -> x) <- H.forAll genA
         (cval -> y) <- H.forAll genA
         (cval -> z) <- H.forAll genA
         H.assert =<< (x <|> (y <|> z)) `eq` ((x <|> y) <|> z)
 
-    -- todo: H.testProperty "With races" ...
+    -- todo: testProperty "With races" ...
     ]
 
-  , H.testProperty "x = x <|> empty" . H.property $ do
+  , testProperty "x = x <|> empty" $ do
       (cval -> x) <- H.forAll genA
       H.assert =<< x `eq` (x <|> empty)
 
-  , H.testProperty "x = empty <|> x" . H.property $ do
+  , testProperty "x = empty <|> x" $ do
       (cval -> x) <- H.forAll genA
       H.assert =<< x `eq` (empty <|> x)
   ]

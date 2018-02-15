@@ -15,7 +15,6 @@ import qualified Test.DejaFu.Conc.Internal.Memory as Mem
 import qualified Test.DejaFu.Internal             as D
 import qualified Test.DejaFu.SCT.Internal.DPOR    as SCT
 import qualified Test.DejaFu.Types                as D
-import qualified Test.Tasty.Hedgehog              as H
 
 import           Common
 
@@ -36,37 +35,37 @@ classLawProps = toTestList
     ]
   where
     eqord gen =
-      [ H.testProperty "Reflexivity (==)" . H.property $ do
+      [ testProperty "Reflexivity (==)" $ do
           x <- H.forAll gen
           x H.=== x
 
-      , H.testProperty "Symmetry (==)" . H.property $ do
+      , testProperty "Symmetry (==)" $ do
           x <- H.forAll gen
           y <- H.forAll gen
           (x == y) H.=== (y == x)
 
-      , H.testProperty "Transitivity (==)" . H.property $ do
+      , testProperty "Transitivity (==)" $ do
           x <- H.forAll gen
           y <- H.forAll (HGen.filter (==x) gen)
           z <- H.forAll (HGen.filter (==y) gen)
           x H.=== z
 
-      , H.testProperty "Reflexivity (<=)" . H.property $ do
+      , testProperty "Reflexivity (<=)" $ do
           x <- H.forAll gen
           H.assert (x <= x)
 
-      , H.testProperty "Antisymmetry (<=)" . H.property $ do
+      , testProperty "Antisymmetry (<=)" $ do
           x <- H.forAll gen
           y <- H.forAll (HGen.filter (\y -> x <= y && y <= x) gen)
           x H.=== y
 
-      , H.testProperty "Transitivity (<=)" . H.property $ do
+      , testProperty "Transitivity (<=)" $ do
           x <- H.forAll gen
           y <- H.forAll (HGen.filter (x<=) gen)
           z <- H.forAll (HGen.filter (y<=) gen)
           H.assert (x <= z)
 
-      , H.testProperty "Eq / Ord Consistency" . H.property $ do
+      , testProperty "Eq / Ord Consistency" $ do
           x <- H.forAll gen
           y <- H.forAll (HGen.filter (==x) gen)
           H.assert (x <= y)
@@ -77,18 +76,18 @@ classLawProps = toTestList
 
 commonProps :: [TestTree]
 commonProps = toTestList
-  [ H.testProperty "simplifyAction a == simplifyLookahead (rewind a)" . H.property $ do
+  [ testProperty "simplifyAction a == simplifyLookahead (rewind a)" $ do
       act <- H.forAll genThreadAction
       case D.rewind act of
         Just lh -> D.simplifyAction act H.=== D.simplifyLookahead lh
         Nothing -> H.discard
 
-  , H.testProperty "isBarrier a ==> synchronises a r" . H.property $ do
+  , testProperty "isBarrier a ==> synchronises a r" $ do
       a <- H.forAll (HGen.filter D.isBarrier genActionType)
       r <- H.forAll genCRefId
       H.assert (D.synchronises a r)
 
-  , H.testProperty "isCommit a r ==> synchronises a r" . H.property $ do
+  , testProperty "isCommit a r ==> synchronises a r" $ do
       a <- H.forAll genPartiallySynchronisedActionType
       case D.crefOf a of
         Just r -> H.assert (D.synchronises a r)
@@ -99,7 +98,7 @@ commonProps = toTestList
 
 memoryProps :: [TestTree]
 memoryProps = toTestList
-    [ H.testProperty "bufferWrite emptyBuffer k c a /= emptyBuffer" . H.property $ do
+    [ testProperty "bufferWrite emptyBuffer k c a /= emptyBuffer" $ do
         k <- H.forAll genWBKey
         a <- H.forAll genInt
         res <- crefProp $ \cref -> do
@@ -107,13 +106,13 @@ memoryProps = toTestList
           wb `eqWB` Mem.emptyBuffer
         H.assert (not res)
 
-    , H.testProperty "commitWrite emptyBuffer k == emptyBuffer" . H.property $ do
+    , testProperty "commitWrite emptyBuffer k == emptyBuffer" $ do
         k <- H.forAll genWBKey
         H.assert $ ST.runST $ do
           wb <- Mem.commitWrite Mem.emptyBuffer k
           wb `eqWB` Mem.emptyBuffer
 
-    , H.testProperty "commitWrite (bufferWrite emptyBuffer k a) k == emptyBuffer" . H.property $ do
+    , testProperty "commitWrite (bufferWrite emptyBuffer k a) k == emptyBuffer" $ do
         k <- H.forAll genWBKey
         a <- H.forAll genInt
         res <- crefProp $ \cref -> do
@@ -122,7 +121,7 @@ memoryProps = toTestList
           wb2 `eqWB` Mem.emptyBuffer
         H.assert res
 
-    , H.testProperty "Single buffered write/read from same thread" . H.property $ do
+    , testProperty "Single buffered write/read from same thread" $ do
         k@(tid, _) <- H.forAll genWBKey
         a <- H.forAll genInt
         res <- crefProp $ \cref -> do
@@ -130,7 +129,7 @@ memoryProps = toTestList
           Mem.readCRef cref tid
         a H.=== res
 
-    , H.testProperty "Overriding buffered write/read from same thread" . H.property $ do
+    , testProperty "Overriding buffered write/read from same thread" $ do
         k@(tid, _) <- H.forAll genWBKey
         a1 <- H.forAll genInt
         a2 <- H.forAll genInt
@@ -140,7 +139,7 @@ memoryProps = toTestList
           Mem.readCRef cref tid
         a2 H.=== res
 
-    , H.testProperty "Buffered write/read from different thread" . H.property $ do
+    , testProperty "Buffered write/read from different thread" $ do
         k1@(tid, _) <- H.forAll genWBKey
         k2 <- H.forAll (HGen.filter ((/=tid) . fst) genWBKey)
         a1 <- H.forAll genInt
@@ -166,7 +165,7 @@ memoryProps = toTestList
 
 sctProps :: [TestTree]
 sctProps = toTestList
-  [ H.testProperty "canInterrupt ==> canInterruptL" . H.property $ do
+  [ testProperty "canInterrupt ==> canInterruptL" $ do
       ds <- H.forAll genDepState
       tid <- H.forAll genThreadId
       act <- H.forAll (HGen.filter (SCT.canInterrupt ds tid) genThreadAction)
@@ -174,7 +173,7 @@ sctProps = toTestList
         Just lh -> H.assert (SCT.canInterruptL ds tid lh)
         Nothing -> H.discard
 
-  , H.testProperty "dependent ==> dependent'" . H.property $ do
+  , testProperty "dependent ==> dependent'" $ do
       ds <- H.forAll genDepState
       tid1 <- H.forAll genThreadId
       tid2 <- H.forAll genThreadId
@@ -184,7 +183,7 @@ sctProps = toTestList
         Just lh -> H.assert (SCT.dependent' ds tid1 ta1 tid2 lh)
         Nothing -> H.discard
 
-  , H.testProperty "dependent x y == dependent y x" . H.property $ do
+  , testProperty "dependent x y == dependent y x" $ do
       ds <- H.forAll genDepState
       tid1 <- H.forAll genThreadId
       tid2 <- H.forAll genThreadId
@@ -192,7 +191,7 @@ sctProps = toTestList
       ta2 <- H.forAll genThreadAction
       SCT.dependent ds tid1 ta1 tid2 ta2 H.=== SCT.dependent ds tid2 ta2 tid1 ta1
 
-  , H.testProperty "dependentActions x y == dependentActions y x" . H.property $ do
+  , testProperty "dependentActions x y == dependentActions y x" $ do
       ds <- H.forAll genDepState
       a1 <- H.forAll genActionType
       a2 <- H.forAll genActionType

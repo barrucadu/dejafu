@@ -6,7 +6,7 @@ import           Test.DejaFu.Conc               (ConcIO)
 import           Test.DejaFu.Refinement
 import           Test.Tasty.DejaFu              (testProperty)
 
-import           Common
+import           Common                         hiding (testProperty)
 
 tests :: [TestTree]
 tests = [ testGroup "MVar" mvarProps ]
