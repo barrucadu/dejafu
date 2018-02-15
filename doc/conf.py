@@ -58,6 +58,7 @@ _repo = 'https://github.com/barrucadu/dejafu/'
 extlinks = {
     'commit': (_repo + 'commit/%s', 'commit '),
     'issue': (_repo + 'issues/%s', 'issue #'),
+    'pull': (_repo + 'pull/%s', 'pull request #'),
     'tag': (_repo + 'releases/tag/%s', 'tag '),
     'github': (_repo + '%s', ''),
     'hackage': ('https://hackage.haskell.org/package/%s', ''),

@@ -22,7 +22,7 @@ maintainer:          mike@barrucadu.co.uk
 copyright:           (c) 2016--2017 Michael Walker
 category:            Concurrency
 build-type:          Simple
-extra-source-files:  README.markdown CHANGELOG.markdown
+extra-source-files:  README.markdown CHANGELOG.rst
 cabal-version:       >=1.10
 
 source-repository head
