@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs #-}
 
-module Common (module Common, module Test.Tasty.DejaFu, T.TestTree) where
+module Common (module Common, module Test.Tasty.DejaFu, T.TestTree, T.expectFail) where
 
 import           Control.Exception             (ArithException, ArrayException,
                                                 SomeException, displayException)
@@ -9,6 +9,8 @@ import qualified Control.Monad.Catch           as C
 import           Control.Monad.Conc.Class
 import           Control.Monad.IO.Class        (liftIO)
 import           Control.Monad.STM.Class
+import qualified Data.Map                      as Map
+import qualified Data.Set                      as Set
 import qualified Hedgehog                      as H
 import qualified Hedgehog.Gen                  as HGen
 import qualified Hedgehog.Range                as HRange
@@ -23,6 +25,7 @@ import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
 import qualified Test.Tasty                    as T
 import           Test.Tasty.DejaFu             hiding (testProperty)
+import qualified Test.Tasty.ExpectedFailure    as T
 import qualified Test.Tasty.Hedgehog           as H
 
 -------------------------------------------------------------------------------
@@ -90,8 +93,8 @@ alwaysFailsWith p = alwaysTrue (either p (const False))
 prop_dep_fun :: (Eq a, Show a) => ConcIO a -> H.Property
 prop_dep_fun conc = H.property $ do
     mem <- H.forAll HGen.enumBounded
-    seed <- H.forAll $ HGen.int (HRange.linear 0 100)
-    fs <- H.forAll $ HGen.list (HRange.linear 0 100) HGen.bool
+    seed <- H.forAll genInt
+    fs <- H.forAll $ genList HGen.bool
 
     (efa1, tids1, efa2, tids2) <- liftIO $ runNorm seed (shuffle fs) mem
     H.footnote ("            to: " ++ show tids2)
@@ -138,6 +141,50 @@ catchArrayException = C.catch
 
 catchSomeException :: C.MonadCatch m => m a -> (SomeException -> m a) -> m a
 catchSomeException = C.catch
+
+-------------------------------------------------------------------------------
+-- Generators
+
+genSmallInt :: H.Gen Int
+genSmallInt = genIntFromTo 0 10
+
+genInt :: H.Gen Int
+genInt = genIntFromTo 0 100
+
+genIntFromTo :: Int -> Int -> H.Gen Int
+genIntFromTo from = HGen.int . HRange.linear from
+
+genMap :: Ord k => H.Gen k -> H.Gen v -> H.Gen (Map.Map k v)
+genMap genKey genVal = HGen.map (HRange.linear 0 100) ((,) <$> genKey <*> genVal)
+
+genSmallMap :: Ord k => H.Gen k -> H.Gen v -> H.Gen (Map.Map k v)
+genSmallMap genKey genVal = HGen.map (HRange.linear 0 10) ((,) <$> genKey <*> genVal)
+
+genSet :: Ord a => H.Gen a -> H.Gen (Set.Set a)
+genSet = HGen.set (HRange.linear 0 100)
+
+genSmallSet :: Ord a => H.Gen a -> H.Gen (Set.Set a)
+genSmallSet = HGen.set (HRange.linear 0 10)
+
+genString :: H.Gen String
+genString = genSmallList HGen.enumBounded
+
+genList :: H.Gen a -> H.Gen [a]
+genList = genListUpTo 100
+
+genSmallList :: H.Gen a -> H.Gen [a]
+genSmallList = genListUpTo 10
+
+genListUpTo :: Int -> H.Gen a -> H.Gen [a]
+genListUpTo = HGen.list . HRange.linear 0
+
+type Function k v = (v, Map.Map k v)
+
+genFunction :: Ord k => H.Gen k -> H.Gen v -> H.Gen (Function k v)
+genFunction genKey genVal = (,) <$> genVal <*> genSmallMap genKey genVal
+
+applyFunction :: Ord k => (v, Map.Map k v) -> k -> v
+applyFunction (def, assocs) k = Map.findWithDefault def k assocs
 
 -------------------------------------------------------------------------------
 -- Utilities

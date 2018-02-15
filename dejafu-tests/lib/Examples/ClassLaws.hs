@@ -1,5 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
 -- | Typeclass laws for @Concurrently@ from the async package.
@@ -10,20 +9,24 @@ import           Control.Exception        (SomeException)
 import           Control.Monad            (ap, forever, liftM, (>=>))
 import           Control.Monad.Catch      (onException)
 import           Control.Monad.Conc.Class
+import           Control.Monad.IO.Class   (MonadIO, liftIO)
 import           Data.Maybe               (isJust)
 import           Data.Set                 (fromList)
+import qualified Hedgehog                 as H
 import           Test.DejaFu              (defaultBounds, defaultMemType)
 import           Test.DejaFu.Conc         (ConcIO)
 import           Test.DejaFu.SCT          (sctBound)
-import           Test.QuickCheck          (Arbitrary(..), Property, monomorphic)
-import qualified Test.QuickCheck          as QC
-import           Test.QuickCheck.Function (Fun, apply)
-import           Test.QuickCheck.Monadic  (assert, monadicIO, run)
-import           Test.Tasty.QuickCheck    (testProperty)
+import qualified Test.Tasty.Hedgehog      as H
 
 import           Common
 
--- Tests at bottom of file due to Template Haskell silliness.
+tests :: [TestTree]
+tests =
+  [ testGroup "Functor" functorProps
+  , testGroup "Applicative" applicativeProps
+  , testGroup "Monad" monadProps
+  , testGroup "Alternative" alternativeProps
+  ]
 
 --------------------------------------------------------------------------------
 
@@ -44,13 +47,18 @@ type C = Concurrently ConcIO
 instance MonadConc m => Functor (Concurrently m) where
   fmap f (Concurrently a) = Concurrently $ f <$> a
 
--- fmap id a = a
-prop_functor_id :: Ord a => C a -> Property
-prop_functor_id ca = ca `eq` fmap id ca
+functorProps :: [TestTree]
+functorProps = toTestList
+  [ H.testProperty "fmap id a = a" . H.property $ do
+      (cval -> ca) <- H.forAll genA
+      H.assert =<< ca `eq` fmap id ca
 
--- fmap f . fmap g = fmap (f . g)
-prop_functor_comp :: Ord c => C a -> Fun a b -> Fun b c -> Property
-prop_functor_comp ca (apply -> f) (apply -> g) = (g . f <$> ca) `eq` (g <$> (f <$> ca))
+  , H.testProperty "fmap f . fmap g = fmap (f . g)" . H.property $ do
+      (cval -> ca) <- H.forAll genA
+      (fun -> f) <- H.forAll genFun
+      (fun -> g) <- H.forAll genFun
+      H.assert =<< (g . f <$> ca) `eq` (g <$> (f <$> ca))
+  ]
 
 --------------------------------------------------------------------------------
 -- Applicative
@@ -60,28 +68,37 @@ instance MonadConc m => Applicative (Concurrently m) where
 
   Concurrently fs <*> Concurrently as = Concurrently $ (\(f, a) -> f a) <$> concurrently fs as
 
--- pure id <*> a = a
-prop_applicative_id :: Ord a => C a -> Property
-prop_applicative_id ca = ca `eq` (pure id <*> ca)
+applicativeProps :: [TestTree]
+applicativeProps =
+  [ H.testProperty "pure id <*> a = a" . H.property $ do
+      (cval -> ca) <- H.forAll genA
+      H.assert =<< ca `eq` (pure id <*> ca)
 
--- pure f <*> pure x = pure (f x)
-prop_applicative_homo :: Ord b => a -> Fun a b -> Property
-prop_applicative_homo a (apply -> f) = pure (f a) `eq` (pure f <*> pure a)
+  , H.testProperty "pure f <*> pure x = pure (f x)" . H.property $ do
+      (fun -> f) <- H.forAll genFun
+      a <- H.forAll genA
+      H.assert =<< pure (f a) `eq` (pure f <*> pure a)
 
--- u <*> pure y = pure ($ y) <*> u
-prop_applicative_inter :: Ord b => C (Fun a b) -> a -> Property
-prop_applicative_inter u y = (u' <*> pure y) `eq` (pure ($ y) <*> u') where
-  u' = apply <$> u
+  , H.testProperty "u <*> pure y = pure ($ y) <*> u" . H.property $ do
+      (cfun -> u) <- H.forAll genFun
+      y <- H.forAll genA
+      H.assert =<< (u <*> pure y) `eq` (pure ($ y) <*> u)
 
--- u <*> (v <*> w) = pure (.) <*> u <*> v <*> w
-prop_applicative_comp :: Ord c => C (Fun b c) -> C (Fun a b) -> C a -> Property
-prop_applicative_comp u v w = (u' <*> (v' <*> w)) `eq` (pure (.) <*> u' <*> v' <*> w) where
-  u' = apply <$> u
-  v' = apply <$> v
+  , testGroup "u <*> (v <*> w) = pure (.) <*> u <*> v <*> w"
+    [ H.testProperty "Without races" . H.property $ do
+        (cfun -> u) <- H.forAll genFun
+        (cfun -> v) <- H.forAll genFun
+        (cval -> w) <- H.forAll genA
+        H.assert =<< (u <*> (v <*> w)) `eq` (pure (.) <*> u <*> v <*> w)
 
--- f <$> x = pure f <*> x
-prop_applicative_fmap :: Ord b => Fun a b -> C a -> Property
-prop_applicative_fmap (apply -> f) a = (f <$> a) `eq` (pure f <*> a)
+    -- todo: H.testProperty "With races" ...
+    ]
+
+  , H.testProperty "f <$> x = pure f <*> x" . H.property $ do
+      (fun -> f) <- H.forAll genFun
+      (cval -> a) <- H.forAll genA
+      H.assert =<< (f <$> a) `eq` (pure f <*> a)
+  ]
 
 --------------------------------------------------------------------------------
 -- Monad
@@ -91,39 +108,52 @@ instance MonadConc m => Monad (Concurrently m) where
 
   Concurrently a >>= f = Concurrently $ a >>= runConcurrently . f
 
--- return >=> f = f
-prop_monad_left_id :: Ord b => Fun a (C b) -> a -> Property
-prop_monad_left_id (apply -> f) = f `eqf` (return >=> f)
+monadProps :: [TestTree]
+monadProps =
+  [ H.testProperty "return >=> f = f" . H.property $ do
+      (func -> f) <- H.forAll genFun
+      a <- H.forAll genA
+      H.assert =<< f a `eq` (return >=> f) a
 
--- f >=> return = f
-prop_monad_right_id :: Ord b => Fun a (C b) -> a -> Property
-prop_monad_right_id (apply -> f) = f `eqf` (f >=> return)
+  , H.testProperty "f >=> return = f" . H.property $ do
+      (func -> f) <- H.forAll genFun
+      a <- H.forAll genA
+      H.assert =<< f a `eq` (f >=> return) a
 
--- (f >=> g) >=> h = f >=> (g >=> h)
-prop_monad_assoc :: Ord d => Fun a (C b) -> Fun b (C c) -> Fun c (C d) -> a -> Property
-prop_monad_assoc (apply -> f) (apply -> g) (apply -> h) = ((f >=> g) >=> h) `eqf` (f >=> (g >=> h))
+  , H.testProperty "(f >=> g) >=> h = f >=> (g >=> h)" . H.property $ do
+      (func -> f) <- H.forAll genFun
+      (func -> g) <- H.forAll genFun
+      (func -> h) <- H.forAll genFun
+      a <- H.forAll genA
+      H.assert =<< ((f >=> g) >=> h) a `eq` (f >=> (g >=> h)) a
 
--- f <$> a = f `liftM` a
-prop_monad_fmap :: Ord b => Fun a b -> C a -> Property
-prop_monad_fmap (apply -> f) a = (f <$> a) `eq` (f `liftM` a)
+  , H.testProperty "f <$> a = f `liftM` a" . H.property $ do
+      (fun -> f) <- H.forAll genFun
+      (cval -> a) <- H.forAll genA
+      H.assert =<< (f <$> a) `eq` (f `liftM` a)
 
--- return = pure
-prop_monad_pure :: Ord a => a -> Property
-prop_monad_pure = pure `eqf` return
+  , H.testProperty "return = pure" . H.property $ do
+      a <- H.forAll genA
+      H.assert =<< pure a `eq` return a
 
--- (<*>) = ap
-prop_monad_ap :: Ord b => Fun a b -> a -> Property
-prop_monad_ap (apply -> f) a = (pure f <*> pure a) `eq` (return f `ap` return a)
+  , testGroup "(<*>) = ap"
+    [ H.testProperty "Without races" . H.property $ do
+        (fun -> f) <- H.forAll genFun
+        a <- H.forAll genA
+        H.assert =<< (pure f <*> pure a) `eq` (return f `ap` return a)
 
--- (<*>) = ap, side-effect-testing version
-prop_monad_ap' :: forall a b. Ord b => Fun a b -> Fun a b -> a -> Property
-prop_monad_ap' (apply -> f) (apply -> g) a = go (<*>) `eq'` go ap where
-  go :: (C (a -> b) -> C a -> C b) -> ConcIO b
-  go combine = do
-    var <- newEmptyMVar
-    let cf = do { res <- tryTakeMVar var; pure $ if isJust res then f else g }
-    let ca = do { putMVar var (); pure a }
-    runConcurrently $ Concurrently cf `combine` Concurrently ca
+    , expectFail . H.testProperty "With races" . H.property $ do
+        (fun -> f1) <- H.forAll genFun
+        (fun -> f2) <- H.forAll genFun
+        a <- H.forAll genA
+        let go combine = do
+              var <- newEmptyMVar
+              let cf = do { res <- tryTakeMVar var; pure $ if isJust res then f1 else f2 }
+              let ca = do { putMVar var (); pure a }
+              runConcurrently $ Concurrently cf `combine` Concurrently ca
+        H.assert =<< go (<*>) `eq'` go ap
+    ]
+  ]
 
 --------------------------------------------------------------------------------
 -- Alternative
@@ -134,43 +164,39 @@ instance MonadConc m => Alternative (Concurrently m) where
   Concurrently as <|> Concurrently bs =
     Concurrently $ either id id <$> race as bs
 
--- x <|> (y <|> z) = (x <|> y) <|> z
-prop_alternative_assoc :: Ord a => C a -> C a -> C a -> Property
-prop_alternative_assoc x y z = (x <|> (y <|> z)) `eq` ((x <|> y) <|> z)
+alternativeProps :: [TestTree]
+alternativeProps =
+  [ testGroup "x <|> (y <|> z) = (x <|> y) <|> z"
+    [ H.testProperty "Without races" . H.property $ do
+        (cval -> x) <- H.forAll genA
+        (cval -> y) <- H.forAll genA
+        (cval -> z) <- H.forAll genA
+        H.assert =<< (x <|> (y <|> z)) `eq` ((x <|> y) <|> z)
 
--- x = x <|> empty
-prop_alternative_right_id :: Ord a => C a -> Property
-prop_alternative_right_id x = x `eq` (x <|> empty)
+    -- todo: H.testProperty "With races" ...
+    ]
 
--- x = empty <|> x
-prop_alternative_left_id :: Ord a => C a -> Property
-prop_alternative_left_id x = x `eq` (empty <|> x)
+  , H.testProperty "x = x <|> empty" . H.property $ do
+      (cval -> x) <- H.forAll genA
+      H.assert =<< x `eq` (x <|> empty)
+
+  , H.testProperty "x = empty <|> x" . H.property $ do
+      (cval -> x) <- H.forAll genA
+      H.assert =<< x `eq` (empty <|> x)
+  ]
 
 --------------------------------------------------------------------------------
 -- Stuff for testing
 
-instance Show (Concurrently m a) where
-  show _ = "<concurrently>"
-
-instance (Arbitrary a, Applicative m) => Arbitrary (Concurrently m a) where
-  arbitrary = Concurrently . pure <$> arbitrary
-
-instance Monoid Integer where
-  mempty  = 0
-  mappend = (+)
-
-eq :: Ord a => C a -> C a -> Property
+eq :: (MonadIO m, Ord a) => C a -> C a -> m Bool
 eq left right = runConcurrently left `eq'` runConcurrently right
 
-eq' :: forall a. Ord a => ConcIO a -> ConcIO a -> Property
-eq' left right = monadicIO $ do
-  leftTraces  <- run $ sctBound defaultMemType defaultBounds left
-  rightTraces <- run $ sctBound defaultMemType defaultBounds right
+eq' :: (MonadIO m, Ord a) => ConcIO a -> ConcIO a -> m Bool
+eq' left right = liftIO $ do
+  leftTraces  <- sctBound defaultMemType defaultBounds left
+  rightTraces <- sctBound defaultMemType defaultBounds right
   let toSet = fromList . map fst
-  assert (toSet leftTraces == toSet rightTraces)
-
-eqf :: Ord b => (a -> C b) -> (a -> C b) -> a -> Property
-eqf left right a = left a `eq` right a
+  pure (toSet leftTraces == toSet rightTraces)
 
 --------------------------------------------------------------------------------
 -- Stuff copied from async
@@ -214,47 +240,24 @@ race left right = concurrently' left right collect where
       Left ex -> throw ex
       Right r -> pure r
 
---------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
+-- Hedgehog generators
 
-return []
+genA :: H.Gen Int
+genA = genSmallInt
 
--- QuickChecking the Applicative composition and Alternative
--- associativity laws is really slow to run every time, sadly. I have
--- done all I can think of for now to cut down the number of
--- executions tried, they give rise to something on the order of 10000
--- or so executions (100 sets of random inputs, 2 computations per
--- test, 40 to 50 schedules for each computation)
---
--- I expect a large portion of it is due to the exception handling,
--- which is admittedly rather heavy-handed right now. There's got to
--- be some better way than just having all exceptions be dependent
--- with everything ever, except Stop.
+genFun :: H.Gen (Function Int Int)
+genFun = genFunction genA genA
 
-tests :: [TestTree]
-tests =
-  [ testGroup "Functor Laws"
-   [ testProperty "identity"    $(monomorphic 'prop_functor_id)
-   , testProperty "composition" $(monomorphic 'prop_functor_comp)
-   ]
-  , testGroup "Applicative Laws"
-    [ testProperty "identity" $(monomorphic 'prop_applicative_id)
-    , testProperty "homomorphism" $(monomorphic 'prop_applicative_homo)
-    , testProperty "interchange"  $(monomorphic 'prop_applicative_inter)
-    , testProperty "composition"  $(monomorphic 'prop_applicative_comp)
-    , testProperty "fmap" $(monomorphic 'prop_applicative_fmap)
-    ]
-  , testGroup "Monad Laws"
-    [ testProperty "left identity"  $(monomorphic 'prop_monad_left_id)
-    , testProperty "right identity" $(monomorphic 'prop_monad_right_id)
-    , testProperty "associativity"  $(monomorphic 'prop_monad_assoc)
-    , testProperty "fmap" $(monomorphic 'prop_monad_fmap)
-    , testProperty "pure" $(monomorphic 'prop_monad_pure)
-    , testProperty "ap"   $(monomorphic 'prop_monad_ap)
-    , testProperty "ap (side effects)" $ QC.expectFailure $(monomorphic 'prop_monad_ap')
-    ]
-  , testGroup "Alternative Laws"
-    [ testProperty "left identity"  $(monomorphic 'prop_alternative_left_id)
-    , testProperty "right identity" $(monomorphic 'prop_alternative_right_id)
-    --, testProperty "associativity"  $(monomorphic 'prop_alternative_assoc)
-    ]
-  ]
+-- for viewpatterns
+fun :: Ord a => Function a b -> a -> b
+fun = applyFunction
+
+cfun :: Ord a => Function a b -> C (a -> b)
+cfun = pure . applyFunction
+
+func :: Ord a => Function a b -> a -> C b
+func = fmap pure . applyFunction
+
+cval :: a -> C a
+cval = pure

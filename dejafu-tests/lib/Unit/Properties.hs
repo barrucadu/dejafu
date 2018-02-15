@@ -7,7 +7,6 @@ import qualified Control.Monad.ST                 as ST
 import qualified Data.Foldable                    as F
 import qualified Data.Map                         as M
 import qualified Data.Sequence                    as S
-import qualified Data.Set                         as Set
 import qualified Data.STRef                       as ST
 import qualified Hedgehog                         as H
 import qualified Hedgehog.Gen                     as HGen
@@ -368,36 +367,6 @@ genSynchronisedActionType = HGen.choice
 
 genDepState :: H.Gen SCT.DepState
 genDepState = SCT.DepState
-  <$> genMap genCRefId HGen.bool
-  <*> genSet genMVarId
-  <*> genMap genThreadId genMaskingState
-
--------------------------------------------------------------------------------
--- Utility generators
-
-genSmallInt :: H.Gen Int
-genSmallInt = genIntFromTo 0 10
-
-genInt :: H.Gen Int
-genInt = genIntFromTo 0 100
-
-genIntFromTo :: Int -> Int -> H.Gen Int
-genIntFromTo from = HGen.int . HRange.linear from
-
-genMap :: Ord k => H.Gen k -> H.Gen v -> H.Gen (M.Map k v)
-genMap genKey genVal = M.fromList <$> genList ((,) <$> genKey <*> genVal)
-
-genSet :: Ord a => H.Gen a -> H.Gen (Set.Set a)
-genSet gen = Set.fromList <$> genList gen
-
-genString :: H.Gen String
-genString = genSmallList HGen.enumBounded
-
-genList :: H.Gen a -> H.Gen [a]
-genList = genListUpTo 100
-
-genSmallList :: H.Gen a -> H.Gen [a]
-genSmallList = genListUpTo 10
-
-genListUpTo :: Int -> H.Gen a -> H.Gen [a]
-genListUpTo = HGen.list . HRange.linear 0
+  <$> genSmallMap genCRefId HGen.bool
+  <*> genSmallSet genMVarId
+  <*> genSmallMap genThreadId genMaskingState
