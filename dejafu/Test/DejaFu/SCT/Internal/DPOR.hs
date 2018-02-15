@@ -548,6 +548,7 @@ independent ds t1 a1 t2 a2
     -- can't re-order any action of a thread with the fork which
     -- created it.
     check _ (Fork t) tid _ | t == tid = True
+    check _ (ForkOS t) tid _ | t == tid = True
     -- because we can't easily tell if this will terminate the other
     -- thread, we just can't re-order asynchronous exceptions at all
     -- :(

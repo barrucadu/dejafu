@@ -24,6 +24,9 @@ Fixed
 * (:issue:`204`) Fix missed interleavings in systematic testing with
   some uses of STM.
 
+* (:issue:`205`) Fix ``forkOS`` being recorded in an execution trace
+  as if it were a ``fork``.
+
 
 1.0.0.1 (2017-01-19)
 --------------------

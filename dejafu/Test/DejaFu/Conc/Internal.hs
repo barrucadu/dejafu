@@ -191,7 +191,7 @@ stepThread sched memtype tid action ctx = case action of
       let (idSource', newtid) = nextTId n (cIdSource ctx)
       let threads' = launch tid newtid a (cThreads ctx)
       threads'' <- makeBound newtid threads'
-      pure (Right ctx { cThreads = goto (b newtid) tid threads'', cIdSource = idSource' }, Single (Fork newtid))
+      pure (Right ctx { cThreads = goto (b newtid) tid threads'', cIdSource = idSource' }, Single (ForkOS newtid))
 
     -- check if the current thread is bound
     AIsBound c ->
