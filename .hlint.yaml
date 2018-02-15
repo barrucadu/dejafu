@@ -27,6 +27,7 @@
 
 # I don't think these help.
 - ignore: {name: Avoid lambda, within: Integration.Refinement}
+- ignore: {name: Reduce duplication, within: Unit.Properties}
 - ignore: {name: Reduce duplication, within: Integration.Litmus}
 - ignore: {name: Reduce duplication, within: Integration.MultiThreaded}
 - ignore: {name: Reduce duplication, within: Integration.SingleThreaded}

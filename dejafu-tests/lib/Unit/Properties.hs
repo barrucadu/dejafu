@@ -1,29 +1,22 @@
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 module Unit.Properties where
 
 import qualified Control.Exception                as E
 import           Control.Monad                    (zipWithM)
 import qualified Control.Monad.ST                 as ST
 import qualified Data.Foldable                    as F
-import           Data.Map                         (Map)
 import qualified Data.Map                         as M
-import           Data.Maybe                       (fromJust, isJust)
-import           Data.Proxy                       (Proxy(..))
 import qualified Data.Sequence                    as S
-import           Data.Set                         (Set)
 import qualified Data.Set                         as Set
 import qualified Data.STRef                       as ST
+import qualified Hedgehog                         as H
+import qualified Hedgehog.Gen                     as HGen
 import qualified Test.DejaFu.Conc.Internal.Common as D
 import qualified Test.DejaFu.Conc.Internal.Memory as Mem
 import qualified Test.DejaFu.Internal             as D
 import qualified Test.DejaFu.SCT.Internal.DPOR    as SCT
-import           Test.DejaFu.Types                (Lookahead, ThreadAction)
 import qualified Test.DejaFu.Types                as D
-import           Test.LeanCheck                   (Listable(..), cons0, cons1,
-                                                   cons2, cons3, mapT, (==>),
-                                                   (><), (\/))
-import           Test.Tasty.LeanCheck             (testProperty)
+import qualified Test.Tasty.Hedgehog              as H
 
 import           Common
 
@@ -39,110 +32,176 @@ tests =
 
 classLawProps :: [TestTree]
 classLawProps = toTestList
-    [ testGroup "Id"      (eqord (Proxy :: Proxy D.Id))
-    , testGroup "Failure" (eqord (Proxy :: Proxy D.Failure))
+    [ testGroup "Id"      (eqord genId)
+    , testGroup "Failure" (eqord genFailure)
     ]
   where
-    eqord :: forall a. (Eq a, Ord a, Listable a, Show a) => Proxy a -> [TestTree]
-    eqord _ =
-      [ testProperty "Reflexivity (==)"     $ \(x :: a)     -> x == x
-      , testProperty "Symmetry (==)"        $ \(x :: a) y   -> (x == y) == (y == x)
-      , testProperty "Transitivity (==)"    $ \(x :: a) y z -> x == y && y == z ==> x == z
-      , testProperty "Reflexivity (<=)"     $ \(x :: a)     -> x <= x
-      , testProperty "Antisymmetry (<=)"    $ \(x :: a) y   -> x <= y && y <= x ==> x == y
-      , testProperty "Transitivity (<=)"    $ \(x :: a) y z -> x <= y && y <= z ==> x <= z
-      , testProperty "Eq / Ord Consistency" $ \(x :: a) y   -> x == y ==> x <= y
+    eqord gen =
+      [ H.testProperty "Reflexivity (==)" . H.property $ do
+          x <- H.forAll gen
+          x H.=== x
+
+      , H.testProperty "Symmetry (==)" . H.property $ do
+          x <- H.forAll gen
+          y <- H.forAll gen
+          (x == y) H.=== (y == x)
+
+      , H.testProperty "Transitivity (==)" . H.property $ do
+          x <- H.forAll gen
+          y <- H.forAll (HGen.filter (==x) gen)
+          z <- H.forAll (HGen.filter (==y) gen)
+          x H.=== z
+
+      , H.testProperty "Reflexivity (<=)" . H.property $ do
+          x <- H.forAll gen
+          H.assert (x <= x)
+
+      , H.testProperty "Antisymmetry (<=)" . H.property $ do
+          x <- H.forAll gen
+          y <- H.forAll (HGen.filter (\y -> x <= y && y <= x) gen)
+          x H.=== y
+
+      , H.testProperty "Transitivity (<=)" . H.property $ do
+          x <- H.forAll gen
+          y <- H.forAll (HGen.filter (x<=) gen)
+          z <- H.forAll (HGen.filter (y<=) gen)
+          H.assert (x <= z)
+
+      , H.testProperty "Eq / Ord Consistency" . H.property $ do
+          x <- H.forAll gen
+          y <- H.forAll (HGen.filter (==x) gen)
+          H.assert (x <= y)
+          H.assert (y <= x)
       ]
 
 -------------------------------------------------------------------------------
 
 commonProps :: [TestTree]
 commonProps = toTestList
-  [ testProperty "simplifyAction a == simplifyLookahead (rewind a)" $
-    \act -> canRewind act ==>
-    D.simplifyAction act == D.simplifyLookahead (rewind' act)
+  [ H.testProperty "simplifyAction a == simplifyLookahead (rewind a)" . H.property $ do
+      act <- H.forAll genThreadAction
+      case D.rewind act of
+        Just lh -> D.simplifyAction act H.=== D.simplifyLookahead lh
+        Nothing -> H.discard
 
-  , testProperty "isBarrier a ==> synchronises a r" $
-    \a r -> D.isBarrier a ==> D.synchronises a r
+  , H.testProperty "isBarrier a ==> synchronises a r" . H.property $ do
+      a <- H.forAll (HGen.filter D.isBarrier genActionType)
+      r <- H.forAll genCRefId
+      H.assert (D.synchronises a r)
 
-  , testProperty "isCommit a r ==> synchronises a r" $
-    \a r -> D.isCommit a r ==> D.synchronises a r
+  , H.testProperty "isCommit a r ==> synchronises a r" . H.property $ do
+      a <- H.forAll genPartiallySynchronisedActionType
+      case D.crefOf a of
+        Just r -> H.assert (D.synchronises a r)
+        _ -> H.discard
   ]
 
 -------------------------------------------------------------------------------
 
 memoryProps :: [TestTree]
 memoryProps = toTestList
-    [ testProperty "bufferWrite emptyBuffer k c a /= emptyBuffer" $
-      \k a -> crefProp $ \cref -> do
-        wb <- Mem.bufferWrite Mem.emptyBuffer k cref a
-        not <$> wb `eqWB` Mem.emptyBuffer
+    [ H.testProperty "bufferWrite emptyBuffer k c a /= emptyBuffer" . H.property $ do
+        k <- H.forAll genWBKey
+        a <- H.forAll genInt
+        res <- crefProp $ \cref -> do
+          wb <- Mem.bufferWrite Mem.emptyBuffer k cref a
+          wb `eqWB` Mem.emptyBuffer
+        H.assert (not res)
 
-    , testProperty "commitWrite emptyBuffer k == emptyBuffer" $
-      \k -> ST.runST $ do
-        wb <- Mem.commitWrite Mem.emptyBuffer k
-        wb `eqWB` Mem.emptyBuffer
+    , H.testProperty "commitWrite emptyBuffer k == emptyBuffer" . H.property $ do
+        k <- H.forAll genWBKey
+        H.assert $ ST.runST $ do
+          wb <- Mem.commitWrite Mem.emptyBuffer k
+          wb `eqWB` Mem.emptyBuffer
 
-    , testProperty "commitWrite (bufferWrite emptyBuffer k a) k == emptyBuffer" $
-      \k a -> crefProp $ \cref -> do
-        wb1 <- Mem.bufferWrite Mem.emptyBuffer k cref a
-        wb2 <- Mem.commitWrite wb1 k
-        wb2 `eqWB` Mem.emptyBuffer
+    , H.testProperty "commitWrite (bufferWrite emptyBuffer k a) k == emptyBuffer" . H.property $ do
+        k <- H.forAll genWBKey
+        a <- H.forAll genInt
+        res <- crefProp $ \cref -> do
+          wb1 <- Mem.bufferWrite Mem.emptyBuffer k cref a
+          wb2 <- Mem.commitWrite wb1 k
+          wb2 `eqWB` Mem.emptyBuffer
+        H.assert res
 
-    , testProperty "Single buffered write/read from same thread" $
-      \k@(tid, _) a -> crefProp $ \cref -> do
-        _ <- Mem.bufferWrite Mem.emptyBuffer k cref a
-        (a ==) <$> Mem.readCRef cref tid
+    , H.testProperty "Single buffered write/read from same thread" . H.property $ do
+        k@(tid, _) <- H.forAll genWBKey
+        a <- H.forAll genInt
+        res <- crefProp $ \cref -> do
+          _ <- Mem.bufferWrite Mem.emptyBuffer k cref a
+          Mem.readCRef cref tid
+        a H.=== res
 
-    , testProperty "Overriding buffered write/read from same thread" $
-      \k@(tid, _) a1 a2 -> crefProp $ \cref -> do
-        _ <- Mem.bufferWrite Mem.emptyBuffer k cref a1
-        _ <- Mem.bufferWrite Mem.emptyBuffer k cref a2
-        (a2 ==) <$> Mem.readCRef cref tid
+    , H.testProperty "Overriding buffered write/read from same thread" . H.property $ do
+        k@(tid, _) <- H.forAll genWBKey
+        a1 <- H.forAll genInt
+        a2 <- H.forAll genInt
+        res <- crefProp $ \cref -> do
+          _ <- Mem.bufferWrite Mem.emptyBuffer k cref a1
+          _ <- Mem.bufferWrite Mem.emptyBuffer k cref a2
+          Mem.readCRef cref tid
+        a2 H.=== res
 
-    , testProperty "Buffered write/read from different thread" $
-      \k1@(tid1, _) k2@(tid2, _) a1 a2 -> crefProp $ \cref -> do
-        _ <- Mem.bufferWrite Mem.emptyBuffer k1 cref a1
-        _ <- Mem.bufferWrite Mem.emptyBuffer k2 cref a2
-        a' <- Mem.readCRef cref tid1
-        pure (tid1 /= tid2 ==> a' == a1)
+    , H.testProperty "Buffered write/read from different thread" . H.property $ do
+        k1@(tid, _) <- H.forAll genWBKey
+        k2 <- H.forAll (HGen.filter ((/=tid) . fst) genWBKey)
+        a1 <- H.forAll genInt
+        a2 <- H.forAll genInt
+        res <- crefProp $ \cref -> do
+          _ <- Mem.bufferWrite Mem.emptyBuffer k1 cref a1
+          _ <- Mem.bufferWrite Mem.emptyBuffer k2 cref a2
+          Mem.readCRef cref tid
+        a1 H.=== res
     ]
   where
-    crefProp :: (forall s. D.CRef (ST.STRef s) Int -> ST.ST s Bool) -> D.CRefId -> Bool
-    crefProp prop crid = ST.runST $ makeCRef crid >>= prop
+    crefProp
+      :: (Monad m, Show a)
+      => (forall s. D.CRef (ST.STRef s) Int -> ST.ST s a)
+      -> H.PropertyT m a
+    crefProp p = do
+      crefId <- H.forAll genCRefId
+      pure $ ST.runST $ do
+        cref <- makeCRef crefId
+        p cref
 
 -------------------------------------------------------------------------------
 
 sctProps :: [TestTree]
 sctProps = toTestList
-  [ testProperty "canInterrupt ==> canInterruptL" $
-    \ds tid act ->
-      canRewind act && SCT.canInterrupt ds tid act ==>
-      SCT.canInterruptL ds tid (rewind' act)
+  [ H.testProperty "canInterrupt ==> canInterruptL" . H.property $ do
+      ds <- H.forAll genDepState
+      tid <- H.forAll genThreadId
+      act <- H.forAll (HGen.filter (SCT.canInterrupt ds tid) genThreadAction)
+      case D.rewind act of
+        Just lh -> H.assert (SCT.canInterruptL ds tid lh)
+        Nothing -> H.discard
 
-  , testProperty "dependent ==> dependent'" $
-    \ds tid1 tid2 ta1 ta2 ->
-      canRewind ta2 && SCT.dependent ds tid1 ta1 tid2 ta2 ==>
-      SCT.dependent' ds tid1 ta1 tid2 (rewind' ta2)
+  , H.testProperty "dependent ==> dependent'" . H.property $ do
+      ds <- H.forAll genDepState
+      tid1 <- H.forAll genThreadId
+      tid2 <- H.forAll genThreadId
+      ta1 <- H.forAll genThreadAction
+      ta2 <- H.forAll (HGen.filter (SCT.dependent ds tid1 ta1 tid2) genThreadAction)
+      case D.rewind ta2 of
+        Just lh -> H.assert (SCT.dependent' ds tid1 ta1 tid2 lh)
+        Nothing -> H.discard
 
-  , testProperty "dependent x y == dependent y x" $
-    \ds tid1 tid2 ta1 ta2 ->
-      SCT.dependent ds tid1 ta1 tid2 ta2 ==
-      SCT.dependent ds tid2 ta2 tid1 ta1
+  , H.testProperty "dependent x y == dependent y x" . H.property $ do
+      ds <- H.forAll genDepState
+      tid1 <- H.forAll genThreadId
+      tid2 <- H.forAll genThreadId
+      ta1 <- H.forAll genThreadAction
+      ta2 <- H.forAll genThreadAction
+      SCT.dependent ds tid1 ta1 tid2 ta2 H.=== SCT.dependent ds tid2 ta2 tid1 ta1
 
-  , testProperty "dependentActions x y == dependentActions y x" $
-    \ds a1 a2 ->
-      SCT.dependentActions ds a1 a2 == SCT.dependentActions ds a2 a1
+  , H.testProperty "dependentActions x y == dependentActions y x" . H.property $ do
+      ds <- H.forAll genDepState
+      a1 <- H.forAll genActionType
+      a2 <- H.forAll genActionType
+      SCT.dependentActions ds a1 a2 H.=== SCT.dependentActions ds a2 a1
   ]
 
 -------------------------------------------------------------------------------
 -- Utils
-
-canRewind :: ThreadAction -> Bool
-canRewind = isJust . D.rewind
-
-rewind' :: ThreadAction -> Lookahead
-rewind' = fromJust . D.rewind
 
 makeCRef :: D.CRefId -> ST.ST t (D.CRef (ST.STRef t) Int)
 makeCRef crid = D.CRef crid <$> ST.newSTRef (M.empty, 0, 42)
@@ -177,115 +236,168 @@ eqWB (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
       q <- p
       if q then andM ps else pure False
 
+(==>) :: Monad m => Bool -> H.PropertyT m a -> H.PropertyT m a
+False ==> _ = H.discard
+True  ==> p = p
+infixr 0 ==>
+
 -------------------------------------------------------------------------------
--- Typeclass instances
+-- Generators
 
-instance Listable D.ThreadId where
-  tiers = mapT D.ThreadId tiers
+genThreadId :: H.Gen D.ThreadId
+genThreadId = D.ThreadId <$> genId
 
-instance Listable D.CRefId where
-  tiers = mapT D.CRefId tiers
+genCRefId :: H.Gen D.CRefId
+genCRefId = D.CRefId <$> genId
 
-instance Listable D.MVarId where
-  tiers = mapT D.MVarId tiers
+genMVarId :: H.Gen D.MVarId
+genMVarId = D.MVarId <$> genId
 
-instance Listable D.TVarId where
-  tiers = mapT D.TVarId tiers
+genTVarId :: H.Gen D.TVarId
+genTVarId = D.TVarId <$> genId
 
-instance Listable D.Id where
-  tiers = mapT (D.Id Nothing) tiers
+genId :: H.Gen D.Id
+genId = D.Id <$> HGen.maybe genString <*> genSmallInt
 
-instance Listable D.ThreadAction where
-  tiers =
-       cons1 D.Fork
-    \/ cons0 D.MyThreadId
-    \/ cons1 D.GetNumCapabilities
-    \/ cons1 D.SetNumCapabilities
-    \/ cons0 D.Yield
-    \/ cons1 D.ThreadDelay
-    \/ cons1 D.NewMVar
-    \/ cons2 D.PutMVar
-    \/ cons1 D.BlockedPutMVar
-    \/ cons3 D.TryPutMVar
-    \/ cons1 D.ReadMVar
-    \/ cons2 D.TryReadMVar
-    \/ cons1 D.BlockedReadMVar
-    \/ cons2 D.TakeMVar
-    \/ cons1 D.BlockedTakeMVar
-    \/ cons3 D.TryTakeMVar
-    \/ cons1 D.NewCRef
-    \/ cons1 D.ReadCRef
-    \/ cons1 D.ReadCRefCas
-    \/ cons1 D.ModCRef
-    \/ cons1 D.ModCRefCas
-    \/ cons1 D.WriteCRef
-    \/ cons2 D.CasCRef
-    \/ cons2 D.CommitCRef
-    \/ cons2 D.STM
-    \/ cons1 D.BlockedSTM
-    \/ cons0 D.Catching
-    \/ cons0 D.PopCatching
-    \/ cons0 D.Throw
-    \/ cons1 D.ThrowTo
-    \/ cons1 D.BlockedThrowTo
-    \/ cons0 D.Killed
-    \/ cons2 D.SetMasking
-    \/ cons2 D.ResetMasking
-    \/ cons0 D.LiftIO
-    \/ cons0 D.Return
-    \/ cons0 D.Stop
-    \/ cons0 D.Subconcurrency
-    \/ cons0 D.StopSubconcurrency
+genFailure :: H.Gen D.Failure
+genFailure = HGen.element $
+  [ D.InternalError
+  , D.Abort
+  , D.Deadlock
+  , D.STMDeadlock
+  , D.IllegalSubconcurrency
+  ] ++ map D.UncaughtException -- have a few different exception types
+  [ E.toException E.Overflow
+  , E.toException E.ThreadKilled
+  , E.toException E.NonTermination
+  ]
 
-instance Listable D.TAction where
-  tiers =
-       cons1 D.TNew
-    \/ cons1 D.TRead
-    \/ cons1 D.TWrite
-    \/ cons0 D.TRetry
-    \/ cons2 D.TOrElse
-    \/ cons0 D.TThrow
-    \/ cons2 D.TCatch
-    \/ cons0 D.TStop
+genWBKey :: H.Gen (D.ThreadId, Maybe D.CRefId)
+genWBKey = (,) <$> genThreadId <*> HGen.maybe genCRefId
 
-instance Listable E.MaskingState where
-  list =
-    [ E.Unmasked
-    , E.MaskedInterruptible
-    , E.MaskedUninterruptible
-    ]
+genThreadAction :: H.Gen D.ThreadAction
+genThreadAction = HGen.choice
+  [ D.Fork <$> genThreadId
+  , pure D.MyThreadId
+  , D.GetNumCapabilities <$> genSmallInt
+  , D.SetNumCapabilities <$> genSmallInt
+  , pure D.Yield
+  , D.ThreadDelay <$> genSmallInt
+  , D.NewMVar <$> genMVarId
+  , D.PutMVar <$> genMVarId <*> genSmallList genThreadId
+  , D.BlockedPutMVar <$> genMVarId
+  , D.TryPutMVar <$> genMVarId <*> HGen.bool <*> genSmallList genThreadId
+  , D.ReadMVar <$> genMVarId
+  , D.TryReadMVar <$> genMVarId <*> HGen.bool
+  , D.BlockedReadMVar <$> genMVarId
+  , D.TakeMVar <$> genMVarId <*> genSmallList genThreadId
+  , D.BlockedTakeMVar <$> genMVarId
+  , D.TryTakeMVar <$> genMVarId <*> HGen.bool <*> genSmallList genThreadId
+  , D.NewCRef <$> genCRefId
+  , D.ReadCRef <$> genCRefId
+  , D.ReadCRefCas <$> genCRefId
+  , D.ModCRef <$> genCRefId
+  , D.ModCRefCas <$> genCRefId
+  , D.WriteCRef <$> genCRefId
+  , D.CasCRef <$> genCRefId <*> HGen.bool
+  , D.CommitCRef <$> genThreadId <*> genCRefId
+  , D.STM <$> genSmallList genTAction <*> genSmallList genThreadId
+  , D.BlockedSTM <$> genSmallList genTAction
+  , pure D.Catching
+  , pure D.PopCatching
+  , pure D.Throw
+  , D.ThrowTo <$> genThreadId
+  , D.BlockedThrowTo <$> genThreadId
+  , pure D.Killed
+  , D.SetMasking <$> HGen.bool <*> genMaskingState
+  , D.ResetMasking <$> HGen.bool <*> genMaskingState
+  , pure D.LiftIO
+  , pure D.Return
+  , pure D.Stop
+  , pure D.Subconcurrency
+  , pure D.StopSubconcurrency
+  ]
 
-instance Listable D.ActionType where
-  tiers =
-       cons1 D.UnsynchronisedRead
-    \/ cons1 D.UnsynchronisedWrite
-    \/ cons0 D.UnsynchronisedOther
-    \/ cons1 D.PartiallySynchronisedCommit
-    \/ cons1 D.PartiallySynchronisedWrite
-    \/ cons1 D.PartiallySynchronisedModify
-    \/ cons1 D.SynchronisedModify
-    \/ cons1 D.SynchronisedRead
-    \/ cons1 D.SynchronisedWrite
-    \/ cons0 D.SynchronisedOther
+genTAction :: H.Gen D.TAction
+genTAction = HGen.choice
+  [ D.TNew <$> genTVarId
+  , D.TRead <$> genTVarId
+  , D.TWrite <$> genTVarId
+  , pure D.TRetry
+  , HGen.small $ D.TOrElse <$> genSmallList genTAction <*> HGen.maybe (genSmallList genTAction)
+  , pure D.TThrow
+  , HGen.small $ D.TCatch <$> genSmallList genTAction <*> HGen.maybe (genSmallList genTAction)
+  , pure D.TStop
+  ]
 
-instance Listable SCT.DepState where
-  tiers = mapT (\(a,(b,c)) -> SCT.DepState a b c) (tiers >< tiers >< tiers)
+genMaskingState :: H.Gen E.MaskingState
+genMaskingState = HGen.element
+  [ E.Unmasked
+  , E.MaskedInterruptible
+  , E.MaskedUninterruptible
+  ]
 
-instance (Ord k, Listable k, Listable v) => Listable (Map k v) where
-  tiers = mapT M.fromList tiers
+genActionType :: H.Gen D.ActionType
+genActionType = HGen.choice
+  [ genUnsynchronisedActionType
+  , genPartiallySynchronisedActionType
+  , genSynchronisedActionType
+  ]
 
-instance (Ord v, Listable v) => Listable (Set v) where
-  tiers = mapT Set.fromList tiers
+genUnsynchronisedActionType :: H.Gen D.ActionType
+genUnsynchronisedActionType = HGen.choice
+  [ D.UnsynchronisedRead <$> genCRefId
+  , D.UnsynchronisedWrite <$> genCRefId
+  , pure D.UnsynchronisedOther
+  ]
 
-instance Listable D.Failure where
-  list =
-    [ D.InternalError
-    , D.Abort
-    , D.Deadlock
-    , D.STMDeadlock
-    , D.IllegalSubconcurrency
-    ] ++ map D.UncaughtException -- have a few different exception types
-    [ E.toException E.Overflow
-    , E.toException E.ThreadKilled
-    , E.toException E.NonTermination
-    ]
+genPartiallySynchronisedActionType :: H.Gen D.ActionType
+genPartiallySynchronisedActionType = HGen.choice
+  [ D.PartiallySynchronisedCommit <$> genCRefId
+  , D.PartiallySynchronisedWrite <$> genCRefId
+  , D.PartiallySynchronisedModify <$> genCRefId
+  ]
+
+genSynchronisedActionType :: H.Gen D.ActionType
+genSynchronisedActionType = HGen.choice
+  [ D.SynchronisedModify <$> genCRefId
+  , D.SynchronisedRead <$> genMVarId
+  , D.SynchronisedWrite <$> genMVarId
+  , pure D.SynchronisedOther
+  ]
+
+genDepState :: H.Gen SCT.DepState
+genDepState = SCT.DepState
+  <$> genMap genCRefId HGen.bool
+  <*> genSet genMVarId
+  <*> genMap genThreadId genMaskingState
+
+-------------------------------------------------------------------------------
+-- Utility generators
+
+genSmallInt :: H.Gen Int
+genSmallInt = genIntFromTo 0 10
+
+genInt :: H.Gen Int
+genInt = genIntFromTo 0 100
+
+genIntFromTo :: Int -> Int -> H.Gen Int
+genIntFromTo from = HGen.int . HRange.linear from
+
+genMap :: Ord k => H.Gen k -> H.Gen v -> H.Gen (M.Map k v)
+genMap genKey genVal = M.fromList <$> genList ((,) <$> genKey <*> genVal)
+
+genSet :: Ord a => H.Gen a -> H.Gen (Set.Set a)
+genSet gen = Set.fromList <$> genList gen
+
+genString :: H.Gen String
+genString = genSmallList HGen.enumBounded
+
+genList :: H.Gen a -> H.Gen [a]
+genList = genListUpTo 100
+
+genSmallList :: H.Gen a -> H.Gen [a]
+genSmallList = genListUpTo 10
+
+genListUpTo :: Int -> H.Gen a -> H.Gen [a]
+genListUpTo = HGen.list . HRange.linear 0

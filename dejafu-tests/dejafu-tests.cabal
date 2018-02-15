@@ -40,7 +40,6 @@ library
                      , Examples.SearchParty
                      , Examples.SearchParty.Impredicative
 
-                     , Test.Tasty.LeanCheck
                      , Common
                      , QSemN
 
@@ -52,7 +51,6 @@ library
                      , dejafu
                      , exceptions
                      , hedgehog
-                     , leancheck
                      , mtl
                      , mwc-random
                      , QuickCheck
