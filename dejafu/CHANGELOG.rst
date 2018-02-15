@@ -21,6 +21,9 @@ Fixed
 * (:issue:`189`) Remove an incorrect optimisation in systematic
   testing for ``getNumCapabilities`` and ``setNumCapabilities``.
 
+* (:issue:`204`) Fix missed interleavings in systematic testing with
+  some uses of STM.
+
 
 1.0.0.1 (2017-01-19)
 --------------------
