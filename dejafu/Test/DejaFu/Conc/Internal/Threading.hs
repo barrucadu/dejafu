@@ -16,6 +16,7 @@ module Test.DejaFu.Conc.Internal.Threading where
 import qualified Control.Concurrent.Classy        as C
 import           Control.Exception                (Exception, MaskingState(..),
                                                    SomeException, fromException)
+import           Control.Monad                    (forever)
 import           Data.List                        (intersect)
 import           Data.Map.Strict                  (Map)
 import qualified Data.Map.Strict                  as M
@@ -170,12 +171,9 @@ makeBound tid threads = do
     let bt = BoundThread runboundIO getboundIO btid
     pure (eadjust "makeBound" (\t -> t { _bound = Just bt }) tid threads)
   where
-    go runboundIO getboundIO =
-      let loop = do
-            na <- C.takeMVar runboundIO
-            C.putMVar getboundIO =<< na
-            loop
-      in loop
+    go runboundIO getboundIO = forever $ do
+      na <- C.takeMVar runboundIO
+      C.putMVar getboundIO =<< na
 
 -- | Kill a thread and remove it from the thread map.
 --
