@@ -131,7 +131,7 @@ goto a = eadjust "goto" $ \thread -> thread { _continuation = a }
 -- from the parent thread. This ID must not already be in use!
 launch :: ThreadId -> ThreadId -> ((forall b. M n r b -> M n r b) -> Action n r) -> Threads n r -> Threads n r
 launch parent tid a threads = launch' ms tid a threads where
-  ms = maybe Unmasked _masking (M.lookup parent threads)
+  ms = _masking (elookup "launch" parent threads)
 
 -- | Start a thread with the given ID and masking state. This must not already be in use!
 launch' :: MaskingState -> ThreadId -> ((forall b. M n r b -> M n r b) -> Action n r) -> Threads n r -> Threads n r
