@@ -50,6 +50,7 @@ library
                      , deepseq
                      , dejafu
                      , exceptions
+                     , hedgehog
                      , leancheck
                      , mtl
                      , mwc-random
@@ -57,6 +58,7 @@ library
                      , random
                      , tasty
                      , tasty-dejafu
+                     , tasty-hedgehog
                      , tasty-quickcheck
                      , vector
   if impl(ghc < 8.0.1)

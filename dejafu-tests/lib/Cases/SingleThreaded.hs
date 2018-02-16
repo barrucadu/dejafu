@@ -23,7 +23,7 @@ tests =
 --------------------------------------------------------------------------------
 
 mvarTests :: [TestTree]
-mvarTests =
+mvarTests = toTestList
   [ djfu "Taking from an empty MVar blocks" (gives [Left Deadlock]) $ do
       var <- newEmptyMVarInt
       takeMVar var
@@ -78,7 +78,7 @@ mvarTests =
 --------------------------------------------------------------------------------
 
 crefTests :: [TestTree]
-crefTests =
+crefTests = toTestList
   [ djfu "Reading a non-updated CRef gives its initial value" (gives' [True]) $ do
       ref <- newCRefInt 5
       (5==) <$> readCRef ref
@@ -124,7 +124,7 @@ crefTests =
 --------------------------------------------------------------------------------
 
 stmTests :: [TestTree]
-stmTests =
+stmTests = toTestList
   [ djfu "When a TVar is updated, its new value is visible later in same transaction" (gives' [True]) $
       (6==) <$> atomically (do { v <- newTVarInt 5; writeTVar v 6; readTVar v })
 
@@ -163,7 +163,7 @@ stmTests =
 --------------------------------------------------------------------------------
 
 exceptionTests :: [TestTree]
-exceptionTests =
+exceptionTests = toTestList
   [ djfu "An exception thrown can be caught" (gives' [True]) $
       catchArithException
         (throw Overflow)
@@ -210,7 +210,7 @@ exceptionTests =
 --------------------------------------------------------------------------------
 
 capabilityTests :: [TestTree]
-capabilityTests =
+capabilityTests = toTestList
   [ djfu "Reading the capabilities twice without update gives the same result" (gives' [True]) $ do
       c1 <- getNumCapabilities
       c2 <- getNumCapabilities
@@ -225,18 +225,18 @@ capabilityTests =
 --------------------------------------------------------------------------------
 
 subconcurrencyTests :: [TestTree]
-subconcurrencyTests =
-  [ djfu "Failures in subconcurrency can be observed" (gives' [True]) $ do
+subconcurrencyTests = toTestList
+  [ djfuS "Failures in subconcurrency can be observed" (gives' [True]) $ do
       x <- subconcurrency (newEmptyMVar >>= readMVar)
       pure (either (==Deadlock) (const False) x)
 
-  , djfu "Actions after a failing subconcurrency still happen" (gives' [True]) $ do
+  , djfuS "Actions after a failing subconcurrency still happen" (gives' [True]) $ do
       var <- newMVarInt 0
       x <- subconcurrency (putMVar var 1)
       y <- readMVar var
       pure (either (==Deadlock) (const False) x && y == 0)
 
-  , djfu "Non-failing subconcurrency returns the final result" (gives' [True]) $ do
+  , djfuS "Non-failing subconcurrency returns the final result" (gives' [True]) $ do
       var <- newMVarInt 3
       x <- subconcurrency (takeMVar var)
       pure (either (const False) (==3) x)

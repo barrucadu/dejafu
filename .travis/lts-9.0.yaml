@@ -1,4 +1,4 @@
-resolver: lts-6.0
+resolver: lts-9.0
 
 packages:
 - concurrency
@@ -9,6 +9,4 @@ packages:
 
 extra-deps:
 - hedgehog-0.5.2
-- leancheck-0.6.7
 - tasty-hedgehog-0.1.0.1
-- wl-pprint-annotated-0.1.0.0

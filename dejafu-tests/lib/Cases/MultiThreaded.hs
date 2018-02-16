@@ -219,7 +219,7 @@ exceptionTests = toTestList
 --------------------------------------------------------------------------------
 
 capabilityTests :: [TestTree]
-capabilityTests =
+capabilityTests = toTestList
   [ djfu "get/setNumCapabilities are dependent" (gives' [1,3]) $ do
       setNumCapabilities 1
       fork (setNumCapabilities 3)
@@ -230,27 +230,27 @@ capabilityTests =
 
 subconcurrencyTests :: [TestTree]
 subconcurrencyTests = toTestList
-  [ djfuT "Failure is observable" (gives' [Left Deadlock, Right ()]) $ do
+  [ djfuTS "Failure is observable" (gives' [Left Deadlock, Right ()]) $ do
       var <- newEmptyMVar
       subconcurrency $ do
         _ <- fork $ putMVar var ()
         putMVar var ()
 
-  , djfuT "Failure does not abort the outer computation" (gives' [(Left Deadlock, ()), (Right (), ())]) $ do
+  , djfuTS "Failure does not abort the outer computation" (gives' [(Left Deadlock, ()), (Right (), ())]) $ do
       var <- newEmptyMVar
       res <- subconcurrency $ do
         _ <- fork $ putMVar var ()
         putMVar var ()
       (,) <$> pure res <*> readMVar var
 
-  , djfuT "Success is observable" (gives' [Right ()]) $ do
+  , djfuTS "Success is observable" (gives' [Right ()]) $ do
       var <- newMVar ()
       subconcurrency $ do
         out <- newEmptyMVar
         _ <- fork $ takeMVar var >>= putMVar out
         takeMVar out
 
-  , djfuT "It is illegal to start subconcurrency after forking" (gives [Left IllegalSubconcurrency]) $ do
+  , djfuTS "It is illegal to start subconcurrency after forking" (gives [Left IllegalSubconcurrency]) $ do
       var <- newEmptyMVar
       _ <- fork $ readMVar var
       _ <- subconcurrency $ pure ()

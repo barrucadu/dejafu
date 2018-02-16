@@ -1,10 +1,12 @@
+{-# LANGUAGE ViewPatterns #-}
+
 -- |
 -- Module      : Test.DejaFu.SCT.Internal.DPOR
 -- Copyright   : (c) 2015--2017 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : portable
+-- Portability : ViewPatterns
 --
 -- Internal types and functions for SCT via dynamic partial-order
 -- reduction.  This module is NOT considered to form part of the
@@ -528,6 +530,34 @@ dporSched boundf = Scheduler $ \prior threads s ->
 
 -------------------------------------------------------------------------------
 -- * Dependency function
+
+-- | Check if two actions commute.
+--
+-- This implements a stronger check that @not (dependent ...)@, as it
+-- handles some cases which 'dependent' doesn't need to care about.
+--
+-- This should not be used to re-order traces which contain
+-- subconcurrency.
+independent :: DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
+independent ds t1 a1 t2 a2
+    | t1 == t2 = False
+    | check t1 a1 t2 a2 = False
+    | check t2 a2 t1 a1 = False
+    | otherwise = not (dependent ds t1 a1 t2 a2)
+  where
+    -- can't re-order any action of a thread with the fork which
+    -- created it.
+    check _ (Fork t) tid _ | t == tid = True
+    -- because we can't easily tell if this will terminate the other
+    -- thread, we just can't re-order asynchronous exceptions at all
+    -- :(
+    --
+    -- See #191 / #190
+    check _ (ThrowTo t) tid _ | t == tid = True
+    check _ (BlockedThrowTo t) tid _ | t == tid = True
+    -- can't re-order an unsynchronised write with something which synchronises that CRef.
+    check _ (simplifyAction -> UnsynchronisedWrite r) _ (simplifyAction -> a) | synchronises a r = True
+    check _ _ _ _ = False
 
 -- | Check if an action is dependent on another.
 --

@@ -8,6 +8,7 @@ import Data.List (nub, sort)
 import Test.DejaFu (MemType(..), defaultWay, gives')
 import Test.DejaFu.Conc (ConcIO)
 import Test.DejaFu.SCT (runSCT)
+import qualified Test.Tasty.Hedgehog as H
 
 import Control.Monad.Conc.Class
 
@@ -49,6 +50,7 @@ litmusTest name act sq tso pso = testGroup name
   [ testDejafuWay defaultWay SequentialConsistency "SQ"  (gives' sq)  act
   , testDejafuWay defaultWay TotalStoreOrder       "TSO" (gives' tso) act
   , testDejafuWay defaultWay PartialStoreOrder     "PSO" (gives' pso) act
+  , H.testProperty "dependency func." (prop_dep_fun act)
   ]
 
 -- | Run a litmus test against the three different memory models, and

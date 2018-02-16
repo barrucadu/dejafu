@@ -179,7 +179,7 @@ assertEqual err a1 a2
   | a1 == a2  = pure ()
   | otherwise = assertFailure err
 
-testCase :: String -> ConcIO () -> TestTree
+testCase :: String -> ConcIO () -> [TestTree]
 testCase name c = djfu name (alwaysTrue p) (try c) where
   p (Right (Left (e::SomeException))) = False
   p (Right _) = True

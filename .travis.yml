@@ -58,6 +58,7 @@ script:
       git diff --exit-code concurrency dejafu hunit-dejafu tasty-dejafu
       ;;
     test)
+      cd dejafu-tests
       stack exec -- dejafu-tests +RTS -s
       ;;
     doctest)
