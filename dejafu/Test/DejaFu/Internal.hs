@@ -14,6 +14,7 @@ module Test.DejaFu.Internal where
 import           Control.DeepSeq    (NFData(..))
 import           Control.Monad.Ref  (MonadRef(..))
 import           Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.Map.Strict    as M
 import           Data.Maybe         (fromMaybe)
 import           Data.Set           (Set)
 import qualified Data.Set           as S
@@ -320,6 +321,13 @@ efromJust src _ = fatal src "fromJust: Nothing"
 efromList :: String -> [a] -> NonEmpty a
 efromList _ (x:xs) = x:|xs
 efromList src _ = fatal src "fromList: empty list"
+
+-- | 'M.adjust' but which errors if the key is not present.  Use this
+-- only where it shouldn't fail!
+eadjust :: (Ord k, Show k) => String -> (v -> v) -> k -> M.Map k v -> M.Map k v
+eadjust src f k m = case M.lookup k m of
+  Just v -> M.insert k (f v) m
+  Nothing -> fatal src ("adjust: key '" ++ show k ++ "' not found")
 
 -- | 'error' but saying where it came from
 fatal :: String -> String -> a

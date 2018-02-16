@@ -18,13 +18,12 @@ import           Control.Exception                (Exception, MaskingState(..),
                                                    SomeException, fromException)
 import           Data.List                        (intersect)
 import           Data.Map.Strict                  (Map)
+import qualified Data.Map.Strict                  as M
 import           Data.Maybe                       (isJust)
 
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.Internal
 import           Test.DejaFu.Types
-
-import qualified Data.Map.Strict                  as M
 
 --------------------------------------------------------------------------------
 -- * Threads
@@ -99,18 +98,19 @@ interruptible thread = _masking thread == Unmasked || (_masking thread == Masked
 
 -- | Register a new exception handler.
 catching :: Exception e => (e -> Action n r) -> ThreadId -> Threads n r -> Threads n r
-catching h = M.adjust $ \thread ->
+catching h = eadjust "catching" $ \thread ->
   let ms0 = _masking thread
       h'  = Handler $ \e ms -> (if ms /= ms0 then AResetMask False False ms0 else id) (h e)
   in thread { _handlers = h' : _handlers thread }
 
 -- | Remove the most recent exception handler.
 uncatching :: ThreadId -> Threads n r -> Threads n r
-uncatching = M.adjust $ \thread -> thread { _handlers = etail "uncatching" (_handlers thread) }
+uncatching = eadjust "uncatching" $ \thread ->
+  thread { _handlers = etail "uncatching" (_handlers thread) }
 
 -- | Raise an exception in a thread.
 except :: (MaskingState -> Action n r) -> [Handler n r] -> ThreadId -> Threads n r -> Threads n r
-except actf hs = M.adjust $ \thread -> thread
+except actf hs = eadjust "except" $ \thread -> thread
   { _continuation = actf (_masking thread)
   , _handlers = hs
   , _blocking = Nothing
@@ -118,14 +118,14 @@ except actf hs = M.adjust $ \thread -> thread
 
 -- | Set the masking state of a thread.
 mask :: MaskingState -> ThreadId -> Threads n r -> Threads n r
-mask ms = M.adjust $ \thread -> thread { _masking = ms }
+mask ms = eadjust "mask" $ \thread -> thread { _masking = ms }
 
 --------------------------------------------------------------------------------
 -- * Manipulating threads
 
 -- | Replace the @Action@ of a thread.
 goto :: Action n r -> ThreadId -> Threads n r -> Threads n r
-goto a = M.adjust $ \thread -> thread { _continuation = a }
+goto a = eadjust "goto" $ \thread -> thread { _continuation = a }
 
 -- | Start a thread with the given ID, inheriting the masking state
 -- from the parent thread. This ID must not already be in use!
@@ -143,7 +143,7 @@ launch' ms tid a = M.insert tid thread where
 
 -- | Block a thread.
 block :: BlockedOn -> ThreadId -> Threads n r -> Threads n r
-block blockedOn = M.adjust $ \thread -> thread { _blocking = Just blockedOn }
+block blockedOn = eadjust "block" $ \thread -> thread { _blocking = Just blockedOn }
 
 -- | Unblock all threads waiting on the appropriate block. For 'TVar'
 -- blocks, this will wake all threads waiting on at least one of the
@@ -168,7 +168,7 @@ makeBound tid threads = do
     getboundIO <- C.newEmptyMVar
     btid <- C.forkOSN ("bound worker for '" ++ show tid ++ "'") (go runboundIO getboundIO)
     let bt = BoundThread runboundIO getboundIO btid
-    pure (M.adjust (\t -> t { _bound = Just bt }) tid threads)
+    pure (eadjust "makeBound" (\t -> t { _bound = Just bt }) tid threads)
   where
     go runboundIO getboundIO =
       let loop = do
