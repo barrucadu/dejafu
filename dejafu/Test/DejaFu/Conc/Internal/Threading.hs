@@ -181,13 +181,10 @@ makeBound tid threads = do
 --
 -- If the thread is bound, the worker thread is cleaned up.
 kill :: C.MonadConc n => ThreadId -> Threads n r -> n (Threads n r)
-kill tid threads = case M.lookup tid threads of
-  Just thread -> case _bound thread of
-    Just bt -> do
-      C.killThread (_boundTId bt)
-      pure (M.delete tid threads)
-    Nothing -> pure (M.delete tid threads)
-  Nothing -> pure threads
+kill tid threads = do
+  let thread = elookup "kill" tid threads
+  maybe (pure ()) (C.killThread . _boundTId) (_bound thread)
+  pure (M.delete tid threads)
 
 -- | Run an action.
 --
