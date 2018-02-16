@@ -195,7 +195,7 @@ stepThread sched memtype tid action ctx = case action of
 
     -- check if the current thread is bound
     AIsBound c ->
-      let isBound = isJust (_bound =<< M.lookup tid (cThreads ctx))
+      let isBound = isJust . _bound $ elookup "stepThread.AIsBound" tid (cThreads ctx)
       in simple (goto (c isBound) tid (cThreads ctx)) (IsCurrentThreadBound isBound)
 
     -- get the 'ThreadId' of the current thread
