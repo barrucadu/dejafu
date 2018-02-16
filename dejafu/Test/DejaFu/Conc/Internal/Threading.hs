@@ -135,7 +135,7 @@ launch parent tid a threads = launch' ms tid a threads where
 
 -- | Start a thread with the given ID and masking state. This must not already be in use!
 launch' :: MaskingState -> ThreadId -> ((forall b. M n r b -> M n r b) -> Action n r) -> Threads n r -> Threads n r
-launch' ms tid a = M.insert tid thread where
+launch' ms tid a = einsert "launch'" tid thread where
   thread = Thread (a umask) Nothing [] ms Nothing
 
   umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False ms >> pure b

@@ -329,6 +329,13 @@ eadjust src f k m = case M.lookup k m of
   Just v -> M.insert k (f v) m
   Nothing -> fatal src ("adjust: key '" ++ show k ++ "' not found")
 
+-- | 'M.insert' but which errors if the key is already present.  Use
+-- this only where it shouldn't fail!
+einsert :: (Ord k, Show k) => String -> k -> v -> M.Map k v -> M.Map k v
+einsert src k v m
+  | M.member k m = fatal src ("insert: key '" ++ show k ++ "' already present")
+  | otherwise = M.insert k v m
+
 -- | 'error' but saying where it came from
 fatal :: String -> String -> a
 fatal src msg = error ("(dejafu: " ++ src ++ ") " ++ msg)
