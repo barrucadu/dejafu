@@ -84,13 +84,13 @@ data Handler n r = forall e. Exception e => Handler (e -> MaskingState -> Action
 -- | Propagate an exception upwards, finding the closest handler
 -- which can deal with it.
 propagate :: SomeException -> ThreadId -> Threads n r -> Maybe (Threads n r)
-propagate e tid threads = case M.lookup tid threads >>= go . _handlers of
-  Just (act, hs) -> Just $ except act hs tid threads
-  Nothing -> Nothing
+propagate e tid threads = raise <$> propagate' handlers where
+  handlers = _handlers (elookup "propagate" tid threads)
 
-  where
-    go [] = Nothing
-    go (Handler h:hs) = maybe (go hs) (\act -> Just (act, hs)) $ h <$> fromException e
+  raise (act, hs) = except act hs tid threads
+
+  propagate' [] = Nothing
+  propagate' (Handler h:hs) = maybe (propagate' hs) (\act -> Just (act, hs)) $ h <$> fromException e
 
 -- | Check if a thread can be interrupted by an exception.
 interruptible :: Thread n r -> Bool

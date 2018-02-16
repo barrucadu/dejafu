@@ -370,7 +370,7 @@ stepThread sched memtype tid action ctx = case action of
     -- a function to run a computation with the current masking state.
     AMasking m ma c ->
       let a = runCont (ma umask) (AResetMask False False m' . c)
-          m' = _masking . efromJust "stepThread.AMasking" $ M.lookup tid (cThreads ctx)
+          m' = _masking $ elookup "stepThread.AMasking" tid (cThreads ctx)
           umask mb = resetMask True m' >> mb >>= \b -> resetMask False m >> pure b
           resetMask typ ms = cont $ \k -> AResetMask typ True ms $ k ()
           threads' = goto a tid (mask m tid (cThreads ctx))

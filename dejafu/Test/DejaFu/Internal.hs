@@ -336,6 +336,13 @@ einsert src k v m
   | M.member k m = fatal src ("insert: key '" ++ show k ++ "' already present")
   | otherwise = M.insert k v m
 
+-- | 'M.lookup' but which errors if the key is not present.  Use this
+-- only where it shouldn't fail!
+elookup :: (Ord k, Show k) => String -> k -> M.Map k v -> v
+elookup src k =
+  fromMaybe (fatal src ("lookup: key '" ++ show k ++ "' not found")) .
+  M.lookup k
+
 -- | 'error' but saying where it came from
 fatal :: String -> String -> a
 fatal src msg = error ("(dejafu: " ++ src ++ ") " ++ msg)
