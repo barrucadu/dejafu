@@ -20,7 +20,7 @@ maintainer:          mike@barrucadu.co.uk
 copyright:           (c) 2015--2017 Michael Walker
 category:            Testing
 build-type:          Simple
-extra-source-files:  README.markdown CHANGELOG.markdown
+extra-source-files:  README.markdown CHANGELOG.rst
 cabal-version:       >=1.10
 
 source-repository head
