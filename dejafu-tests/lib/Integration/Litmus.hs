@@ -1,21 +1,19 @@
 {-# LANGUAGE RankNTypes #-}
 
-module Cases.Litmus where
+module Integration.Litmus where
 
-import Control.Monad (replicateM)
-import Control.Monad.ST (runST)
-import Data.List (nub, sort)
-import Test.DejaFu (MemType(..), defaultWay, gives')
-import Test.DejaFu.Conc (ConcIO)
-import Test.DejaFu.SCT (runSCT)
-import Test.Framework (Test, testGroup)
-import Test.Framework.Providers.HUnit (hUnitTestToTests)
-import Test.HUnit (test)
-import Test.HUnit.DejaFu (testDejafuWay)
+import           Control.Monad            (replicateM, void)
+import           Data.List                (nub, sort)
+import           Test.DejaFu              (MemType(..), defaultWay, gives')
+import           Test.DejaFu.Conc         (ConcIO)
+import           Test.DejaFu.SCT          (runSCT)
+import qualified Test.Tasty.Hedgehog      as H
 
-import Control.Monad.Conc.Class
+import           Control.Monad.Conc.Class
 
-tests :: [Test]
+import           Common
+
+tests :: [TestTree]
 tests =
   [ let sq  = [(a,b) | a <- [0..1], b <- [0..1], (a,b) /= (1,0)]
         tso = sq
@@ -46,11 +44,12 @@ tests =
     in litmusTest "Independent Read Independent Write" intelWP28 out out out
   ]
 
-litmusTest :: (Eq a, Show a) => String -> ConcIO a -> [a] -> [a] -> [a] -> Test
-litmusTest name act sq tso pso = testGroup name . hUnitTestToTests $ test
+litmusTest :: (Eq a, Show a) => String -> ConcIO a -> [a] -> [a] -> [a] -> TestTree
+litmusTest name act sq tso pso = testGroup name
   [ testDejafuWay defaultWay SequentialConsistency "SQ"  (gives' sq)  act
   , testDejafuWay defaultWay TotalStoreOrder       "TSO" (gives' tso) act
   , testDejafuWay defaultWay PartialStoreOrder     "PSO" (gives' pso) act
+  , H.testProperty "dependency func." (prop_dep_fun act)
   ]
 
 -- | Run a litmus test against the three different memory models, and
@@ -62,10 +61,10 @@ litmusTest name act sq tso pso = testGroup name . hUnitTestToTests $ test
 -- possible results. This is why dejafu is good!
 compareTest :: forall a. (Ord a, Show a) => (forall m. MonadConc m => m a) -> IO ()
 compareTest act = do
-  putStr "DejaFu-SQ:  " >> results SequentialConsistency
-  putStr "DejaFu-TSO: " >> results TotalStoreOrder
-  putStr "DejaFu-PSO: " >> results PartialStoreOrder
-  putStr "IO:         " >> ioResults >>= putStrLn
+  void $ putStr "DejaFu-SQ:  " >> results SequentialConsistency
+  void $ putStr "DejaFu-TSO: " >> results TotalStoreOrder
+  void $ putStr "DejaFu-PSO: " >> results PartialStoreOrder
+  void $ putStr "IO:         " >> ioResults >>= putStrLn
 
   where
     results memtype = show . nub . sort . map (\(Right a,_) -> a) <$>

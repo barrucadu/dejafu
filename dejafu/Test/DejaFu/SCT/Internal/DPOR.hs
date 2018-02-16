@@ -1,10 +1,12 @@
+{-# LANGUAGE ViewPatterns #-}
+
 -- |
 -- Module      : Test.DejaFu.SCT.Internal.DPOR
 -- Copyright   : (c) 2015--2017 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : portable
+-- Portability : ViewPatterns
 --
 -- Internal types and functions for SCT via dynamic partial-order
 -- reduction.  This module is NOT considered to form part of the
@@ -529,6 +531,35 @@ dporSched boundf = Scheduler $ \prior threads s ->
 -------------------------------------------------------------------------------
 -- * Dependency function
 
+-- | Check if two actions commute.
+--
+-- This implements a stronger check that @not (dependent ...)@, as it
+-- handles some cases which 'dependent' doesn't need to care about.
+--
+-- This should not be used to re-order traces which contain
+-- subconcurrency.
+independent :: DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
+independent ds t1 a1 t2 a2
+    | t1 == t2 = False
+    | check t1 a1 t2 a2 = False
+    | check t2 a2 t1 a1 = False
+    | otherwise = not (dependent ds t1 a1 t2 a2)
+  where
+    -- can't re-order any action of a thread with the fork which
+    -- created it.
+    check _ (Fork t) tid _ | t == tid = True
+    check _ (ForkOS t) tid _ | t == tid = True
+    -- because we can't easily tell if this will terminate the other
+    -- thread, we just can't re-order asynchronous exceptions at all
+    -- :(
+    --
+    -- See #191 / #190
+    check _ (ThrowTo t) tid _ | t == tid = True
+    check _ (BlockedThrowTo t) tid _ | t == tid = True
+    -- can't re-order an unsynchronised write with something which synchronises that CRef.
+    check _ (simplifyAction -> UnsynchronisedWrite r) _ (simplifyAction -> a) | synchronises a r = True
+    check _ _ _ _ = False
+
 -- | Check if an action is dependent on another.
 --
 -- This is basically the same as 'dependent'', but can make use of the
@@ -536,13 +567,6 @@ dporSched boundf = Scheduler $ \prior threads s ->
 -- in a few cases.
 dependent :: DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
 dependent ds t1 a1 t2 a2 = case (a1, a2) of
-  -- @SetNumCapabilities@ and @GetNumCapabilities@ are NOT dependent
-  -- IF the value read is the same as the value written. 'dependent''
-  -- can not see the value read (as it hasn't happened yet!), and so
-  -- is more pessimistic here.
-  (SetNumCapabilities a, GetNumCapabilities b) | a == b -> False
-  (GetNumCapabilities a, SetNumCapabilities b) | a == b -> False
-
   -- When masked interruptible, a thread can only be interrupted when
   -- actually blocked. 'dependent'' has to assume that all
   -- potentially-blocking operations can block, and so is more
@@ -588,13 +612,13 @@ dependent' ds t1 a1 t2 l2 = case (a1, l2) of
 
   -- Another worst-case: assume all STM is dependent.
   (STM _ _, WillSTM) -> True
+  (BlockedSTM _, WillSTM) -> True
 
   -- This is a bit pessimistic: Set/Get are only dependent if the
   -- value set is not the same as the value that will be got, but we
   -- can't know that here. 'dependent' optimises this case.
-  (GetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
+  (GetNumCapabilities _, WillSetNumCapabilities _) -> True
   (SetNumCapabilities _, WillGetNumCapabilities)   -> True
-  (SetNumCapabilities a, WillSetNumCapabilities b) -> a /= b
 
   _ -> dependentActions ds (simplifyAction a1) (simplifyLookahead l2)
 
@@ -715,6 +739,7 @@ updateMaskState tid (Fork tid2) = \masks -> case M.lookup tid masks of
   Nothing -> masks
 updateMaskState tid (SetMasking   _ ms) = M.insert tid ms
 updateMaskState tid (ResetMasking _ ms) = M.insert tid ms
+updateMaskState tid Stop = M.delete tid
 updateMaskState _ _ = id
 
 -- | Check if a @CRef@ has a buffered write pending.

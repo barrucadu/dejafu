@@ -53,12 +53,13 @@ script:
   case "$MODE" in
     style)
       curl -sL https://raw.github.com/ndmitchell/weeder/master/misc/travis.sh | sh -s .
-      curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh  | sh -s concurrency dejafu hunit-dejafu tasty-dejafu
+      curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh  | sh -s .
       stack exec ./style.sh
-      git diff --exit-code concurrency dejafu hunit-dejafu tasty-dejafu
+      git diff --exit-code
       ;;
     test)
-      stack exec -- dejafu-tests --plain
+      cd dejafu-tests
+      stack exec -- dejafu-tests +RTS -s
       ;;
     doctest)
       stack exec -- bash -c "DEJAFU_DOCTEST=y doctest dejafu/Test"

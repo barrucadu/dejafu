@@ -7,6 +7,27 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Changed
+~~~~~~~
+
+* (:issue:`193`) Deterministically assign commit thread IDs.
+
+Fixed
+~~~~~
+
+* (:issue:`189`) Remove an incorrect optimisation in systematic
+  testing for ``getNumCapabilities`` and ``setNumCapabilities``.
+
+* (:issue:`204`) Fix missed interleavings in systematic testing with
+  some uses of STM.
+
+* (:issue:`205`) Fix ``forkOS`` being recorded in an execution trace
+  as if it were a ``fork``.
+
+
 1.0.0.1 (2017-01-19)
 --------------------
 

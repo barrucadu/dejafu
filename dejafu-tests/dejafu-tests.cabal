@@ -16,47 +16,61 @@ build-type:          Simple
 -- extra-source-files:  
 cabal-version:       >=1.10
 
-executable dejafu-tests
-  main-is:             Main.hs
+library
+  exposed-modules:     Unit
+                     , Unit.Properties
 
-  other-modules:       Cases
-                     , Cases.Async
-                     , Cases.SingleThreaded
-                     , Cases.MultiThreaded
-                     , Cases.Refinement
-                     , Cases.Litmus
-                     , Cases.Discard
-                     , Cases.Regressions
-                     , Cases.Properties
+                     , Integration
+                     , Integration.Async
+                     , Integration.SingleThreaded
+                     , Integration.MultiThreaded
+                     , Integration.Refinement
+                     , Integration.Litmus
+                     , Integration.Discard
+                     , Integration.Regressions
 
                      , Examples
                      , Examples.AutoUpdate
                      , Examples.ClassLaws
                      , Examples.Logger
+                     , Examples.ParMonad
+                     , Examples.ParMonad.Direct
+                     , Examples.ParMonad.DirectInternal
                      , Examples.Philosophers
                      , Examples.SearchParty
                      , Examples.SearchParty.Impredicative
 
                      , Common
-
                      , QSemN
 
-  -- other-extensions:    
   build-depends:       base
+                     , abstract-deque
                      , concurrency
                      , containers
+                     , deepseq
                      , dejafu
                      , exceptions
-                     , HUnit
-                     , hunit-dejafu
-                     , leancheck
-                     , QuickCheck
+                     , hedgehog
+                     , mtl
+                     , mwc-random
                      , random
-                     , test-framework
-                     , test-framework-hunit
-                     , test-framework-quickcheck2
+                     , tasty
+                     , tasty-expected-failure
+                     , tasty-dejafu
+                     , tasty-hedgehog
+                     , vector
   if impl(ghc < 8.0.1)
     build-depends: transformers
-  -- hs-source-dirs:      
+  hs-source-dirs:      lib
   default-language:    Haskell2010
-  ghc-options: -threaded -rtsopts
+  ghc-options:         -Wall
+
+executable dejafu-tests
+  main-is:             Main.hs
+
+  build-depends:       base
+                     , dejafu-tests
+                     , tasty
+  hs-source-dirs:      exe
+  default-language:    Haskell2010
+  ghc-options:         -Wall -threaded -rtsopts

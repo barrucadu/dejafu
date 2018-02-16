@@ -8,7 +8,7 @@ if hlint --version | grep "^HLint v1" -q; then
 fi
 
 LINT_FAIL=false
-for package in concurrency dejafu hunit-dejafu tasty-dejafu; do
+for package in concurrency dejafu hunit-dejafu tasty-dejafu dejafu-tests; do
   if ! hlint --no-summary $package; then
     LINT_FAIL=true
   fi

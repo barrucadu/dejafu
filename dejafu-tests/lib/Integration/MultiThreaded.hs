@@ -1,29 +1,32 @@
-module Cases.MultiThreaded where
+module Integration.MultiThreaded where
 
-import Control.Exception (ArithException(..))
-import Control.Monad.IO.Class (liftIO)
-import qualified Control.Concurrent as C
-import Test.DejaFu (Failure(..), gives, gives', isUncaughtException)
-import Test.Framework (Test)
+import qualified Control.Concurrent        as C
+import           Control.Exception         (ArithException(..))
+import           Control.Monad.IO.Class    (liftIO)
+import           Test.DejaFu               (Failure(..), gives, gives',
+                                            isUncaughtException)
 
-import Control.Concurrent.Classy hiding (newQSemN, signalQSemN, waitQSemN)
-import Test.DejaFu.Conc (subconcurrency)
+import           Control.Concurrent.Classy
+import qualified Data.IORef                as IORef
+import           Test.DejaFu.Conc          (subconcurrency)
 
-import Common
+import           Common
 
-tests :: [Test]
+tests :: [TestTree]
 tests =
-    [ testGroup "Threading" threadingTests
-    , testGroup "MVar" mvarTests
-    , testGroup "CRef" crefTests
-    , testGroup "STM" stmTests
-    , testGroup "Exceptions" exceptionTests
-    , testGroup "Subconcurrency" subconcurrencyTests
-    ]
+  [ testGroup "Threading" threadingTests
+  , testGroup "MVar" mvarTests
+  , testGroup "CRef" crefTests
+  , testGroup "STM" stmTests
+  , testGroup "Exceptions" exceptionTests
+  , testGroup "Capabilities" capabilityTests
+  , testGroup "Subconcurrency" subconcurrencyTests
+  , testGroup "IO" ioTests
+  ]
 
 --------------------------------------------------------------------------------
 
-threadingTests :: [Test]
+threadingTests :: [TestTree]
 threadingTests = toTestList
   [ djfuT "Fork reports the thread ID of the child" (gives' [True]) $ do
       var <- newEmptyMVar
@@ -47,7 +50,7 @@ threadingTests = toTestList
 
   , djfuT "A thread started with forkOS is bound" (gives' [(True, True)]) $ do
       v <- newEmptyMVar
-      forkOS $ do
+      _ <- forkOS $ do
         b1 <- isCurrentThreadBound
         b2 <- liftIO C.isCurrentThreadBound
         putMVar v (b1, b2)
@@ -55,12 +58,12 @@ threadingTests = toTestList
 
   , djfuT "A thread started with fork is not bound" (gives' [False]) $ do
       v <- newEmptyMVar
-      fork $ putMVar v =<< isCurrentThreadBound
+      _ <- fork $ putMVar v =<< isCurrentThreadBound
       readMVar v
 
   , djfuT "An action can be run in an unbound thread" (gives' [(True, False)]) $ do
       v <- newEmptyMVar
-      forkOS $ do
+      _ <- forkOS $ do
         b1 <- isCurrentThreadBound
         b2 <- runInUnboundThread isCurrentThreadBound
         putMVar v (b1, b2)
@@ -68,7 +71,7 @@ threadingTests = toTestList
 
   , djfuT "An action can be run in a bound thread" (gives' [(False, True)]) $ do
       v <- newEmptyMVar
-      fork $ do
+      _ <- fork $ do
         b1 <- isCurrentThreadBound
         b2 <- runInBoundThread isCurrentThreadBound
         putMVar v (b1, b2)
@@ -77,7 +80,7 @@ threadingTests = toTestList
 
 --------------------------------------------------------------------------------
 
-mvarTests :: [Test]
+mvarTests :: [TestTree]
 mvarTests = toTestList
   [ djfuT "Racey MVar computations may deadlock" (gives [Left Deadlock, Right 0]) $ do
       a <- newEmptyMVar
@@ -85,8 +88,8 @@ mvarTests = toTestList
       c <- newMVarInt 0
       let lock m = putMVar m ()
       let unlock = takeMVar
-      j1 <- spawn $ lock a >> lock b >> modifyMVar_ c (return . succ) >> unlock b >> unlock a
-      j2 <- spawn $ lock b >> lock a >> modifyMVar_ c (return . pred) >> unlock a >> unlock b
+      j1 <- spawn $ lock a >> lock b >> modifyMVar_ c (pure . succ) >> unlock b >> unlock a
+      j2 <- spawn $ lock b >> lock a >> modifyMVar_ c (pure . pred) >> unlock a >> unlock b
       takeMVar j1
       takeMVar j2
       takeMVar c
@@ -100,7 +103,7 @@ mvarTests = toTestList
 
 --------------------------------------------------------------------------------
 
-crefTests :: [Test]
+crefTests :: [TestTree]
 crefTests = toTestList
   [ djfuT "Racey CRef computations are nondeterministic" (gives' [0,1]) $ do
       x  <- newCRefInt 0
@@ -112,7 +115,7 @@ crefTests = toTestList
 
   , djfuT "CASing CRef changes its value" (gives' [0,1]) $ do
       x <- newCRefInt 0
-      _ <- fork $ modifyCRefCAS x (\_ -> (1, ()))
+      _ <- fork $ modifyCRefCAS x (const (1, ()))
       readCRef x
 
   , djfuT "Racey CAS computations are nondeterministic" (gives' [(True, 2), (False, 2)]) $ do
@@ -151,7 +154,7 @@ crefTests = toTestList
 
 --------------------------------------------------------------------------------
 
-stmTests :: [Test]
+stmTests :: [TestTree]
 stmTests = toTestList
   [ djfuT "Transactions are atomic" (gives' [0,2]) $ do
       x <- atomically $ newTVarInt 0
@@ -167,13 +170,13 @@ stmTests = toTestList
   , djfuT "'retry' is the right identity of 'orElse'" (gives' [()]) $ do
       x <- atomically $ newTVar Nothing
       let readJust var = maybe retry pure =<< readTVar var
-      fork . atomically . writeTVar x $ Just ()
+      _ <- fork . atomically . writeTVar x $ Just ()
       atomically $ readJust x `orElse` retry
   ]
 
 --------------------------------------------------------------------------------
 
-exceptionTests :: [Test]
+exceptionTests :: [TestTree]
 exceptionTests = toTestList
   [ djfuT "Exceptions can kill unmasked threads" (gives [Left Deadlock, Right ()]) $ do
       x <- newEmptyMVar
@@ -218,31 +221,52 @@ exceptionTests = toTestList
 
 --------------------------------------------------------------------------------
 
-subconcurrencyTests :: [Test]
+capabilityTests :: [TestTree]
+capabilityTests = toTestList
+  [ djfu "get/setNumCapabilities are dependent" (gives' [1,3]) $ do
+      setNumCapabilities 1
+      _ <- fork (setNumCapabilities 3)
+      getNumCapabilities
+  ]
+
+--------------------------------------------------------------------------------
+
+subconcurrencyTests :: [TestTree]
 subconcurrencyTests = toTestList
-  [ djfuT "Failure is observable" (gives' [Left Deadlock, Right ()]) $ do
+  [ djfuTS "Failure is observable" (gives' [Left Deadlock, Right ()]) $ do
       var <- newEmptyMVar
       subconcurrency $ do
         _ <- fork $ putMVar var ()
         putMVar var ()
 
-  , djfuT "Failure does not abort the outer computation" (gives' [(Left Deadlock, ()), (Right (), ())]) $ do
+  , djfuTS "Failure does not abort the outer computation" (gives' [(Left Deadlock, ()), (Right (), ())]) $ do
       var <- newEmptyMVar
       res <- subconcurrency $ do
         _ <- fork $ putMVar var ()
         putMVar var ()
       (,) <$> pure res <*> readMVar var
 
-  , djfuT "Success is observable" (gives' [Right ()]) $ do
+  , djfuTS "Success is observable" (gives' [Right ()]) $ do
       var <- newMVar ()
       subconcurrency $ do
         out <- newEmptyMVar
         _ <- fork $ takeMVar var >>= putMVar out
         takeMVar out
 
-  , djfuT "It is illegal to start subconcurrency after forking" (gives [Left IllegalSubconcurrency]) $ do
+  , djfuTS "It is illegal to start subconcurrency after forking" (gives [Left IllegalSubconcurrency]) $ do
       var <- newEmptyMVar
       _ <- fork $ readMVar var
       _ <- subconcurrency $ pure ()
       pure ()
+  ]
+
+-------------------------------------------------------------------------------
+
+ioTests :: [TestTree]
+ioTests = toTestList
+  [ djfu "Lifted IO actions are dependent" (gives' [0,1,2]) $ do
+      r <- liftIO (IORef.newIORef (0::Int))
+      _ <- fork $ liftIO (IORef.atomicWriteIORef r 1)
+      _ <- fork $ liftIO (IORef.atomicWriteIORef r 2)
+      liftIO (IORef.readIORef r)
   ]

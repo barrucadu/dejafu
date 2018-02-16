@@ -1,16 +1,21 @@
 {-# LANGUAGE CPP #-}
 
-module Cases.SingleThreaded where
+module Integration.SingleThreaded where
 
-import Control.Exception (ArithException(..), ArrayException(..))
-import Test.DejaFu (Failure(..), gives, gives', isUncaughtException)
+import           Control.Exception         (ArithException(..),
+                                            ArrayException(..))
+import           Test.DejaFu               (Failure(..), gives, gives',
+                                            isUncaughtException)
 
-import Control.Concurrent.Classy
-import Test.DejaFu.Conc (subconcurrency)
+import           Control.Concurrent.Classy
+import           Control.Monad             (replicateM_)
+import           Control.Monad.IO.Class    (liftIO)
+import qualified Data.IORef                as IORef
+import           Test.DejaFu.Conc          (subconcurrency)
 
-import Common
+import           Common
 
-tests :: [Test]
+tests :: [TestTree]
 tests =
   [ testGroup "MVar" mvarTests
   , testGroup "CRef" crefTests
@@ -18,12 +23,13 @@ tests =
   , testGroup "Exceptions" exceptionTests
   , testGroup "Capabilities" capabilityTests
   , testGroup "Subconcurrency" subconcurrencyTests
+  , testGroup "IO" ioTests
   ]
 
 --------------------------------------------------------------------------------
 
-mvarTests :: [Test]
-mvarTests =
+mvarTests :: [TestTree]
+mvarTests = toTestList
   [ djfu "Taking from an empty MVar blocks" (gives [Left Deadlock]) $ do
       var <- newEmptyMVarInt
       takeMVar var
@@ -77,8 +83,8 @@ mvarTests =
 
 --------------------------------------------------------------------------------
 
-crefTests :: [Test]
-crefTests =
+crefTests :: [TestTree]
+crefTests = toTestList
   [ djfu "Reading a non-updated CRef gives its initial value" (gives' [True]) $ do
       ref <- newCRefInt 5
       (5==) <$> readCRef ref
@@ -110,7 +116,7 @@ crefTests =
       tick <- readForCAS ref
       (suc, _) <- casCRef ref tick 6
       val <- readCRef ref
-      return (suc && (6 == val))
+      pure (suc && (6 == val))
 
   , djfu "Compare-and-swap on a modified CRef fails" (gives' [True]) $ do
       ref  <- newCRefInt 5
@@ -118,13 +124,13 @@ crefTests =
       writeCRef ref 6
       (suc, _) <- casCRef ref tick 7
       val <- readCRef ref
-      return (not suc && not (7 == val))
+      pure (not suc && 7 /= val)
   ]
 
 --------------------------------------------------------------------------------
 
-stmTests :: [Test]
-stmTests =
+stmTests :: [TestTree]
+stmTests = toTestList
   [ djfu "When a TVar is updated, its new value is visible later in same transaction" (gives' [True]) $
       (6==) <$> atomically (do { v <- newTVarInt 5; writeTVar v 6; readTVar v })
 
@@ -132,7 +138,7 @@ stmTests =
       ctv <- atomically $ newTVarInt 5
       (5==) <$> atomically (readTVar ctv)
 
-  , djfu "Aborting a transaction blocks the thread" (gives [Left STMDeadlock]) $
+  , djfu "Aborting a transaction blocks the thread" (gives [Left STMDeadlock])
       (atomically retry :: MonadConc m => m ()) -- avoid an ambiguous type
 
   , djfu "Aborting a transaction can be caught and recovered from" (gives' [True]) $ do
@@ -156,44 +162,44 @@ stmTests =
         (\_ -> writeTVar ctv 6)
       (6==) <$> atomically (readTVar ctv)
 
-  , djfu "MonadSTM is a MonadFail" (alwaysFailsWith isUncaughtException) $
+  , djfu "MonadSTM is a MonadFail" (alwaysFailsWith isUncaughtException)
       (atomically $ fail "hello world" :: MonadConc m => m ())  -- avoid an ambiguous type
   ]
 
 --------------------------------------------------------------------------------
 
-exceptionTests :: [Test]
-exceptionTests =
+exceptionTests :: [TestTree]
+exceptionTests = toTestList
   [ djfu "An exception thrown can be caught" (gives' [True]) $
       catchArithException
         (throw Overflow)
-        (\_ -> return True)
+        (\_ -> pure True)
 
   , djfu "Nested exception handlers work" (gives' [True]) $
       catchArithException
         (catchArrayException
           (throw Overflow)
-          (\_ -> return False))
-        (\_ -> return True)
+          (\_ -> pure False))
+        (\_ -> pure True)
 
   , djfu "Uncaught exceptions kill the computation" (alwaysFailsWith isUncaughtException) $
       catchArithException
         (throw $ IndexOutOfBounds "")
-        (\_ -> return False)
+        (\_ -> pure False)
 
   , djfu "SomeException matches all exception types" (gives' [True]) $ do
       a <- catchSomeException
            (throw Overflow)
-           (\_ -> return True)
+           (\_ -> pure True)
       b <- catchSomeException
            (throw $ IndexOutOfBounds "")
-           (\_ -> return True)
-      return (a && b)
+           (\_ -> pure True)
+      pure (a && b)
 
   , djfu "Exceptions thrown in a transaction can be caught outside it" (gives' [True]) $
       catchArithException
         (atomically $ throwSTM Overflow)
-        (\_ -> return True)
+        (\_ -> pure True)
 
   , djfu "Throwing an unhandled exception to the main thread kills it" (alwaysFailsWith isUncaughtException) $ do
       tid <- myThreadId
@@ -203,18 +209,18 @@ exceptionTests =
       tid <- myThreadId
       catchArithException (throwTo tid Overflow >> pure False) (\_ -> pure True)
 
-  , djfu "MonadConc is a MonadFail" (alwaysFailsWith isUncaughtException) $
+  , djfu "MonadConc is a MonadFail" (alwaysFailsWith isUncaughtException)
       (fail "hello world" :: MonadConc m => m ())  -- avoid an ambiguous type
   ]
 
 --------------------------------------------------------------------------------
 
-capabilityTests :: [Test]
-capabilityTests =
+capabilityTests :: [TestTree]
+capabilityTests = toTestList
   [ djfu "Reading the capabilities twice without update gives the same result" (gives' [True]) $ do
       c1 <- getNumCapabilities
       c2 <- getNumCapabilities
-      return (c1 == c2)
+      pure (c1 == c2)
 
   , djfu "Getting the updated capabilities gives the new value" (gives' [True]) $ do
       caps <- getNumCapabilities
@@ -224,20 +230,30 @@ capabilityTests =
 
 --------------------------------------------------------------------------------
 
-subconcurrencyTests :: [Test]
-subconcurrencyTests =
-  [ djfu "Failures in subconcurrency can be observed" (gives' [True]) $ do
+subconcurrencyTests :: [TestTree]
+subconcurrencyTests = toTestList
+  [ djfuS "Failures in subconcurrency can be observed" (gives' [True]) $ do
       x <- subconcurrency (newEmptyMVar >>= readMVar)
       pure (either (==Deadlock) (const False) x)
 
-  , djfu "Actions after a failing subconcurrency still happen" (gives' [True]) $ do
+  , djfuS "Actions after a failing subconcurrency still happen" (gives' [True]) $ do
       var <- newMVarInt 0
       x <- subconcurrency (putMVar var 1)
       y <- readMVar var
       pure (either (==Deadlock) (const False) x && y == 0)
 
-  , djfu "Non-failing subconcurrency returns the final result" (gives' [True]) $ do
+  , djfuS "Non-failing subconcurrency returns the final result" (gives' [True]) $ do
       var <- newMVarInt 3
       x <- subconcurrency (takeMVar var)
       pure (either (const False) (==3) x)
+  ]
+
+-------------------------------------------------------------------------------
+
+ioTests :: [TestTree]
+ioTests = toTestList
+  [ djfu "Lifted IO is performed" (gives' [3]) $ do
+      r <- liftIO (IORef.newIORef (0::Int))
+      replicateM_ 3 (liftIO (IORef.atomicModifyIORef r (\i -> (i+1, ()))))
+      liftIO (IORef.readIORef r)
   ]

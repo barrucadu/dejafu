@@ -1,14 +1,14 @@
-module Cases.Refinement where
+module Integration.Refinement where
 
-import Control.Concurrent.Classy.MVar
-import Control.Monad (void)
-import Test.DejaFu.Conc (ConcIO)
-import Test.DejaFu.Refinement
-import Test.HUnit.DejaFu (testProperty)
+import           Control.Concurrent.Classy.MVar
+import           Control.Monad                  (void)
+import           Test.DejaFu.Conc               (ConcIO)
+import           Test.DejaFu.Refinement
+import           Test.Tasty.DejaFu              (testProperty)
 
-import Common
+import           Common                         hiding (testProperty)
 
-tests :: [Test]
+tests :: [TestTree]
 tests = [ testGroup "MVar" mvarProps ]
 
 -------------------------------------------------------------------------------
@@ -21,7 +21,7 @@ mvar e = Sig
   , expression = void . e
   }
 
-mvarProps :: [Test]
+mvarProps :: [TestTree]
 mvarProps = toTestList
   [ testProperty "readMVar is idempotent when composed sequentially" $
       mvar readMVar === mvar (\v -> readMVar v >> readMVar v)

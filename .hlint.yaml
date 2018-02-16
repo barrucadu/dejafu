@@ -17,3 +17,17 @@
 
 # Prefer applicative operators over monadic ones.
 - suggest: {name: Generalise monadic functions, lhs: return, rhs: pure}
+
+# The whole point of this example is to test class laws
+- ignore: {name: Functor law, within: Examples.ClassLaws}
+- ignore: {name: Generalise monadic functions, within: Examples.ClassLaws}
+
+# These test names are copied straight from the async package
+- ignore: {name: Use camelCase, within: Integration.Async}
+
+# I don't think these help.
+- ignore: {name: Avoid lambda, within: Integration.Refinement}
+- ignore: {name: Reduce duplication, within: Unit.Properties}
+- ignore: {name: Reduce duplication, within: Integration.Litmus}
+- ignore: {name: Reduce duplication, within: Integration.MultiThreaded}
+- ignore: {name: Reduce duplication, within: Integration.SingleThreaded}
