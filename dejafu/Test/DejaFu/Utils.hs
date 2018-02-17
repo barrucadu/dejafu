@@ -81,6 +81,7 @@ showFail STMDeadlock = "[stm-deadlock]"
 showFail InternalError = "[internal-error]"
 showFail (UncaughtException exc) = "[" ++ displayException exc ++ "]"
 showFail IllegalSubconcurrency = "[illegal-subconcurrency]"
+showFail IllegalDontCheck = "[illegal-dontcheck]"
 
 -------------------------------------------------------------------------------
 -- * Scheduling

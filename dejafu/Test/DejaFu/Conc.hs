@@ -28,6 +28,7 @@ module Test.DejaFu.Conc
   , MemType(..)
   , runConcurrent
   , subconcurrency
+  , dontCheck
 
   -- * Execution traces
   , Trace
@@ -227,3 +228,39 @@ runConcurrent sched memtype s ma = do
 -- @since 0.6.0.0
 subconcurrency :: ConcT r n a -> ConcT r n (Either Failure a)
 subconcurrency ma = toConc (ASub (unC ma))
+
+-- | Run an arbitrary action which is invisible for the purposes of
+-- systematic testing and bounding:
+--
+--  * For systematic testing, 'dontCheck' is not dependent with
+--    anything, even if the action has dependencies.
+--
+--  * For pre-emption bounding, 'dontCheck' counts for zero
+--    pre-emptions, even if the action performs pre-emptive context
+--    switches.
+--
+--  * For fair bounding, 'dontCheck' counts for zero yields/delays,
+--    even if the action performs yields or delays.
+--
+--  * For length bounding, 'dontCheck' counts for one step, even if
+--    the action has many.
+--
+-- The action is executed atomically with a deterministic scheduler
+-- under sequential consistency.  Any threads created inside the
+-- action continue to exist in the main computation.
+--
+-- This must be the first thing done in the main thread.  Violating
+-- this condition will result in the computation failing with
+-- @IllegalDontCheck@.
+--
+-- If the action fails (deadlock, length bound exceeded, etc), the
+-- whole computation fails.
+--
+-- @since unreleased
+dontCheck
+  :: Maybe Int
+  -- ^ An optional length bound.
+  -> ConcT r n a
+  -- ^ The action to execute.
+  -> ConcT r n a
+dontCheck lb ma = toConc (ADontCheck lb (unC ma))

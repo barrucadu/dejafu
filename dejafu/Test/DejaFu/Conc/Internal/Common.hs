@@ -151,6 +151,7 @@ data Action n r =
 
   | forall a. ASub (M n r a) (Either Failure a -> Action n r)
   | AStopSub (Action n r)
+  | forall a. ADontCheck (Maybe Int) (M n r a) (a -> Action n r)
 
 --------------------------------------------------------------------------------
 -- * Scheduling & Traces
@@ -192,3 +193,4 @@ lookahead (AReturn _) = WillReturn
 lookahead (AStop _) = WillStop
 lookahead (ASub _ _) = WillSubconcurrency
 lookahead (AStopSub _) = WillStopSubconcurrency
+lookahead (ADontCheck _ _ _) = WillDontCheck

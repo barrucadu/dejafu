@@ -568,6 +568,8 @@ independent ds t1 a1 t2 a2
     | check t2 a2 t1 a1 = False
     | otherwise = not (dependent ds t1 a1 t2 a2)
   where
+    -- @dontCheck@ must be the first thing in the computation.
+    check _ (DontCheck _) _ _ = True
     -- can't re-order any action of a thread with the fork which
     -- created it.
     check _ (Fork t) tid _ | t == tid = True

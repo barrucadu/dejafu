@@ -85,7 +85,7 @@ initialThread = ThreadId (Id (Just "main") 0)
 
 -- | All the actions that a thread can perform.
 --
--- @since 1.0.0.0
+-- @since unreleased
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -177,6 +177,8 @@ data ThreadAction =
   -- ^ Start executing an action with @subconcurrency@.
   | StopSubconcurrency
   -- ^ Stop executing an action with @subconcurrency@.
+  | DontCheck Trace
+  -- ^ Execute an action with @dontCheck@.
   deriving (Eq, Show)
 
 instance NFData ThreadAction where
@@ -209,11 +211,12 @@ instance NFData ThreadAction where
   rnf (BlockedThrowTo t) = rnf t
   rnf (SetMasking b m) = b `seq` m `seq` ()
   rnf (ResetMasking b m) = b `seq` m `seq` ()
+  rnf (DontCheck t) = rnf t
   rnf a = a `seq` ()
 
 -- | A one-step look-ahead at what a thread will do next.
 --
--- @since 1.0.0.0
+-- @since unreleased
 data Lookahead =
     WillFork
   -- ^ Will start a new thread.
@@ -294,6 +297,8 @@ data Lookahead =
   -- ^ Will execute an action with @subconcurrency@.
   | WillStopSubconcurrency
   -- ^ Will stop executing an extion with @subconcurrency@.
+  | WillDontCheck
+  -- ^ Will execute an action with @dontCheck@.
   deriving (Eq, Show)
 
 instance NFData Lookahead where
@@ -390,7 +395,7 @@ instance NFData Decision where
 -- The @Eq@, @Ord@, and @NFData@ instances compare/evaluate the
 -- exception with @show@ in the @UncaughtException@ case.
 --
--- @since 0.9.0.0
+-- @since unreleased
 data Failure
   = InternalError
   -- ^ Will be raised if the scheduler does something bad. This should
@@ -412,6 +417,9 @@ data Failure
   | IllegalSubconcurrency
   -- ^ Calls to @subconcurrency@ were nested, or attempted when
   -- multiple threads existed.
+  | IllegalDontCheck
+  -- ^ A call to @dontCheck@ was attempted after the first action of
+  -- the initial thread.
   deriving Show
 
 instance Eq Failure where
@@ -421,6 +429,7 @@ instance Eq Failure where
   STMDeadlock            == STMDeadlock            = True
   (UncaughtException e1) == (UncaughtException e2) = show e1 == show e2
   IllegalSubconcurrency  == IllegalSubconcurrency  = True
+  IllegalDontCheck       == IllegalDontCheck       = True
   _ == _ = False
 
 instance Ord Failure where
@@ -432,6 +441,7 @@ instance Ord Failure where
     transform STMDeadlock = (3, Nothing)
     transform (UncaughtException e) = (4, Just (show e))
     transform IllegalSubconcurrency = (5, Nothing)
+    transform IllegalDontCheck = (6, Nothing)
 
 instance NFData Failure where
   rnf (UncaughtException e) = rnf (show e)
@@ -472,6 +482,13 @@ isUncaughtException _ = False
 isIllegalSubconcurrency :: Failure -> Bool
 isIllegalSubconcurrency IllegalSubconcurrency = True
 isIllegalSubconcurrency _ = False
+
+-- | Check if a failure is an @IllegalDontCheck@
+--
+-- @since unreleased
+isIllegalDontCheck :: Failure -> Bool
+isIllegalDontCheck IllegalDontCheck = True
+isIllegalDontCheck _ = False
 
 -------------------------------------------------------------------------------
 -- * Discarding results and traces

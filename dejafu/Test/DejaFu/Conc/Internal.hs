@@ -24,7 +24,7 @@ import           Control.Monad.Ref                   (MonadRef, newRef, readRef,
 import           Data.Functor                        (void)
 import           Data.List                           (sortOn)
 import qualified Data.Map.Strict                     as M
-import           Data.Maybe                          (isJust)
+import           Data.Maybe                          (isJust, isNothing)
 import           Data.Monoid                         ((<>))
 import           Data.Sequence                       (Seq, (<|))
 import qualified Data.Sequence                       as Seq
@@ -126,7 +126,13 @@ runThreads sched memtype ref = go Seq.empty Nothing where
         pure (finalCtx, sofar', finalDecision)
 
       step chosen thread ctx' = do
-          (res, actOrTrc) <- stepThread sched memtype chosen (_continuation thread) $ ctx { cSchedState = g' }
+          (res, actOrTrc) <- stepThread
+              (isNothing prior)
+              sched
+              memtype
+              chosen
+              (_continuation thread)
+              ctx { cSchedState = g' }
           let trc    = getTrc actOrTrc
           let sofar' = sofar <> trc
           let prior' = getPrior actOrTrc
@@ -168,7 +174,9 @@ data Act
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
 stepThread :: forall n r g. (MonadConc n, MonadRef r n)
-  => Scheduler g
+  => Bool
+  -- ^ Is this the first action?
+  -> Scheduler g
   -- ^ The scheduler.
   -> MemType
   -- ^ The memory model to use.
@@ -179,7 +187,7 @@ stepThread :: forall n r g. (MonadConc n, MonadRef r n)
   -> Context n r g
   -- ^ The execution context.
   -> n (Either Failure (Context n r g), Act)
-stepThread sched memtype tid action ctx = case action of
+stepThread isFirst sched memtype tid action ctx = case action of
     -- start a new thread, assigning it the next 'ThreadId'
     AFork n a b -> pure $
       let threads' = launch tid newtid a (cThreads ctx)
@@ -407,6 +415,12 @@ stepThread sched memtype tid action ctx = case action of
     -- returning to normal computation; and every item in the trace
     -- corresponds to a scheduling point.
     AStopSub c -> simple (goto c tid (cThreads ctx)) StopSubconcurrency
+
+    -- run an action atomically, with a non-preemptive length bounded
+    -- round robin scheduler, under sequential consistency.
+    ADontCheck _ _ _
+      | isFirst -> fatal "stepThread.ADontCheck" "unimplemented"
+      | otherwise -> pure (Left IllegalDontCheck, Single (DontCheck []))
   where
 
     -- this is not inline in the long @case@ above as it's needed by
