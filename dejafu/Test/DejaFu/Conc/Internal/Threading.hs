@@ -16,15 +16,15 @@ module Test.DejaFu.Conc.Internal.Threading where
 import qualified Control.Concurrent.Classy        as C
 import           Control.Exception                (Exception, MaskingState(..),
                                                    SomeException, fromException)
+import           Control.Monad                    (forever)
 import           Data.List                        (intersect)
 import           Data.Map.Strict                  (Map)
+import qualified Data.Map.Strict                  as M
 import           Data.Maybe                       (isJust)
 
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.Internal
 import           Test.DejaFu.Types
-
-import qualified Data.Map.Strict                  as M
 
 --------------------------------------------------------------------------------
 -- * Threads
@@ -85,13 +85,13 @@ data Handler n r = forall e. Exception e => Handler (e -> MaskingState -> Action
 -- | Propagate an exception upwards, finding the closest handler
 -- which can deal with it.
 propagate :: SomeException -> ThreadId -> Threads n r -> Maybe (Threads n r)
-propagate e tid threads = case M.lookup tid threads >>= go . _handlers of
-  Just (act, hs) -> Just $ except act hs tid threads
-  Nothing -> Nothing
+propagate e tid threads = raise <$> propagate' handlers where
+  handlers = _handlers (elookup "propagate" tid threads)
 
-  where
-    go [] = Nothing
-    go (Handler h:hs) = maybe (go hs) (\act -> Just (act, hs)) $ h <$> fromException e
+  raise (act, hs) = except act hs tid threads
+
+  propagate' [] = Nothing
+  propagate' (Handler h:hs) = maybe (propagate' hs) (\act -> Just (act, hs)) $ h <$> fromException e
 
 -- | Check if a thread can be interrupted by an exception.
 interruptible :: Thread n r -> Bool
@@ -99,18 +99,19 @@ interruptible thread = _masking thread == Unmasked || (_masking thread == Masked
 
 -- | Register a new exception handler.
 catching :: Exception e => (e -> Action n r) -> ThreadId -> Threads n r -> Threads n r
-catching h = M.adjust $ \thread ->
+catching h = eadjust "catching" $ \thread ->
   let ms0 = _masking thread
       h'  = Handler $ \e ms -> (if ms /= ms0 then AResetMask False False ms0 else id) (h e)
   in thread { _handlers = h' : _handlers thread }
 
 -- | Remove the most recent exception handler.
 uncatching :: ThreadId -> Threads n r -> Threads n r
-uncatching = M.adjust $ \thread -> thread { _handlers = etail "uncatching" (_handlers thread) }
+uncatching = eadjust "uncatching" $ \thread ->
+  thread { _handlers = etail "uncatching" (_handlers thread) }
 
 -- | Raise an exception in a thread.
 except :: (MaskingState -> Action n r) -> [Handler n r] -> ThreadId -> Threads n r -> Threads n r
-except actf hs = M.adjust $ \thread -> thread
+except actf hs = eadjust "except" $ \thread -> thread
   { _continuation = actf (_masking thread)
   , _handlers = hs
   , _blocking = Nothing
@@ -118,24 +119,24 @@ except actf hs = M.adjust $ \thread -> thread
 
 -- | Set the masking state of a thread.
 mask :: MaskingState -> ThreadId -> Threads n r -> Threads n r
-mask ms = M.adjust $ \thread -> thread { _masking = ms }
+mask ms = eadjust "mask" $ \thread -> thread { _masking = ms }
 
 --------------------------------------------------------------------------------
 -- * Manipulating threads
 
 -- | Replace the @Action@ of a thread.
 goto :: Action n r -> ThreadId -> Threads n r -> Threads n r
-goto a = M.adjust $ \thread -> thread { _continuation = a }
+goto a = eadjust "goto" $ \thread -> thread { _continuation = a }
 
 -- | Start a thread with the given ID, inheriting the masking state
 -- from the parent thread. This ID must not already be in use!
 launch :: ThreadId -> ThreadId -> ((forall b. M n r b -> M n r b) -> Action n r) -> Threads n r -> Threads n r
 launch parent tid a threads = launch' ms tid a threads where
-  ms = maybe Unmasked _masking (M.lookup parent threads)
+  ms = _masking (elookup "launch" parent threads)
 
 -- | Start a thread with the given ID and masking state. This must not already be in use!
 launch' :: MaskingState -> ThreadId -> ((forall b. M n r b -> M n r b) -> Action n r) -> Threads n r -> Threads n r
-launch' ms tid a = M.insert tid thread where
+launch' ms tid a = einsert "launch'" tid thread where
   thread = Thread (a umask) Nothing [] ms Nothing
 
   umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False ms >> pure b
@@ -143,7 +144,7 @@ launch' ms tid a = M.insert tid thread where
 
 -- | Block a thread.
 block :: BlockedOn -> ThreadId -> Threads n r -> Threads n r
-block blockedOn = M.adjust $ \thread -> thread { _blocking = Just blockedOn }
+block blockedOn = eadjust "block" $ \thread -> thread { _blocking = Just blockedOn }
 
 -- | Unblock all threads waiting on the appropriate block. For 'TVar'
 -- blocks, this will wake all threads waiting on at least one of the
@@ -168,26 +169,20 @@ makeBound tid threads = do
     getboundIO <- C.newEmptyMVar
     btid <- C.forkOSN ("bound worker for '" ++ show tid ++ "'") (go runboundIO getboundIO)
     let bt = BoundThread runboundIO getboundIO btid
-    pure (M.adjust (\t -> t { _bound = Just bt }) tid threads)
+    pure (eadjust "makeBound" (\t -> t { _bound = Just bt }) tid threads)
   where
-    go runboundIO getboundIO =
-      let loop = do
-            na <- C.takeMVar runboundIO
-            C.putMVar getboundIO =<< na
-            loop
-      in loop
+    go runboundIO getboundIO = forever $ do
+      na <- C.takeMVar runboundIO
+      C.putMVar getboundIO =<< na
 
 -- | Kill a thread and remove it from the thread map.
 --
 -- If the thread is bound, the worker thread is cleaned up.
 kill :: C.MonadConc n => ThreadId -> Threads n r -> n (Threads n r)
-kill tid threads = case M.lookup tid threads of
-  Just thread -> case _bound thread of
-    Just bt -> do
-      C.killThread (_boundTId bt)
-      pure (M.delete tid threads)
-    Nothing -> pure (M.delete tid threads)
-  Nothing -> pure threads
+kill tid threads = do
+  let thread = elookup "kill" tid threads
+  maybe (pure ()) (C.killThread . _boundTId) (_bound thread)
+  pure (M.delete tid threads)
 
 -- | Run an action.
 --
