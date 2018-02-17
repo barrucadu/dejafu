@@ -291,12 +291,6 @@ simplifyLookahead _ = UnsynchronisedOther
 -------------------------------------------------------------------------------
 -- * Error reporting
 
--- | 'head' but with a better error message if it fails.  Use this
--- only where it shouldn't fail!
-ehead :: String -> [a] -> a
-ehead _ (x:_) = x
-ehead src _ = fatal src "head: empty list"
-
 -- | 'tail' but with a better error message if it fails.  Use this
 -- only where it shouldn't fail!
 etail :: String -> [a] -> [a]

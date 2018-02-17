@@ -22,7 +22,8 @@ import           Data.List            (nubBy, partition, sortOn)
 import           Data.List.NonEmpty   (toList)
 import           Data.Map.Strict      (Map)
 import qualified Data.Map.Strict      as M
-import           Data.Maybe           (isJust, isNothing, listToMaybe)
+import           Data.Maybe           (isJust, isNothing, listToMaybe,
+                                       maybeToList)
 import           Data.Sequence        (Seq, (|>))
 import qualified Data.Sequence        as Sq
 import           Data.Set             (Set)
@@ -270,24 +271,23 @@ findBacktrackSteps backtrack boundKill = go initialDepState S.empty initialThrea
   -- backtracking points.
   doBacktrack killsEarly allThreads enabledThreads bs =
     let tagged = reverse $ zip [0..] bs
-        idxs   = [ (ehead "doBacktrack.idxs" is, False, u)
+        idxs   = [ (i, False, u)
                  | (u, n) <- enabledThreads
                  , v <- S.toList allThreads
                  , u /= v
-                 , let is = idxs' u n v tagged
-                 , not $ null is]
+                 , i <- maybeToList (findIndex u n v tagged)]
 
-        idxs' u n v = go' True where
+        findIndex u n v = go' True where
           {-# INLINE go' #-}
           go' final ((i,b):rest)
             -- Don't cross subconcurrency boundaries
-            | isSubC final b = []
+            | isSubC final b = Nothing
             -- If this is the final action in the trace and the
             -- execution was killed due to nothing being within bounds
             -- (@killsEarly == True@) assume worst-case dependency.
-            | bcktThreadid b == v && (killsEarly || isDependent b) = i : go' False rest
+            | bcktThreadid b == v && (killsEarly || isDependent b) = Just i
             | otherwise = go' False rest
-          go' _ [] = []
+          go' _ [] = Nothing
 
           {-# INLINE isSubC #-}
           isSubC final b = case bcktAction b of
