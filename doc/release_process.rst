@@ -22,6 +22,10 @@ Release Process
 
    * Change the ``unreleased`` title to the version number
    * Add the current date
+
+       **If it's early in the year (like January or February), make sure
+       you don't put down the wrong year.**
+
    * Add the git tag name and a link to where it will be on github
    * Add the Hackage URL
 
