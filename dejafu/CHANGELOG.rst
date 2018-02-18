@@ -7,6 +7,21 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Added
+~~~~~
+
+* (:pull:`219`) The testing-only ``Test.DejaFu.Conc.dontCheck``
+  function, and associated definitions:
+
+    * ``Test.DejaFu.Types.DontCheck``
+    * ``Test.DejaFu.Types.WillDontCheck``
+    * ``Test.DejaFu.Types.IllegalDontCheck``
+    * ``Test.DejaFu.Types.isIllegalDontCheck``
+
+
 1.0.0.2 (2018-02-18)
 --------------------
 
