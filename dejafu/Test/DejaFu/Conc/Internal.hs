@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -8,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : MultiParamTypeClasses, RankNTypes, ScopedTypeVariables
+-- Portability : LambdaCase, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables
 --
 -- Concurrent monads with a fixed scheduler: internal types and
 -- functions. This module is NOT considered to form part of the public
@@ -21,6 +22,7 @@ import           Control.Monad.Conc.Class            (MonadConc,
                                                       rtsSupportsBoundThreads)
 import           Control.Monad.Ref                   (MonadRef, newRef, readRef,
                                                       writeRef)
+import           Data.Foldable                       (toList)
 import           Data.Functor                        (void)
 import           Data.List                           (sortOn)
 import qualified Data.Map.Strict                     as M
@@ -56,20 +58,33 @@ runConcurrency :: (MonadConc n, MonadRef r n)
   -> M n r a
   -> n (Either Failure a, Context n r g, SeqTrace, Maybe (ThreadId, ThreadAction))
 runConcurrency sched memtype g idsrc caps ma = do
-  (c, ref) <- runRefCont AStop (Just . Right) (runM ma)
-  let threads0 = launch' Unmasked initialThread (const c) M.empty
-  threads <- (if rtsSupportsBoundThreads then makeBound initialThread else pure) threads0
   let ctx = Context { cSchedState = g
                     , cIdSource   = idsrc
-                    , cThreads    = threads
+                    , cThreads    = M.empty
                     , cWriteBuf   = emptyBuffer
                     , cCaps       = caps
                     }
-  (finalCtx, trace, finalAction) <- runThreads sched memtype ref ctx
+  res@(_, finalCtx, _, _) <- runConcurrency' sched memtype ctx ma
   let finalThreads = cThreads finalCtx
   mapM_ (`kill` finalThreads) (M.keys finalThreads)
+  pure res
+
+-- | Run a concurrent program using the given context, and without
+-- killing threads which remain at the end.  The context must have no
+-- main thread.
+runConcurrency' :: (MonadConc n, MonadRef r n)
+  => Scheduler g
+  -> MemType
+  -> Context n r g
+  -> M n r a
+  -> n (Either Failure a, Context n r g, SeqTrace, Maybe (ThreadId, ThreadAction))
+runConcurrency' sched memtype ctx ma = do
+  (c, ref) <- runRefCont AStop (Just . Right) (runM ma)
+  let threads0 = launch' Unmasked initialThread (const c) (cThreads ctx)
+  threads <- (if rtsSupportsBoundThreads then makeBound initialThread else pure) threads0
+  (finalCtx, trace, finalAction) <- runThreads sched memtype ref ctx { cThreads = threads }
   out <- readRef ref
-  pure (efromJust "runConcurrency" out, finalCtx, trace, finalAction)
+  pure (efromJust "runConcurrency'" out, finalCtx, trace, finalAction)
 
 -- | The context a collection of threads are running in.
 data Context n r g = Context
@@ -152,13 +167,14 @@ runThreads sched memtype ref = go Seq.empty Nothing where
             | (fst <$> prior) `notElem` map (Just . fst) runnable' = Start chosen
             | otherwise = SwitchTo chosen
 
-          getTrc (Single a)    = Seq.singleton (decision, alternatives, a)
-          getTrc (SubC   as _) = (decision, alternatives, Subconcurrency) <| as
+          getTrc (Single a) = Seq.singleton (decision, alternatives, a)
+          getTrc (Multi a (Just as) _) = (decision, alternatives, a) <| as
+          getTrc (Multi a _ _) = Seq.singleton (decision, alternatives, a)
 
           alternatives = filter (\(t, _) -> t /= chosen) runnable'
 
-          getPrior (Single a)      = Just (chosen, a)
-          getPrior (SubC _ finalD) = finalD
+          getPrior (Single a) = Just (chosen, a)
+          getPrior (Multi _ _ finalD) = finalD
 
 --------------------------------------------------------------------------------
 -- * Single-step execution
@@ -167,8 +183,9 @@ runThreads sched memtype ref = go Seq.empty Nothing where
 data Act
   = Single ThreadAction
   -- ^ Just one action.
-  | SubC SeqTrace (Maybe (ThreadId, ThreadAction))
-  -- ^ Subconcurrency, with the given trace and final action.
+  | Multi ThreadAction (Maybe SeqTrace) (Maybe (ThreadId, ThreadAction))
+  -- ^ @subconcurrency@ or @dontCheck@, with the given trace and final
+  -- action.
   deriving (Eq, Show)
 
 -- | Run a single thread one step, by dispatching on the type of
@@ -408,7 +425,7 @@ stepThread isFirst sched memtype tid action ctx = case action of
             runConcurrency sched memtype (cSchedState ctx) (cIdSource ctx) (cCaps ctx) ma
           pure (Right ctx { cThreads    = goto (AStopSub (c res)) tid (cThreads ctx)
                           , cIdSource   = cIdSource ctx'
-                          , cSchedState = cSchedState ctx' }, SubC trace finalDecision)
+                          , cSchedState = cSchedState ctx' }, Multi Subconcurrency (Just trace) finalDecision)
 
     -- after the end of a subconcurrent computation. does nothing,
     -- only exists so that: there is an entry in the trace for
@@ -418,8 +435,19 @@ stepThread isFirst sched memtype tid action ctx = case action of
 
     -- run an action atomically, with a non-preemptive length bounded
     -- round robin scheduler, under sequential consistency.
-    ADontCheck _ _ _
-      | isFirst -> fatal "stepThread.ADontCheck" "unimplemented"
+    ADontCheck lb ma c
+      | isFirst -> do
+          -- create a restricted context
+          threads' <- kill tid (cThreads ctx)
+          let dcCtx = ctx { cThreads = threads', cSchedState = lb }
+          runConcurrency' dcSched SequentialConsistency dcCtx ma >>= \case
+            (Right a, ctx', trace, finalDecision) -> do
+              let threads'' = launch' Unmasked tid (const (c a)) (cThreads ctx')
+              threads''' <- (if rtsSupportsBoundThreads then makeBound tid else pure) threads''
+              pure ( Right ctx' { cThreads = threads''', cSchedState = cSchedState ctx }
+                   , Multi (DontCheck (toList trace)) Nothing finalDecision
+                   )
+            (Left f, _, trace, _) -> pure (Left f, Single (DontCheck (toList trace)))
       | otherwise -> pure (Left IllegalDontCheck, Single (DontCheck []))
   where
 
@@ -446,3 +474,10 @@ stepThread isFirst sched memtype tid action ctx = case action of
       pure $ case res of
         (Right ctx', act) -> (Right ctx' { cWriteBuf = emptyBuffer }, act)
         _ -> res
+
+    -- scheduler for @ADontCheck@
+    dcSched = Scheduler go where
+      go _ _ (Just 0) = (Nothing, Just 0)
+      go prior threads s =
+        let (t, _) = scheduleThread roundRobinSchedNP prior threads ()
+        in (t, fmap (\lb -> lb - 1) s)
