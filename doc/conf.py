@@ -59,6 +59,7 @@ extlinks = {
     'pull': (_repo + 'pull/%s', 'pull request #'),
     'tag': (_repo + 'releases/tag/%s', 'tag '),
     'github': (_repo + '%s', ''),
+    'u': ('https://github.com/%s', ''),
     'hackage': ('https://hackage.haskell.org/package/%s', ''),
     'stackage': ('https://www.stackage.org/package/%s', ''),
 }

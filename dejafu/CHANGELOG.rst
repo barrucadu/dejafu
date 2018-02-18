@@ -7,8 +7,13 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-unreleased
-----------
+1.0.0.2 (2017-02-18)
+--------------------
+
+* Git: :tag:`dejafu-1.0.0.2`
+* Hackage: :hackage:`dejafu-1.0.0.2`
+
+**Contributors:** :u:`qrilka` (:pull:`214`).
 
 Changed
 ~~~~~~~
@@ -27,8 +32,19 @@ Fixed
 * (:issue:`205`) Fix ``forkOS`` being recorded in an execution trace
   as if it were a ``fork``.
 
+Miscellaneous
+~~~~~~~~~~~~~
 
-1.0.0.1 (2017-01-19)
+* (:pull:`180`) Doctest Haddock examples in ``Test.DejaFu`` and
+  ``Test.DejaFu.Refinement``.
+
+* (:pull:`185`, :pull:`215`) Check some more internal invariants and
+  throw on error.
+
+* (:pull:`214`) Remove unnecessary use of ``head``.
+
+
+1.0.0.1 (2018-01-19)
 --------------------
 
 * Git: :tag:`dejafu-1.0.0.1`

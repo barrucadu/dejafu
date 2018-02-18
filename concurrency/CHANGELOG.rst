@@ -7,7 +7,7 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-1.4.0.0 (2017-01-19)
+1.4.0.0 (2018-01-19)
 --------------------
 
 * Git: :tag:`concurrency-1.4.0.0`
