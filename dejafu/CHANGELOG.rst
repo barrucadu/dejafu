@@ -21,6 +21,13 @@ Added
     * ``Test.DejaFu.Types.IllegalDontCheck``
     * ``Test.DejaFu.Types.isIllegalDontCheck``
 
+* (:pull:`219`) A snapshotting approach based on
+  ``Test.DejaFu.Conc.dontCheck``:
+
+    * ``Test.DejaFu.Conc.canDCSnapshot``
+    * ``Test.DejaFu.Conc.runForDCSnapshot``
+    * ``Test.DejaFu.Conc.runWithDCSnapshot``
+
 
 1.0.0.2 (2018-02-18)
 --------------------

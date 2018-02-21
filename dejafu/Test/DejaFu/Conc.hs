@@ -30,6 +30,11 @@ module Test.DejaFu.Conc
   , subconcurrency
   , dontCheck
 
+  -- ** Snapshotting
+  , DCSnapshot
+  , runForDCSnapshot
+  , runWithDCSnapshot
+
   -- * Execution traces
   , Trace
   , Decision(..)
@@ -46,26 +51,27 @@ module Test.DejaFu.Conc
   , module Test.DejaFu.Schedule
   ) where
 
-import           Control.Exception                (MaskingState(..))
-import qualified Control.Monad.Catch              as Ca
-import qualified Control.Monad.IO.Class           as IO
-import           Control.Monad.Ref                (MonadRef)
-import qualified Control.Monad.Ref                as Re
-import           Control.Monad.Trans.Class        (MonadTrans(..))
-import qualified Data.Foldable                    as F
-import           Data.IORef                       (IORef)
+import           Control.Exception                   (MaskingState(..))
+import qualified Control.Monad.Catch                 as Ca
+import qualified Control.Monad.IO.Class              as IO
+import           Control.Monad.Ref                   (MonadRef)
+import qualified Control.Monad.Ref                   as Re
+import           Control.Monad.Trans.Class           (MonadTrans(..))
+import qualified Data.Foldable                       as F
+import           Data.IORef                          (IORef)
 import           Test.DejaFu.Schedule
 
-import qualified Control.Monad.Conc.Class         as C
+import qualified Control.Monad.Conc.Class            as C
 import           Test.DejaFu.Conc.Internal
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.Conc.Internal.STM
+import           Test.DejaFu.Conc.Internal.Threading (Threads)
 import           Test.DejaFu.Internal
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
 
 #if MIN_VERSION_base(4,9,0)
-import qualified Control.Monad.Fail               as Fail
+import qualified Control.Monad.Fail                  as Fail
 #endif
 
 -- | @since 0.6.0.0
@@ -215,15 +221,19 @@ runConcurrent :: (C.MonadConc n, MonadRef r n)
   -> ConcT r n a
   -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s ma = do
-  (res, ctx, trace, _) <- runConcurrency sched memtype s initialIdSource 2 (unC ma)
-  pure (res, cSchedState ctx, F.toList trace)
+  res <- runConcurrency False sched memtype s initialIdSource 2 (unC ma)
+  out <- efromJust "runConcurrent" <$> Re.readRef (finalRef res)
+  pure ( out
+       , cSchedState (finalContext res)
+       , F.toList (finalTrace res)
+       )
 
 -- | Run a concurrent computation and return its result.
 --
 -- This can only be called in the main thread, when no other threads
--- exist. Calls to 'subconcurrency' cannot be nested. Violating either
--- of these conditions will result in the computation failing with
--- @IllegalSubconcurrency@.
+-- exist. Calls to 'subconcurrency' cannot be nested, or placed inside
+-- a call to 'dontCheck'. Violating either of these conditions will
+-- result in the computation failing with @IllegalSubconcurrency@.
 --
 -- @since 0.6.0.0
 subconcurrency :: ConcT r n a -> ConcT r n (Either Failure a)
@@ -264,3 +274,60 @@ dontCheck
   -- ^ The action to execute.
   -> ConcT r n a
 dontCheck lb ma = toConc (ADontCheck lb (unC ma))
+
+-------------------------------------------------------------------------------
+-- Snapshotting
+
+-- | A snapshot of the concurrency state immediately after 'dontCheck'
+-- finishes.
+--
+-- @since unreleased
+data DCSnapshot r n a = DCSnapshot
+  { dcsContext :: Context n r ()
+  -- ^ The execution context.  The scheduler state is ignored when
+  -- restoring.
+  , dcsRestore :: Threads n r -> n ()
+  -- ^ Action to restore CRef, MVar, and TVar values.
+  , dcsRef :: r (Maybe (Either Failure a))
+  -- ^ Reference where the result will be written.
+  }
+
+-- | Like 'runConcurrent', but terminates immediately after running
+-- the 'dontCheck' action with a 'DCSnapshot' which can be used in
+-- 'runWithDCSnapshot' to avoid doing that work again.
+--
+-- If this program does not contain a legal use of 'dontCheck', then
+-- the result will be @Nothing@.
+--
+-- @since unreleased
+runForDCSnapshot :: (C.MonadConc n, MonadRef r n)
+  => ConcT r n a
+  -> n (Maybe (Either Failure (DCSnapshot r n a), Trace))
+runForDCSnapshot ma = do
+  res <- runConcurrency True roundRobinSchedNP SequentialConsistency () initialIdSource 2 (unC ma)
+  out <- Re.readRef (finalRef res)
+  pure $ case (finalRestore res, out) of
+    (Just _, Just (Left f)) -> Just (Left f, F.toList (finalTrace res))
+    (Just restore, _) -> Just (Right (DCSnapshot (finalContext res) restore (finalRef res)), F.toList (finalTrace res))
+    (_, _) -> Nothing
+
+-- | Like 'runConcurrent', but uses a 'DCSnapshot' produced by
+-- 'runForDCSnapshot' to skip the 'dontCheck' work.
+--
+-- @since unreleased
+runWithDCSnapshot :: (C.MonadConc n, MonadRef r n)
+  => Scheduler s
+  -> MemType
+  -> s
+  -> DCSnapshot r n a
+  -> n (Either Failure a, s, Trace)
+runWithDCSnapshot sched memtype s snapshot = do
+  let context = (dcsContext snapshot) { cSchedState = s }
+  let restore = dcsRestore snapshot
+  let ref = dcsRef snapshot
+  res <- runConcurrencyWithSnapshot sched memtype context restore ref
+  out <- efromJust "runWithDCSnapshot" <$> Re.readRef (finalRef res)
+  pure ( out
+       , cSchedState (finalContext res)
+       , F.toList (finalTrace res)
+       )
