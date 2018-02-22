@@ -85,7 +85,7 @@ initialThread = ThreadId (Id (Just "main") 0)
 
 -- | All the actions that a thread can perform.
 --
--- @since unreleased
+-- @since 1.1.0.0
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -216,7 +216,7 @@ instance NFData ThreadAction where
 
 -- | A one-step look-ahead at what a thread will do next.
 --
--- @since unreleased
+-- @since 1.1.0.0
 data Lookahead =
     WillFork
   -- ^ Will start a new thread.
@@ -395,7 +395,7 @@ instance NFData Decision where
 -- The @Eq@, @Ord@, and @NFData@ instances compare/evaluate the
 -- exception with @show@ in the @UncaughtException@ case.
 --
--- @since unreleased
+-- @since 1.1.0.0
 data Failure
   = InternalError
   -- ^ Will be raised if the scheduler does something bad. This should
@@ -485,7 +485,7 @@ isIllegalSubconcurrency _ = False
 
 -- | Check if a failure is an @IllegalDontCheck@
 --
--- @since unreleased
+-- @since 1.1.0.0
 isIllegalDontCheck :: Failure -> Bool
 isIllegalDontCheck IllegalDontCheck = True
 isIllegalDontCheck _ = False

@@ -278,7 +278,7 @@ subconcurrency ma = toConc (ASub (unC ma))
 -- If the action fails (deadlock, length bound exceeded, etc), the
 -- whole computation fails.
 --
--- @since unreleased
+-- @since 1.1.0.0
 dontCheck
   :: Maybe Int
   -- ^ An optional length bound.
@@ -345,7 +345,7 @@ dontCheck lb ma = toConc (ADontCheck lb (unC ma))
 -- | A snapshot of the concurrency state immediately after 'dontCheck'
 -- finishes.
 --
--- @since unreleased
+-- @since 1.1.0.0
 data DCSnapshot r n a = DCSnapshot
   { dcsContext :: Context n r ()
   -- ^ The execution context.  The scheduler state is ignored when
@@ -367,7 +367,7 @@ data DCSnapshot r n a = DCSnapshot
 -- 'dontCheck', snapshotting will be handled for you, without you
 -- needing to call this function yourself.
 --
--- @since unreleased
+-- @since 1.1.0.0
 runForDCSnapshot :: (C.MonadConc n, MonadRef r n)
   => ConcT r n a
   -> n (Maybe (Either Failure (DCSnapshot r n a), Trace))
@@ -386,7 +386,7 @@ runForDCSnapshot ma = do
 -- 'dontCheck', snapshotting will be handled for you, without you
 -- needing to call this function yourself.
 --
--- @since unreleased
+-- @since 1.1.0.0
 runWithDCSnapshot :: (C.MonadConc n, MonadRef r n)
   => Scheduler s
   -> MemType
@@ -406,14 +406,14 @@ runWithDCSnapshot sched memtype s snapshot = do
 
 -- | Check if a 'DCSnapshot' can be taken from this computation.
 --
--- @since unreleased
+-- @since 1.1.0.0
 canDCSnapshot :: ConcT r n a -> Bool
 canDCSnapshot (C (M k)) = lookahead (k undefined) == WillDontCheck
 
 -- | Get the threads which exist in a snapshot, partitioned into
 -- runnable and not runnable.
 --
--- @since unreleased
+-- @since 1.1.0.0
 threadsFromDCSnapshot :: DCSnapshot r n a -> ([ThreadId], [ThreadId])
 threadsFromDCSnapshot snapshot = partition isRunnable (M.keys threads) where
   threads = cThreads (dcsContext snapshot)
