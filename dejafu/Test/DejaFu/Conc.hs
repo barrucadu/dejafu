@@ -248,8 +248,7 @@ runConcurrent sched memtype s ma = do
 subconcurrency :: ConcT r n a -> ConcT r n (Either Failure a)
 subconcurrency ma = toConc (ASub (unC ma))
 
--- | Run an arbitrary action which is invisible for the purposes of
--- systematic testing and bounding:
+-- | Run an arbitrary action which gets some special treatment:
 --
 --  * For systematic testing, 'dontCheck' is not dependent with
 --    anything, even if the action has dependencies.
@@ -263,6 +262,10 @@ subconcurrency ma = toConc (ASub (unC ma))
 --
 --  * For length bounding, 'dontCheck' counts for one step, even if
 --    the action has many.
+--
+--   * All SCT functions use 'runForDCSnapshot' / 'runWithDCSnapshot'
+--     to ensure that the action is only executed once, although you
+--     should be careful with @IO@ (see note on snapshotting @IO@).
 --
 -- The action is executed atomically with a deterministic scheduler
 -- under sequential consistency.  Any threads created inside the
