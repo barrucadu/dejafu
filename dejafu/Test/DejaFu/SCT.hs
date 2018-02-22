@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 
 -- |
 -- Module      : Test.DejaFu.SCT
@@ -8,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : BangPatterns, GADTs, GeneralizedNewtypeDeriving
+-- Portability : BangPatterns, GADTs, GeneralizedNewtypeDeriving, LambdaCase
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
@@ -498,30 +499,18 @@ sctBoundDiscard :: (MonadConc n, MonadRef r n)
   -> ConcT r n a
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
-sctBoundDiscard discard memtype cb conc = go initialState where
-  -- Repeatedly run the computation gathering all the results and
-  -- traces into a list until there are no schedules remaining to try.
-  go !dp = case findSchedulePrefix dp of
-    Just (prefix, conservative, sleep) -> do
-      (res, s, trace) <- runConcurrent scheduler
-                                       memtype
-                                       (initialDPORSchedState sleep prefix)
-                                       conc
+sctBoundDiscard discard0 memtype0 cb0 = sct initialState findSchedulePrefix step discard0 memtype0 where
+  step dp (prefix, conservative, sleep) run = do
+    (res, s, trace) <- run
+      (dporSched (cBound cb0))
+      (initialDPORSchedState sleep prefix)
 
-      let bpoints = findBacktracks (schedBoundKill s) (schedBPoints s) trace
-      let newDPOR = incorporateTrace conservative trace dp
+    let bpoints = findBacktrackSteps (cBacktrack cb0) (schedBoundKill s) (schedBPoints s) trace
+    let newDPOR = incorporateTrace conservative trace dp
 
-      if schedIgnore s
-        then go (force newDPOR)
-        else checkDiscard discard res trace $ go (force (incorporateBacktrackSteps bpoints newDPOR))
-
-    Nothing -> pure []
-
-  -- The DPOR scheduler.
-  scheduler = dporSched (cBound cb)
-
-  -- Find the new backtracking steps.
-  findBacktracks = findBacktrackSteps (cBacktrack cb)
+    pure $ if schedIgnore s
+           then (force newDPOR, Nothing)
+           else (force (incorporateBacktrackSteps bpoints newDPOR), Just (res, trace))
 
 -- | SCT via uniform random scheduling.
 --
@@ -561,14 +550,15 @@ sctUniformRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctUniformRandomDiscard discard memtype g0 lim0 conc = go g0 (max 0 lim0) where
-  go _ 0 = pure []
-  go g n = do
-    (res, s, trace) <- runConcurrent (randSched $ \g' -> (1, g'))
-                                     memtype
-                                     (initialRandSchedState Nothing g)
-                                     conc
-    checkDiscard discard res trace $ go (schedGen s) (n-1)
+sctUniformRandomDiscard discard0 memtype0 g0 lim0 = sct (const (g0, max 0 lim0)) check step discard0 memtype0 where
+  check (_, 0) = Nothing
+  check s = Just s
+
+  step _ (g, n) run = do
+    (res, s, trace) <- run
+      (randSched $ \g' -> (1, g'))
+      (initialRandSchedState Nothing g)
+    pure ((schedGen s, n-1), Just (res, trace))
 
 -- | SCT via weighted random scheduling.
 --
@@ -612,15 +602,48 @@ sctWeightedRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctWeightedRandomDiscard discard memtype g0 lim0 use0 conc = go g0 (max 0 lim0) (max 1 use0) M.empty where
-  go _ 0 _ _ = pure []
-  go g n 0 _ = go g n (max 1 use0) M.empty
-  go g n use ws = do
-    (res, s, trace) <- runConcurrent (randSched $ randomR (1, 50))
-                                     memtype
-                                     (initialRandSchedState (Just ws) g)
-                                     conc
-    checkDiscard discard res trace $ go (schedGen s) (n-1) (use-1) (schedWeights s)
+sctWeightedRandomDiscard discard0 memtype0 g0 lim0 use0 = sct (const (g0, max 0 lim0, max 1 use0, M.empty)) check step discard0 memtype0 where
+  check (_, 0, _, _) = Nothing
+  check s = Just s
+
+  step s (g, n, 0, _) run = step s (g, n, max 1 use0, M.empty) run
+  step _ (g, n, use, ws) run = do
+    (res, s, trace) <- run
+      (randSched $ randomR (1, 50))
+      (initialRandSchedState (Just ws) g)
+    pure ((schedGen s, n-1, use-1, schedWeights s), Just (res, trace))
+
+-- | General-purpose SCT function.
+sct :: (MonadConc n, MonadRef r n)
+  => ([ThreadId] -> s)
+  -- ^ Initial state
+  -> (s -> Maybe t)
+  -- ^ State predicate
+  -> (s -> t -> (Scheduler g -> g -> n (Either Failure a, g, Trace)) -> n (s, Maybe (Either Failure a, Trace)))
+  -- ^ Run the computation and update the state
+  -> (Either Failure a -> Maybe Discard)
+  -> MemType
+  -> ConcT r n a
+  -> n [(Either Failure a, Trace)]
+sct s0 sfun srun discard memtype conc
+    | canDCSnapshot conc = runForDCSnapshot conc >>= \case
+        Just (Right snap, _) -> go (runSnap snap) (fst (threadsFromDCSnapshot snap))
+        Just (Left f, trace) -> pure [(Left f, trace)]
+        _ -> fatal "sct" "Failed to construct snapshot"
+    | otherwise = go runFull [initialThread]
+  where
+    go run = go' . s0 where
+      go' !s = case sfun s of
+        Just t -> srun s t run >>= \case
+          (s', Just (res, trace)) -> case discard res of
+            Just DiscardResultAndTrace -> go' s'
+            Just DiscardTrace -> ((res, []):) <$> go' s'
+            Nothing -> ((res, trace):) <$> go' s'
+          (s', Nothing) -> go' s'
+        Nothing -> pure []
+
+    runFull sched s = runConcurrent sched memtype s conc
+    runSnap snap sched s = runWithDCSnapshot sched memtype s snap
 
 -------------------------------------------------------------------------------
 -- Utilities
@@ -678,10 +701,3 @@ maxDiff = go 0 where
     in go m' xs
   go m [] = m
   go' x0 m x = m `max` abs (x0 - x)
-
--- | Apply the discard function.
-checkDiscard :: Functor f => (a -> Maybe Discard) -> a -> [b] -> f [(a, [b])] -> f [(a, [b])]
-checkDiscard discard res trace rest = case discard res of
-  Just DiscardResultAndTrace -> rest
-  Just DiscardTrace -> ((res, []):) <$> rest
-  Nothing -> ((res, trace):) <$> rest

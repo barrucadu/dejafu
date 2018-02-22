@@ -17,7 +17,7 @@ import qualified Hedgehog.Range                as HRange
 import           System.Random                 (mkStdGen)
 import           Test.DejaFu                   (Failure, Predicate,
                                                 ProPredicate(..), Result(..),
-                                                Way, alwaysTrue)
+                                                Way, alwaysTrue, somewhereTrue)
 import           Test.DejaFu.Conc              (ConcIO, Scheduler(..),
                                                 randomSched, runConcurrent)
 import           Test.DejaFu.SCT.Internal.DPOR
@@ -82,6 +82,9 @@ djfuTS name p c = toTestList $ TEST name c p defaultWays False
 
 alwaysFailsWith :: (Failure -> Bool) -> Predicate a
 alwaysFailsWith p = alwaysTrue (either p (const False))
+
+sometimesFailsWith :: (Failure -> Bool) -> Predicate a
+sometimesFailsWith p = somewhereTrue (either p (const False))
 
 testProperty :: String -> H.PropertyT IO () -> T.TestTree
 testProperty name = H.testProperty name . H.property

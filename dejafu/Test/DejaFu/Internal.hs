@@ -167,6 +167,7 @@ rewind Return = Just WillReturn
 rewind Stop = Just WillStop
 rewind Subconcurrency = Just WillSubconcurrency
 rewind StopSubconcurrency = Just WillStopSubconcurrency
+rewind (DontCheck _) = Just WillDontCheck
 
 -- | Check if an operation could enable another thread.
 willRelease :: Lookahead -> Bool
@@ -184,6 +185,7 @@ willRelease WillThrow = True
 willRelease (WillSetMasking _ _) = True
 willRelease (WillResetMasking _ _) = True
 willRelease WillStop = True
+willRelease WillDontCheck = True
 willRelease _ = False
 
 -------------------------------------------------------------------------------

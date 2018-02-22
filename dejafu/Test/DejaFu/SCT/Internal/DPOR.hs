@@ -122,15 +122,19 @@ instance NFData BacktrackStep where
 
 -- | Initial DPOR state, given an initial thread ID. This initial
 -- thread should exist and be runnable at the start of execution.
-initialState :: DPOR
-initialState = DPOR
-  { dporRunnable = S.singleton initialThread
-  , dporTodo     = M.singleton initialThread False
-  , dporNext     = Nothing
-  , dporDone     = S.empty
-  , dporSleep    = M.empty
-  , dporTaken    = M.empty
-  }
+--
+-- The main thread must be in the list of initially runnable threads.
+initialState :: [ThreadId] -> DPOR
+initialState threads
+  | initialThread `elem` threads = DPOR
+    { dporRunnable = S.fromList threads
+    , dporTodo     = M.singleton initialThread False
+    , dporNext     = Nothing
+    , dporDone     = S.empty
+    , dporSleep    = M.empty
+    , dporTaken    = M.empty
+    }
+  | otherwise = fatal "initialState" "Initial thread is not in initially runnable set"
 
 -- | Produce a new schedule prefix from a @DPOR@ tree. If there are no new
 -- prefixes remaining, return 'Nothing'. Also returns whether the
@@ -568,6 +572,8 @@ independent ds t1 a1 t2 a2
     | check t2 a2 t1 a1 = False
     | otherwise = not (dependent ds t1 a1 t2 a2)
   where
+    -- @dontCheck@ must be the first thing in the computation.
+    check _ (DontCheck _) _ _ = True
     -- can't re-order any action of a thread with the fork which
     -- created it.
     check _ (Fork t) tid _ | t == tid = True

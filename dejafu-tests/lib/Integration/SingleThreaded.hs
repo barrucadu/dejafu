@@ -4,14 +4,17 @@ module Integration.SingleThreaded where
 
 import           Control.Exception         (ArithException(..),
                                             ArrayException(..))
-import           Test.DejaFu               (Failure(..), gives, gives',
+import           Test.DejaFu               (Failure(..), gives, gives', isAbort,
+                                            isDeadlock, isIllegalDontCheck,
                                             isUncaughtException)
+import           Test.DejaFu.Defaults      (defaultLengthBound)
 
 import           Control.Concurrent.Classy
 import           Control.Monad             (replicateM_)
 import           Control.Monad.IO.Class    (liftIO)
 import qualified Data.IORef                as IORef
-import           Test.DejaFu.Conc          (subconcurrency)
+import           System.Random             (mkStdGen)
+import           Test.DejaFu.Conc          (dontCheck, subconcurrency)
 
 import           Common
 
@@ -22,7 +25,7 @@ tests =
   , testGroup "STM" stmTests
   , testGroup "Exceptions" exceptionTests
   , testGroup "Capabilities" capabilityTests
-  , testGroup "Subconcurrency" subconcurrencyTests
+  , testGroup "Hacks" hacksTests
   , testGroup "IO" ioTests
   ]
 
@@ -230,22 +233,83 @@ capabilityTests = toTestList
 
 --------------------------------------------------------------------------------
 
-subconcurrencyTests :: [TestTree]
-subconcurrencyTests = toTestList
-  [ djfuS "Failures in subconcurrency can be observed" (gives' [True]) $ do
-      x <- subconcurrency (newEmptyMVar >>= readMVar)
-      pure (either (==Deadlock) (const False) x)
+hacksTests :: [TestTree]
+hacksTests = toTestList
+  [ testGroup "Subconcurrency"
+    [ djfuS "Failures in subconcurrency can be observed" (gives' [True]) $ do
+        x <- subconcurrency (newEmptyMVar >>= readMVar)
+        pure (either (==Deadlock) (const False) x)
 
-  , djfuS "Actions after a failing subconcurrency still happen" (gives' [True]) $ do
-      var <- newMVarInt 0
-      x <- subconcurrency (putMVar var 1)
-      y <- readMVar var
-      pure (either (==Deadlock) (const False) x && y == 0)
+    , djfuS "Actions after a failing subconcurrency still happen" (gives' [True]) $ do
+        var <- newMVarInt 0
+        x <- subconcurrency (putMVar var 1)
+        y <- readMVar var
+        pure (either (==Deadlock) (const False) x && y == 0)
 
-  , djfuS "Non-failing subconcurrency returns the final result" (gives' [True]) $ do
-      var <- newMVarInt 3
-      x <- subconcurrency (takeMVar var)
-      pure (either (const False) (==3) x)
+    , djfuS "Non-failing subconcurrency returns the final result" (gives' [True]) $ do
+        var <- newMVarInt 3
+        x <- subconcurrency (takeMVar var)
+        pure (either (const False) (==3) x)
+    ]
+
+  , testGroup "DontCheck"
+    [ djfu "Inner state modifications are visible to the outside" (gives' [True]) $ do
+        outer <- dontCheck Nothing $ do
+          inner <- newEmptyMVarInt
+          putMVar inner 5
+          pure inner
+        (==5) <$> takeMVar outer
+
+    , djfu "Failures abort the whole computation" (alwaysFailsWith isDeadlock) $
+        dontCheck Nothing $ takeMVar =<< newEmptyMVarInt
+
+    , djfu "Must be the very first thing" (alwaysFailsWith isIllegalDontCheck) $ do
+        v <- newEmptyMVarInt
+        dontCheck Nothing $ putMVar v 5
+
+    , djfu "Exceeding the length bound aborts the whole computation" (alwaysFailsWith isAbort) $
+        dontCheck (Just 1) $ newEmptyMVarInt >> pure ()
+
+    , djfu "Only counts as one action towards SCT length bounding" (gives' [True]) $ do
+        let ntimes = fromIntegral defaultLengthBound * 5
+        dontCheck Nothing $ replicateM_ ntimes (pure ())
+        pure True
+
+    -- we use 'randomly' here because we specifically want to compare
+    -- multiple executions with snapshotting
+    , toTestList . testGroup "Snapshotting" $ let snapshotTest n p conc = W n conc p ("randomly", randomly (mkStdGen 0) 150) in
+      [ snapshotTest "State updates are applied correctly" (gives' [2]) $ do
+          r <- dontCheck Nothing $ do
+            r <- newCRefInt 0
+            writeCRef r 1
+            writeCRef r 2
+            pure r
+          readCRef r
+
+      , snapshotTest "Lifted IO is re-run (1)" (gives' [2..151]) $ do
+          r <- dontCheck Nothing $ do
+            r <- liftIO (IORef.newIORef 0)
+            liftIO (IORef.modifyIORef r (+1))
+            pure r
+          liftIO (IORef.readIORef r)
+
+      , snapshotTest "Lifted IO is re-run (2)" (gives' [1]) $ do
+          r <- dontCheck Nothing $ do
+            let modify r f = liftIO (IORef.readIORef r) >>= liftIO . IORef.writeIORef r . f
+            r <- liftIO (IORef.newIORef 0)
+            modify r (+1)
+            pure r
+          liftIO (IORef.readIORef r)
+
+      , snapshotTest "Lifted IO is re-run (3)" (gives' [1]) $ do
+          r <- dontCheck Nothing $ do
+            r <- liftIO (IORef.newIORef 0)
+            liftIO (IORef.writeIORef r 0)
+            liftIO (IORef.modifyIORef r (+1))
+            pure r
+          liftIO (IORef.readIORef r)
+      ]
+    ]
   ]
 
 -------------------------------------------------------------------------------

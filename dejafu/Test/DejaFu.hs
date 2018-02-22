@@ -72,8 +72,11 @@ There are two types of failure which dejafu itself may raise:
    aren't using a scheduler you wrote yourself, please [file a
    bug](https://github.com/barrucadu/dejafu/issues).
 
-Finally, there is one failure which can arise through improper use of
+Finally, there are two failures which can arise through improper use of
 dejafu:
+
+ * 'IllegalDontCheck', the "Test.DejaFu.Conc.dontCheck" function is
+   used as anything other than the fist action in the main thread.
 
  * 'IllegalSubconcurrency', the "Test.DejaFu.Conc.subconcurrency"
    function is used when multiple threads exist, or is used inside
@@ -323,6 +326,7 @@ Helper functions to identify failures.
   , isDeadlock
   , isUncaughtException
   , isIllegalSubconcurrency
+  , isIllegalDontCheck
 
   -- * Property testing
 
