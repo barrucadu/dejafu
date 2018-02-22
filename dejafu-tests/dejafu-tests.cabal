@@ -58,6 +58,7 @@ library
                      , tasty-expected-failure
                      , tasty-dejafu
                      , tasty-hedgehog
+                     , tasty-hunit
                      , vector
   if impl(ghc < 8.0.1)
     build-depends: transformers
