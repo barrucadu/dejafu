@@ -31,6 +31,9 @@ module Test.DejaFu.Conc
   , dontCheck
 
   -- ** Snapshotting
+
+  -- $snapshotting_io
+
   , DCSnapshot
   , runForDCSnapshot
   , runWithDCSnapshot
@@ -283,6 +286,58 @@ dontCheck lb ma = toConc (ADontCheck lb (unC ma))
 
 -------------------------------------------------------------------------------
 -- Snapshotting
+
+-- $snapshotting_io
+--
+-- __Snapshotting @IO@:__ A snapshot captures entire state of your
+-- concurrent program: the state of every thread, the number of
+-- capabilities, the values of any @CRef@s, @MVar@s, and @TVar@s, and
+-- records any @IO@ that you performed.
+--
+-- When restoring a snapshot this @IO@ is replayed, in order.  But the
+-- whole snapshotted computation is not.  So the effects of the @IO@
+-- take place again, but any return values are ignored.  For example,
+-- this program will not do what you want:
+--
+-- @
+-- bad_snapshot = do
+--   r <- dontCheck Nothing $ do
+--     r <- liftIO (newIORef 0)
+--     liftIO (modifyIORef r (+1))
+--     pure r
+--   liftIO (readIORef r)
+-- @
+--
+-- When the snapshot is taken, the value in the @IORef@ will be 1.
+-- When the snapshot is restored for the first time, those @IO@
+-- actions will be run again, /but their return values will be discarded/.
+-- The value in the @IORef@ will be 2.  When the snapshot
+-- is restored for the second time, the value in the @IORef@ will be
+-- 3.  And so on.
+--
+-- To safely use @IO@ in a snapshotted computation, __the combined effect must be idempotent__.
+-- You should either use actions which set the state to the final
+-- value directly, rather than modifying it (eg, using a combination
+-- of @liftIO . readIORef@ and @liftIO . writeIORef@ here), or reset
+-- the state to a known value.  Both of these approaches will work:
+--
+-- @
+-- good_snapshot1 = do
+--   r <- dontCheck Nothing $ do
+--     let modify r f = liftIO (readIORef r) >>= liftIO . writeIORef r . f
+--     r <- liftIO (newIORef 0)
+--     modify r (+1)
+--     pure r
+--   liftIO (readIORef r)
+--
+-- good_snapshot2 = do
+--   r <- dontCheck Nothing $ do
+--     r <- liftIO (newIORef 0)
+--     liftIO (writeIORef r 0)
+--     liftIO (modifyIORef r (+1))
+--     pure r
+--   liftIO (readIORef r)
+-- @
 
 -- | A snapshot of the concurrency state immediately after 'dontCheck'
 -- finishes.

@@ -285,6 +285,29 @@ hacksTests = toTestList
             writeCRef r 2
             pure r
           readCRef r
+
+      , snapshotTest "Lifted IO is re-run (1)" (gives' [2..151]) $ do
+          r <- dontCheck Nothing $ do
+            r <- liftIO (IORef.newIORef 0)
+            liftIO (IORef.modifyIORef r (+1))
+            pure r
+          liftIO (IORef.readIORef r)
+
+      , snapshotTest "Lifted IO is re-run (2)" (gives' [1]) $ do
+          r <- dontCheck Nothing $ do
+            let modify r f = liftIO (IORef.readIORef r) >>= liftIO . IORef.writeIORef r . f
+            r <- liftIO (IORef.newIORef 0)
+            modify r (+1)
+            pure r
+          liftIO (IORef.readIORef r)
+
+      , snapshotTest "Lifted IO is re-run (3)" (gives' [1]) $ do
+          r <- dontCheck Nothing $ do
+            r <- liftIO (IORef.newIORef 0)
+            liftIO (IORef.writeIORef r 0)
+            liftIO (IORef.modifyIORef r (+1))
+            pure r
+          liftIO (IORef.readIORef r)
       ]
     ]
   ]
