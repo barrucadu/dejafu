@@ -24,9 +24,16 @@ Added
 * (:pull:`219`) A snapshotting approach based on
   ``Test.DejaFu.Conc.dontCheck``:
 
-    * ``Test.DejaFu.Conc.canDCSnapshot``
     * ``Test.DejaFu.Conc.runForDCSnapshot``
     * ``Test.DejaFu.Conc.runWithDCSnapshot``
+    * ``Test.DejaFu.Conc.canDCSnapshot``
+    * ``Test.DejaFu.Conc.threadsFromDCSnapshot``
+
+Changed
+~~~~~~~
+
+* (:pull:`219`) SCT functions automatically use the snapshotting
+  mechanism when possible.
 
 
 1.0.0.2 (2018-02-18)

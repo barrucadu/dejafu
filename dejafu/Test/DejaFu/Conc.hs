@@ -34,6 +34,8 @@ module Test.DejaFu.Conc
   , DCSnapshot
   , runForDCSnapshot
   , runWithDCSnapshot
+  , canDCSnapshot
+  , threadsFromDCSnapshot
 
   -- * Execution traces
   , Trace
@@ -59,13 +61,17 @@ import qualified Control.Monad.Ref                   as Re
 import           Control.Monad.Trans.Class           (MonadTrans(..))
 import qualified Data.Foldable                       as F
 import           Data.IORef                          (IORef)
+import           Data.List                           (partition)
+import qualified Data.Map.Strict                     as M
+import           Data.Maybe                          (isNothing)
 import           Test.DejaFu.Schedule
 
 import qualified Control.Monad.Conc.Class            as C
 import           Test.DejaFu.Conc.Internal
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.Conc.Internal.STM
-import           Test.DejaFu.Conc.Internal.Threading (Threads)
+import           Test.DejaFu.Conc.Internal.Threading (Thread(_blocking),
+                                                      Threads)
 import           Test.DejaFu.Internal
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
@@ -299,6 +305,10 @@ data DCSnapshot r n a = DCSnapshot
 -- If this program does not contain a legal use of 'dontCheck', then
 -- the result will be @Nothing@.
 --
+-- If you are using the SCT functions on an action which contains a
+-- 'dontCheck', snapshotting will be handled for you, without you
+-- needing to call this function yourself.
+--
 -- @since unreleased
 runForDCSnapshot :: (C.MonadConc n, MonadRef r n)
   => ConcT r n a
@@ -313,6 +323,10 @@ runForDCSnapshot ma = do
 
 -- | Like 'runConcurrent', but uses a 'DCSnapshot' produced by
 -- 'runForDCSnapshot' to skip the 'dontCheck' work.
+--
+-- If you are using the SCT functions on an action which contains a
+-- 'dontCheck', snapshotting will be handled for you, without you
+-- needing to call this function yourself.
 --
 -- @since unreleased
 runWithDCSnapshot :: (C.MonadConc n, MonadRef r n)
@@ -331,3 +345,18 @@ runWithDCSnapshot sched memtype s snapshot = do
        , cSchedState (finalContext res)
        , F.toList (finalTrace res)
        )
+
+-- | Check if a 'DCSnapshot' can be taken from this computation.
+--
+-- @since unreleased
+canDCSnapshot :: ConcT r n a -> Bool
+canDCSnapshot (C (M k)) = lookahead (k undefined) == WillDontCheck
+
+-- | Get the threads which exist in a snapshot, partitioned into
+-- runnable and not runnable.
+--
+-- @since unreleased
+threadsFromDCSnapshot :: DCSnapshot r n a -> ([ThreadId], [ThreadId])
+threadsFromDCSnapshot snapshot = partition isRunnable (M.keys threads) where
+  threads = cThreads (dcsContext snapshot)
+  isRunnable tid = isNothing (_blocking =<< M.lookup tid threads)

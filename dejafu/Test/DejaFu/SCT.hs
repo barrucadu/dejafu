@@ -550,7 +550,7 @@ sctUniformRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctUniformRandomDiscard discard0 memtype0 g0 lim0 = sct (g0, max 0 lim0) check step discard0 memtype0 where
+sctUniformRandomDiscard discard0 memtype0 g0 lim0 = sct (const (g0, max 0 lim0)) check step discard0 memtype0 where
   check (_, 0) = Nothing
   check s = Just s
 
@@ -602,7 +602,7 @@ sctWeightedRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctWeightedRandomDiscard discard0 memtype0 g0 lim0 use0 = sct (g0, max 0 lim0, max 1 use0, M.empty) check step discard0 memtype0 where
+sctWeightedRandomDiscard discard0 memtype0 g0 lim0 use0 = sct (const (g0, max 0 lim0, max 1 use0, M.empty)) check step discard0 memtype0 where
   check (_, 0, _, _) = Nothing
   check s = Just s
 
@@ -615,7 +615,7 @@ sctWeightedRandomDiscard discard0 memtype0 g0 lim0 use0 = sct (g0, max 0 lim0, m
 
 -- | General-purpose SCT function.
 sct :: (MonadConc n, MonadRef r n)
-  => s
+  => ([ThreadId] -> s)
   -- ^ Initial state
   -> (s -> Maybe t)
   -- ^ State predicate
@@ -625,17 +625,25 @@ sct :: (MonadConc n, MonadRef r n)
   -> MemType
   -> ConcT r n a
   -> n [(Either Failure a, Trace)]
-sct s0 sfun srun discard memtype conc = go s0 where
-  go !s = case sfun s of
-    Just t -> srun s t run >>= \case
-      (s', Just (res, trace)) -> case discard res of
-        Just DiscardResultAndTrace -> go s'
-        Just DiscardTrace -> ((res, []):) <$> go s'
-        Nothing -> ((res, trace):) <$> go s'
-      (s', Nothing) -> go s'
-    Nothing -> pure []
+sct s0 sfun srun discard memtype conc
+    | canDCSnapshot conc = runForDCSnapshot conc >>= \case
+        Just (Right snap, _) -> go (runSnap snap) (fst (threadsFromDCSnapshot snap))
+        Just (Left f, trace) -> pure [(Left f, trace)]
+        _ -> fatal "sct" "Failed to construct snapshot"
+    | otherwise = go runFull [initialThread]
+  where
+    go run = go' . s0 where
+      go' !s = case sfun s of
+        Just t -> srun s t run >>= \case
+          (s', Just (res, trace)) -> case discard res of
+            Just DiscardResultAndTrace -> go' s'
+            Just DiscardTrace -> ((res, []):) <$> go' s'
+            Nothing -> ((res, trace):) <$> go' s'
+          (s', Nothing) -> go' s'
+        Nothing -> pure []
 
-  run sched s = runConcurrent sched memtype s conc
+    runFull sched s = runConcurrent sched memtype s conc
+    runSnap snap sched s = runWithDCSnapshot sched memtype s snap
 
 -------------------------------------------------------------------------------
 -- Utilities

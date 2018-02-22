@@ -13,6 +13,7 @@ import           Control.Concurrent.Classy
 import           Control.Monad             (replicateM_)
 import           Control.Monad.IO.Class    (liftIO)
 import qualified Data.IORef                as IORef
+import           System.Random             (mkStdGen)
 import           Test.DejaFu.Conc          (dontCheck, subconcurrency)
 
 import           Common
@@ -273,6 +274,18 @@ hacksTests = toTestList
         let ntimes = fromIntegral defaultLengthBound * 5
         dontCheck Nothing $ replicateM_ ntimes (pure ())
         pure True
+
+    -- we use 'randomly' here because we specifically want to compare
+    -- multiple executions with snapshotting
+    , toTestList . testGroup "Snapshotting" $ let snapshotTest n p conc = W n conc p ("randomly", randomly (mkStdGen 0) 150) in
+      [ snapshotTest "State updates are applied correctly" (gives' [2]) $ do
+          r <- dontCheck Nothing $ do
+            r <- newCRefInt 0
+            writeCRef r 1
+            writeCRef r 2
+            pure r
+          readCRef r
+      ]
     ]
   ]
 

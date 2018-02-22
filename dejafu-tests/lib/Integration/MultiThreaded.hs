@@ -282,6 +282,15 @@ hacksTests = toTestList
         putMVar trigger ()
         readCRef ref
 
+    , djfuT "Bound threads created on the inside are bound on the outside" (gives' [True]) $ do
+        (out, trigger) <- dontCheck Nothing $ do
+          v <- newEmptyMVar
+          o <- newEmptyMVar
+          _ <- forkOS (takeMVar v >> isCurrentThreadBound >>= putMVar o)
+          pure (o, v)
+        putMVar trigger ()
+        takeMVar out
+
     , djfuT "Thread IDs are consistent between the inner action and the outside" (sometimesFailsWith isUncaughtException) $ do
         (tid, trigger) <- dontCheck Nothing $ do
           me <- myThreadId
