@@ -132,6 +132,15 @@ instance Ca.MonadMask (ConcT r n) where
   mask                mb = toConc (AMasking MaskedInterruptible   (\f -> unC $ mb $ wrap f))
   uninterruptibleMask mb = toConc (AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f))
 
+#if MIN_VERSION_exceptions(0,9,0)
+  -- from https://github.com/fpco/stackage/issues/3315#issuecomment-368583481
+  generalBracket acquire release cleanup use = mask $ \unmasked -> do
+    resource <- acquire
+    result <- unmasked (use resource) `catch` (\e -> cleanup resource e >> throwM e)
+    _ <- release resource
+    pure result
+#endif
+
 instance Monad n => C.MonadConc (ConcT r n) where
   type MVar     (ConcT r n) = MVar r
   type CRef     (ConcT r n) = CRef r
