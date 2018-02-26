@@ -37,7 +37,7 @@ library
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base       >=4.8 && <5
-                     , exceptions >=0.7 && <0.9
+                     , exceptions >=0.7 && <0.10
                      , dejafu     >=1.0 && <1.2
                      , HUnit      >=1.2 && <1.7
   -- hs-source-dirs:      
