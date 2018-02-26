@@ -8,6 +8,7 @@ import qualified Integration.Litmus         as L
 import qualified Integration.MultiThreaded  as M
 import qualified Integration.Refinement     as R
 import qualified Integration.Regressions    as G
+import qualified Integration.SCT            as SC
 import qualified Integration.SingleThreaded as S
 
 import           Common
@@ -22,6 +23,7 @@ tests =
   , testGroup "Refinement"     R.tests
   , testGroup "Regressions"    G.tests
   , testGroup "SingleThreaded" S.tests
+  , testGroup "SCT"            SC.tests
   ]
 
 -- | Tasty options

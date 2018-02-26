@@ -28,6 +28,7 @@ library
                      , Integration.Litmus
                      , Integration.Discard
                      , Integration.Regressions
+                     , Integration.SCT
 
                      , Examples
                      , Examples.AutoUpdate
