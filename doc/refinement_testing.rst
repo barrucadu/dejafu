@@ -96,9 +96,9 @@ functions.  These functions are:
 .. csv-table::
    :header: "Function", "Operator", "Checks that..."
 
-   "``refines``",         "``=>=``", "...the left is equivalent to, or strictly refines, the right"
-   "``strictlyRefines``", "``->-``", "...the left has strictly fewer behaviours than the right"
-   "``equivalentTo``",    "``===``", "...the left and right have exactly the same behaviours"
+   "``equivalentTo``",    "``===``", "... the left and right have exactly the same behaviours"
+   "``refines``",         "``=>=``", "... every behaviour of the left is also a behaviour of the right"
+   "``strictlyRefines``", "``->-``", "... ``left =>= right`` holds but ``left === right`` does not"
 
 The signatures can have different state types, as long as the seed and
 observation types are the same.  This lets you compare different
