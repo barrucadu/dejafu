@@ -3,6 +3,11 @@ sudo: false
 
 language: c
 
+# If something is tagged, it's come from a PR which has been merged
+# into master.  There's no need to build both the tag and the merge
+# commit.
+if: tag IS blank
+
 # Cache builds
 cache:
   directories:
