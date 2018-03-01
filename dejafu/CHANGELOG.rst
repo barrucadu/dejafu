@@ -20,6 +20,8 @@ Added
         * ``Test.DejaFu.SCT.lway``
         * ``Test.DejaFu.SCT.lmemtype``
         * ``Test.DejaFu.SCT.ldiscard``
+        * ``Test.DejaFu.SCT.ldebugShow``
+        * ``Test.DejaFu.SCT.ldebugPrint``
     * Lens helpers:
         * ``Test.DejaFu.SCT.get``
         * ``Test.DejaFu.SCT.set``
@@ -30,6 +32,8 @@ Added
         * ``Test.DejaFu.SCT.resultsSetWithSettings'``
     * Defaults:
         * ``Test.DejaFu.Defaults.defaultSettings``
+        * ``Test.DejaFu.Defaults.defaultDebugShow``
+        * ``Test.DejaFu.Defaults.defaultDebugPrint``
 
 
 1.1.0.2 (2018-03-01)

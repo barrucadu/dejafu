@@ -1,10 +1,12 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -- |
 -- Module      : Test.DejaFu.Defaults
 -- Copyright   : (c) 2017--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : portable
+-- Portability : ScopedTypeVariables
 --
 -- Default parameters for test execution.
 module Test.DejaFu.Defaults where
@@ -15,7 +17,7 @@ import           Test.DejaFu.Types
 -- | Default SCT settings: just combine all the other defaults.
 --
 -- @since unreleased
-defaultSettings :: Settings n a
+defaultSettings :: Applicative n => Settings n a
 defaultSettings = fromWayAndMemType defaultWay defaultMemType
 
 -- | A default way to execute concurrent programs: systematically
@@ -73,3 +75,20 @@ defaultFairBound = 5
 -- @since 0.2.0.0
 defaultLengthBound :: LengthBound
 defaultLengthBound = 250
+
+-- | Show a value for debugging purposes: @const "_"@.
+--
+-- If you want debugging output, you will probably want to change
+-- this.
+--
+-- @since unreleased
+defaultDebugShow :: forall a. a -> String
+defaultDebugShow = get ldebugShow (defaultSettings :: Settings IO a)
+
+-- | Print a message for debugging purposes: @const (pure ())@.
+--
+-- If you want debugging output, you must change this.
+--
+-- @since unreleased
+defaultDebugPrint :: Applicative n => String -> n ()
+defaultDebugPrint = get ldebugPrint defaultSettings

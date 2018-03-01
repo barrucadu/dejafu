@@ -1,7 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -11,7 +10,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : BangPatterns, GADTs, GeneralizedNewtypeDeriving, KindSignatures, LambdaCase, RankNTypes
+-- Portability : BangPatterns, GADTs, GeneralizedNewtypeDeriving, LambdaCase, RankNTypes
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
@@ -39,6 +38,8 @@ module Test.DejaFu.SCT
   , lway
   , lmemtype
   , ldiscard
+  , ldebugShow
+  , ldebugPrint
 
   -- *** Lens helpers
   , get
@@ -324,13 +325,16 @@ resultsSetDiscard' discard way memtype conc = do
 
 -- | SCT configuration record.
 --
--- See 'fromWayAndMemType', 'lway', 'lmemtype', and 'ldiscarder'.
+-- See 'fromWayAndMemType', 'lway', 'lmemtype', 'ldiscarder',
+-- 'ldebugShow', and 'ldebugPrint'.
 --
 -- @since unreleased
-data Settings (n :: * -> *) a = Settings
+data Settings n a = Settings
   { _way :: Way
   , _memtype :: MemType
   , _discard :: Either Failure a -> Maybe Discard
+  , _debugShow :: a -> String
+  , _debugPrint :: String -> n ()
   }
 
 -- lens type synonyms, unexported
@@ -355,16 +359,30 @@ lmemtype afb s = (\b -> s {_memtype = b}) <$> afb (_memtype s)
 ldiscard :: Lens' (Settings n a) (Either Failure a -> Maybe Discard)
 ldiscard afb s = (\b -> s {_discard = b}) <$> afb (_discard s)
 
+-- | A lens into the debug 'show' function.
+--
+-- @since unreleased
+ldebugShow :: Lens' (Settings n a) (a -> String)
+ldebugShow afb s = (\b -> s {_debugShow = b}) <$> afb (_debugShow s)
+
+-- | A lens into the debug 'print' function.
+--
+-- @since unreleased
+ldebugPrint :: Lens' (Settings n a) (String -> n ())
+ldebugPrint afb s = (\b -> s {_debugPrint = b}) <$> afb (_debugPrint s)
+
 -- | Construct a 'Settings' record from a 'Way' and a 'MemType'.
 --
 -- All other settings take on their default values.
 --
 -- @since unreleased
-fromWayAndMemType :: Way -> MemType -> Settings n a
+fromWayAndMemType :: Applicative n => Way -> MemType -> Settings n a
 fromWayAndMemType way memtype = Settings
   { _way = way
   , _memtype = memtype
   , _discard = const Nothing
+  , _debugShow = const "_"
+  , _debugPrint = const (pure ())
   }
 
 -- | Get a value from a lens.
@@ -784,7 +802,9 @@ sct settings s0 sfun srun conc
     | canDCSnapshot conc = runForDCSnapshot conc >>= \case
         Just (Right snap, _) -> go (runSnap snap) (fst (threadsFromDCSnapshot snap))
         Just (Left f, trace) -> pure [(Left f, trace)]
-        _ -> fatal "sct" "Failed to construct snapshot"
+        _ -> do
+          _debugPrint settings "Failed to construct snapshot, continuing without."
+          go runFull [initialThread]
     | otherwise = go runFull [initialThread]
   where
     go run = go' . s0 where
