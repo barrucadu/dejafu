@@ -6,6 +6,31 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+unreleased
+----------
+
+Added
+~~~~~
+
+* (:issue:`221`) A record-based approach to SCT configuration:
+
+    * ``Test.DejaFu.SCT.Settings``
+    * ``Test.DejaFu.SCT.fromWayAndMemType``
+    * Lenses:
+        * ``Test.DejaFu.SCT.lway``
+        * ``Test.DejaFu.SCT.lmemtype``
+        * ``Test.DejaFu.SCT.ldiscard``
+    * Lens helpers:
+        * ``Test.DejaFu.SCT.get``
+        * ``Test.DejaFu.SCT.set``
+    * Runners:
+        * ``Test.DejaFu.SCT.runSCTWithSettings``
+        * ``Test.DejaFu.SCT.runSCTWithSettings'``
+        * ``Test.DejaFu.SCT.resultsSetWithSettings``
+        * ``Test.DejaFu.SCT.resultsSetWithSettings'``
+    * Defaults:
+        * ``Test.DejaFu.Defaults.defaultSettings``
+
 
 1.1.0.2 (2018-03-01)
 --------------------

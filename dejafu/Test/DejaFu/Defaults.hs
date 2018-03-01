@@ -1,6 +1,6 @@
 -- |
 -- Module      : Test.DejaFu.Defaults
--- Copyright   : (c) 2017 Michael Walker
+-- Copyright   : (c) 2017--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -11,6 +11,12 @@ module Test.DejaFu.Defaults where
 
 import           Test.DejaFu.SCT
 import           Test.DejaFu.Types
+
+-- | Default SCT settings: just combine all the other defaults.
+--
+-- @since unreleased
+defaultSettings :: Settings n a
+defaultSettings = fromWayAndMemType defaultWay defaultMemType
 
 -- | A default way to execute concurrent programs: systematically
 -- using 'defaultBounds'.
