@@ -92,3 +92,10 @@ defaultDebugShow = get ldebugShow (defaultSettings :: Settings IO a)
 -- @since unreleased
 defaultDebugPrint :: Applicative n => String -> n ()
 defaultDebugPrint = get ldebugPrint defaultSettings
+
+-- | Terminate SCT early, as soon as a result matching the predicate
+-- is found: @const False@.
+--
+-- @since unreleased
+defaultEarlyExit :: forall a. Either Failure a -> Bool
+defaultEarlyExit = get learlyExit (defaultSettings :: Settings IO a)

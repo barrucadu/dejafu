@@ -40,6 +40,7 @@ module Test.DejaFu.SCT
   , ldiscard
   , ldebugShow
   , ldebugPrint
+  , learlyExit
 
   -- *** Lens helpers
   , get
@@ -335,6 +336,7 @@ data Settings n a = Settings
   , _discard :: Either Failure a -> Maybe Discard
   , _debugShow :: a -> String
   , _debugPrint :: String -> n ()
+  , _earlyExit :: Either Failure a -> Bool
   }
 
 -- lens type synonyms, unexported
@@ -371,6 +373,12 @@ ldebugShow afb s = (\b -> s {_debugShow = b}) <$> afb (_debugShow s)
 ldebugPrint :: Lens' (Settings n a) (String -> n ())
 ldebugPrint afb s = (\b -> s {_debugPrint = b}) <$> afb (_debugPrint s)
 
+-- | A lens into the early-exit predicate.
+--
+-- @since unreleased
+learlyExit :: Lens' (Settings n a) (Either Failure a -> Bool)
+learlyExit afb s = (\b -> s {_earlyExit = b}) <$> afb (_earlyExit s)
+
 -- | Construct a 'Settings' record from a 'Way' and a 'MemType'.
 --
 -- All other settings take on their default values.
@@ -383,6 +391,7 @@ fromWayAndMemType way memtype = Settings
   , _discard = const Nothing
   , _debugShow = const "_"
   , _debugPrint = const (pure ())
+  , _earlyExit = const False
   }
 
 -- | Get a value from a lens.
@@ -807,14 +816,15 @@ sct settings s0 sfun srun conc
           go runFull [initialThread]
     | otherwise = go runFull [initialThread]
   where
-    go run = go' . s0 where
-      go' !s = case sfun s of
+    go run = go' Nothing . s0 where
+      go' (Just res) _ | _earlyExit settings res = pure []
+      go' _ !s = case sfun s of
         Just t -> srun s t run >>= \case
           (s', Just (res, trace)) -> case _discard settings res of
-            Just DiscardResultAndTrace -> go' s'
-            Just DiscardTrace -> ((res, []):) <$> go' s'
-            Nothing -> ((res, trace):) <$> go' s'
-          (s', Nothing) -> go' s'
+            Just DiscardResultAndTrace -> go' (Just res) s'
+            Just DiscardTrace -> ((res, []):) <$> go' (Just res) s'
+            Nothing -> ((res, trace):) <$> go' (Just res) s'
+          (s', Nothing) -> go' Nothing s'
         Nothing -> pure []
 
     runFull sched s = runConcurrent sched (_memtype settings) s conc

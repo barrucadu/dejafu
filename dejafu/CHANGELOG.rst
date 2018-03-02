@@ -22,6 +22,7 @@ Added
         * ``Test.DejaFu.SCT.ldiscard``
         * ``Test.DejaFu.SCT.ldebugShow``
         * ``Test.DejaFu.SCT.ldebugPrint``
+        * ``Test.DejaFu.SCT.learlyExit``
     * Lens helpers:
         * ``Test.DejaFu.SCT.get``
         * ``Test.DejaFu.SCT.set``
@@ -34,6 +35,7 @@ Added
         * ``Test.DejaFu.Defaults.defaultSettings``
         * ``Test.DejaFu.Defaults.defaultDebugShow``
         * ``Test.DejaFu.Defaults.defaultDebugPrint``
+        * ``Test.DejaFu.Defaults.defaultEarlyExit``
 
 
 1.1.0.2 (2018-03-01)
