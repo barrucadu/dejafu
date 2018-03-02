@@ -7,6 +7,20 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.1.0.2 (2018-03-01)
+--------------------
+
+* Git: :tag:`dejafu-1.1.0.2`
+* Hackage: :hackage:`dejafu-1.1.0.2`
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* (:pull:`235`) The documentation for ``Test.DejaFu.Conc.dontCheck``
+  and ``subconcurrency`` clarify that an illegal use does not
+  necessarily cause a failing test.
+
+
 1.1.0.1 (2018-02-26)
 --------------------
 
