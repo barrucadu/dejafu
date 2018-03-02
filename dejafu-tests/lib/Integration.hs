@@ -6,6 +6,7 @@ import qualified Integration.Async          as A
 import qualified Integration.Discard        as D
 import qualified Integration.Litmus         as L
 import qualified Integration.MultiThreaded  as M
+import qualified Integration.Names          as N
 import qualified Integration.Refinement     as R
 import qualified Integration.Regressions    as G
 import qualified Integration.SCT            as SC
@@ -20,6 +21,7 @@ tests =
   , testGroup "Discard"        D.tests
   , testGroup "Litmus"         L.tests
   , testGroup "MultiThreaded"  M.tests
+  , testGroup "Names"          N.tests
   , testGroup "Refinement"     R.tests
   , testGroup "Regressions"    G.tests
   , testGroup "SingleThreaded" S.tests

@@ -29,6 +29,7 @@ library
                      , Integration.Discard
                      , Integration.Regressions
                      , Integration.SCT
+                     , Integration.Names
 
                      , Examples
                      , Examples.AutoUpdate
