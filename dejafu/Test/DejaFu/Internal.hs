@@ -105,6 +105,7 @@ tvarsWritten act = S.fromList $ case act of
   _ -> []
 
   where
+    tvarsOf' (TNew tv) = [tv]
     tvarsOf' (TWrite tv) = [tv]
     tvarsOf' (TOrElse ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
     tvarsOf' (TCatch  ta tb) = concatMap tvarsOf' (ta ++ fromMaybe [] tb)
@@ -262,6 +263,20 @@ mvarOf :: ActionType -> Maybe MVarId
 mvarOf (SynchronisedRead  c) = Just c
 mvarOf (SynchronisedWrite c) = Just c
 mvarOf _ = Nothing
+
+-- | Get the @ThreadId@s involved in a @ThreadAction@.
+tidsOf :: ThreadAction -> Set ThreadId
+tidsOf (Fork tid) = S.singleton tid
+tidsOf (ForkOS tid) = S.singleton tid
+tidsOf (PutMVar _ tids) = S.fromList tids
+tidsOf (TryPutMVar _ _ tids) = S.fromList tids
+tidsOf (TakeMVar _ tids) = S.fromList tids
+tidsOf (TryTakeMVar _ _ tids) = S.fromList tids
+tidsOf (CommitCRef tid _) = S.singleton tid
+tidsOf (STM _ tids) = S.fromList tids
+tidsOf (ThrowTo tid) = S.singleton tid
+tidsOf (BlockedThrowTo tid) = S.singleton tid
+tidsOf _ = S.empty
 
 -- | Throw away information from a 'ThreadAction' and give a
 -- simplified view of what is happening.
