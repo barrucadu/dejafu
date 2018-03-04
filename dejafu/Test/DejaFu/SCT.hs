@@ -1,8 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RankNTypes #-}
 
 -- |
 -- Module      : Test.DejaFu.SCT
@@ -10,37 +7,15 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : BangPatterns, GADTs, GeneralizedNewtypeDeriving, LambdaCase, RankNTypes
+-- Portability : BangPatterns, LambdaCase
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
   ( -- * Running Concurrent Programs
-    Way
-  , systematically
-  , randomly
-  , uniformly
-  , swarmy
-  , runSCT
-  , resultsSet
-
-  -- ** Configuration
-  , Settings
-  , fromWayAndMemType
+    runSCT
   , runSCTWithSettings
+  , resultsSet
   , resultsSetWithSettings
-
-  -- *** Lenses
-  , lway
-  , lmemtype
-  , Discard(..)
-  , ldiscard
-  , ldebugShow
-  , ldebugPrint
-  , learlyExit
-
-  -- *** Lens helpers
-  , get
-  , set
 
   -- ** Strict variants
   , runSCT'
@@ -48,47 +23,8 @@ module Test.DejaFu.SCT
   , runSCTWithSettings'
   , resultsSetWithSettings'
 
-  -- * Bounded Partial-order Reduction
-
-  -- | We can characterise the state of a concurrent computation by
-  -- considering the ordering of dependent events. This is a partial
-  -- order: independent events can be performed in any order without
-  -- affecting the result, and so are /not/ ordered.
-  --
-  -- Partial-order reduction is a technique for computing these
-  -- partial orders, and only testing one total order for each partial
-  -- order. This cuts down the amount of work to be done
-  -- significantly. /Bounded/ partial-order reduction is a further
-  -- optimisation, which only considers schedules within some bound.
-  --
-  -- This module provides a combination pre-emption, fair, and length
-  -- bounding runner:
-  --
-  -- * Pre-emption + fair bounding is useful for programs which use
-  --   loop/yield control flows but are otherwise terminating.
-  --
-  -- * Pre-emption, fair + length bounding is useful for
-  --   non-terminating programs, and used by the testing functionality
-  --   in @Test.DejaFu@.
-  --
-  -- See /Bounded partial-order reduction/, K. Coons, M. Musuvathi,
-  -- K. McKinley for more details.
-
-  , Bounds(..)
-  , PreemptionBound(..)
-  , FairBound(..)
-  , LengthBound(..)
-  , noBounds
-
-  -- * Random Scheduling
-
-  -- | By greatly sacrificing completeness, testing of a large
-  -- concurrent system can be greatly sped-up. Counter-intuitively,
-  -- random scheduling has better bug-finding behaviour than just
-  -- executing a program \"for real\" many times. This is perhaps
-  -- because a random scheduler is more chaotic than the real
-  -- scheduler.
-
+  -- ** Configuration
+  , module Test.DejaFu.Settings
 
   -- * Deprecated
   , runSCTDiscard
@@ -103,11 +39,10 @@ module Test.DejaFu.SCT
   , sctWeightedRandomDiscard
   ) where
 
-import           Control.Applicative               (Const(..), (<|>))
+import           Control.Applicative               ((<|>))
 import           Control.DeepSeq                   (NFData(..), force)
 import           Control.Monad.Conc.Class          (MonadConc)
 import           Control.Monad.Ref                 (MonadRef)
-import           Data.Functor.Identity             (Identity(..))
 import           Data.List                         (foldl')
 import qualified Data.Map.Strict                   as M
 import           Data.Maybe                        (fromMaybe)
@@ -119,92 +54,12 @@ import           Test.DejaFu.Conc
 import           Test.DejaFu.Internal
 import           Test.DejaFu.SCT.Internal.DPOR
 import           Test.DejaFu.SCT.Internal.Weighted
+import           Test.DejaFu.Settings
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
 
 -------------------------------------------------------------------------------
 -- Running Concurrent Programs
-
--- | How to explore the possible executions of a concurrent program.
---
--- @since 0.7.0.0
-data Way where
-  Systematic :: Bounds -> Way
-  Weighted   :: RandomGen g => g -> Int -> Int -> Way
-  Uniform    :: RandomGen g => g -> Int -> Way
-
-instance Show Way where
-  show (Systematic bs)  = "Systematic (" ++ show bs ++ ")"
-  show (Weighted _ n t) = "Weighted <gen> " ++ show (n, t)
-  show (Uniform  _ n)   = "Uniform <gen> " ++ show n
-
--- | Systematically execute a program, trying all distinct executions
--- within the bounds.
---
--- This corresponds to 'sctBound'.
---
--- @since 0.7.0.0
-systematically
-  :: Bounds
-  -- ^ The bounds to constrain the exploration.
-  -> Way
-systematically = Systematic
-
--- | Randomly execute a program, exploring a fixed number of
--- executions.
---
--- Threads are scheduled by a weighted random selection, where weights
--- are assigned randomly on thread creation.
---
--- This corresponds to 'sctWeightedRandom' with weight re-use
--- disabled, and is not guaranteed to find all distinct results
--- (unlike 'systematically' / 'sctBound').
---
--- @since 0.7.0.0
-randomly :: RandomGen g
-  => g
-  -- ^ The random generator to drive the scheduling.
-  -> Int
-  -- ^ The number of executions to try.
-  -> Way
-randomly g lim = swarmy g lim 1
-
--- | Randomly execute a program, exploring a fixed number of
--- executions.
---
--- Threads are scheduled by a uniform random selection.
---
--- This corresponds to 'sctUniformRandom', and is not guaranteed to
--- find all distinct results (unlike 'systematically' / 'sctBound').
---
--- @since 0.7.0.0
-uniformly :: RandomGen g
-  => g
-  -- ^ The random generator to drive the scheduling.
-  -> Int
-  -- ^ The number of executions to try.
-  -> Way
-uniformly = Uniform
-
--- | Randomly execute a program, exploring a fixed number of
--- executions.
---
--- Threads are scheduled by a weighted random selection, where weights
--- are assigned randomly on thread creation.
---
--- This corresponds to 'sctWeightedRandom', and is not guaranteed to
--- find all distinct results (unlike 'systematically' / 'sctBound').
---
--- @since 0.7.0.0
-swarmy :: RandomGen g
-  => g
-  -- ^ The random generator to drive the scheduling.
-  -> Int
-  -- ^ The number of executions to try.
-  -> Int
-  -- ^ The number of executions to use the thread weights for.
-  -> Way
-swarmy = Weighted
 
 -- | Explore possible executions of a concurrent program according to
 -- the given 'Way'.
@@ -328,88 +183,6 @@ resultsSetDiscard' discard way memtype conc = do
 -------------------------------------------------------------------------------
 -- Configuration
 
--- | SCT configuration record.
---
--- See 'fromWayAndMemType', 'lway', 'lmemtype', 'ldiscarder',
--- 'ldebugShow', and 'ldebugPrint'.
---
--- @since unreleased
-data Settings n a = Settings
-  { _way :: Way
-  , _memtype :: MemType
-  , _discard :: Either Failure a -> Maybe Discard
-  , _debugShow :: a -> String
-  , _debugPrint :: Maybe (String -> n ())
-  , _earlyExit :: Either Failure a -> Bool
-  }
-
--- lens type synonyms, unexported
-type Lens s t a b = forall f. Functor f => (a -> f b) -> s -> f t
-type Lens' s a = Lens s s a a
-
--- | A lens into the 'Way'.
---
--- @since unreleased
-lway :: Lens' (Settings n a) Way
-lway afb s = (\b -> s {_way = b}) <$> afb (_way s)
-
--- | A lens into the 'MemType'.
---
--- @since unreleased
-lmemtype :: Lens' (Settings n a) MemType
-lmemtype afb s = (\b -> s {_memtype = b}) <$> afb (_memtype s)
-
--- | A lens into the discard function.
---
--- @since unreleased
-ldiscard :: Lens' (Settings n a) (Either Failure a -> Maybe Discard)
-ldiscard afb s = (\b -> s {_discard = b}) <$> afb (_discard s)
-
--- | A lens into the debug 'show' function.
---
--- @since unreleased
-ldebugShow :: Lens' (Settings n a) (a -> String)
-ldebugShow afb s = (\b -> s {_debugShow = b}) <$> afb (_debugShow s)
-
--- | A lens into the debug 'print' function.
---
--- @since unreleased
-ldebugPrint :: Lens' (Settings n a) (Maybe (String -> n ()))
-ldebugPrint afb s = (\b -> s {_debugPrint = b}) <$> afb (_debugPrint s)
-
--- | A lens into the early-exit predicate.
---
--- @since unreleased
-learlyExit :: Lens' (Settings n a) (Either Failure a -> Bool)
-learlyExit afb s = (\b -> s {_earlyExit = b}) <$> afb (_earlyExit s)
-
--- | Construct a 'Settings' record from a 'Way' and a 'MemType'.
---
--- All other settings take on their default values.
---
--- @since unreleased
-fromWayAndMemType :: Applicative n => Way -> MemType -> Settings n a
-fromWayAndMemType way memtype = Settings
-  { _way = way
-  , _memtype = memtype
-  , _discard = const Nothing
-  , _debugShow = const "_"
-  , _debugPrint = Nothing
-  , _earlyExit = const False
-  }
-
--- | Get a value from a lens.
---
--- @since unreleased
-get :: Lens' s a -> s -> a
-get lens = getConst . lens Const
-
--- | Set a value in a lens.
---
--- @since unreleased
-set :: Lens' s a -> a -> s -> s
-set lens a = runIdentity . lens (\_ -> Identity a)
-
 -- | A variant of 'runSCT' which takes a 'Settings' record.
 --
 -- The exact executions tried, and the order in which results are
@@ -515,32 +288,6 @@ resultsSetWithSettings' settings conc = do
 -------------------------------------------------------------------------------
 -- Combined Bounds
 
--- | @since 0.2.0.0
-data Bounds = Bounds
-  { boundPreemp :: Maybe PreemptionBound
-  , boundFair   :: Maybe FairBound
-  , boundLength :: Maybe LengthBound
-  } deriving (Eq, Ord, Read, Show)
-
--- | @since 0.5.1.0
-instance NFData Bounds where
-  rnf bs = rnf ( boundPreemp bs
-               , boundFair   bs
-               , boundLength bs
-               )
-
--- | No bounds enabled. This forces the scheduler to just use
--- partial-order reduction and sleep sets to prune the search
--- space. This will /ONLY/ work if your computation always terminates!
---
--- @since 0.3.0.0
-noBounds :: Bounds
-noBounds = Bounds
-  { boundPreemp = Nothing
-  , boundFair   = Nothing
-  , boundLength = Nothing
-  }
-
 -- | Combination bound function
 cBound :: Bounds -> IncrementalBoundFunc ((Int, Maybe ThreadId), M.Map ThreadId Int, Int)
 cBound (Bounds pb fb lb) (Just (k1, k2, k3)) prior lh =
@@ -562,22 +309,6 @@ cBacktrack _ = backtrackAt (\_ _ -> False)
 
 -------------------------------------------------------------------------------
 -- Pre-emption bounding
-
--- | BPOR using pre-emption bounding. This adds conservative
--- backtracking points at the prior context switch whenever a
--- non-conervative backtracking point is added, as alternative
--- decisions can influence the reachability of different states.
---
--- See the BPOR paper for more details.
---
--- @since 0.2.0.0
-newtype PreemptionBound = PreemptionBound Int
-  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
-
--- | @since 0.5.1.0
-instance NFData PreemptionBound where
-  -- not derived, so it can have a separate @since annotation
-  rnf (PreemptionBound i) = rnf i
 
 -- | Pre-emption bound function. This does not count pre-emptive
 -- context switches to a commit thread.
@@ -609,21 +340,6 @@ pBacktrack bs = backtrackAt (\_ _ -> False) bs . concatMap addConservative where
 -------------------------------------------------------------------------------
 -- Fair bounding
 
--- | BPOR using fair bounding. This bounds the maximum difference
--- between the number of yield operations different threads have
--- performed.
---
--- See the BPOR paper for more details.
---
--- @since 0.2.0.0
-newtype FairBound = FairBound Int
-  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
-
--- | @since 0.5.1.0
-instance NFData FairBound where
-  -- not derived, so it can have a separate @since annotation
-  rnf (FairBound i) = rnf i
-
 -- | Fair bound function
 fBound :: FairBound -> IncrementalBoundFunc (M.Map ThreadId Int)
 fBound (FairBound fb) k prior lhead =
@@ -641,18 +357,6 @@ fBacktrack = backtrackAt check where
 
 -------------------------------------------------------------------------------
 -- Length bounding
-
--- | BPOR using length bounding. This bounds the maximum length (in
--- terms of primitive actions) of an execution.
---
--- @since 0.2.0.0
-newtype LengthBound = LengthBound Int
-  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
-
--- | @since 0.5.1.0
-instance NFData LengthBound where
-  -- not derived, so it can have a separate @since annotation
-  rnf (LengthBound i) = rnf i
 
 -- | Length bound function
 lBound :: LengthBound -> IncrementalBoundFunc Int

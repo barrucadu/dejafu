@@ -14,28 +14,29 @@ Added
 
 * (:issue:`221`) A record-based approach to SCT configuration:
 
-    * ``Test.DejaFu.SCT.Settings``
-    * ``Test.DejaFu.SCT.fromWayAndMemType``
+    * ``Test.DejaFu.Settings`` (re-exported from ``Test.DejaFu.SCT``)
+    * ``Test.DejaFu.Settings.Settings``
+    * ``Test.DejaFu.Settings.fromWayAndMemType``
     * Lenses:
-        * ``Test.DejaFu.SCT.lway``
-        * ``Test.DejaFu.SCT.lmemtype``
-        * ``Test.DejaFu.SCT.ldiscard``
-        * ``Test.DejaFu.SCT.ldebugShow``
-        * ``Test.DejaFu.SCT.ldebugPrint``
-        * ``Test.DejaFu.SCT.learlyExit``
+        * ``Test.DejaFu.Settings.lway``
+        * ``Test.DejaFu.Settings.lmemtype``
+        * ``Test.DejaFu.Settings.ldiscard``
+        * ``Test.DejaFu.Settings.learlyExit``
+        * ``Test.DejaFu.Settings.ldebugShow``
+        * ``Test.DejaFu.Settings.ldebugPrint``
     * Lens helpers:
-        * ``Test.DejaFu.SCT.get``
-        * ``Test.DejaFu.SCT.set``
+        * ``Test.DejaFu.Settings.get``
+        * ``Test.DejaFu.Settings.set``
     * Runners:
         * ``Test.DejaFu.SCT.runSCTWithSettings``
         * ``Test.DejaFu.SCT.runSCTWithSettings'``
         * ``Test.DejaFu.SCT.resultsSetWithSettings``
         * ``Test.DejaFu.SCT.resultsSetWithSettings'``
     * Defaults:
-        * ``Test.DejaFu.Defaults.defaultSettings``
-        * ``Test.DejaFu.Defaults.defaultDebugShow``
-        * ``Test.DejaFu.Defaults.defaultDebugPrint``
-        * ``Test.DejaFu.Defaults.defaultEarlyExit``
+        * ``Test.DejaFu.Settings.defaultSettings``
+        * ``Test.DejaFu.Settings.defaultEarlyExit``
+        * ``Test.DejaFu.Settings.defaultDebugShow``
+        * ``Test.DejaFu.Settings.defaultDebugPrint``
 
 Deprecated
 ~~~~~~~~~~

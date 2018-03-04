@@ -41,6 +41,7 @@ library
                      , Test.DejaFu.Defaults
                      , Test.DejaFu.Refinement
                      , Test.DejaFu.SCT
+                     , Test.DejaFu.Settings
                      , Test.DejaFu.Schedule
                      , Test.DejaFu.Types
                      , Test.DejaFu.Utils

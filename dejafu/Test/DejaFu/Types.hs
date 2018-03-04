@@ -491,6 +491,65 @@ isIllegalDontCheck IllegalDontCheck = True
 isIllegalDontCheck _ = False
 
 -------------------------------------------------------------------------------
+-- * Schedule bounding
+
+-- | @since 0.2.0.0
+data Bounds = Bounds
+  { boundPreemp :: Maybe PreemptionBound
+  , boundFair   :: Maybe FairBound
+  , boundLength :: Maybe LengthBound
+  } deriving (Eq, Ord, Read, Show)
+
+-- | @since 0.5.1.0
+instance NFData Bounds where
+  rnf bs = rnf ( boundPreemp bs
+               , boundFair   bs
+               , boundLength bs
+               )
+
+-- | Restrict the number of pre-emptive context switches allowed in an
+-- execution.
+--
+-- A pre-emption bound of zero disables pre-emptions entirely.
+--
+-- @since 0.2.0.0
+newtype PreemptionBound = PreemptionBound Int
+  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | @since 0.5.1.0
+instance NFData PreemptionBound where
+  -- not derived, so it can have a separate @since annotation
+  rnf (PreemptionBound i) = rnf i
+
+-- | Restrict the maximum difference between the number of yield or
+-- delay operations different threads have performed.
+--
+-- A fair bound of zero disables yields and delays entirely.
+--
+-- @since 0.2.0.0
+newtype FairBound = FairBound Int
+  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | @since 0.5.1.0
+instance NFData FairBound where
+  -- not derived, so it can have a separate @since annotation
+  rnf (FairBound i) = rnf i
+
+-- | Restrict the maximum length (in terms of primitive actions) of an
+-- execution.
+--
+-- A length bound of zero immediately aborts the execution.
+--
+-- @since 0.2.0.0
+newtype LengthBound = LengthBound Int
+  deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
+
+-- | @since 0.5.1.0
+instance NFData LengthBound where
+  -- not derived, so it can have a separate @since annotation
+  rnf (LengthBound i) = rnf i
+
+-------------------------------------------------------------------------------
 -- * Discarding results and traces
 
 -- | An @Either Failure a -> Maybe Discard@ value can be used to
