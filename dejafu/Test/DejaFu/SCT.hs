@@ -23,11 +23,6 @@ module Test.DejaFu.SCT
   , runSCT
   , resultsSet
 
-  -- ** Discarding variants
-  , Discard(..)
-  , runSCTDiscard
-  , resultsSetDiscard
-
   -- ** Configuration
   , Settings
   , fromWayAndMemType
@@ -37,6 +32,7 @@ module Test.DejaFu.SCT
   -- *** Lenses
   , lway
   , lmemtype
+  , Discard(..)
   , ldiscard
   , ldebugShow
   , ldebugPrint
@@ -49,8 +45,6 @@ module Test.DejaFu.SCT
   -- ** Strict variants
   , runSCT'
   , resultsSet'
-  , runSCTDiscard'
-  , resultsSetDiscard'
   , runSCTWithSettings'
   , resultsSetWithSettings'
 
@@ -85,8 +79,6 @@ module Test.DejaFu.SCT
   , FairBound(..)
   , LengthBound(..)
   , noBounds
-  , sctBound
-  , sctBoundDiscard
 
   -- * Random Scheduling
 
@@ -97,9 +89,17 @@ module Test.DejaFu.SCT
   -- because a random scheduler is more chaotic than the real
   -- scheduler.
 
+
+  -- * Deprecated
+  , runSCTDiscard
+  , resultsSetDiscard
+  , runSCTDiscard'
+  , resultsSetDiscard'
+  , sctBound
+  , sctBoundDiscard
   , sctUniformRandom
-  , sctWeightedRandom
   , sctUniformRandomDiscard
+  , sctWeightedRandom
   , sctWeightedRandomDiscard
   ) where
 
@@ -253,6 +253,7 @@ runSCTDiscard :: (MonadConc n, MonadRef r n)
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
 runSCTDiscard discard way = runSCTWithSettings . set ldiscard discard . fromWayAndMemType way
+{-# DEPRECATED runSCTDiscard "Use runSCTWithSettings instead" #-}
 
 -- | A variant of 'resultsSet' which can selectively discard results.
 --
@@ -270,6 +271,7 @@ resultsSetDiscard :: (MonadConc n, MonadRef r n, Ord a)
 resultsSetDiscard discard way memtype conc =
   let discard' efa = discard efa <|> Just DiscardTrace
   in S.fromList . map fst <$> runSCTDiscard discard' way memtype conc
+{-# DEPRECATED resultsSetDiscard "Use resultsSetWithSettings instead" #-}
 
 -- | A strict variant of 'runSCT'.
 --
@@ -308,6 +310,7 @@ runSCTDiscard' :: (MonadConc n, MonadRef r n, NFData a)
 runSCTDiscard' discard way memtype conc = do
   res <- runSCTDiscard discard way memtype conc
   rnf res `seq` pure res
+{-# DEPRECATED runSCTDiscard' "Use runSCTWithSettings' instead" #-}
 
 -- | A strict variant of 'resultsSetDiscard'.
 --
@@ -320,6 +323,7 @@ resultsSetDiscard' :: (MonadConc n, MonadRef r n, Ord a, NFData a)
 resultsSetDiscard' discard way memtype conc = do
   res <- resultsSetDiscard discard way memtype conc
   rnf res `seq` pure res
+{-# DEPRECATED resultsSetDiscard' "Use resultsSetWithSettings' instead" #-}
 
 -------------------------------------------------------------------------------
 -- Configuration
@@ -689,6 +693,7 @@ sctBound :: (MonadConc n, MonadRef r n)
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
 sctBound = sctBoundDiscard (const Nothing)
+{-# DEPRECATED sctBound "Use runSCT instead" #-}
 
 -- | A variant of 'sctBound' which can selectively discard results.
 --
@@ -708,6 +713,7 @@ sctBoundDiscard :: (MonadConc n, MonadRef r n)
   -> n [(Either Failure a, Trace)]
 sctBoundDiscard discard memtype cb = runSCTWithSettings $
   set ldiscard discard (fromWayAndMemType (systematically cb) memtype)
+{-# DEPRECATED sctBoundDiscard "Use runSCTWithSettings instead" #-}
 
 -- | SCT via uniform random scheduling.
 --
@@ -728,6 +734,7 @@ sctUniformRandom :: (MonadConc n, MonadRef r n, RandomGen g)
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
 sctUniformRandom = sctUniformRandomDiscard (const Nothing)
+{-# DEPRECATED sctUniformRandom "Use runSCT instead" #-}
 
 -- | A variant of 'sctUniformRandom' which can selectively discard
 -- results.
@@ -749,6 +756,7 @@ sctUniformRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   -> n [(Either Failure a, Trace)]
 sctUniformRandomDiscard discard memtype g lim = runSCTWithSettings $
   set ldiscard discard (fromWayAndMemType (uniformly g lim) memtype)
+{-# DEPRECATED sctUniformRandomDiscard "Use runSCTWithSettings instead" #-}
 
 -- | SCT via weighted random scheduling.
 --
@@ -771,6 +779,7 @@ sctWeightedRandom :: (MonadConc n, MonadRef r n, RandomGen g)
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
 sctWeightedRandom = sctWeightedRandomDiscard (const Nothing)
+{-# DEPRECATED sctWeightedRandom "Use runSCT instead" #-}
 
 -- | A variant of 'sctWeightedRandom' which can selectively discard
 -- results.
@@ -794,6 +803,7 @@ sctWeightedRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   -> n [(Either Failure a, Trace)]
 sctWeightedRandomDiscard discard memtype g lim use = runSCTWithSettings $
   set ldiscard discard (fromWayAndMemType (swarmy g lim use) memtype)
+{-# DEPRECATED sctWeightedRandomDiscard "Use runSCTWithSettings instead" #-}
 
 -- | General-purpose SCT function.
 sct :: (MonadConc n, MonadRef r n)

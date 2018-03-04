@@ -37,6 +37,22 @@ Added
         * ``Test.DejaFu.Defaults.defaultDebugPrint``
         * ``Test.DejaFu.Defaults.defaultEarlyExit``
 
+Deprecated
+~~~~~~~~~~
+
+* (:issue:`221`) SCT function variants:
+
+    * ``Test.DejaFu.SCT.runSCTDiscard``
+    * ``Test.DejaFu.SCT.resultSetDiscard``
+    * ``Test.DejaFu.SCT.runSCTDiscard'``
+    * ``Test.DejaFu.SCT.resultSetDiscard'``
+    * ``Test.DejaFu.SCT.sctBound``
+    * ``Test.DejaFu.SCT.sctBoundDiscard``
+    * ``Test.DejaFu.SCT.sctUniformRandom``
+    * ``Test.DejaFu.SCT.sctUniformRandomDiscard``
+    * ``Test.DejaFu.SCT.sctWeightedRandom``
+    * ``Test.DejaFu.SCT.sctWeightedRandomDiscard``
+
 
 1.1.0.2 (2018-03-01)
 --------------------
