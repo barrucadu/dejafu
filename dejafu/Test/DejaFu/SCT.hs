@@ -335,7 +335,7 @@ data Settings n a = Settings
   , _memtype :: MemType
   , _discard :: Either Failure a -> Maybe Discard
   , _debugShow :: a -> String
-  , _debugPrint :: String -> n ()
+  , _debugPrint :: Maybe (String -> n ())
   , _earlyExit :: Either Failure a -> Bool
   }
 
@@ -370,7 +370,7 @@ ldebugShow afb s = (\b -> s {_debugShow = b}) <$> afb (_debugShow s)
 -- | A lens into the debug 'print' function.
 --
 -- @since unreleased
-ldebugPrint :: Lens' (Settings n a) (String -> n ())
+ldebugPrint :: Lens' (Settings n a) (Maybe (String -> n ()))
 ldebugPrint afb s = (\b -> s {_debugPrint = b}) <$> afb (_debugPrint s)
 
 -- | A lens into the early-exit predicate.
@@ -390,7 +390,7 @@ fromWayAndMemType way memtype = Settings
   , _memtype = memtype
   , _discard = const Nothing
   , _debugShow = const "_"
-  , _debugPrint = const (pure ())
+  , _debugPrint = Nothing
   , _earlyExit = const False
   }
 
@@ -812,7 +812,7 @@ sct settings s0 sfun srun conc
         Just (Right snap, _) -> go (runSnap snap) (fst (threadsFromDCSnapshot snap))
         Just (Left f, trace) -> pure [(Left f, trace)]
         _ -> do
-          _debugPrint settings "Failed to construct snapshot, continuing without."
+          dbg "Failed to construct snapshot, continuing without."
           go runFull [initialThread]
     | otherwise = go runFull [initialThread]
   where
@@ -829,6 +829,8 @@ sct settings s0 sfun srun conc
 
     runFull sched s = runConcurrent sched (_memtype settings) s conc
     runSnap snap sched s = runWithDCSnapshot sched (_memtype settings) s snap
+
+    dbg = fromMaybe (const (pure ())) (_debugPrint settings)
 
 -------------------------------------------------------------------------------
 -- Utilities

@@ -85,12 +85,12 @@ defaultLengthBound = 250
 defaultDebugShow :: forall a. a -> String
 defaultDebugShow = get ldebugShow (defaultSettings :: Settings IO a)
 
--- | Print a message for debugging purposes: @const (pure ())@.
+-- | Print a message for debugging purposes: @Nothing@.
 --
 -- If you want debugging output, you must change this.
 --
 -- @since unreleased
-defaultDebugPrint :: Applicative n => String -> n ()
+defaultDebugPrint :: Applicative n => Maybe (String -> n ())
 defaultDebugPrint = get ldebugPrint defaultSettings
 
 -- | Terminate SCT early, as soon as a result matching the predicate
