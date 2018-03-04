@@ -9,6 +9,23 @@ standard Haskell versioning scheme.
 unreleased
 ----------
 
+Added
+~~~~~
+
+* (:issue:`221`) Settings-based test functions:
+
+    * ``Test.HUnit.DejaFu.testAutoWithSettings``
+    * ``Test.HUnit.DejaFu.testDejafuWithSettings``
+    * ``Test.HUnit.DejaFu.testDejafusWithSettings``
+
+* (:issue:`221`) Re-export of ``Test.DejaFu.Settings``.
+
+Deprecated
+~~~~~~~~~~
+
+* (:issue:`221`) ``Test.HUnit.DejaFu.testDejafuDiscard`` and
+  ``testDejafusDiscard``.
+
 Removed
 ~~~~~~~
 
