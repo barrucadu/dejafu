@@ -14,7 +14,8 @@ Added
 
 * (:issue:`221`) A record-based approach to SCT configuration:
 
-    * ``Test.DejaFu.Settings`` (re-exported from ``Test.DejaFu.SCT``)
+    * ``Test.DejaFu.Settings``
+      (re-exported from ``Test.Dejafu`` and ``Test.DejaFu.SCT``)
     * ``Test.DejaFu.Settings.Settings``
     * ``Test.DejaFu.Settings.defaultSettings``
     * ``Test.DejaFu.Settings.fromWayAndMemType``
@@ -34,6 +35,13 @@ Added
         * ``Test.DejaFu.SCT.resultsSetWithSettings``
         * ``Test.DejaFu.SCT.resultsSetWithSettings'``
 
+* (:issue:`221`) Settings-based test functions:
+
+    * ``Test.DejaFu.autocheckWithSettings``
+    * ``Test.DejaFu.dejafuWithSettings``
+    * ``Test.DejaFu.dejafusWithSettings``
+    * ``Test.DejaFu.runTestWithSettings``
+
 Deprecated
 ~~~~~~~~~~
 
@@ -52,6 +60,8 @@ Deprecated
 
 * (:issue:`221`) The ``Test.DejaFu.Defaults`` module.  Import
   ``Test.DejaFu.Settings`` instead.
+
+* (:issue:`221`) ``Test.DejaFu.dejafuDiscard``.
 
 Removed
 ~~~~~~~
