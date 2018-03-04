@@ -7,7 +7,7 @@ import           Control.Exception         (ArithException(..),
 import           Test.DejaFu               (Failure(..), gives, gives', isAbort,
                                             isDeadlock, isIllegalDontCheck,
                                             isUncaughtException)
-import           Test.DejaFu.Defaults      (defaultLengthBound)
+import           Test.DejaFu.Settings      (defaultLengthBound)
 
 import           Control.Concurrent.Classy
 import           Control.Monad             (replicateM_)

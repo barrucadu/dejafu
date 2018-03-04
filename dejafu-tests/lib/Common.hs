@@ -2,6 +2,7 @@
 
 module Common (module Common, module Test.Tasty.DejaFu, T.TestTree, T.expectFail) where
 
+import           Control.Arrow                 (second)
 import           Control.Exception             (ArithException, ArrayException,
                                                 SomeException, displayException)
 import           Control.Monad                 (void)
@@ -38,12 +39,12 @@ instance IsTest T.TestTree where
   toTestList t = [t]
 
 instance IsTest T where
-  toTestList (T n c p) = toTestList (TEST n c p defaultWays True)
-  toTestList (W n c p w) = toTestList (TEST n c p [w] True)
-  toTestList (B n c p b) = toTestList (TEST n c p (defaultWaysFor b) True)
-  toTestList (TEST n c p w subc) = toTestList . testGroup n $
-    let mk (name, way) = testDejafuWay way defaultMemType name p c
-    in map mk w ++ [H.testProperty "dependency func." (prop_dep_fun c) | subc]
+  toTestList (T n c p) = toTestList (TEST n c p (map (second toSettings) defaultWays) True)
+  toTestList (W n c p w) = toTestList (TEST n c p [second toSettings w] True)
+  toTestList (B n c p b) = toTestList (TEST n c p (map (second toSettings) (defaultWaysFor b)) True)
+  toTestList (TEST n c p ss subc) = toTestList . testGroup n $
+    let mk (name, settings) = testDejafuWithSettings settings name p c
+    in map mk ss ++ [H.testProperty "dependency func." (prop_dep_fun c) | subc]
 
 instance IsTest t => IsTest [t] where
   toTestList = concatMap toTestList
@@ -52,7 +53,10 @@ data T where
   T :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> T
   W :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> (String, Way) -> T
   B :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> Bounds -> T
-  TEST :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> [(String, Way)] -> Bool -> T
+  TEST :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
+
+toSettings :: Applicative f => Way -> Settings f a
+toSettings w = fromWayAndMemType w defaultMemType
 
 defaultWays :: [(String, Way)]
 defaultWays = defaultWaysFor defaultBounds
@@ -72,13 +76,13 @@ djfu :: (Eq a, Show a) => String -> Predicate a -> ConcIO a -> [T.TestTree]
 djfu name p c = toTestList $ W name c p ("systematically", systematically defaultBounds)
 
 djfuS :: (Eq a, Show a) => String -> Predicate a -> ConcIO a -> [T.TestTree]
-djfuS name p c = toTestList $ TEST name c p [("systematically", systematically defaultBounds)] False
+djfuS name p c = toTestList $ TEST name c p [("systematically", toSettings (systematically defaultBounds))] False
 
 djfuT :: (Eq a, Show a) => String -> Predicate a -> ConcIO a -> [T.TestTree]
 djfuT name p c = toTestList $ T name c p
 
 djfuTS :: (Eq a, Show a) => String -> Predicate a -> ConcIO a -> [T.TestTree]
-djfuTS name p c = toTestList $ TEST name c p defaultWays False
+djfuTS name p c = toTestList $ TEST name c p (map (second toSettings) defaultWays) False
 
 alwaysFailsWith :: (Failure -> Bool) -> Predicate a
 alwaysFailsWith p = alwaysTrue (either p (const False))

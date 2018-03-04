@@ -21,7 +21,7 @@ tests = toTestList
   , testCase "No traces kept when they get discared" $ testDiscardTrace discarder testAction
   ]
   where
-    check name xs f = testDejafuDiscard f defaultWay defaultMemType name (gives' xs) testAction
+    check name xs f = testDejafuWithSettings (set ldiscard (Just f) defaultSettings) name (gives' xs) testAction
     testAction = do
       mvar <- newEmptyMVarInt
       _ <- fork $ putMVar mvar 1
@@ -34,7 +34,7 @@ tests = toTestList
 
 testDiscardTrace :: (Either Failure a -> Maybe Discard) -> ConcIO a -> Assertion
 testDiscardTrace discarder action = do
-  results <- runSCTDiscard discarder defaultWay defaultMemType action
+  results <- runSCTWithSettings (set ldiscard (Just discarder) defaultSettings) action
   for_ results $ \(efa, trace) -> case discarder efa of
     Just DiscardResultAndTrace -> assertFailure "expected result to be discarded"
     Just DiscardTrace
