@@ -6,7 +6,7 @@
 
 -- |
 -- Module      : Test.Tasty.DejaFu
--- Copyright   : (c) 2015--2017 Michael Walker
+-- Copyright   : (c) 2015--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
@@ -34,23 +34,14 @@ module Test.Tasty.DejaFu
   , testDejafuWay
   , testDejafusWay
 
-  , testDejafuDiscard
-  , testDejafusDiscard
+  , testAutoWithSettings
+  , testDejafuWithSettings
+  , testDejafusWithSettings
 
   -- ** Re-exports
   , Predicate
   , ProPredicate(..)
-  , Way
-  , defaultWay
-  , systematically
-  , randomly
-  , uniformly
-  , swarmy
-  , Bounds(..)
-  , defaultBounds
-  , MemType(..)
-  , defaultMemType
-  , Discard(..)
+  , module Test.DejaFu.Settings
 
   -- * Refinement property testing
   , testProperty
@@ -65,7 +56,11 @@ module Test.Tasty.DejaFu
   , R.refines, (R.=>=)
   , R.strictlyRefines, (R.->-)
   , R.equivalentTo, (R.===)
-  ) where
+
+    -- * Deprecated
+  , testDejafuDiscard
+  , testDejafusDiscard
+) where
 
 import           Data.Char              (toUpper)
 import qualified Data.Foldable          as F
@@ -78,6 +73,7 @@ import           Test.DejaFu            hiding (Testable(..))
 import qualified Test.DejaFu.Conc       as Conc
 import qualified Test.DejaFu.Refinement as R
 import qualified Test.DejaFu.SCT        as SCT
+import qualified Test.DejaFu.Settings
 import qualified Test.DejaFu.Types      as D
 import           Test.Tasty             (TestName, TestTree, testGroup)
 import           Test.Tasty.Options     (IsOption(..), OptionDescription(..),
@@ -95,7 +91,7 @@ instance IsTest (Conc.ConcIO (Maybe String)) where
   run options conc callback = do
     let memtype = lookupOption options
     let way     = lookupOption options
-    let traces  = SCT.runSCTDiscard (pdiscard assertableP) way memtype conc
+    let traces  = SCT.runSCTWithSettings (set ldiscard (Just (pdiscard assertableP)) (fromWayAndMemType way memtype)) conc
     run options (ConcTest traces (peval assertableP)) callback
 
 concOptions :: [OptionDescription]
@@ -142,7 +138,7 @@ testAuto :: (Eq a, Show a)
   => Conc.ConcIO a
   -- ^ The computation to test.
   -> TestTree
-testAuto = testAutoWay defaultWay defaultMemType
+testAuto = testAutoWithSettings defaultSettings
 
 -- | Variant of 'testAuto' which tests a computation under a given
 -- execution way and memory model.
@@ -156,11 +152,18 @@ testAutoWay :: (Eq a, Show a)
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> TestTree
-testAutoWay way memtype = testDejafusWay way memtype autocheckCases
+testAutoWay way = testAutoWithSettings . fromWayAndMemType way
 
--- | Predicates for the various autocheck functions.
-autocheckCases :: Eq a => [(TestName, Predicate a)]
-autocheckCases =
+-- | Variant of 'testAuto' which takes a settings record.
+--
+-- @since unreleased
+testAutoWithSettings :: (Eq a, Show a)
+  => Settings IO a
+  -- ^ The SCT settings.
+  -> Conc.ConcIO a
+  -- ^ The computation to test.
+  -> TestTree
+testAutoWithSettings settings = testDejafusWithSettings settings
   [("Never Deadlocks", representative deadlocksNever)
   , ("No Exceptions", representative exceptionsNever)
   , ("Consistent Result", alwaysSame)
@@ -177,7 +180,7 @@ testDejafu :: Show b
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> TestTree
-testDejafu = testDejafuWay defaultWay defaultMemType
+testDejafu = testDejafuWithSettings defaultSettings
 
 -- | Variant of 'testDejafu' which takes a way to execute the program
 -- and a memory model.
@@ -195,7 +198,22 @@ testDejafuWay :: Show b
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> TestTree
-testDejafuWay = testDejafuDiscard (const Nothing)
+testDejafuWay way = testDejafuWithSettings . fromWayAndMemType way
+
+-- | Variant of 'testDejafu' which takes a settings record.
+--
+-- @since unreleased
+testDejafuWithSettings :: Show b
+  => Settings IO a
+  -- ^ The settings record
+  -> TestName
+  -- ^ The name of the test.
+  -> ProPredicate a b
+  -- ^ The predicate to check.
+  -> Conc.ConcIO a
+  -- ^ The computation to test.
+  -> TestTree
+testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name, p)]
 
 -- | Variant of 'testDejafuWay' which can selectively discard results.
 --
@@ -214,8 +232,9 @@ testDejafuDiscard :: Show b
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> TestTree
-testDejafuDiscard discard way memtype name test =
-  testconc discard way memtype [(name, test)]
+testDejafuDiscard discard way =
+  testDejafuWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
+{-# DEPRECATED testDejafuDiscard "Use testDejafuWithSettings instead" #-}
 
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test. This will share work between the predicates, rather than
@@ -228,7 +247,7 @@ testDejafus :: Show b
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> TestTree
-testDejafus = testDejafusWay defaultWay defaultMemType
+testDejafus = testDejafusWithSettings defaultSettings
 
 -- | Variant of 'testDejafus' which takes a way to execute the program
 -- and a memory model.
@@ -244,7 +263,20 @@ testDejafusWay :: Show b
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> TestTree
-testDejafusWay = testconc (const Nothing)
+testDejafusWay way = testDejafusWithSettings . fromWayAndMemType way
+
+-- | Variant of 'testDejafus' which takes a settings record.
+--
+-- @since unreleased
+testDejafusWithSettings :: Show b
+  => Settings IO a
+  -- ^ The SCT settings.
+  -> [(TestName, ProPredicate a b)]
+  -- ^ The list of predicates (with names) to check.
+  -> Conc.ConcIO a
+  -- ^ The computation to test.
+  -> TestTree
+testDejafusWithSettings = testconc
 
 -- | Variant of 'testDejafusWay' which can selectively discard
 -- results, beyond what each predicate already discards.
@@ -262,7 +294,9 @@ testDejafusDiscard :: Show b
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> TestTree
-testDejafusDiscard = testconc
+testDejafusDiscard discard way =
+  testDejafusWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
+{-# DEPRECATED testDejafusDiscard "Use testDejafusWithSettings instead" #-}
 
 
 -------------------------------------------------------------------------------
@@ -335,20 +369,18 @@ instance IsTest PropTest where
 
 -- | Produce a Tasty 'Test' from a Deja Fu unit test.
 testconc :: Show b
-  => (Either Failure a -> Maybe Discard)
-  -> Way
-  -> MemType
+  => Settings IO a
   -> [(TestName, ProPredicate a b)]
   -> Conc.ConcIO a
   -> TestTree
-testconc discard way memtype tests concio = case map toTest tests of
+testconc settings tests concio = case map toTest tests of
   [t] -> t
   ts  -> testGroup "Deja Fu Tests" ts
 
   where
     toTest (name, p) =
-      let discarder = D.strengthenDiscard discard (pdiscard p)
-          traces    = SCT.runSCTDiscard discarder way memtype concio
+      let discarder = maybe id D.strengthenDiscard (get ldiscard settings) (pdiscard p)
+          traces    = SCT.runSCTWithSettings (set ldiscard (Just discarder) settings) concio
       in singleTest name $ ConcTest traces (peval p)
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu refinement property test.
