@@ -7,7 +7,7 @@
 -- Portability : portable
 --
 -- Default parameters for test execution.
-module Test.DejaFu.Defaults
+module Test.DejaFu.Defaults {-# DEPRECATED "Import Test.DejaFu.Settings instead" #-}
  ( defaultSettings
  , defaultWay
  , defaultBounds

@@ -407,9 +407,9 @@ import           Data.Profunctor          (Profunctor(..))
 import           System.Environment       (lookupEnv)
 
 import           Test.DejaFu.Conc
-import           Test.DejaFu.Defaults
 import           Test.DejaFu.Refinement
 import           Test.DejaFu.SCT
+import           Test.DejaFu.Settings
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
 

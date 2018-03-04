@@ -115,8 +115,8 @@ import qualified Data.Set                 as S
 import           Test.LeanCheck           (Listable(..), concatMapT, mapT)
 
 import           Test.DejaFu.Conc         (ConcIO, Failure, subconcurrency)
-import           Test.DejaFu.Defaults     (defaultMemType, defaultWay)
 import           Test.DejaFu.SCT          (runSCT)
+import           Test.DejaFu.Settings     (defaultMemType, defaultWay)
 
 -- $setup
 -- >>> import Control.Concurrent.Classy hiding (check)

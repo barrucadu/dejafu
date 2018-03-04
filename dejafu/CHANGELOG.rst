@@ -54,6 +54,9 @@ Deprecated
     * ``Test.DejaFu.SCT.sctWeightedRandom``
     * ``Test.DejaFu.SCT.sctWeightedRandomDiscard``
 
+* (:issue:`221`) The ``Test.DejaFu.Defaults`` module.  Import
+  ``Test.DejaFu.Settings`` instead.
+
 
 1.1.0.2 (2018-03-01)
 --------------------

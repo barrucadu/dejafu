@@ -61,12 +61,12 @@ module Test.DejaFu.Settings
   , set
   ) where
 
-import           Control.Applicative               (Const(..))
-import           Data.Functor.Identity             (Identity(..))
-import           System.Random                     (RandomGen)
+import           Control.Applicative   (Const(..))
+import           Data.Functor.Identity (Identity(..))
+import           System.Random         (RandomGen)
 
-import Test.DejaFu.Internal (Settings(..), Way(..))
-import Test.DejaFu.Types
+import           Test.DejaFu.Internal  (Settings(..), Way(..))
+import           Test.DejaFu.Types
 
 -------------------------------------------------------------------------------
 -- SCT configuration
