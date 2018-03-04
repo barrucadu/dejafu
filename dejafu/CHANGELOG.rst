@@ -16,6 +16,7 @@ Added
 
     * ``Test.DejaFu.Settings`` (re-exported from ``Test.DejaFu.SCT``)
     * ``Test.DejaFu.Settings.Settings``
+    * ``Test.DejaFu.Settings.defaultSettings``
     * ``Test.DejaFu.Settings.fromWayAndMemType``
     * Lenses:
         * ``Test.DejaFu.Settings.lway``
@@ -32,11 +33,6 @@ Added
         * ``Test.DejaFu.SCT.runSCTWithSettings'``
         * ``Test.DejaFu.SCT.resultsSetWithSettings``
         * ``Test.DejaFu.SCT.resultsSetWithSettings'``
-    * Defaults:
-        * ``Test.DejaFu.Settings.defaultSettings``
-        * ``Test.DejaFu.Settings.defaultEarlyExit``
-        * ``Test.DejaFu.Settings.defaultDebugShow``
-        * ``Test.DejaFu.Settings.defaultDebugPrint``
 
 Deprecated
 ~~~~~~~~~~
@@ -56,6 +52,12 @@ Deprecated
 
 * (:issue:`221`) The ``Test.DejaFu.Defaults`` module.  Import
   ``Test.DejaFu.Settings`` instead.
+
+Removed
+~~~~~~~
+
+* (:issue:`221`) ``Test.DejaFu.Defaults.defaultDiscarder``, as the
+  discard function is optional.
 
 
 1.1.0.2 (2018-03-01)

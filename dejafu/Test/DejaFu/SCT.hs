@@ -107,7 +107,7 @@ runSCTDiscard :: (MonadConc n, MonadRef r n)
   -> ConcT r n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-runSCTDiscard discard way = runSCTWithSettings . set ldiscard discard . fromWayAndMemType way
+runSCTDiscard discard way = runSCTWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
 {-# DEPRECATED runSCTDiscard "Use runSCTWithSettings instead" #-}
 
 -- | A variant of 'resultsSet' which can selectively discard results.
@@ -251,7 +251,7 @@ resultsSetWithSettings :: (MonadConc n, MonadRef r n, Ord a)
   -- ^ The computation to run many times.
   -> n (Set (Either Failure a))
 resultsSetWithSettings settings conc =
-  let settings' = settings { _discard = \efa -> _discard settings efa <|> Just DiscardTrace }
+  let settings' = settings { _discard = Just $ \efa -> fromMaybe (const Nothing) (_discard settings) efa <|> Just DiscardTrace }
   in S.fromList . map fst <$> runSCTWithSettings settings' conc
 
 -- | A strict variant of 'runSCTWithSettings'.
@@ -416,7 +416,7 @@ sctBoundDiscard :: (MonadConc n, MonadRef r n)
   -- ^ The computation to run many times
   -> n [(Either Failure a, Trace)]
 sctBoundDiscard discard memtype cb = runSCTWithSettings $
-  set ldiscard discard (fromWayAndMemType (systematically cb) memtype)
+  set ldiscard (Just discard) (fromWayAndMemType (systematically cb) memtype)
 {-# DEPRECATED sctBoundDiscard "Use runSCTWithSettings instead" #-}
 
 -- | SCT via uniform random scheduling.
@@ -459,7 +459,7 @@ sctUniformRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
 sctUniformRandomDiscard discard memtype g lim = runSCTWithSettings $
-  set ldiscard discard (fromWayAndMemType (uniformly g lim) memtype)
+  set ldiscard (Just discard) (fromWayAndMemType (uniformly g lim) memtype)
 {-# DEPRECATED sctUniformRandomDiscard "Use runSCTWithSettings instead" #-}
 
 -- | SCT via weighted random scheduling.
@@ -506,7 +506,7 @@ sctWeightedRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
 sctWeightedRandomDiscard discard memtype g lim use = runSCTWithSettings $
-  set ldiscard discard (fromWayAndMemType (swarmy g lim use) memtype)
+  set ldiscard (Just discard) (fromWayAndMemType (swarmy g lim use) memtype)
 {-# DEPRECATED sctWeightedRandomDiscard "Use runSCTWithSettings instead" #-}
 
 -- | General-purpose SCT function.
@@ -526,15 +526,15 @@ sct settings s0 sfun srun conc
         Just (Right snap, _) -> go (runSnap snap) (fst (threadsFromDCSnapshot snap))
         Just (Left f, trace) -> pure [(Left f, trace)]
         _ -> do
-          dbg "Failed to construct snapshot, continuing without."
+          debugPrint "Failed to construct snapshot, continuing without."
           go runFull [initialThread]
     | otherwise = go runFull [initialThread]
   where
     go run = go' Nothing . s0 where
-      go' (Just res) _ | _earlyExit settings res = pure []
+      go' (Just res) _ | earlyExit res = pure []
       go' _ !s = case sfun s of
         Just t -> srun s t run >>= \case
-          (s', Just (res, trace)) -> case _discard settings res of
+          (s', Just (res, trace)) -> case discard res of
             Just DiscardResultAndTrace -> go' (Just res) s'
             Just DiscardTrace -> ((res, []):) <$> go' (Just res) s'
             Nothing -> ((res, trace):) <$> go' (Just res) s'
@@ -544,7 +544,9 @@ sct settings s0 sfun srun conc
     runFull sched s = runConcurrent sched (_memtype settings) s conc
     runSnap snap sched s = runWithDCSnapshot sched (_memtype settings) s snap
 
-    dbg = fromMaybe (const (pure ())) (_debugPrint settings)
+    debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
+    earlyExit = fromMaybe (const False) (_earlyExit settings)
+    discard = fromMaybe (const Nothing) (_discard settings)
 
 -------------------------------------------------------------------------------
 -- Utilities

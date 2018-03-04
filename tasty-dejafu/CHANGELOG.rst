@@ -6,6 +6,15 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+unreleased
+----------
+
+Removed
+~~~~~~~
+
+* (:issue:`221`) The re-export of
+  ``Test.DejaFu.Defaults.defaultDiscarder``.
+
 
 1.0.1.1 (2018-02-22)
 --------------------

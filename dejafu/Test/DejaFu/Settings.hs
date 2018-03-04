@@ -1,5 +1,4 @@
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
 -- Module      : Test.DejaFu.Settings
@@ -7,7 +6,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : RankNTypes, ScopedTypeVariables
+-- Portability : RankNTypes
 --
 -- Configuration for the SCT functions.
 module Test.DejaFu.Settings
@@ -43,16 +42,12 @@ module Test.DejaFu.Settings
 
   -- ** Discard functions
   , Discard(..)
-  , defaultDiscarder
   , ldiscard
 
   -- ** Early exit
-  , defaultEarlyExit
   , learlyExit
 
   -- ** Debug output
-  , defaultDebugShow
-  , defaultDebugPrint
   , ldebugShow
   , ldebugPrint
 
@@ -86,10 +81,10 @@ fromWayAndMemType :: Applicative n => Way -> MemType -> Settings n a
 fromWayAndMemType way memtype = Settings
   { _way = way
   , _memtype = memtype
-  , _discard = const Nothing
-  , _debugShow = const "_"
+  , _discard = Nothing
+  , _debugShow = Nothing
   , _debugPrint = Nothing
-  , _earlyExit = const False
+  , _earlyExit = Nothing
   }
 
 -------------------------------------------------------------------------------
@@ -243,58 +238,28 @@ lmemtype afb s = (\b -> s {_memtype = b}) <$> afb (_memtype s)
 -------------------------------------------------------------------------------
 -- Discard functions
 
--- | Do not discard any results.
---
--- @since 0.7.1.0
-defaultDiscarder :: Either Failure a -> Maybe Discard
-defaultDiscarder = const Nothing
-
 -- | A lens into the discard function.
 --
 -- @since unreleased
-ldiscard :: Lens' (Settings n a) (Either Failure a -> Maybe Discard)
+ldiscard :: Lens' (Settings n a) (Maybe (Either Failure a -> Maybe Discard))
 ldiscard afb s = (\b -> s {_discard = b}) <$> afb (_discard s)
 
 -------------------------------------------------------------------------------
 -- Early exit
 
--- | Terminate SCT early, as soon as a result matching the predicate
--- is found: @const False@.
---
--- @since unreleased
-defaultEarlyExit :: forall a. Either Failure a -> Bool
-defaultEarlyExit = get learlyExit (defaultSettings :: Settings IO a)
-
 -- | A lens into the early-exit predicate.
 --
 -- @since unreleased
-learlyExit :: Lens' (Settings n a) (Either Failure a -> Bool)
+learlyExit :: Lens' (Settings n a) (Maybe (Either Failure a -> Bool))
 learlyExit afb s = (\b -> s {_earlyExit = b}) <$> afb (_earlyExit s)
 
 -------------------------------------------------------------------------------
 -- Debug output
 
--- | Show a value for debugging purposes: @const "_"@.
---
--- If you want debugging output, you will probably want to change
--- this.
---
--- @since unreleased
-defaultDebugShow :: forall a. a -> String
-defaultDebugShow = get ldebugShow (defaultSettings :: Settings IO a)
-
--- | Print a message for debugging purposes: @Nothing@.
---
--- If you want debugging output, you must change this.
---
--- @since unreleased
-defaultDebugPrint :: Applicative n => Maybe (String -> n ())
-defaultDebugPrint = get ldebugPrint defaultSettings
-
 -- | A lens into the debug 'show' function.
 --
 -- @since unreleased
-ldebugShow :: Lens' (Settings n a) (a -> String)
+ldebugShow :: Lens' (Settings n a) (Maybe (a -> String))
 ldebugShow afb s = (\b -> s {_debugShow = b}) <$> afb (_debugShow s)
 
 -- | A lens into the debug 'print' function.

@@ -126,7 +126,6 @@ few tricks available.
 
   , defaultWay
   , defaultMemType
-  , defaultDiscarder
 
   -- *** Exploration
 

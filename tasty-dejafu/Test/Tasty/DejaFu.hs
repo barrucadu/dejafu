@@ -51,7 +51,6 @@ module Test.Tasty.DejaFu
   , MemType(..)
   , defaultMemType
   , Discard(..)
-  , defaultDiscarder
 
   -- * Refinement property testing
   , testProperty

@@ -15,10 +15,6 @@ module Test.DejaFu.Defaults {-# DEPRECATED "Import Test.DejaFu.Settings instead"
  , defaultFairBound
  , defaultLengthBound
  , defaultMemType
- , defaultDiscarder
- , defaultEarlyExit
- , defaultDebugShow
- , defaultDebugPrint
  ) where
 
 import           Test.DejaFu.Settings

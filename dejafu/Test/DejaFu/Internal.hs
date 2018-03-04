@@ -36,10 +36,10 @@ import           Test.DejaFu.Types
 data Settings n a = Settings
   { _way :: Way
   , _memtype :: MemType
-  , _discard :: Either Failure a -> Maybe Discard
-  , _debugShow :: a -> String
+  , _discard :: Maybe (Either Failure a -> Maybe Discard)
+  , _debugShow :: Maybe (a -> String)
   , _debugPrint :: Maybe (String -> n ())
-  , _earlyExit :: Either Failure a -> Bool
+  , _earlyExit :: Maybe (Either Failure a -> Bool)
   }
 
 -- | How to explore the possible executions of a concurrent program.

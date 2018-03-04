@@ -50,7 +50,6 @@ module Test.HUnit.DejaFu
   , MemType(..)
   , defaultMemType
   , Discard(..)
-  , defaultDiscarder
 
   -- * Refinement property testing
   , testProperty
