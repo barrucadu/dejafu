@@ -30,4 +30,5 @@
 - ignore: {name: Reduce duplication, within: Unit.Properties}
 - ignore: {name: Reduce duplication, within: Integration.Litmus}
 - ignore: {name: Reduce duplication, within: Integration.MultiThreaded}
+- ignore: {name: Reduce duplication, within: Integration.SCT}
 - ignore: {name: Reduce duplication, within: Integration.SingleThreaded}
