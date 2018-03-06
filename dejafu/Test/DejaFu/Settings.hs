@@ -22,7 +22,6 @@ module Test.DejaFu.Settings
   , systematically
   , randomly
   , uniformly
-  , swarmy
 
   -- *** Schedule bounds
 
@@ -164,6 +163,9 @@ module Test.DejaFu.Settings
   -- * Lens helpers
   , get
   , set
+
+  -- * Deprecated
+  , swarmy
   ) where
 
 import           Control.Applicative   (Const(..))
@@ -239,7 +241,7 @@ randomly :: RandomGen g
   -> Int
   -- ^ The number of executions to try.
   -> Way
-randomly g lim = swarmy g lim 1
+randomly g lim = Weighted g lim 1
 
 -- | Randomly execute a program, exploring a fixed number of
 -- executions.
@@ -276,7 +278,9 @@ swarmy :: RandomGen g
   -> Int
   -- ^ The number of executions to use the thread weights for.
   -> Way
+-- when this is removed, simplify the Weighted logic to not do re-use
 swarmy = Weighted
+{-# DEPRECATED swarmy "Use randomly instead.  If you have a case where swarmy works better, please comment on issue #237." #-}
 
 -------------------------------------------------------------------------------
 -- Schedule bounds
