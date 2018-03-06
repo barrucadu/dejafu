@@ -6,6 +6,18 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+1.3.0.0 (2018-03-06)
+--------------------
+
+* Git: :tag:`dejafu-1.3.0.0`
+* Hackage: :hackage:`dejafu-1.3.0.0`
+
+Deprecated
+~~~~~~~~~~
+
+* (:pull:`240`) ``Test.DejaFu.Settings.swarmy``
+
+
 1.2.0.0 - The Settings Release (2018-03-06)
 -------------------------------------------
 
