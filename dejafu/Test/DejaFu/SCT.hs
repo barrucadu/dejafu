@@ -13,23 +13,21 @@
 module Test.DejaFu.SCT
   ( -- * Running Concurrent Programs
     runSCT
-  , runSCTWithSettings
-  , resultsSet
-  , resultsSetWithSettings
-
-  -- ** Strict variants
   , runSCT'
+  , resultsSet
   , resultsSet'
-  , runSCTWithSettings'
-  , resultsSetWithSettings'
 
   -- ** Configuration
+  , runSCTWithSettings
+  , runSCTWithSettings'
+  , resultsSetWithSettings
+  , resultsSetWithSettings'
   , module Test.DejaFu.Settings
 
   -- * Deprecated
   , runSCTDiscard
-  , resultsSetDiscard
   , runSCTDiscard'
+  , resultsSetDiscard
   , resultsSetDiscard'
   , sctBound
   , sctBoundDiscard

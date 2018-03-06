@@ -29,9 +29,6 @@ import           Test.DejaFu.Types
 
 -- | SCT configuration record.
 --
--- See 'fromWayAndMemType', 'lway', 'lmemtype', 'ldiscarder',
--- 'ldebugShow', and 'ldebugPrint'.
---
 -- @since unreleased
 data Settings n a = Settings
   { _way :: Way

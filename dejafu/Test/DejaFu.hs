@@ -105,15 +105,10 @@ module Test.DejaFu
 
 There are a few knobs to tweak to control the behaviour of dejafu.
 The defaults should generally be good enough, but if not you have a
-few tricks available.
-
- * The 'Way', which controls how schedules are explored.
-
- * The 'MemType', which controls how reads and writes to @CRef@s (or
-   @IORef@s) behave.
-
- * The 'Discard' function, which saves memory by throwing away
-   uninteresting results during exploration.
+few tricks available.  The main two are: the 'Way', which controls how
+schedules are explored; and the 'MemType', which controls how reads
+and writes to @CRef@s behave; see "Test.DejaFu.Settings" for a
+complete listing.
 
 -}
 

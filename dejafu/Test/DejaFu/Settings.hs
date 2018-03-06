@@ -132,9 +132,32 @@ module Test.DejaFu.Settings
   , ldiscard
 
   -- ** Early exit
+
+  -- | Sometimes we don't want to wait for all executions to be
+  -- explored, we just want to stop as soon as a particular result is
+  -- found.  An early-exit predicate, which has type @Either Failure a
+  -- -> Bool@, can opt to halt execution when such a result is found.
+  --
+  -- All results found up to, and including, the one which terminates
+  -- the exploration are reported.
+  --
+  -- __Usage in combination with a discard function:__ A discard
+  -- function can be used in combination with early-exit.  As usual,
+  -- results or traces will be discarded as appropriate.  If a single
+  -- result causes the early-exit function to return @True@ and the
+  -- discard function to return @Just DiscardResultAndTrace@, the
+  -- exploration will end early, but the result will not be included
+  -- in the output.
+
   , learlyExit
 
   -- ** Debug output
+
+  -- | You can opt to receive debugging messages by setting debugging
+  -- print and show functions.  Enabling debugging doesn't change any
+  -- behaviour, it just causes messages to be printed.  These options
+  -- are most likely not useful for anyone not developing dejafu.
+
   , ldebugShow
   , ldebugPrint
 
