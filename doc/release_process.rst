@@ -26,22 +26,25 @@ Release Process
        **If it's early in the year (like January or February), make sure
        you don't put down the wrong year.**
 
-   * Add the git tag name and a link to where it will be on github
+   * Add the git tag name
    * Add the Hackage URL
+   * Add the contributors list
 
 7. Commit.
 
 8. Push to GitHub and wait for Travis to confirm everything is OK.  If
    it's not OK, fix what is broken before continuing.
 
-9. Tag.  Tags are in the form ``<package>-<version>``, and the message
-   is the changelog entry.
+9. Merge the PR.
 
-10. Push tags to GitHub.
+10. Tag the merge commit.  Tags are in the form
+    ``<package>-<version>``, and the message is the changelog entry.
 
-11. Upload updated packages to Hackage.
+11. Push tags to GitHub.
 
-See :commit:`44181e6` and :tag:`dejafu-0.7.1.3` if any of this is
+12. Upload updated packages to Hackage.
+
+See :commit:`75a02b9` and :tag:`dejafu-1.1.0.1` if any of this is
 unclear.
 
 .. _PVP: https://pvp.haskell.org/

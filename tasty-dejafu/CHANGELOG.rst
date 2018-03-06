@@ -6,6 +6,40 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+1.1.0.0 - The Settings Release (2018-03-06)
+-------------------------------------------
+
+* Git: :tag:`tasty-dejafu-1.1.0.0`
+* Hackage: :hackage:`tasty-dejafu-1.1.0.0`
+
+Added
+~~~~~
+
+* (:pull:`238`) Settings-based test functions:
+
+    * ``Test.Tasty.DejaFu.testAutoWithSettings``
+    * ``Test.Tasty.DejaFu.testDejafuWithSettings``
+    * ``Test.Tasty.DejaFu.testDejafusWithSettings``
+
+* (:pull:`238`) Re-export of ``Test.DejaFu.Settings``.
+
+Deprecated
+~~~~~~~~~~
+
+* (:pull:`238`) ``Test.Tasty.DejaFu.testDejafuDiscard`` and
+  ``testDejafusDiscard``.
+
+Removed
+~~~~~~~
+
+* (:pull:`238`) The re-export of
+  ``Test.DejaFu.Defaults.defaultDiscarder``.
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The version bounds on :hackage:`dejafu` are >=1.2 && <1.3.
+
 
 1.0.1.1 (2018-02-22)
 --------------------

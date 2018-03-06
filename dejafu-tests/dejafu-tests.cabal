@@ -26,7 +26,6 @@ library
                      , Integration.MultiThreaded
                      , Integration.Refinement
                      , Integration.Litmus
-                     , Integration.Discard
                      , Integration.Regressions
                      , Integration.SCT
                      , Integration.Names

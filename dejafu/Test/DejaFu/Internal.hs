@@ -1,10 +1,12 @@
+{-# LANGUAGE GADTs #-}
+
 -- |
 -- Module      : Test.DejaFu.Internal
--- Copyright   : (c) 2017 Michael Walker
+-- Copyright   : (c) 2017--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : portable
+-- Portability : GADTs
 --
 -- Internal types and functions used throughout DejaFu.  This module
 -- is NOT considered to form part of the public interface of this
@@ -18,8 +20,37 @@ import qualified Data.Map.Strict    as M
 import           Data.Maybe         (fromMaybe)
 import           Data.Set           (Set)
 import qualified Data.Set           as S
+import           System.Random      (RandomGen)
 
 import           Test.DejaFu.Types
+
+-------------------------------------------------------------------------------
+-- * SCT settings
+
+-- | SCT configuration record.
+--
+-- @since 1.2.0.0
+data Settings n a = Settings
+  { _way :: Way
+  , _memtype :: MemType
+  , _discard :: Maybe (Either Failure a -> Maybe Discard)
+  , _debugShow :: Maybe (a -> String)
+  , _debugPrint :: Maybe (String -> n ())
+  , _earlyExit :: Maybe (Either Failure a -> Bool)
+  }
+
+-- | How to explore the possible executions of a concurrent program.
+--
+-- @since 0.7.0.0
+data Way where
+  Systematic :: Bounds -> Way
+  Weighted   :: RandomGen g => g -> Int -> Int -> Way
+  Uniform    :: RandomGen g => g -> Int -> Way
+
+instance Show Way where
+  show (Systematic bs)  = "Systematic (" ++ show bs ++ ")"
+  show (Weighted _ n t) = "Weighted <gen> " ++ show (n, t)
+  show (Uniform  _ n)   = "Uniform <gen> " ++ show n
 
 -------------------------------------------------------------------------------
 -- * Identifiers

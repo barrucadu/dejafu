@@ -3,7 +3,6 @@ module Integration where
 import           Test.Tasty.Options         (OptionDescription)
 
 import qualified Integration.Async          as A
-import qualified Integration.Discard        as D
 import qualified Integration.Litmus         as L
 import qualified Integration.MultiThreaded  as M
 import qualified Integration.Names          as N
@@ -18,7 +17,6 @@ import           Common
 tests :: [TestTree]
 tests =
   [ testGroup "Async"          A.tests
-  , testGroup "Discard"        D.tests
   , testGroup "Litmus"         L.tests
   , testGroup "MultiThreaded"  M.tests
   , testGroup "Names"          N.tests

@@ -13,9 +13,9 @@ import           Control.Monad.IO.Class   (MonadIO, liftIO)
 import           Data.Maybe               (isJust)
 import           Data.Set                 (fromList)
 import qualified Hedgehog                 as H
-import           Test.DejaFu              (defaultBounds, defaultMemType)
+import           Test.DejaFu              (defaultMemType, defaultWay)
 import           Test.DejaFu.Conc         (ConcIO)
-import           Test.DejaFu.SCT          (sctBound)
+import           Test.DejaFu.SCT          (runSCT)
 
 import           Common
 
@@ -192,8 +192,8 @@ eq left right = runConcurrently left `eq'` runConcurrently right
 
 eq' :: (MonadIO m, Ord a) => ConcIO a -> ConcIO a -> m Bool
 eq' left right = liftIO $ do
-  leftTraces  <- sctBound defaultMemType defaultBounds left
-  rightTraces <- sctBound defaultMemType defaultBounds right
+  leftTraces  <- runSCT defaultWay defaultMemType left
+  rightTraces <- runSCT defaultWay defaultMemType right
   let toSet = fromList . map fst
   pure (toSet leftTraces == toSet rightTraces)
 

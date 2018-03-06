@@ -5,7 +5,7 @@
 
 -- |
 -- Module      : Test.HUnit.DejaFu
--- Copyright   : (c) 2015--2017 Michael Walker
+-- Copyright   : (c) 2015--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
@@ -34,23 +34,14 @@ module Test.HUnit.DejaFu
   , testDejafuWay
   , testDejafusWay
 
-  , testDejafuDiscard
+  , testAutoWithSettings
+  , testDejafuWithSettings
+  , testDejafusWithSettings
 
   -- ** Re-exports
   , Predicate
   , ProPredicate(..)
-  , Way
-  , defaultWay
-  , systematically
-  , randomly
-  , uniformly
-  , swarmy
-  , Bounds(..)
-  , defaultBounds
-  , MemType(..)
-  , defaultMemType
-  , Discard(..)
-  , defaultDiscarder
+  , module Test.DejaFu.Settings
 
   -- * Refinement property testing
   , testProperty
@@ -65,6 +56,10 @@ module Test.HUnit.DejaFu
   , R.refines, (R.=>=)
   , R.strictlyRefines, (R.->-)
   , R.equivalentTo, (R.===)
+
+  -- * Deprecated
+  , testDejafuDiscard
+  , testDejafusDiscard
   ) where
 
 import           Control.Monad.Catch    (try)
@@ -74,6 +69,7 @@ import           Test.DejaFu            hiding (Testable(..))
 import qualified Test.DejaFu.Conc       as Conc
 import qualified Test.DejaFu.Refinement as R
 import qualified Test.DejaFu.SCT        as SCT
+import qualified Test.DejaFu.Settings
 import qualified Test.DejaFu.Types      as D
 import           Test.HUnit             (Assertable(..), Test(..), Testable(..),
                                          assertFailure, assertString)
@@ -89,7 +85,7 @@ instance Testable (Conc.ConcIO ()) where
 -- | @since 0.3.0.0
 instance Assertable (Conc.ConcIO ()) where
   assert conc = do
-    traces <- SCT.runSCTDiscard (pdiscard assertableP) defaultWay defaultMemType (try conc)
+    traces <- SCT.runSCTWithSettings (set ldiscard (Just (pdiscard assertableP)) defaultSettings) (try conc)
     assertString . showErr $ peval assertableP traces
 
 assertableP :: Predicate (Either HUnitFailure ())
@@ -109,7 +105,7 @@ testAuto :: (Eq a, Show a)
   => Conc.ConcIO a
   -- ^ The computation to test.
   -> Test
-testAuto = testAutoWay defaultWay defaultMemType
+testAuto = testAutoWithSettings defaultSettings
 
 -- | Variant of 'testAuto' which tests a computation under a given
 -- execution way and memory model.
@@ -123,11 +119,18 @@ testAutoWay :: (Eq a, Show a)
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> Test
-testAutoWay way memtype = testDejafusWay way memtype autocheckCases
+testAutoWay way = testAutoWithSettings . fromWayAndMemType way
 
--- | Predicates for the various autocheck functions.
-autocheckCases :: Eq a => [(String, Predicate a)]
-autocheckCases =
+-- | Variant of 'testAuto' which takes a settings record.
+--
+-- @since 1.1.0.0
+testAutoWithSettings :: (Eq a, Show a)
+  => Settings IO a
+  -- ^ The SCT settings.
+  -> Conc.ConcIO a
+  -- ^ The computation to test.
+  -> Test
+testAutoWithSettings settings = testDejafusWithSettings settings
   [("Never Deadlocks", representative deadlocksNever)
   , ("No Exceptions", representative exceptionsNever)
   , ("Consistent Result", alwaysSame)
@@ -144,7 +147,7 @@ testDejafu :: Show b
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> Test
-testDejafu = testDejafuWay defaultWay defaultMemType
+testDejafu = testDejafuWithSettings defaultSettings
 
 -- | Variant of 'testDejafu' which takes a way to execute the program
 -- and a memory model.
@@ -162,7 +165,22 @@ testDejafuWay :: Show b
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> Test
-testDejafuWay = testDejafuDiscard (const Nothing)
+testDejafuWay way = testDejafuWithSettings . fromWayAndMemType way
+
+-- | Variant of 'testDejafu' which takes a settings record.
+--
+-- @since 1.1.0.0
+testDejafuWithSettings :: Show b
+  => Settings IO a
+  -- ^ The SCT settings.
+  -> String
+  -- ^ The name of the test.
+  -> ProPredicate a b
+  -- ^ The predicate to check.
+  -> Conc.ConcIO a
+  -- ^ The computation to test.
+  -> Test
+testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name, p)]
 
 -- | Variant of 'testDejafuWay' which can selectively discard results.
 --
@@ -181,8 +199,9 @@ testDejafuDiscard :: Show b
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> Test
-testDejafuDiscard discard way memtype name test =
-  testconc discard way memtype [(name, test)]
+testDejafuDiscard discard way =
+  testDejafuWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
+{-# DEPRECATED testDejafuDiscard "Use testDejafuWithSettings instead" #-}
 
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test. This will share work between the predicates, rather than
@@ -195,7 +214,7 @@ testDejafus :: Show b
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> Test
-testDejafus = testDejafusWay defaultWay defaultMemType
+testDejafus = testDejafusWithSettings defaultSettings
 
 -- | Variant of 'testDejafus' which takes a way to execute the program
 -- and a memory model.
@@ -211,7 +230,20 @@ testDejafusWay :: Show b
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> Test
-testDejafusWay = testconc (const Nothing)
+testDejafusWay way = testDejafusWithSettings . fromWayAndMemType way
+
+-- | Variant of 'testDejafus' which takes a settings record.
+--
+-- @since 1.1.0.0
+testDejafusWithSettings :: Show b
+  => Settings IO a
+  -- ^ The SCT settings.
+  -> [(String, ProPredicate a b)]
+  -- ^ The list of predicates (with names) to check.
+  -> Conc.ConcIO a
+  -- ^ The computation to test.
+  -> Test
+testDejafusWithSettings = testconc
 
 -- | Variant of 'testDejafusWay' which can selectively discard
 -- results, beyond what each predicate already discards.
@@ -229,7 +261,9 @@ testDejafusDiscard :: Show b
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> Test
-testDejafusDiscard = testconc
+testDejafusDiscard discard way =
+  testDejafusWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
+{-# DEPRECATED testDejafusDiscard "Use testDejafusWithSettings instead" #-}
 
 
 -------------------------------------------------------------------------------
@@ -271,20 +305,18 @@ testPropertyFor = testprop
 
 -- | Produce a HUnit 'Test' from a Deja Fu unit test.
 testconc :: Show b
-  => (Either Failure a -> Maybe Discard)
-  -> Way
-  -> MemType
+  => Settings IO a
   -> [(String, ProPredicate a b)]
   -> Conc.ConcIO a
   -> Test
-testconc discard way memtype tests concio = case map toTest tests of
+testconc settings tests concio = case map toTest tests of
   [t] -> t
   ts  -> TestList ts
 
   where
     toTest (name, p) = TestLabel name . TestCase $ do
-      let discarder = D.strengthenDiscard discard (pdiscard p)
-      traces <- SCT.runSCTDiscard discarder way memtype concio
+      let discarder = maybe id D.strengthenDiscard (get ldiscard settings) (pdiscard p)
+      traces <- SCT.runSCTWithSettings (set ldiscard (Just discarder) settings) concio
       assertString . showErr $ peval p traces
 
 -- | Produce a HUnit 'Test' from a Deja Fu refinement property test.

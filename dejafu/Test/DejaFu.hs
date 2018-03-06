@@ -4,7 +4,7 @@
 
 {- |
 Module      : Test.DejaFu
-Copyright   : (c) 2015--2017 Michael Walker
+Copyright   : (c) 2015--2018 Michael Walker
 License     : MIT
 Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 Stability   : experimental
@@ -105,149 +105,21 @@ module Test.DejaFu
 
 There are a few knobs to tweak to control the behaviour of dejafu.
 The defaults should generally be good enough, but if not you have a
-few tricks available.
-
- * The 'Way', which controls how schedules are explored.
-
- * The 'MemType', which controls how reads and writes to @CRef@s (or
-   @IORef@s) behave.
-
- * The 'Discard' function, which saves memory by throwing away
-   uninteresting results during exploration.
+few tricks available.  The main two are: the 'Way', which controls how
+schedules are explored; and the 'MemType', which controls how reads
+and writes to @CRef@s behave; see "Test.DejaFu.Settings" for a
+complete listing.
 
 -}
 
   , autocheckWay
   , dejafuWay
   , dejafusWay
-  , dejafuDiscard
+  , autocheckWithSettings
+  , dejafuWithSettings
+  , dejafusWithSettings
 
-  -- *** Defaults
-
-  , defaultWay
-  , defaultMemType
-  , defaultDiscarder
-
-  -- *** Exploration
-
-  , Way
-  , systematically
-  , randomly
-  , uniformly
-  , swarmy
-
-  -- **** Schedule bounding
-
-  {- |
-
-Schedule bounding is used by the 'systematically' approach to limit
-the search-space, which in general will be huge.
-
-There are three types of bounds used:
-
- * The 'PreemptionBound', which bounds the number of pre-emptive
-   context switches.  Empirical evidence suggests @2@ is a good value
-   for this, if you have a small test case.
-
- * The 'FairBound', which bounds the difference between how many times
-   threads can yield.  This is necessary to test certain kinds of
-   potentially non-terminating behaviour, such as spinlocks.
-
- * The 'LengthBound', which bounds how long a test case can run, in
-   terms of scheduling decisions.  This is necessary to test certain
-   kinds of potentially non-terminating behaviour, such as livelocks.
-
-Schedule bounding is not used by the non-systematic exploration
-behaviours.
-
--}
-
-  , Bounds(..)
-  , defaultBounds
-  , noBounds
-  , PreemptionBound(..)
-  , defaultPreemptionBound
-  , FairBound(..)
-  , defaultFairBound
-  , LengthBound(..)
-  , defaultLengthBound
-
-  -- *** Memory model
-
-  {- |
-
-When executed on a multi-core processor some @CRef@ / @IORef@ programs
-can exhibit \"relaxed memory\" behaviours, where the apparent
-behaviour of the program is not a simple interleaving of the actions
-of each thread.
-
-__Example:__ This is a simple program which creates two @CRef@s
-containing @False@, and forks two threads.  Each thread writes @True@
-to one of the @CRef@s and reads the other.  The value that each thread
-reads is communicated back through an @MVar@:
-
->>> :{
-let relaxed = do
-      r1 <- newCRef False
-      r2 <- newCRef False
-      x <- spawn $ writeCRef r1 True >> readCRef r2
-      y <- spawn $ writeCRef r2 True >> readCRef r1
-      (,) <$> readMVar x <*> readMVar y
-:}
-
-We see something surprising if we ask for the results:
-
->>> autocheck relaxed
-[pass] Never Deadlocks
-[pass] No Exceptions
-[fail] Consistent Result
-    (False,True) S0---------S1----S0--S2----S0--
-<BLANKLINE>
-    (False,False) S0---------S1--P2----S1--S0---
-<BLANKLINE>
-    (True,False) S0---------S2----S1----S0---
-<BLANKLINE>
-    (True,True) S0---------S1-C-S2----S1---S0---
-False
-
-It's possible for both threads to read the value @False@, even though
-each writes @True@ to the other @CRef@ before reading.  This is
-because processors are free to re-order reads and writes to
-independent memory addresses in the name of performance.
-
-Execution traces for relaxed memory computations can include \"C\"
-actions, as above, which show where @CRef@ writes were explicitly
-/committed/, and made visible to other threads.
-
-However, modelling this behaviour can require more executions.  If you
-do not care about the relaxed-memory behaviour of your program, use
-the 'SequentialConsistency' model.
-
--}
-
-  , MemType(..)
-
-  -- *** Reducing memory usage
-
-  {- |
-
-Sometimes we know that a result is uninteresting and cannot affect the
-result of a test, in which case there is no point in keeping it
-around.  Execution traces can be large, so any opportunity to get rid
-of them early is possibly a great saving of memory.
-
-A discard function, which has type @Either Failure a -> Maybe
-Discard@, can selectively discard results or execution traces before
-the schedule exploration finishes, allowing them to be garbage
-collected sooner.
-
-__Note:__ This is only relevant if you are producing your own
-predicates.  The predicates and helper functions provided by this
-module do discard results and traces wherever possible.
-
--}
-
-  , Discard(..)
+  , module Test.DejaFu.Settings
 
   -- ** Manual testing
 
@@ -391,6 +263,9 @@ interference we have provided: the left term never empties a full
 -}
 
   , module Test.DejaFu.Refinement
+
+  -- * Deprecated
+  , dejafuDiscard
   ) where
 
 import           Control.Arrow            (first)
@@ -407,9 +282,9 @@ import           Data.Profunctor          (Profunctor(..))
 import           System.Environment       (lookupEnv)
 
 import           Test.DejaFu.Conc
-import           Test.DejaFu.Defaults
 import           Test.DejaFu.Refinement
 import           Test.DejaFu.SCT
+import           Test.DejaFu.Settings
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
 
@@ -458,7 +333,7 @@ autocheck :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
   => ConcT r n a
   -- ^ The computation to test.
   -> n Bool
-autocheck = autocheckWay defaultWay defaultMemType
+autocheck = autocheckWithSettings defaultSettings
 
 -- | Variant of 'autocheck' which takes a way to run the program and a
 -- memory model.
@@ -496,11 +371,42 @@ autocheckWay :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
   -> ConcT r n a
   -- ^ The computation to test.
   -> n Bool
-autocheckWay way memtype = dejafusWay way memtype autocheckCases
+autocheckWay way = autocheckWithSettings . fromWayAndMemType way
 
--- | Predicates for the various autocheck functions.
-autocheckCases :: Eq a => [(String, Predicate a)]
-autocheckCases =
+-- | Variant of 'autocheck' which takes a settings record.
+--
+-- >>> autocheckWithSettings (fromWayAndMemType defaultWay defaultMemType) relaxed
+-- [pass] Never Deadlocks
+-- [pass] No Exceptions
+-- [fail] Consistent Result
+--     (False,True) S0---------S1----S0--S2----S0--
+-- <BLANKLINE>
+--     (False,False) S0---------S1--P2----S1--S0---
+-- <BLANKLINE>
+--     (True,False) S0---------S2----S1----S0---
+-- <BLANKLINE>
+--     (True,True) S0---------S1-C-S2----S1---S0---
+-- False
+--
+-- >>> autocheckWithSettings (fromWayAndMemType defaultWay SequentialConsistency) relaxed
+-- [pass] Never Deadlocks
+-- [pass] No Exceptions
+-- [fail] Consistent Result
+--     (False,True) S0---------S1----S0--S2----S0--
+-- <BLANKLINE>
+--     (True,True) S0---------S1-P2----S1---S0---
+-- <BLANKLINE>
+--     (True,False) S0---------S2----S1----S0---
+-- False
+--
+-- @since 1.2.0.0
+autocheckWithSettings :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
+  => Settings n a
+  -- ^ The SCT settings.
+  -> ConcT r n a
+  -- ^ The computation to test.
+  -> n Bool
+autocheckWithSettings settings = dejafusWithSettings settings
   [ ("Never Deadlocks",   representative deadlocksNever)
   , ("No Exceptions",     representative exceptionsNever)
   , ("Consistent Result", alwaysSame) -- already representative
@@ -529,7 +435,7 @@ dejafu :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -> ConcT r n a
   -- ^ The computation to test.
   -> n Bool
-dejafu = dejafuWay defaultWay defaultMemType
+dejafu = dejafuWithSettings defaultSettings
 
 -- | Variant of 'dejafu' which takes a way to run the program and a
 -- memory model.
@@ -563,7 +469,32 @@ dejafuWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -> ConcT r n a
   -- ^ The computation to test.
   -> n Bool
-dejafuWay = dejafuDiscard (const Nothing)
+dejafuWay way = dejafuWithSettings . fromWayAndMemType way
+
+-- | Variant of 'dejafu' which takes a settings record.
+--
+-- >>> import System.Random
+--
+-- >>> dejafuWithSettings (fromWayAndMemType (randomly (mkStdGen 1) 100) defaultMemType) "Randomly!" alwaysSame example
+-- [fail] Randomly!
+--     "hello" S0----S1--S0--
+-- <BLANKLINE>
+--     "world" S0----S2--S1-S0--
+-- False
+--
+-- @since 1.2.0.0
+dejafuWithSettings :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
+  => Settings n a
+  -- ^ The SCT settings.
+  -> String
+  -- ^ The name of the test.
+  -> ProPredicate a b
+  -- ^ The predicate to check.
+  -> ConcT r n a
+  -- ^ The computation to test.
+  -> n Bool
+dejafuWithSettings settings name test =
+  dejafusWithSettings settings [(name, test)]
 
 -- | Variant of 'dejafuWay' which can selectively discard results.
 --
@@ -589,10 +520,9 @@ dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -> ConcT r n a
   -- ^ The computation to test.
   -> n Bool
-dejafuDiscard discard way memtype name test conc = do
-  let discarder = strengthenDiscard discard (pdiscard test)
-  traces <- runSCTDiscard discarder way memtype conc
-  liftIO $ doTest name (peval test traces)
+dejafuDiscard discard way =
+  dejafuWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
+{-# DEPRECATED dejafuDiscard "Use dejafuWithSettings instead" #-}
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
@@ -612,7 +542,7 @@ dejafus :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -> ConcT r n a
   -- ^ The computation to test.
   -> n Bool
-dejafus = dejafusWay defaultWay defaultMemType
+dejafus = dejafusWithSettings defaultSettings
 
 -- | Variant of 'dejafus' which takes a way to run the program and a
 -- memory model.
@@ -638,12 +568,35 @@ dejafusWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -> ConcT r n a
   -- ^ The computation to test.
   -> n Bool
-dejafusWay way memtype tests conc = do
-    traces  <- runSCTDiscard discarder way memtype conc
+dejafusWay way = dejafusWithSettings . fromWayAndMemType way
+
+-- | Variant of 'dejafus' which takes a settings record.
+--
+-- >>> dejafusWithSettings (fromWayAndMemType defaultWay SequentialConsistency) [("A", alwaysSame), ("B", exceptionsNever)] relaxed
+-- [fail] A
+--     (False,True) S0---------S1----S0--S2----S0--
+-- <BLANKLINE>
+--     (True,True) S0---------S1-P2----S1---S0---
+-- <BLANKLINE>
+--     (True,False) S0---------S2----S1----S0---
+-- [pass] B
+-- False
+--
+-- @since 1.2.0.0
+dejafusWithSettings :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
+  => Settings n a
+  -- ^ The SCT settings.
+  -> [(String, ProPredicate a b)]
+  -- ^ The list of predicates (with names) to check.
+  -> ConcT r n a
+  -- ^ The computation to test.
+  -> n Bool
+dejafusWithSettings settings tests conc = do
+    traces  <- runSCTWithSettings (set ldiscard (Just discarder) settings) conc
     results <- mapM (\(name, test) -> liftIO . doTest name $ chk test traces) tests
     pure (and results)
   where
-    discarder = foldr
+    discarder = maybe id strengthenDiscard (get ldiscard settings) $ foldr
       (weakenDiscard . pdiscard . snd)
       (const (Just DiscardResultAndTrace))
       tests
@@ -653,11 +606,14 @@ dejafusWay way memtype tests conc = do
     -- include more than this if the different predicates have
     -- different discard functions, so we do another pass of
     -- discarding.
-    chk p = peval p . mapMaybe go where
-      go r@(efa, _) = case pdiscard p efa of
-        Just DiscardResultAndTrace -> Nothing
-        Just DiscardTrace -> Just (efa, [])
-        Nothing -> Just r
+    chk p rs
+      | moreThan 1 rs =
+        let go r@(efa, _) = case pdiscard p efa of
+              Just DiscardResultAndTrace -> Nothing
+              Just DiscardTrace -> Just (efa, [])
+              Nothing -> Just r
+        in peval p (mapMaybe go rs)
+      | otherwise = peval p rs
 
 -------------------------------------------------------------------------------
 -- Test cases
@@ -709,7 +665,7 @@ runTest :: (MonadConc n, MonadRef r n)
   -> ConcT r n a
   -- ^ The computation to test
   -> n (Result b)
-runTest = runTestWay defaultWay defaultMemType
+runTest = runTestWithSettings defaultSettings
 
 -- | Variant of 'runTest' which takes a way to run the program and a
 -- memory model.
@@ -729,8 +685,26 @@ runTestWay :: (MonadConc n, MonadRef r n)
   -> ConcT r n a
   -- ^ The computation to test
   -> n (Result b)
-runTestWay way memtype p conc =
-  peval p <$> runSCTDiscard (pdiscard p) way memtype conc
+runTestWay way = runTestWithSettings . fromWayAndMemType way
+
+-- | Variant of 'runTest' which takes a settings record.
+--
+-- The exact executions tried, and the order in which results are
+-- found, is unspecified and may change between releases.  This may
+-- affect which failing traces are reported, when there is a failure.
+--
+-- @since 1.2.0.0
+runTestWithSettings :: (MonadConc n, MonadRef r n)
+  => Settings n a
+  -- ^ The SCT settings.
+  -> ProPredicate a b
+  -- ^ The predicate to check
+  -> ConcT r n a
+  -- ^ The computation to test
+  -> n (Result b)
+runTestWithSettings settings p conc =
+  let discarder = maybe id strengthenDiscard (get ldiscard settings) (pdiscard p)
+  in peval p <$> runSCTWithSettings (set ldiscard (Just discarder) settings) conc
 
 
 -------------------------------------------------------------------------------
