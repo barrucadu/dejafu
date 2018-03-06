@@ -6,31 +6,39 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
-unreleased
-----------
+1.1.0.0 - The Settings Release (2018-03-06)
+-------------------------------------------
+
+* Git: :tag:`hunit-dejafu-1.1.0.0`
+* Hackage: :hackage:`hunit-dejafu-1.1.0.0`
 
 Added
 ~~~~~
 
-* (:issue:`221`) Settings-based test functions:
+* (:pull:`238`) Settings-based test functions:
 
     * ``Test.HUnit.DejaFu.testAutoWithSettings``
     * ``Test.HUnit.DejaFu.testDejafuWithSettings``
     * ``Test.HUnit.DejaFu.testDejafusWithSettings``
 
-* (:issue:`221`) Re-export of ``Test.DejaFu.Settings``.
+* (:pull:`238`) Re-export of ``Test.DejaFu.Settings``.
 
 Deprecated
 ~~~~~~~~~~
 
-* (:issue:`221`) ``Test.HUnit.DejaFu.testDejafuDiscard`` and
+* (:pull:`238`) ``Test.HUnit.DejaFu.testDejafuDiscard`` and
   ``testDejafusDiscard``.
 
 Removed
 ~~~~~~~
 
-* (:issue:`221`) The re-export of
+* (:pull:`238`) The re-export of
   ``Test.DejaFu.Defaults.defaultDiscarder``.
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The version bounds on :hackage:`dejafu` are >=1.2 && <1.3.
 
 
 1.0.1.2 (2018-02-26)

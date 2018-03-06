@@ -399,7 +399,7 @@ autocheckWay way = autocheckWithSettings . fromWayAndMemType way
 --     (True,False) S0---------S2----S1----S0---
 -- False
 --
--- @since unreleased
+-- @since 1.2.0.0
 autocheckWithSettings :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
   => Settings n a
   -- ^ The SCT settings.
@@ -482,7 +482,7 @@ dejafuWay way = dejafuWithSettings . fromWayAndMemType way
 --     "world" S0----S2--S1-S0--
 -- False
 --
--- @since unreleased
+-- @since 1.2.0.0
 dejafuWithSettings :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   => Settings n a
   -- ^ The SCT settings.
@@ -582,7 +582,7 @@ dejafusWay way = dejafusWithSettings . fromWayAndMemType way
 -- [pass] B
 -- False
 --
--- @since unreleased
+-- @since 1.2.0.0
 dejafusWithSettings :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   => Settings n a
   -- ^ The SCT settings.
@@ -693,7 +693,7 @@ runTestWay way = runTestWithSettings . fromWayAndMemType way
 -- found, is unspecified and may change between releases.  This may
 -- affect which failing traces are reported, when there is a failure.
 --
--- @since unreleased
+-- @since 1.2.0.0
 runTestWithSettings :: (MonadConc n, MonadRef r n)
   => Settings n a
   -- ^ The SCT settings.

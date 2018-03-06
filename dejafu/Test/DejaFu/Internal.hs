@@ -29,7 +29,7 @@ import           Test.DejaFu.Types
 
 -- | SCT configuration record.
 --
--- @since unreleased
+-- @since 1.2.0.0
 data Settings n a = Settings
   { _way :: Way
   , _memtype :: MemType

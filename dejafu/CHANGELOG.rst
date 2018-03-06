@@ -6,13 +6,18 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
-unreleased
-----------
+1.2.0.0 - The Settings Release (2018-03-06)
+-------------------------------------------
+
+* Git: :tag:`dejafu-1.2.0.0`
+* Hackage: :hackage:`dejafu-1.2.0.0`
+
+**Contributors:** :u:`qrilka` (:pull:`236`).
 
 Added
 ~~~~~
 
-* (:issue:`221`) A record-based approach to SCT configuration:
+* (:pull:`238`) A record-based approach to SCT configuration:
 
     * ``Test.DejaFu.Settings``
       (re-exported from ``Test.Dejafu`` and ``Test.DejaFu.SCT``)
@@ -35,7 +40,7 @@ Added
         * ``Test.DejaFu.SCT.resultsSetWithSettings``
         * ``Test.DejaFu.SCT.resultsSetWithSettings'``
 
-* (:issue:`221`) Settings-based test functions:
+* (:pull:`238`) Settings-based test functions:
 
     * ``Test.DejaFu.autocheckWithSettings``
     * ``Test.DejaFu.dejafuWithSettings``
@@ -45,7 +50,7 @@ Added
 Deprecated
 ~~~~~~~~~~
 
-* (:issue:`221`) SCT function variants:
+* (:pull:`238`) SCT function variants:
 
     * ``Test.DejaFu.SCT.runSCTDiscard``
     * ``Test.DejaFu.SCT.resultSetDiscard``
@@ -58,15 +63,15 @@ Deprecated
     * ``Test.DejaFu.SCT.sctWeightedRandom``
     * ``Test.DejaFu.SCT.sctWeightedRandomDiscard``
 
-* (:issue:`221`) The ``Test.DejaFu.Defaults`` module.  Import
+* (:pull:`238`) The ``Test.DejaFu.Defaults`` module.  Import
   ``Test.DejaFu.Settings`` instead.
 
-* (:issue:`221`) ``Test.DejaFu.dejafuDiscard``.
+* (:pull:`238`) ``Test.DejaFu.dejafuDiscard``.
 
 Removed
 ~~~~~~~
 
-* (:issue:`221`) ``Test.DejaFu.Defaults.defaultDiscarder``, as the
+* (:pull:`238`) ``Test.DejaFu.Defaults.defaultDiscarder``, as the
   discard function is optional.
 
 

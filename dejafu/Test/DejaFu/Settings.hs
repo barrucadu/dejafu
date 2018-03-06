@@ -178,7 +178,7 @@ import           Test.DejaFu.Types
 
 -- | Default SCT settings: just combine all the other defaults.
 --
--- @since unreleased
+-- @since 1.2.0.0
 defaultSettings :: Applicative n => Settings n a
 defaultSettings = fromWayAndMemType defaultWay defaultMemType
 
@@ -186,7 +186,7 @@ defaultSettings = fromWayAndMemType defaultWay defaultMemType
 --
 -- All other settings take on their default values.
 --
--- @since unreleased
+-- @since 1.2.0.0
 fromWayAndMemType :: Applicative n => Way -> MemType -> Settings n a
 fromWayAndMemType way memtype = Settings
   { _way = way
@@ -209,7 +209,7 @@ defaultWay = systematically defaultBounds
 
 -- | A lens into the 'Way'.
 --
--- @since unreleased
+-- @since 1.2.0.0
 lway :: Lens' (Settings n a) Way
 lway afb s = (\b -> s {_way = b}) <$> afb (_way s)
 
@@ -341,7 +341,7 @@ defaultMemType = TotalStoreOrder
 
 -- | A lens into the 'MemType'.
 --
--- @since unreleased
+-- @since 1.2.0.0
 lmemtype :: Lens' (Settings n a) MemType
 lmemtype afb s = (\b -> s {_memtype = b}) <$> afb (_memtype s)
 
@@ -350,7 +350,7 @@ lmemtype afb s = (\b -> s {_memtype = b}) <$> afb (_memtype s)
 
 -- | A lens into the discard function.
 --
--- @since unreleased
+-- @since 1.2.0.0
 ldiscard :: Lens' (Settings n a) (Maybe (Either Failure a -> Maybe Discard))
 ldiscard afb s = (\b -> s {_discard = b}) <$> afb (_discard s)
 
@@ -359,7 +359,7 @@ ldiscard afb s = (\b -> s {_discard = b}) <$> afb (_discard s)
 
 -- | A lens into the early-exit predicate.
 --
--- @since unreleased
+-- @since 1.2.0.0
 learlyExit :: Lens' (Settings n a) (Maybe (Either Failure a -> Bool))
 learlyExit afb s = (\b -> s {_earlyExit = b}) <$> afb (_earlyExit s)
 
@@ -368,13 +368,13 @@ learlyExit afb s = (\b -> s {_earlyExit = b}) <$> afb (_earlyExit s)
 
 -- | A lens into the debug 'show' function.
 --
--- @since unreleased
+-- @since 1.2.0.0
 ldebugShow :: Lens' (Settings n a) (Maybe (a -> String))
 ldebugShow afb s = (\b -> s {_debugShow = b}) <$> afb (_debugShow s)
 
 -- | A lens into the debug 'print' function.
 --
--- @since unreleased
+-- @since 1.2.0.0
 ldebugPrint :: Lens' (Settings n a) (Maybe (String -> n ()))
 ldebugPrint afb s = (\b -> s {_debugPrint = b}) <$> afb (_debugPrint s)
 
@@ -387,12 +387,12 @@ type Lens' s a = Lens s s a a
 
 -- | Get a value from a lens.
 --
--- @since unreleased
+-- @since 1.2.0.0
 get :: Lens' s a -> s -> a
 get lens = getConst . lens Const
 
 -- | Set a value in a lens.
 --
--- @since unreleased
+-- @since 1.2.0.0
 set :: Lens' s a -> a -> s -> s
 set lens a = runIdentity . lens (\_ -> Identity a)

@@ -156,7 +156,7 @@ testAutoWay way = testAutoWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testAuto' which takes a settings record.
 --
--- @since unreleased
+-- @since 1.1.0.0
 testAutoWithSettings :: (Eq a, Show a)
   => Settings IO a
   -- ^ The SCT settings.
@@ -202,7 +202,7 @@ testDejafuWay way = testDejafuWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testDejafu' which takes a settings record.
 --
--- @since unreleased
+-- @since 1.1.0.0
 testDejafuWithSettings :: Show b
   => Settings IO a
   -- ^ The settings record
@@ -267,7 +267,7 @@ testDejafusWay way = testDejafusWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testDejafus' which takes a settings record.
 --
--- @since unreleased
+-- @since 1.1.0.0
 testDejafusWithSettings :: Show b
   => Settings IO a
   -- ^ The SCT settings.

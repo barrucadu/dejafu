@@ -186,7 +186,7 @@ resultsSetDiscard' discard way memtype conc = do
 -- The exact executions tried, and the order in which results are
 -- found, is unspecified and may change between releases.
 --
--- @since unreleased
+-- @since 1.2.0.0
 runSCTWithSettings :: (MonadConc n, MonadRef r n)
   => Settings n a
   -- ^ The SCT settings.
@@ -241,7 +241,7 @@ runSCTWithSettings settings conc = case _way settings of
 
 -- | A variant of 'resultsSet' which takes a 'Settings' record.
 --
--- @since unreleased
+-- @since 1.2.0.0
 resultsSetWithSettings :: (MonadConc n, MonadRef r n, Ord a)
   => Settings n a
   -- ^ The SCT settings.
@@ -260,7 +260,7 @@ resultsSetWithSettings settings conc =
 -- The exact executions tried, and the order in which results are
 -- found, is unspecified and may change between releases.
 --
--- @since unreleased
+-- @since 1.2.0.0
 runSCTWithSettings' :: (MonadConc n, MonadRef r n, NFData a)
   => Settings n a
   -> ConcT r n a
@@ -274,7 +274,7 @@ runSCTWithSettings' settings conc = do
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since unreleased
+-- @since 1.2.0.0
 resultsSetWithSettings' :: (MonadConc n, MonadRef r n, Ord a, NFData a)
   => Settings n a
   -> ConcT r n a
