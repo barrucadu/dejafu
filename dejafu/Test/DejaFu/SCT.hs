@@ -528,16 +528,16 @@ sct settings s0 sfun srun conc
           go runFull [initialThread]
     | otherwise = go runFull [initialThread]
   where
-    go run = go' Nothing . s0 where
-      go' (Just res) _ | earlyExit res = pure []
-      go' _ !s = case sfun s of
+    go run = go' Nothing [] . s0 where
+      go' (Just res) out _ | earlyExit res = pure out
+      go' _ out !s = case sfun s of
         Just t -> srun s t run >>= \case
           (s', Just (res, trace)) -> case discard res of
-            Just DiscardResultAndTrace -> go' (Just res) s'
-            Just DiscardTrace -> ((res, []):) <$> go' (Just res) s'
-            Nothing -> ((res, trace):) <$> go' (Just res) s'
-          (s', Nothing) -> go' Nothing s'
-        Nothing -> pure []
+            Just DiscardResultAndTrace -> go' (Just res) out s'
+            Just DiscardTrace -> go' (Just res) ((res, []):out) s'
+            Nothing -> go' (Just res) ((res, trace):out) s'
+          (s', Nothing) -> go' Nothing out s'
+        Nothing -> pure out
 
     runFull sched s = runConcurrent sched (_memtype settings) s conc
     runSnap snap sched s = runWithDCSnapshot sched (_memtype settings) s snap
