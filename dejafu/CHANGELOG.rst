@@ -18,6 +18,8 @@ Added
     * ``Test.DejaFu.Settings.lequality``
     * ``Test.DejaFu.Settings.lshrink``
 
+* ``Test.DejaFu.Utils.toTIdTrace`` to extract thread IDs from a trace.
+
 Performance
 ~~~~~~~~~~~
 

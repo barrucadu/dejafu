@@ -46,9 +46,9 @@ tests =
 
 litmusTest :: (Eq a, Show a) => String -> ConcIO a -> [a] -> [a] -> [a] -> TestTree
 litmusTest name act sq tso pso = testGroup name
-  [ testDejafuWay defaultWay SequentialConsistency "SQ"  (gives' sq)  act
-  , testDejafuWay defaultWay TotalStoreOrder       "TSO" (gives' tso) act
-  , testDejafuWay defaultWay PartialStoreOrder     "PSO" (gives' pso) act
+  [ testDejafuWithSettings (set lmemtype SequentialConsistency (toSettings defaultWay)) "SQ"  (gives' sq)  act
+  , testDejafuWithSettings (set lmemtype TotalStoreOrder       (toSettings defaultWay)) "TSO" (gives' tso) act
+  , testDejafuWithSettings (set lmemtype PartialStoreOrder     (toSettings defaultWay)) "PSO" (gives' pso) act
   , H.testProperty "dependency func." (prop_dep_fun act)
   ]
 

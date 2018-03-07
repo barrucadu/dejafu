@@ -52,6 +52,7 @@ library
                      , Test.DejaFu.Conc.Internal.STM
                      , Test.DejaFu.Conc.Internal.Threading
                      , Test.DejaFu.Internal
+                     , Test.DejaFu.SCT.Internal
                      , Test.DejaFu.SCT.Internal.DPOR
                      , Test.DejaFu.SCT.Internal.Weighted
 

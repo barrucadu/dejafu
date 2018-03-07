@@ -1,13 +1,10 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE LambdaCase #-}
-
 -- |
 -- Module      : Test.DejaFu.SCT
 -- Copyright   : (c) 2015--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : BangPatterns, LambdaCase
+-- Portability : portable
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
@@ -50,6 +47,7 @@ import           System.Random                     (RandomGen, randomR)
 
 import           Test.DejaFu.Conc
 import           Test.DejaFu.Internal
+import           Test.DejaFu.SCT.Internal
 import           Test.DejaFu.SCT.Internal.DPOR
 import           Test.DejaFu.SCT.Internal.Weighted
 import           Test.DejaFu.Settings
@@ -199,7 +197,7 @@ runSCTWithSettings settings conc = case _way settings of
 
         check = findSchedulePrefix
 
-        step dp (prefix, conservative, sleep) run = do
+        step run dp (prefix, conservative, sleep) = do
           (res, s, trace) <- run
             (dporSched (_memtype settings) (cBound cb0))
             (initialDPORSchedState sleep prefix)
@@ -218,7 +216,7 @@ runSCTWithSettings settings conc = case _way settings of
         check (_, 0) = Nothing
         check s = Just s
 
-        step _ (g, n) run = do
+        step run _ (g, n) = do
           (res, s, trace) <- run
             (randSched $ \g' -> (1, g'))
             (initialRandSchedState Nothing g)
@@ -231,8 +229,8 @@ runSCTWithSettings settings conc = case _way settings of
         check (_, 0, _, _) = Nothing
         check s = Just s
 
-        step s (g, n, 0, _) run = step s (g, n, max 1 use0, M.empty) run
-        step _ (g, n, use, ws) run = do
+        step run s (g, n, 0, _) = step run s (g, n, max 1 use0, M.empty)
+        step run _ (g, n, use, ws) = do
           (res, s, trace) <- run
             (randSched $ randomR (1, 50))
             (initialRandSchedState (Just ws) g)
@@ -506,66 +504,6 @@ sctWeightedRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
 sctWeightedRandomDiscard discard memtype g lim use = runSCTWithSettings $
   set ldiscard (Just discard) (fromWayAndMemType (swarmy g lim use) memtype)
 {-# DEPRECATED sctWeightedRandomDiscard "Use runSCTWithSettings instead" #-}
-
--- | General-purpose SCT function.
-sct :: (MonadConc n, MonadRef r n)
-  => Settings n a
-  -- ^ The SCT settings ('Way' is ignored)
-  -> ([ThreadId] -> s)
-  -- ^ Initial state
-  -> (s -> Maybe t)
-  -- ^ State predicate
-  -> (s -> t -> (Scheduler g -> g -> n (Either Failure a, g, Trace)) -> n (s, Maybe (Either Failure a, Trace)))
-  -- ^ Run the computation and update the state
-  -> ConcT r n a
-  -> n [(Either Failure a, Trace)]
-sct settings s0 sfun srun conc
-    | canDCSnapshot conc = runForDCSnapshot conc >>= \case
-        Just (Right snap, _) -> go (runSnap snap) (fst (threadsFromDCSnapshot snap))
-        Just (Left f, trace) -> pure [(Left f, trace)]
-        _ -> do
-          debugPrint "Failed to construct snapshot, continuing without."
-          go runFull [initialThread]
-    | otherwise = go runFull [initialThread]
-  where
-    go run = go' Nothing [] . s0 where
-      go' (Just res) _ _ | earlyExit res = pure []
-      go' _ seen !s = case sfun s of
-        Just t -> srun s t run >>= \case
-          (s', Just (res, trace)) -> case discard res of
-            Just DiscardResultAndTrace -> go' (Just res) seen s'
-            Just DiscardTrace -> result res [] seen s'
-            Nothing -> result res trace seen s'
-          (s', Nothing) -> go' Nothing seen s'
-        Nothing -> pure []
-
-      -- Sadly, we have to use a list to store the set of unique
-      -- results, as we don't have an @Ord a@ dict hanging around.  I
-      -- suspect that most test cases will have a relatively small
-      -- number of unique results, compared to the number of
-      -- executions, however.  Pathological cases (like IORef ones in
-      -- dejafu-tests which produce a different result on every
-      -- execution) are probably uncommon.
-      result = case _equality settings of
-          Just f -> \res trace seen s ->
-            let eq f (Right a1) (Right a2) = f a1 a2
-                eq _ (Left e1) (Left e2) = e1 == e2
-                eq _ _ _ = False
-            in if any (eq f res) seen
-               then do
-                 debugPrint ("Ignoring previously seen result '" ++ either show debugShow res ++ "'")
-                 go' (Just res) seen s
-               else ((res, trace) :) <$> go' (Just res) (res:seen) s
-          Nothing -> \res trace _ s ->
-            ((res, trace) :) <$> go' (Just res) [] s
-
-    runFull sched s = runConcurrent sched (_memtype settings) s conc
-    runSnap snap sched s = runWithDCSnapshot sched (_memtype settings) s snap
-
-    debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
-    debugShow = fromMaybe (const "_") (_debugShow settings)
-    earlyExit = fromMaybe (const False) (_earlyExit settings)
-    discard = fromMaybe (const Nothing) (_discard settings)
 
 -------------------------------------------------------------------------------
 -- Utilities
