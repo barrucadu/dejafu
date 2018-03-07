@@ -165,6 +165,23 @@ module Test.DejaFu.Settings
 
   , lequality
 
+  -- ** Shrinking
+
+  -- | There may be many ways to reveal the same bug, and dejafu is
+  -- not guaranteed to find the simplest way first.  This is
+  -- particularly problematic with random testing, where the schedules
+  -- generated tend to involve a lot of context switching.  Shrinking
+  -- produces simpler traces, which still have the same essential
+  -- behaviour.
+  --
+  -- __Performance:__ Shrinking can be expensive, as it involves
+  -- running the program again for each distinct result.  This is why
+  -- shrinking is disabled by default.  If you want to use shrinking,
+  -- it is /highly/ recommended to also use 'lequality', to reduce the
+  -- number of traces to shrink.
+
+  , lshrink
+
   -- ** Debug output
 
   -- | You can opt to receive debugging messages by setting debugging
@@ -213,6 +230,7 @@ fromWayAndMemType way memtype = Settings
   , _debugPrint = Nothing
   , _earlyExit = Nothing
   , _equality = Nothing
+  , _shrink = False
   }
 
 -------------------------------------------------------------------------------
@@ -391,6 +409,15 @@ learlyExit afb s = (\b -> s {_earlyExit = b}) <$> afb (_earlyExit s)
 -- @since unreleased
 lequality :: Lens' (Settings n a) (Maybe (a -> a -> Bool))
 lequality afb s = (\b -> s {_equality = b}) <$> afb (_equality s)
+
+-------------------------------------------------------------------------------
+-- Shrinking
+
+-- | A lens into the shrink flag.
+--
+-- @since unreleased
+lshrink :: Lens' (Settings n a) Bool
+lshrink afb s = (\b -> s {_shrink = b}) <$> afb (_shrink s)
 
 -------------------------------------------------------------------------------
 -- Debug output

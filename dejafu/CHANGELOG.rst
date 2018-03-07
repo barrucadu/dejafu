@@ -16,6 +16,7 @@ Added
 * (:issue:`183`) SCT settings for trace shrinking:
 
     * ``Test.DejaFu.Settings.lequality``
+    * ``Test.DejaFu.Settings.lshrink``
 
 Performance
 ~~~~~~~~~~~
