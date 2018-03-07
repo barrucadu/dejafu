@@ -150,6 +150,21 @@ module Test.DejaFu.Settings
 
   , learlyExit
 
+  -- ** Representative traces
+
+  -- | There may be many different execution traces which give rise to
+  -- the same result, but some traces can be more complex than others.
+  --
+  -- By supplying an equality predicate on results, all but the
+  -- simplest trace for each distinct result can be thrown away.
+  --
+  -- __Slippage:__ Just comparing results can lead to different errors
+  -- which happen to have the same result comparing as equal.  For
+  -- example, all deadlocks have the same result (@Left Deadlock@),
+  -- but may have different causes.  See issue @#241@.
+
+  , lequality
+
   -- ** Debug output
 
   -- | You can opt to receive debugging messages by setting debugging
@@ -197,6 +212,7 @@ fromWayAndMemType way memtype = Settings
   , _debugShow = Nothing
   , _debugPrint = Nothing
   , _earlyExit = Nothing
+  , _equality = Nothing
   }
 
 -------------------------------------------------------------------------------
@@ -366,6 +382,15 @@ ldiscard afb s = (\b -> s {_discard = b}) <$> afb (_discard s)
 -- @since 1.2.0.0
 learlyExit :: Lens' (Settings n a) (Maybe (Either Failure a -> Bool))
 learlyExit afb s = (\b -> s {_earlyExit = b}) <$> afb (_earlyExit s)
+
+-------------------------------------------------------------------------------
+-- Representative traces
+
+-- | A lens into the equality predicate.
+--
+-- @since unreleased
+lequality :: Lens' (Settings n a) (Maybe (a -> a -> Bool))
+lequality afb s = (\b -> s {_equality = b}) <$> afb (_equality s)
 
 -------------------------------------------------------------------------------
 -- Debug output
