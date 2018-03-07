@@ -529,20 +529,41 @@ sct settings s0 sfun srun conc
     | otherwise = go runFull [initialThread]
   where
     go run = go' Nothing [] . s0 where
-      go' (Just res) out _ | earlyExit res = pure out
-      go' _ out !s = case sfun s of
+      go' (Just res) _ _ | earlyExit res = pure []
+      go' _ seen !s = case sfun s of
         Just t -> srun s t run >>= \case
           (s', Just (res, trace)) -> case discard res of
-            Just DiscardResultAndTrace -> go' (Just res) out s'
-            Just DiscardTrace -> go' (Just res) ((res, []):out) s'
-            Nothing -> go' (Just res) ((res, trace):out) s'
-          (s', Nothing) -> go' Nothing out s'
-        Nothing -> pure out
+            Just DiscardResultAndTrace -> go' (Just res) seen s'
+            Just DiscardTrace -> result res [] seen s'
+            Nothing -> result res trace seen s'
+          (s', Nothing) -> go' Nothing seen s'
+        Nothing -> pure []
+
+      -- Sadly, we have to use a list to store the set of unique
+      -- results, as we don't have an @Ord a@ dict hanging around.  I
+      -- suspect that most test cases will have a relatively small
+      -- number of unique results, compared to the number of
+      -- executions, however.  Pathological cases (like IORef ones in
+      -- dejafu-tests which produce a different result on every
+      -- execution) are probably uncommon.
+      result = case _equality settings of
+          Just f -> \res trace seen s ->
+            let eq f (Right a1) (Right a2) = f a1 a2
+                eq _ (Left e1) (Left e2) = e1 == e2
+                eq _ _ _ = False
+            in if any (eq f res) seen
+               then do
+                 debugPrint ("Ignoring previously seen result '" ++ either show debugShow res ++ "'")
+                 go' (Just res) seen s
+               else ((res, trace) :) <$> go' (Just res) (res:seen) s
+          Nothing -> \res trace _ s ->
+            ((res, trace) :) <$> go' (Just res) [] s
 
     runFull sched s = runConcurrent sched (_memtype settings) s conc
     runSnap snap sched s = runWithDCSnapshot sched (_memtype settings) s snap
 
     debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
+    debugShow = fromMaybe (const "_") (_debugShow settings)
     earlyExit = fromMaybe (const False) (_earlyExit settings)
     discard = fromMaybe (const Nothing) (_discard settings)
 
