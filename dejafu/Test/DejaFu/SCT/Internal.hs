@@ -206,17 +206,21 @@ replay run = run (Scheduler (const sched)) where
 -- | Simplify a trace by permuting adjacent independent actions to
 -- reduce context switching.
 simplify :: MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-simplify memtype trc0 = go (length trc0) trc0 where
-  go 0 trc = trc
-  go n trc =
-    let trc' = dropCommits memtype
-             . pushForward memtype
-             . pullBack memtype
-             . preferLowest
-             $ trc
-    in if trc' /= trc then go (n-1) trc' else trc
+simplify memtype trc0 = loop (length trc0) (prepare trc0) where
+  prepare = dropCommits memtype . lexicoNormalForm memtype
+  step = pushForward memtype . pullBack memtype
 
-  preferLowest = permuteBy memtype . repeat $ \tid1 tid2 -> tid1 > tid2
+  loop 0 trc = trc
+  loop n trc =
+    let trc' = step trc
+    in if trc' /= trc then loop (n-1) trc' else trc
+
+-- | Put a trace into lexicographic (by thread ID) normal form.
+lexicoNormalForm :: MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
+lexicoNormalForm memtype = go where
+  go trc =
+    let trc' = permuteBy memtype (repeat (>)) trc
+    in if trc == trc' then trc else go trc'
 
 -- | Swap adjacent independent actions in the trace if a predicate
 -- holds.
@@ -232,6 +236,16 @@ permuteBy memtype = go initialDepState where
   go _ _ trc = trc
 
   go' ds ps t@(tid, ta) trc = t : go (updateDepState memtype ds tid ta) ps trc
+
+-- | Throw away commit actions which are followed by a memory barrier.
+dropCommits :: MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
+dropCommits SequentialConsistency = id
+dropCommits memtype = go initialDepState where
+  go ds (t1@(tid1, ta1@(CommitCRef _ _)):t2@(tid2, ta2):trc)
+    | isBarrier (simplifyAction ta2) = go ds (t2:trc)
+    | independent ds tid1 ta1 tid2 ta2 = t2 : go (updateDepState memtype ds tid2 ta2) (t1:trc)
+  go ds (t@(tid,ta):trc) = t : go (updateDepState memtype ds tid ta) trc
+  go _ [] = []
 
 -- | Attempt to reduce context switches by \"pulling\" thread actions
 -- back to a prior execution of that thread.
@@ -284,16 +298,6 @@ pushForward memtype = go initialDepState where
       | independent ds tid0 ta0 tid ta = (t:) <$> fgo (updateDepState memtype ds tid ta) trc
       | otherwise = Nothing
     fgo _ _ = Nothing
-
--- | Throw away commit actions which are followed by a memory barrier.
-dropCommits :: MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-dropCommits SequentialConsistency = id
-dropCommits memtype = go initialDepState where
-  go ds (t1@(tid1, ta1@(CommitCRef _ _)):t2@(tid2, ta2):trc)
-    | isBarrier (simplifyAction ta2) = go ds (t2:trc)
-    | independent ds tid1 ta1 tid2 ta2 = t2 : go (updateDepState memtype ds tid2 ta2) (t1:trc)
-  go ds (t@(tid,ta):trc) = t : go (updateDepState memtype ds tid ta) trc
-  go _ [] = []
 
 -- | Re-number threads and CRefs.
 --
