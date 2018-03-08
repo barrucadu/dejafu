@@ -6,6 +6,19 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+1.3.0.1 (2018-03-08)
+--------------------
+
+* Git: :tag:`dejafu-1.3.0.1`
+* Hackage: :hackage:`dejafu-1.3.0.1`
+
+Fixed
+~~~~~
+
+* (:pull:`242`) A compilation error when building with
+  :hackage:`exceptions-0.9.0`.
+
+
 1.3.0.0 (2018-03-06)
 --------------------
 
