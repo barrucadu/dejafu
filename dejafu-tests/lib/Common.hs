@@ -106,18 +106,18 @@ prop_dep_fun conc = H.property $ do
     seed <- H.forAll genInt
     fs <- H.forAll $ genList HGen.bool
 
-    (efa1, tids1, efa2, tids2) <- liftIO $ runNorm seed (shuffle fs) mem
+    (efa1, tids1, efa2, tids2) <- liftIO $ runNorm seed (shuffle mem fs) mem
     H.footnote ("            to: " ++ show tids2)
     H.footnote ("rewritten from: " ++ show tids1)
     efa1 H.=== efa2
   where
-    shuffle = go initialDepState where
+    shuffle mem = go initialDepState where
       go ds (f:fs) (t1@(tid1, ta1):t2@(tid2, ta2):trc)
         | independent ds tid1 ta1 tid2 ta2 && f = go' ds fs t2 (t1 : trc)
         | otherwise = go' ds fs t1 (t2 : trc)
       go _ _ trc = trc
 
-      go' ds fs t@(tid, ta) trc = t : go (updateDepState ds tid ta) fs trc
+      go' ds fs t@(tid, ta) trc = t : go (updateDepState mem ds tid ta) fs trc
 
     runNorm seed norm memtype = do
       let g = mkStdGen seed

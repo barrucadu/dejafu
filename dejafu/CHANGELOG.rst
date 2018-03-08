@@ -7,6 +7,16 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Performance
+~~~~~~~~~~~
+
+* Prune some unnecessary interleavings of ``CRef`` actions in
+  systematic testing when using sequential consistency.
+
+
 1.3.1.0 (2018-03-11)
 --------------------
 

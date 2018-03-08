@@ -201,11 +201,11 @@ runSCTWithSettings settings conc = case _way settings of
 
         step dp (prefix, conservative, sleep) run = do
           (res, s, trace) <- run
-            (dporSched (cBound cb0))
+            (dporSched (_memtype settings) (cBound cb0))
             (initialDPORSchedState sleep prefix)
 
-          let bpoints = findBacktrackSteps (cBacktrack cb0) (schedBoundKill s) (schedBPoints s) trace
-          let newDPOR = incorporateTrace conservative trace dp
+          let bpoints = findBacktrackSteps (_memtype settings) (cBacktrack cb0) (schedBoundKill s) (schedBPoints s) trace
+          let newDPOR = incorporateTrace (_memtype settings) conservative trace dp
 
           pure $ if schedIgnore s
                  then (force newDPOR, Nothing)
