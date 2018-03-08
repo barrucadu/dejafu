@@ -2,7 +2,9 @@ module Integration.MultiThreaded where
 
 import qualified Control.Concurrent        as C
 import           Control.Exception         (ArithException(..))
+import           Control.Monad             (replicateM, void)
 import           Control.Monad.IO.Class    (liftIO)
+import           System.Random             (mkStdGen)
 import           Test.DejaFu               (Failure(..), gives, gives',
                                             isUncaughtException)
 
@@ -76,6 +78,18 @@ threadingTests = toTestList
         b2 <- runInBoundThread isCurrentThreadBound
         putMVar v (b1, b2)
       readMVar v
+
+  , toTestList . (\conc -> W "Shrinking can cope with re-ordering forks" conc (gives' [False, True]) ("randomly", randomly (mkStdGen 0) 150)) $ do
+      v <- newEmptyMVar
+      _ <- fork $ do
+        _ <- fork . void $ replicateM 2 myThreadId
+        _ <- fork . void $ replicateM 3 myThreadId
+        putMVar v True
+      _ <- fork $ do
+        _ <- fork . void $ replicateM 4 myThreadId
+        _ <- fork . void $ replicateM 5 myThreadId
+        putMVar v False
+      takeMVar v
   ]
 
 --------------------------------------------------------------------------------

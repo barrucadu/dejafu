@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -8,19 +9,24 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : BangPatterns, LambdaCase, RankNTypes
+-- Portability : BangPatterns, FlexibleContexts, LambdaCase, RankNTypes
 --
 -- Internal types and functions for SCT.  This module is NOT
 -- considered to form part of the public interface of this library.
 module Test.DejaFu.SCT.Internal where
 
-import           Control.Monad.Conc.Class      (MonadConc)
-import           Control.Monad.Ref             (MonadRef)
-import           Data.Maybe                    (fromMaybe)
+import           Control.Monad.Conc.Class         (MonadConc)
+import           Control.Monad.Ref                (MonadRef)
+import           Data.Coerce                      (Coercible, coerce)
+import qualified Data.IntMap.Strict               as I
+import           Data.List                        (find, mapAccumL)
+import           Data.Maybe                       (fromMaybe)
 
 import           Test.DejaFu.Conc
+import           Test.DejaFu.Conc.Internal        (Context(..), DCSnapshot(..))
+import           Test.DejaFu.Conc.Internal.Memory (commitThreadId)
 import           Test.DejaFu.Internal
-import           Test.DejaFu.Schedule          (Scheduler(..))
+import           Test.DejaFu.Schedule             (Scheduler(..))
 import           Test.DejaFu.SCT.Internal.DPOR
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
@@ -42,13 +48,31 @@ sct :: (MonadConc n, MonadRef r n)
   -> n [(Either Failure a, Trace)]
 sct settings s0 sfun srun conc
     | canDCSnapshot conc = runForDCSnapshot conc >>= \case
-        Just (Right snap, _) -> sct' settings (s0 (fst (threadsFromDCSnapshot snap))) sfun (srun (runSnap snap)) (runSnap snap)
+        Just (Right snap, _) -> sct'Snap snap
         Just (Left f, trace) -> pure [(Left f, trace)]
         _ -> do
           debugPrint "Failed to construct snapshot, continuing without."
-          sct' settings (s0 [initialThread]) sfun (srun runFull) runFull
-    | otherwise = sct' settings (s0 [initialThread]) sfun (srun runFull) runFull
+          sct'Full
+    | otherwise = sct'Full
   where
+    sct'Full = sct'
+      settings
+      (s0 [initialThread])
+      sfun
+      (srun runFull)
+      runFull
+      (toId 1)
+      (toId 1)
+
+    sct'Snap snap = let idsrc = cIdSource (dcsContext snap) in sct'
+      settings
+      (s0 (fst (threadsFromDCSnapshot snap)))
+      sfun
+      (srun (runSnap snap))
+      (runSnap snap)
+      (toId $ 1 + fst (_tids  idsrc))
+      (toId $ 1 + fst (_crids idsrc))
+
     runFull sched s = runConcurrent sched (_memtype settings) s conc
     runSnap snap sched s = runWithDCSnapshot sched (_memtype settings) s snap
 
@@ -66,8 +90,12 @@ sct' :: (MonadConc n, MonadRef r n)
   -- ^ Run the computation and update the state
   -> (forall x. Scheduler x -> x -> n (Either Failure a, x, Trace))
   -- ^ Just run the computation
+  -> ThreadId
+  -- ^ The first available @ThreadId@
+  -> CRefId
+  -- ^ The first available @CRefId@
   -> n [(Either Failure a, Trace)]
-sct' settings s0 sfun srun run = go Nothing [] s0 where
+sct' settings s0 sfun srun run nextTId nextCRId = go Nothing [] s0 where
   go (Just res) _ _ | earlyExit res = pure []
   go _ seen !s = case sfun s of
     Just t -> srun s t >>= \case
@@ -98,7 +126,7 @@ sct' settings s0 sfun srun run = go Nothing [] s0 where
   dosimplify res trace seen s
     | not (_simplify settings) = ((res, trace) :) <$> go (Just res) seen s
     | otherwise = do
-        shrunk <- simplifyExecution settings run res trace
+        shrunk <- simplifyExecution settings run nextTId nextCRId res trace
         (shrunk :) <$> go (Just res) seen s
 
   earlyExit = fromMaybe (const False) (_earlyExit settings)
@@ -123,17 +151,21 @@ simplifyExecution :: (MonadConc n, MonadRef r n)
   -- ^ The SCT settings ('Way' is ignored)
   -> (forall x. Scheduler x -> x -> n (Either Failure a, x, Trace))
   -- ^ Just run the computation
+  -> ThreadId
+  -- ^ The first available @ThreadId@
+  -> CRefId
+  -- ^ The first available @CRefId@
   -> Either Failure a
   -- ^ The expected result
   -> Trace
   -> n (Either Failure a, Trace)
-simplifyExecution settings run res trace
+simplifyExecution settings run nextTId nextCRId res trace
     | tidTrace == simplifiedTrace = do
         debugPrint ("Simplifying new result '" ++ p res ++ "': no simplification possible!")
         pure (res, trace)
     | otherwise = do
         debugPrint ("Simplifying new result '" ++ p res ++ "': OK!")
-        (res', _, trace') <- replay run simplifiedTrace
+        (res', _, trace') <- replay run (fixup simplifiedTrace)
         case (_equality settings, res, res') of
           (Just f,  Right a1, Right a2) | f a1 a2  -> pure (res', trace')
           (_,       Left  e1, Left  e2) | e1 == e2 -> pure (res', trace')
@@ -144,6 +176,7 @@ simplifyExecution settings run res trace
   where
     tidTrace = toTIdTrace trace
     simplifiedTrace = simplify (_memtype settings) tidTrace
+    fixup = renumber (_memtype settings) (fromId nextTId) (fromId nextCRId)
 
     debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
     debugShow = fromMaybe (const "_") (_debugShow settings)
@@ -156,12 +189,16 @@ replay :: (MonadConc n, MonadRef r n)
   -> [(ThreadId, ThreadAction)]
   -- ^ The reduced sequence of scheduling decisions
   -> n (Either Failure a, [(ThreadId, ThreadAction)], Trace)
-replay run = run (Scheduler sched) where
-    sched prior runnable ((t, Stop):ts)
-      | any ((==t) . fst) runnable = (Just t, ts)
-      | otherwise = sched prior runnable ts
-    sched _ _ ((t, _):ts) = (Just t, ts)
-    sched _ _ _ = (Nothing, [])
+replay run = run (Scheduler (const sched)) where
+    sched runnable ((t, Stop):ts) = case findThread t runnable of
+      Just t' -> (Just t', ts)
+      Nothing -> sched runnable ts
+    sched runnable ((t, _):ts) = (findThread t runnable, ts)
+    sched _ _ = (Nothing, [])
+
+    -- find a thread ignoring names
+    findThread tid0 =
+      fmap fst . find (\(tid,_) -> fromId tid == fromId tid0)
 
 -------------------------------------------------------------------------------
 -- * Schedule simplification
@@ -257,3 +294,90 @@ dropCommits memtype = go initialDepState where
     | independent ds tid1 ta1 tid2 ta2 = t2 : go (updateDepState memtype ds tid2 ta2) (t1:trc)
   go ds (t@(tid,ta):trc) = t : go (updateDepState memtype ds tid ta) trc
   go _ [] = []
+
+-- | Re-number threads and CRefs.
+--
+-- Permuting forks or newCRefs makes the existing numbering invalid,
+-- which then causes problems for scheduling.  Just re-numbering
+-- threads isn't enough, as CRef IDs are used to determine commit
+-- thread IDs.
+--
+-- Renumbered things will not fix their names, so don't rely on those
+-- at all.
+renumber
+  :: MemType
+  -- ^ The memory model determines how commit threads are numbered.
+  -> Int
+  -- ^ First free thread ID.
+  -> Int
+  -- ^ First free @CRef@ ID.
+  -> [(ThreadId, ThreadAction)]
+  -> [(ThreadId, ThreadAction)]
+renumber memtype tid0 crid0 = snd . mapAccumL go (I.empty, tid0, I.empty, crid0) where
+  go s@(tidmap, _, cridmap, _) (_, CommitCRef tid crid) =
+    let tid'  = renumbered tidmap  tid
+        crid' = renumbered cridmap crid
+        act' = CommitCRef tid' crid'
+    in case memtype of
+         PartialStoreOrder -> (s, (commitThreadId tid' (Just crid'), act'))
+         _ -> (s, (commitThreadId tid' Nothing, act'))
+  go s@(tidmap, _, _, _) (tid, act) =
+    let (s', act') = updateAction s act
+    in (s', (renumbered tidmap tid, act'))
+
+  -- I can't help but feel there should be some generic programming
+  -- solution to this sort of thing (and to the many other functions
+  -- operating over @ThreadAction@s / @Lookahead@s)
+  updateAction (tidmap, nexttid, cridmap, nextcrid) (Fork old) =
+    let tidmap' = I.insert (fromId old) nexttid tidmap
+        nexttid' = nexttid + 1
+    in ((tidmap', nexttid', cridmap, nextcrid), Fork (toId nexttid))
+  updateAction (tidmap, nexttid, cridmap, nextcrid) (ForkOS old) =
+    let tidmap' = I.insert (fromId old) nexttid tidmap
+        nexttid' = nexttid + 1
+    in ((tidmap', nexttid', cridmap, nextcrid), ForkOS (toId nexttid))
+  updateAction s@(tidmap, _, _, _) (PutMVar mvid olds) =
+    (s, PutMVar mvid (map (renumbered tidmap) olds))
+  updateAction s@(tidmap, _, _, _) (TryPutMVar mvid b olds) =
+    (s, TryPutMVar mvid b (map (renumbered tidmap) olds))
+  updateAction s@(tidmap, _, _, _) (TakeMVar mvid olds) =
+    (s, TakeMVar mvid (map (renumbered tidmap) olds))
+  updateAction s@(tidmap, _, _, _) (TryTakeMVar mvid b olds) =
+    (s, TryTakeMVar mvid b (map (renumbered tidmap) olds))
+  updateAction (tidmap, nexttid, cridmap, nextcrid) (NewCRef old) =
+    let cridmap' = I.insert (fromId old) nextcrid cridmap
+        nextcrid' = nextcrid + 1
+    in ((tidmap, nexttid, cridmap', nextcrid'), NewCRef (toId nextcrid))
+  updateAction s@(_, _, cridmap, _) (ReadCRef old) =
+    (s, ReadCRef (renumbered cridmap old))
+  updateAction s@(_, _, cridmap, _) (ReadCRefCas old) =
+    (s, ReadCRefCas (renumbered cridmap old))
+  updateAction s@(_, _, cridmap, _) (ModCRef old) =
+    (s, ModCRef (renumbered cridmap old))
+  updateAction s@(_, _, cridmap, _) (ModCRefCas old) =
+    (s, ModCRefCas (renumbered cridmap old))
+  updateAction s@(_, _, cridmap, _) (WriteCRef old) =
+    (s, WriteCRef (renumbered cridmap old))
+  updateAction s@(_, _, cridmap, _) (CasCRef old b) =
+    (s, CasCRef (renumbered cridmap old) b)
+  updateAction s@(tidmap, _, _, _) (STM tas olds) =
+    (s, STM tas (map (renumbered tidmap) olds))
+  updateAction s@(tidmap, _, _, _) (ThrowTo old) =
+    (s, ThrowTo (renumbered tidmap old))
+  updateAction s@(tidmap, _, _, _) (BlockedThrowTo old) =
+    (s, BlockedThrowTo (renumbered tidmap old))
+  updateAction s act = (s, act)
+
+  renumbered :: (Coercible a Id, Coercible Id a) => I.IntMap Int -> a -> a
+  renumbered idmap id_ = toId $ I.findWithDefault (fromId id_) (fromId id_) idmap
+
+-------------------------------------------------------------------------------
+-- * Utilities
+
+-- | Helper function for constructing IDs of any sort.
+toId :: Coercible Id a => Int -> a
+toId = coerce . Id Nothing
+
+-- | Helper function for deconstructing IDs of any sort.
+fromId :: Coercible a Id => a -> Int
+fromId a = let (Id _ id_) = coerce a in id_

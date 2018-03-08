@@ -19,8 +19,7 @@ import           System.Random              (mkStdGen)
 import           Test.DejaFu                (Failure, Predicate,
                                              ProPredicate(..), Result(..), Way,
                                              alwaysTrue, somewhereTrue)
-import           Test.DejaFu.Conc           (ConcIO, Scheduler(..), randomSched,
-                                             runConcurrent)
+import           Test.DejaFu.Conc           (ConcIO, randomSched, runConcurrent)
 import           Test.DejaFu.SCT.Internal
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
@@ -106,7 +105,10 @@ prop_dep_fun conc = H.property $ do
     seed <- H.forAll genInt
     fs <- H.forAll $ genList HGen.bool
 
-    (efa1, tids1, efa2, tids2) <- liftIO $ runNorm seed (permuteBy mem (map (\f _ _ -> f) fs)) mem
+    (efa1, tids1, efa2, tids2) <- liftIO $ runNorm
+      seed
+      (renumber mem 1 1 . permuteBy mem (map (\f _ _ -> f) fs))
+      mem
     H.footnote ("            to: " ++ show tids2)
     H.footnote ("rewritten from: " ++ show tids1)
     efa1 H.=== efa2
@@ -115,16 +117,11 @@ prop_dep_fun conc = H.property $ do
       let g = mkStdGen seed
       (efa1, _, trc1) <- runConcurrent randomSched memtype g conc
       let tids1 = toTIdTrace trc1
-      (efa2, _, trc2) <- play memtype (norm tids1) conc
+      (efa2, _, trc2) <- replay (play memtype conc) (norm tids1)
       let tids2 = toTIdTrace trc2
       pure (efa1, map fst tids1, efa2, map fst tids2)
 
-    play = runConcurrent (Scheduler sched) where
-      sched prior runnable ((t, Stop):ts)
-        | any ((==t) . fst) runnable = (Just t, ts)
-        | otherwise = sched prior runnable ts
-      sched _ _ ((t, _):ts) = (Just t, ts)
-      sched _ _ _ = (Nothing, [])
+    play memtype conc s g = runConcurrent s memtype g conc
 
 -------------------------------------------------------------------------------
 -- Exceptions

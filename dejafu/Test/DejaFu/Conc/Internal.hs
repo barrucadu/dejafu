@@ -57,6 +57,20 @@ data CResult n r g a = CResult
   , finalDecision :: Maybe (ThreadId, ThreadAction)
   }
 
+-- | A snapshot of the concurrency state immediately after 'dontCheck'
+-- finishes.
+--
+-- @since 1.1.0.0
+data DCSnapshot r n a = DCSnapshot
+  { dcsContext :: Context n r ()
+  -- ^ The execution context.  The scheduler state is ignored when
+  -- restoring.
+  , dcsRestore :: Threads n r -> n ()
+  -- ^ Action to restore CRef, MVar, and TVar values.
+  , dcsRef :: r (Maybe (Either Failure a))
+  -- ^ Reference where the result will be written.
+  }
+
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
