@@ -134,9 +134,9 @@ instance Ca.MonadMask (ConcT r n) where
 
 #if MIN_VERSION_exceptions(0,9,0)
   -- from https://github.com/fpco/stackage/issues/3315#issuecomment-368583481
-  generalBracket acquire release cleanup use = mask $ \unmasked -> do
+  generalBracket acquire release cleanup use = Ca.mask $ \unmasked -> do
     resource <- acquire
-    result <- unmasked (use resource) `catch` (\e -> cleanup resource e >> throwM e)
+    result <- unmasked (use resource) `Ca.catch` (\e -> cleanup resource e >> Ca.throwM e)
     _ <- release resource
     pure result
 #endif
