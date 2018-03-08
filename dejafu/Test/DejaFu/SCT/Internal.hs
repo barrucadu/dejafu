@@ -91,14 +91,14 @@ sct' settings s0 sfun srun run = go Nothing [] s0 where
           eq _ _ _ = False
       in if any (eq f res) seen
          then go (Just res) seen s
-         else doshrink res trace (res:seen) s
-    Nothing -> doshrink
+         else dosimplify res trace (res:seen) s
+    Nothing -> dosimplify
 
-  doshrink res [] seen s = ((res, []) :) <$> go (Just res) seen s
-  doshrink res trace seen s
-    | not (_shrink settings) = ((res, trace) :) <$> go (Just res) seen s
+  dosimplify res [] seen s = ((res, []) :) <$> go (Just res) seen s
+  dosimplify res trace seen s
+    | not (_simplify settings) = ((res, trace) :) <$> go (Just res) seen s
     | otherwise = do
-        shrunk <- shrink settings run res trace
+        shrunk <- simplifyExecution settings run res trace
         (shrunk :) <$> go (Just res) seen s
 
   earlyExit = fromMaybe (const False) (_earlyExit settings)
@@ -106,9 +106,9 @@ sct' settings s0 sfun srun run = go Nothing [] s0 where
 
 -- | Given a result and a trace, produce a more minimal trace.
 --
--- In principle, shrinking is semantics preserving and can be done
--- without needing to execute the computation again.  However, there
--- are two good reasons to do so:
+-- In principle, simplification is semantics preserving and can be
+-- done without needing to execute the computation again.  However,
+-- there are two good reasons to do so:
 --
 --  * It's a sanity check that there are no bugs.
 --  * It's easier to generate a reduced sequence of scheduling
@@ -117,33 +117,33 @@ sct' settings s0 sfun srun run = go Nothing [] s0 where
 --
 -- Unlike shrinking in randomised property-testing tools like
 -- QuickCheck or Hedgehog, we only run the test case /once/, at the
--- end, rather than after every shrinking step.
-shrink :: (MonadConc n, MonadRef r n)
+-- end, rather than after every simplification step.
+simplifyExecution :: (MonadConc n, MonadRef r n)
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
   -> (forall x. Scheduler x -> x -> n (Either Failure a, x, Trace))
   -- ^ Just run the computation
   -> Either Failure a
-  -- ^ The result to shrink to
+  -- ^ The expected result
   -> Trace
   -> n (Either Failure a, Trace)
-shrink settings run res trace
-    | tidTrace == normalisedTrace = do
-        debugPrint ("Shrinking new result '" ++ p res ++ "': no shrink possible!")
+simplifyExecution settings run res trace
+    | tidTrace == simplifiedTrace = do
+        debugPrint ("Simplifying new result '" ++ p res ++ "': no simplification possible!")
         pure (res, trace)
     | otherwise = do
-        debugPrint ("Shrinking new result '" ++ p res ++ "': OK!")
-        (res', _, trace') <- replay run normalisedTrace
+        debugPrint ("Simplifying new result '" ++ p res ++ "': OK!")
+        (res', _, trace') <- replay run simplifiedTrace
         case (_equality settings, res, res') of
           (Just f,  Right a1, Right a2) | f a1 a2  -> pure (res', trace')
           (_,       Left  e1, Left  e2) | e1 == e2 -> pure (res', trace')
           (Nothing, Right _,  Right _) -> pure (res', trace') -- this is a risky case!
           _ -> do
-            debugPrint ("Got a different result after shrinking: '" ++ p res ++ "' /= '" ++ p res' ++ "'")
+            debugPrint ("Got a different result after simplifying: '" ++ p res ++ "' /= '" ++ p res' ++ "'")
             pure (res, trace)
   where
     tidTrace = toTIdTrace trace
-    normalisedTrace = normalise (_memtype settings) tidTrace
+    simplifiedTrace = simplify (_memtype settings) tidTrace
 
     debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
     debugShow = fromMaybe (const "_") (_debugShow settings)
@@ -164,15 +164,19 @@ replay run = run (Scheduler sched) where
     sched _ _ _ = (Nothing, [])
 
 -------------------------------------------------------------------------------
--- * Schedule normalisation
+-- * Schedule simplification
 
--- | Normalise a trace by permuting adjacent independent actions to
+-- | Simplify a trace by permuting adjacent independent actions to
 -- reduce context switching.
-normalise :: MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-normalise memtype trc0 = go (length trc0) trc0 where
+simplify :: MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
+simplify memtype trc0 = go (length trc0) trc0 where
   go 0 trc = trc
   go n trc =
-    let trc' = dropCommits memtype . pushForward memtype . pullBack memtype . preferLowest $ trc
+    let trc' = dropCommits memtype
+             . pushForward memtype
+             . pullBack memtype
+             . preferLowest
+             $ trc
     in if trc' /= trc then go (n-1) trc' else trc
 
   preferLowest = permuteBy memtype . repeat $ \tid1 tid2 -> tid1 > tid2

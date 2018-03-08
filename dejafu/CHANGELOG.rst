@@ -13,10 +13,10 @@ unreleased
 Added
 ~~~~~
 
-* (:issue:`183`) SCT settings for trace shrinking:
+* (:issue:`183`) SCT settings for trace simplification:
 
     * ``Test.DejaFu.Settings.lequality``
-    * ``Test.DejaFu.Settings.lshrink``
+    * ``Test.DejaFu.Settings.lsimplify``
 
 * ``Test.DejaFu.Utils.toTIdTrace`` to extract thread IDs from a trace.
 

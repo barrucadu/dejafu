@@ -165,22 +165,28 @@ module Test.DejaFu.Settings
 
   , lequality
 
-  -- ** Shrinking
+  -- ** Trace simplification
 
   -- | There may be many ways to reveal the same bug, and dejafu is
   -- not guaranteed to find the simplest way first.  This is
   -- particularly problematic with random testing, where the schedules
-  -- generated tend to involve a lot of context switching.  Shrinking
-  -- produces simpler traces, which still have the same essential
-  -- behaviour.
+  -- generated tend to involve a lot of context switching.
+  -- Simplification produces smaller traces, which still have the same
+  -- essential behaviour.
   --
-  -- __Performance:__ Shrinking can be expensive, as it involves
-  -- running the program again for each distinct result.  This is why
-  -- shrinking is disabled by default.  If you want to use shrinking,
-  -- it is /highly/ recommended to also use 'lequality', to reduce the
-  -- number of traces to shrink.
+  -- __Performance:__ Simplification in dejafu, unlike shrinking in
+  -- most random testing tools, is quite cheap.  Simplification is
+  -- guaranteed to preserve semantics, so the test case does not need
+  -- to be re-run repeatedly during the simplification process.  The
+  -- test case is re-run only /once/, after the process completes, for
+  -- implementation reasons.
+  --
+  -- Concurrency tests can be rather large, however.  So
+  -- simplification is disabled by default, and it is /highly/
+  -- recommended to also use 'lequality', to reduce the number of
+  -- traces to simplify.
 
-  , lshrink
+  , lsimplify
 
   -- ** Debug output
 
@@ -230,7 +236,7 @@ fromWayAndMemType way memtype = Settings
   , _debugPrint = Nothing
   , _earlyExit = Nothing
   , _equality = Nothing
-  , _shrink = False
+  , _simplify = False
   }
 
 -------------------------------------------------------------------------------
@@ -411,13 +417,13 @@ lequality :: Lens' (Settings n a) (Maybe (a -> a -> Bool))
 lequality afb s = (\b -> s {_equality = b}) <$> afb (_equality s)
 
 -------------------------------------------------------------------------------
--- Shrinking
+-- Simplification
 
--- | A lens into the shrink flag.
+-- | A lens into the simplify flag.
 --
 -- @since unreleased
-lshrink :: Lens' (Settings n a) Bool
-lshrink afb s = (\b -> s {_shrink = b}) <$> afb (_shrink s)
+lsimplify :: Lens' (Settings n a) Bool
+lsimplify afb s = (\b -> s {_simplify = b}) <$> afb (_simplify s)
 
 -------------------------------------------------------------------------------
 -- Debug output
