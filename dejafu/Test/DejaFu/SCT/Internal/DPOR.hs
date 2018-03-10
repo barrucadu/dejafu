@@ -634,10 +634,8 @@ dependent' ds t1 a1 t2 l2 = case (a1, l2) of
   -- thread and if the actions can be interrupted. We can also
   -- slightly improve on that by not considering interrupting the
   -- normal termination of a thread: it doesn't make a difference.
-  (ThrowTo t, WillStop) | t == t2 -> False
-  (Stop, WillThrowTo t) | t == t1 -> False
-  (ThrowTo t, _)     | t == t2 -> canInterruptL ds t2 l2
-  (_, WillThrowTo t) | t == t1 -> canInterrupt  ds t1 a1
+  (ThrowTo t, _)     | t == t2 -> canInterruptL ds t2 l2 && l2 /= WillStop
+  (_, WillThrowTo t) | t == t1 -> canInterrupt  ds t1 a1 && a1 /= Stop
 
   -- Another worst-case: assume all STM is dependent.
   (STM _ _, WillSTM) -> True
@@ -656,56 +654,37 @@ dependent' ds t1 a1 t2 l2 = case (a1, l2) of
 -- being so great an over-approximation as to be useless!
 dependentActions :: DepState -> ActionType -> ActionType -> Bool
 dependentActions ds a1 a2 = case (a1, a2) of
-  -- Unsynchronised reads and writes are always dependent, even under
-  -- a relaxed memory model, as an unsynchronised write gives rise to
-  -- a commit, which synchronises.
-  (UnsynchronisedRead          r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> a2 /= UnsynchronisedRead r1
-  (UnsynchronisedWrite         r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
-  (PartiallySynchronisedWrite  r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
-  (PartiallySynchronisedModify r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
-  (SynchronisedModify          r1, _) | same crefOf && a2 /= PartiallySynchronisedCommit r1 -> True
+  (UnsynchronisedRead _, UnsynchronisedRead _) -> False
 
   -- Unsynchronised writes and synchronisation where the buffer is not
   -- empty.
   --
   -- See [RMMVerification], lemma 5.25.
-  (UnsynchronisedWrite r1, PartiallySynchronisedCommit _) | same crefOf && isBuffered ds r1 -> False
-  (PartiallySynchronisedCommit _, UnsynchronisedWrite r2) | same crefOf && isBuffered ds r2 -> False
+  (UnsynchronisedWrite r1, PartiallySynchronisedCommit r2) | r1 == r2 && isBuffered ds r1 -> False
+  (PartiallySynchronisedCommit r1, UnsynchronisedWrite r2) | r1 == r2 && isBuffered ds r1 -> False
 
   -- Unsynchronised reads where a memory barrier would flush a
   -- buffered write
-  (UnsynchronisedRead r1, _) | isBarrier a2 -> isBuffered ds r1
-  (_, UnsynchronisedRead r2) | isBarrier a1 -> isBuffered ds r2
+  (UnsynchronisedRead r1, _) | isBarrier a2 && isBuffered ds r1 -> True
+  (_, UnsynchronisedRead r2) | isBarrier a1 && isBuffered ds r2 -> True
 
   -- Commits and memory barriers must be dependent, as memory barriers
   -- (currently) flush in a consistent order.  Alternative orders need
   -- to be explored as well.  Perhaps a better implementation of
   -- memory barriers would just block every non-commit thread while
   -- any buffer is nonempty.
-  (PartiallySynchronisedCommit _, _) | isBarrier a2 -> True
-  (_, PartiallySynchronisedCommit _) | isBarrier a1 -> True
+  (PartiallySynchronisedCommit r1, _) | synchronises a2 r1 -> True
+  (_, PartiallySynchronisedCommit r2) | synchronises a1 r2 -> True
 
   -- Two @MVar@ puts are dependent if they're to the same empty
   -- @MVar@, and two takes are dependent if they're to the same full
   -- @MVar@.
-  (SynchronisedWrite v1, SynchronisedWrite v2) -> v1 == v2 && not (isFull ds v1)
-  (SynchronisedRead  v1, SynchronisedRead  v2) -> v1 == v2 && isFull ds v1
+  (SynchronisedWrite v1, SynchronisedWrite v2) | v1 == v2 -> not (isFull ds v1)
+  (SynchronisedRead  v1, SynchronisedRead  v2) | v1 == v2 -> isFull ds v1
+  (SynchronisedWrite v1, SynchronisedRead  v2) | v1 == v2 -> True
+  (SynchronisedRead  v1, SynchronisedWrite v2) | v1 == v2 -> True
 
-  (_, _) -> case getSame crefOf of
-    -- Two actions on the same CRef where at least one is synchronised
-    Just r -> synchronises a1 r || synchronises a2 r
-    -- Two actions on the same MVar
-    _ -> same mvarOf
-
-  where
-    same :: Eq a => (ActionType -> Maybe a) -> Bool
-    same = isJust . getSame
-
-    getSame :: Eq a => (ActionType -> Maybe a) -> Maybe a
-    getSame f =
-      let f1 = f a1
-          f2 = f a2
-      in if f1 == f2 then f1 else Nothing
+  (_, _) -> maybe False (\r -> Just r == crefOf a2) (crefOf a1)
 
 -------------------------------------------------------------------------------
 -- ** Dependency function state
