@@ -6,6 +6,16 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+unreleased
+----------
+
+Fixed
+~~~~~
+
+* (:issue:`243`) Add missing dependency for ``setNumCapabilities``
+  actions.
+
+
 1.3.0.1 (2018-03-08)
 --------------------
 

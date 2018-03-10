@@ -641,11 +641,11 @@ dependent' ds t1 a1 t2 l2 = case (a1, l2) of
   (STM _ _, WillSTM) -> True
   (BlockedSTM _, WillSTM) -> True
 
-  -- This is a bit pessimistic: Set/Get are only dependent if the
-  -- value set is not the same as the value that will be got, but we
-  -- can't know that here. 'dependent' optimises this case.
+  -- the number of capabilities is essentially a global shared
+  -- variable
   (GetNumCapabilities _, WillSetNumCapabilities _) -> True
   (SetNumCapabilities _, WillGetNumCapabilities)   -> True
+  (SetNumCapabilities _, WillSetNumCapabilities _) -> True
 
   _ -> dependentActions ds (simplifyAction a1) (simplifyLookahead l2)
 
