@@ -6,6 +6,19 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+1.3.0.2 (2018-03-11)
+--------------------
+
+* Git: :tag:`dejafu-1.3.0.2`
+* Hackage: :hackage:`dejafu-1.3.0.2`
+
+Fixed
+~~~~~
+
+* (:pull:`244`) Add missing dependency for ``setNumCapabilities``
+  actions.
+
+
 1.3.0.1 (2018-03-08)
 --------------------
 

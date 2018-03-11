@@ -65,4 +65,10 @@ tests = toTestList
       t <- mask $ \restore -> fork (try (restore (act s)) >> pure ())
       killThread t
       tryReadMVar s
+
+  , djfu "https://github.com/barrucadu/dejafu/issues/243" (gives' [1,2,3]) $ do
+      setNumCapabilities 1
+      _ <- fork (setNumCapabilities 2)
+      _ <- fork (setNumCapabilities 3)
+      getNumCapabilities
   ]
