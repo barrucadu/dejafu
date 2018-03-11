@@ -7,13 +7,16 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-unreleased
-----------
+1.4.0.2 (2018-03-11)
+--------------------
+
+* Git: :tag:`concurrency-1.4.0.2`
+* Hackage: :hackage:`concurrency-1.4.0.2`
 
 Miscellaneous
 ~~~~~~~~~~~~~
 
-* The upper bound on :hackage:`exceptions` is <0.11.
+* (:pull:`245`) The upper bound on :hackage:`exceptions` is <0.11.
 
 
 1.4.0.1 (2018-02-26)

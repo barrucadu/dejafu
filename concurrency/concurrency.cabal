@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                concurrency
-version:             1.4.0.1
+version:             1.4.0.2
 synopsis:            Typeclasses, functions, and data types for concurrency and STM.
 
 description:
@@ -32,7 +32,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      concurrency-1.4.0.1
+  tag:      concurrency-1.4.0.2
 
 library
   exposed-modules:     Control.Monad.Conc.Class

@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                hunit-dejafu
-version:             1.1.0.1
+version:             1.1.0.2
 synopsis:            Deja Fu support for the HUnit test framework.
 
 description:
@@ -30,7 +30,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      hunit-dejafu-1.1.0.1
+  tag:      hunit-dejafu-1.1.0.2
 
 library
   exposed-modules:     Test.HUnit.DejaFu
