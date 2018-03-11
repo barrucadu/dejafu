@@ -31,7 +31,7 @@ newtype ThreadId = ThreadId Id
 instance Show ThreadId where
   show (ThreadId id_) = show id_
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic ThreadId
 
 -- | Every @CRef@ has a unique identifier.
@@ -43,7 +43,7 @@ newtype CRefId = CRefId Id
 instance Show CRefId where
   show (CRefId id_) = show id_
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic CRefId
 
 -- | Every @MVar@ has a unique identifier.
@@ -55,7 +55,7 @@ newtype MVarId = MVarId Id
 instance Show MVarId where
   show (MVarId id_) = show id_
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic MVarId
 
 -- | Every @TVar@ has a unique identifier.
@@ -67,7 +67,7 @@ newtype TVarId = TVarId Id
 instance Show TVarId where
   show (TVarId id_) = show id_
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic TVarId
 
 -- | An identifier for a thread, @MVar@, @CRef@, or @TVar@.
@@ -88,7 +88,7 @@ instance Show Id where
   show (Id (Just n) _) = n
   show (Id _ i) = show i
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic Id
 
 instance NFData Id
@@ -200,7 +200,7 @@ data ThreadAction =
   -- ^ Execute an action with @dontCheck@.
   deriving (Eq, Show)
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic ThreadAction
 
 -- this makes me sad
@@ -335,7 +335,7 @@ data Lookahead =
   -- ^ Will execute an action with @dontCheck@.
   deriving (Eq, Show)
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic Lookahead
 
 -- this also makes me sad
@@ -402,7 +402,7 @@ data TAction =
   -- ^ Terminate successfully and commit effects.
   deriving (Eq, Show)
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic TAction
 
 -- | @since 0.5.1.0
@@ -434,7 +434,7 @@ data Decision =
   -- ^ Pre-empt the running thread, and switch to another.
   deriving (Eq, Show)
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic Decision
 
 -- | @since 0.5.1.0
@@ -500,7 +500,7 @@ instance NFData Failure where
   rnf (UncaughtException e) = rnf (show e)
   rnf f = f `seq` ()
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic Failure
 
 -- | Check if a failure is an @InternalError@.
@@ -556,7 +556,7 @@ data Bounds = Bounds
   , boundLength :: Maybe LengthBound
   } deriving (Eq, Ord, Read, Show)
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic Bounds
 
 -- | @since 0.5.1.0
@@ -571,7 +571,7 @@ instance NFData Bounds
 newtype PreemptionBound = PreemptionBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic PreemptionBound
 
 -- | @since 0.5.1.0
@@ -586,7 +586,7 @@ instance NFData PreemptionBound
 newtype FairBound = FairBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic FairBound
 
 -- | @since 0.5.1.0
@@ -601,7 +601,7 @@ instance NFData FairBound
 newtype LengthBound = LengthBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic LengthBound
 
 -- | @since 0.5.1.0
@@ -623,7 +623,7 @@ data Discard
   -- reported as a possible behaviour of the program.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic Discard
 
 instance NFData Discard
@@ -688,7 +688,7 @@ data MemType =
   -- created.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic MemType
 
 -- | @since 0.5.1.0
@@ -703,8 +703,8 @@ newtype MonadFailException = MonadFailException String
 
 instance Exception MonadFailException
 
--- | @since unreleased
+-- | @since 1.3.1.0
 deriving instance Generic MonadFailException
 
--- | @since unreleased
+-- | @since 1.3.1.0
 instance NFData MonadFailException

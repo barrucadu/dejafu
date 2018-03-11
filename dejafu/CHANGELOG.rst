@@ -7,13 +7,16 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-unreleased
-----------
+1.3.1.0 (2018-03-11)
+--------------------
+
+* Git: :tag:`dejafu-1.3.1.0`
+* Hackage: :hackage:`dejafu-1.3.1.0`
 
 Added
 ~~~~~
 
-* ``Generic`` instances for:
+* (:pull:`246`) ``Generic`` instances for:
 
     * ``Test.DejaFu.Types.ThreadId``
     * ``Test.DejaFu.Types.CRefId``
@@ -33,7 +36,8 @@ Added
     * ``Test.DejaFu.Types.MemType``
     * ``Test.DejaFu.Types.MonadFailException``
 
-* ``NFData`` instance for ``Test.DejaFu.Types.MonadFailException``
+* (:pull:`246`) ``NFData`` instance for
+  ``Test.DejaFu.Types.MonadFailException``
 
 Fixed
 ~~~~~
