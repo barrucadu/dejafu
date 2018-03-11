@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GADTs #-}
 
 -- |
@@ -6,20 +8,21 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : GADTs
+-- Portability : DeriveAnyClass, DeriveGeneric, GADTs
 --
 -- Internal types and functions used throughout DejaFu.  This module
 -- is NOT considered to form part of the public interface of this
 -- library.
 module Test.DejaFu.Internal where
 
-import           Control.DeepSeq    (NFData(..))
+import           Control.DeepSeq    (NFData)
 import           Control.Monad.Ref  (MonadRef(..))
 import           Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map.Strict    as M
 import           Data.Maybe         (fromMaybe)
 import           Data.Set           (Set)
 import qualified Data.Set           as S
+import           GHC.Generics       (Generic)
 import           System.Random      (RandomGen)
 
 import           Test.DejaFu.Types
@@ -62,14 +65,7 @@ data IdSource = IdSource
   , _mvids :: (Int, [String])
   , _tvids :: (Int, [String])
   , _tids  :: (Int, [String])
-  } deriving (Eq, Ord, Show)
-
-instance NFData IdSource where
-  rnf idsource = rnf ( _crids idsource
-                     , _mvids idsource
-                     , _tvids idsource
-                     , _tids  idsource
-                     )
+  } deriving (Eq, Ord, Show, Generic, NFData)
 
 -- | Get the next free 'CRefId'.
 nextCRId :: String -> IdSource -> (IdSource, CRefId)
@@ -247,18 +243,7 @@ data ActionType =
   | SynchronisedOther
   -- ^ Some other action which does require cross-thread
   -- communication.
-  deriving (Eq, Show)
-
-instance NFData ActionType where
-  rnf (UnsynchronisedRead c) = rnf c
-  rnf (UnsynchronisedWrite c) = rnf c
-  rnf (PartiallySynchronisedCommit c) = rnf c
-  rnf (PartiallySynchronisedWrite c) = rnf c
-  rnf (PartiallySynchronisedModify c) = rnf c
-  rnf (SynchronisedModify c) = rnf c
-  rnf (SynchronisedRead m) = rnf m
-  rnf (SynchronisedWrite m) = rnf m
-  rnf a = a `seq` ()
+  deriving (Eq, Show, Generic, NFData)
 
 -- | Check if an action imposes a write barrier.
 isBarrier :: ActionType -> Bool

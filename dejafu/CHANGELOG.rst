@@ -7,6 +7,35 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Added
+~~~~~
+
+* ``Generic`` instances for:
+
+    * ``Test.DejaFu.Types.ThreadId``
+    * ``Test.DejaFu.Types.CRefId``
+    * ``Test.DejaFu.Types.MVarId``
+    * ``Test.DejaFu.Types.TVarId``
+    * ``Test.DejaFu.Types.Id``
+    * ``Test.DejaFu.Types.ThreadAction``
+    * ``Test.DejaFu.Types.Lookahead``
+    * ``Test.DejaFu.Types.TAction``
+    * ``Test.DejaFu.Types.Decision``
+    * ``Test.DejaFu.Types.Failure``
+    * ``Test.DejaFu.Types.Bounds``
+    * ``Test.DejaFu.Types.PreemptionBound``
+    * ``Test.DejaFu.Types.FairBound``
+    * ``Test.DejaFu.Types.LengthBound``
+    * ``Test.DejaFu.Types.Discard``
+    * ``Test.DejaFu.Types.MemType``
+    * ``Test.DejaFu.Types.MonadFailException``
+
+* ``NFData`` instance for ``Test.DejaFu.Types.MonadFailException``
+
+
 1.3.0.3 (2018-03-11)
 --------------------
 

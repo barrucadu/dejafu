@@ -1,12 +1,14 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ViewPatterns #-}
 
 -- |
 -- Module      : Test.DejaFu.SCT.Internal.DPOR
--- Copyright   : (c) 2015--2017 Michael Walker
+-- Copyright   : (c) 2015--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : ViewPatterns
+-- Portability : DeriveAnyClass, DeriveGeneric, ViewPatterns
 --
 -- Internal types and functions for SCT via dynamic partial-order
 -- reduction.  This module is NOT considered to form part of the
@@ -28,6 +30,7 @@ import           Data.Sequence        (Seq, (|>))
 import qualified Data.Sequence        as Sq
 import           Data.Set             (Set)
 import qualified Data.Set             as S
+import           GHC.Generics         (Generic)
 
 import           Test.DejaFu.Internal
 import           Test.DejaFu.Schedule (Scheduler(..))
@@ -59,16 +62,7 @@ data DPOR = DPOR
   -- ^ Transitions which have been taken, excluding
   -- conservatively-added ones. This is used in implementing sleep
   -- sets.
-  } deriving (Eq, Show)
-
-instance NFData DPOR where
-  rnf dpor = rnf ( dporRunnable dpor
-                 , dporTodo     dpor
-                 , dporNext     dpor
-                 , dporDone     dpor
-                 , dporSleep    dpor
-                 , dporTaken    dpor
-                 )
+  } deriving (Eq, Show, Generic, NFData)
 
 -- | Check the DPOR data invariants and raise an error if any are
 -- broken.
@@ -109,16 +103,7 @@ data BacktrackStep = BacktrackStep
   -- alternatives were added conservatively due to the bound.
   , bcktState      :: DepState
   -- ^ Some domain-specific state at this point.
-  } deriving (Eq, Show)
-
-instance NFData BacktrackStep where
-  rnf bs = rnf ( bcktThreadid   bs
-               , bcktDecision   bs
-               , bcktAction     bs
-               , bcktRunnable   bs
-               , bcktBacktracks bs
-               , bcktState      bs
-               )
+  } deriving (Eq, Show, Generic, NFData)
 
 -- | Initial DPOR state, given an initial thread ID. This initial
 -- thread should exist and be runnable at the start of execution.
@@ -362,17 +347,7 @@ data DPORSchedState k = DPORSchedState
   -- remove decisions from the sleep set.
   , schedBState    :: Maybe k
   -- ^ State used by the incremental bounding function.
-  } deriving (Eq, Show)
-
-instance NFData k => NFData (DPORSchedState k) where
-  rnf s = rnf ( schedSleep     s
-              , schedPrefix    s
-              , schedBPoints   s
-              , schedIgnore    s
-              , schedBoundKill s
-              , schedDepState  s
-              , schedBState    s
-              )
+  } deriving (Eq, Show, Generic, NFData)
 
 -- | Initial DPOR scheduler state for a given prefix
 initialDPORSchedState :: Map ThreadId ThreadAction
