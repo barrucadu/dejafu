@@ -20,6 +20,9 @@ Added
 
 * ``Test.DejaFu.Utils.toTIdTrace`` to extract thread IDs from a trace.
 
+* SCT setting to make some recoverable errors fatal:
+  ``Test.DejaFu.Settings.ldebugFatal``
+
 Performance
 ~~~~~~~~~~~
 

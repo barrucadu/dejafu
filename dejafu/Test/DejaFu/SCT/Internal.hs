@@ -51,7 +51,7 @@ sct settings s0 sfun srun conc
         Just (Right snap, _) -> sct'Snap snap
         Just (Left f, trace) -> pure [(Left f, trace)]
         _ -> do
-          debugPrint "Failed to construct snapshot, continuing without."
+          debugFatal "Failed to construct snapshot, continuing without."
           sct'Full
     | otherwise = sct'Full
   where
@@ -76,6 +76,7 @@ sct settings s0 sfun srun conc
     runFull sched s = runConcurrent sched (_memtype settings) s conc
     runSnap snap sched s = runWithDCSnapshot sched (_memtype settings) s snap
 
+    debugFatal = if _debugFatal settings then fatal "sct" else debugPrint
     debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
 
 -- | Like 'sct' but given a function to run the computation.
@@ -171,13 +172,14 @@ simplifyExecution settings run nextTId nextCRId res trace
           (_,       Left  e1, Left  e2) | e1 == e2 -> pure (res', trace')
           (Nothing, Right _,  Right _) -> pure (res', trace') -- this is a risky case!
           _ -> do
-            debugPrint ("Got a different result after simplifying: '" ++ p res ++ "' /= '" ++ p res' ++ "'")
+            debugFatal ("Got a different result after simplifying: '" ++ p res ++ "' /= '" ++ p res' ++ "'")
             pure (res, trace)
   where
     tidTrace = toTIdTrace trace
     simplifiedTrace = simplify (_memtype settings) tidTrace
     fixup = renumber (_memtype settings) (fromId nextTId) (fromId nextCRId)
 
+    debugFatal = if _debugFatal settings then fatal "sct" else debugPrint
     debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
     debugShow = fromMaybe (const "_") (_debugShow settings)
     p = either show debugShow

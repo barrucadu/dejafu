@@ -54,8 +54,13 @@ data T where
   B :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> Bounds -> T
   TEST :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
 
-toSettings :: Applicative f => Way -> Settings f a
-toSettings w = fromWayAndMemType w defaultMemType
+toSettings :: (Applicative f, Eq a, Show a) => Way -> Settings f a
+toSettings w
+  = set ldebugFatal True
+  . set ldebugShow (Just show)
+  . set lequality (Just (==))
+  . set lsimplify True
+  $ fromWayAndMemType w defaultMemType
 
 defaultWays :: [(String, Way)]
 defaultWays = defaultWaysFor defaultBounds

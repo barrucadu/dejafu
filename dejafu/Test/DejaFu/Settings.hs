@@ -198,6 +198,12 @@ module Test.DejaFu.Settings
   , ldebugShow
   , ldebugPrint
 
+  -- | The debugging output includes both recoverable errors and
+  -- informative messages.  Those recoverable errors can be made fatal
+  -- instead.
+
+  , ldebugFatal
+
   -- * Lens helpers
   , get
   , set
@@ -234,6 +240,7 @@ fromWayAndMemType way memtype = Settings
   , _discard = Nothing
   , _debugShow = Nothing
   , _debugPrint = Nothing
+  , _debugFatal = False
   , _earlyExit = Nothing
   , _equality = Nothing
   , _simplify = False
@@ -439,6 +446,12 @@ ldebugShow afb s = (\b -> s {_debugShow = b}) <$> afb (_debugShow s)
 -- @since 1.2.0.0
 ldebugPrint :: Lens' (Settings n a) (Maybe (String -> n ()))
 ldebugPrint afb s = (\b -> s {_debugPrint = b}) <$> afb (_debugPrint s)
+
+-- | A lens into the make-recoverable-errors-fatal flag.
+--
+-- @since unreleased
+ldebugFatal :: Lens' (Settings n a) Bool
+ldebugFatal afb s = (\b -> s {_debugFatal = b}) <$> afb (_debugFatal s)
 
 -------------------------------------------------------------------------------
 -- Lens helpers
