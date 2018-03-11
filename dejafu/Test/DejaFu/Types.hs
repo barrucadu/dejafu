@@ -203,12 +203,16 @@ data ThreadAction =
 -- | @since unreleased
 deriving instance Generic ThreadAction
 
+-- this makes me sad
 instance NFData ThreadAction where
   rnf (Fork t) = rnf t
   rnf (ForkOS t) = rnf t
-  rnf (ThreadDelay n) = rnf n
-  rnf (GetNumCapabilities c) = rnf c
-  rnf (SetNumCapabilities c) = rnf c
+  rnf (IsCurrentThreadBound b) = rnf b
+  rnf MyThreadId = ()
+  rnf (GetNumCapabilities i) = rnf i
+  rnf (SetNumCapabilities i) = rnf i
+  rnf Yield = ()
+  rnf (ThreadDelay i) = rnf i
   rnf (NewMVar m) = rnf m
   rnf (PutMVar m ts) = rnf (m, ts)
   rnf (BlockedPutMVar m) = rnf m
@@ -227,14 +231,22 @@ instance NFData ThreadAction where
   rnf (WriteCRef c) = rnf c
   rnf (CasCRef c b) = rnf (c, b)
   rnf (CommitCRef t c) = rnf (t, c)
-  rnf (STM tr ts) = rnf (tr, ts)
-  rnf (BlockedSTM tr) = rnf tr
+  rnf (STM as ts) = rnf (as, ts)
+  rnf (BlockedSTM as) = rnf as
+  rnf Catching = ()
+  rnf PopCatching = ()
+  rnf Throw = ()
   rnf (ThrowTo t) = rnf t
   rnf (BlockedThrowTo t) = rnf t
-  rnf (SetMasking b m) = b `seq` m `seq` ()
-  rnf (ResetMasking b m) = b `seq` m `seq` ()
-  rnf (DontCheck t) = rnf t
-  rnf a = a `seq` ()
+  rnf Killed = ()
+  rnf (SetMasking b m) = rnf (b, show m)
+  rnf (ResetMasking b m) = rnf (b, show m)
+  rnf LiftIO = ()
+  rnf Return = ()
+  rnf Stop = ()
+  rnf Subconcurrency = ()
+  rnf StopSubconcurrency = ()
+  rnf (DontCheck as) = rnf as
 
 -- | A one-step look-ahead at what a thread will do next.
 --
@@ -326,15 +338,24 @@ data Lookahead =
 -- | @since unreleased
 deriving instance Generic Lookahead
 
+-- this also makes me sad
 instance NFData Lookahead where
-  rnf (WillThreadDelay n) = rnf n
-  rnf (WillSetNumCapabilities c) = rnf c
+  rnf WillFork = ()
+  rnf WillForkOS = ()
+  rnf WillIsCurrentThreadBound = ()
+  rnf WillMyThreadId = ()
+  rnf WillGetNumCapabilities = ()
+  rnf (WillSetNumCapabilities i) = rnf i
+  rnf WillYield = ()
+  rnf (WillThreadDelay i) = rnf i
+  rnf WillNewMVar = ()
   rnf (WillPutMVar m) = rnf m
   rnf (WillTryPutMVar m) = rnf m
   rnf (WillReadMVar m) = rnf m
   rnf (WillTryReadMVar m) = rnf m
   rnf (WillTakeMVar m) = rnf m
   rnf (WillTryTakeMVar m) = rnf m
+  rnf WillNewCRef = ()
   rnf (WillReadCRef c) = rnf c
   rnf (WillReadCRefCas c) = rnf c
   rnf (WillModCRef c) = rnf c
@@ -342,10 +363,19 @@ instance NFData Lookahead where
   rnf (WillWriteCRef c) = rnf c
   rnf (WillCasCRef c) = rnf c
   rnf (WillCommitCRef t c) = rnf (t, c)
+  rnf WillSTM = ()
+  rnf WillCatching = ()
+  rnf WillPopCatching = ()
+  rnf WillThrow = ()
   rnf (WillThrowTo t) = rnf t
-  rnf (WillSetMasking b m) = b `seq` m `seq` ()
-  rnf (WillResetMasking b m) = b `seq` m `seq` ()
-  rnf l = l `seq` ()
+  rnf (WillSetMasking b m) = rnf (b, show m)
+  rnf (WillResetMasking b m) = rnf (b, show m)
+  rnf WillLiftIO = ()
+  rnf WillReturn = ()
+  rnf WillStop = ()
+  rnf WillSubconcurrency = ()
+  rnf WillStopSubconcurrency = ()
+  rnf WillDontCheck = ()
 
 -- | All the actions that an STM transaction can perform.
 --

@@ -35,6 +35,12 @@ Added
 
 * ``NFData`` instance for ``Test.DejaFu.Types.MonadFailException``
 
+Fixed
+~~~~~
+
+* (:issue:`199`) Missing cases in the ``NFData`` instances for
+  ``Test.DejaFu.Types.ThreadAction`` and ``TAction``
+
 
 1.3.0.3 (2018-03-11)
 --------------------
