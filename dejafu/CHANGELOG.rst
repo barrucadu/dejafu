@@ -7,6 +7,45 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.3.1.0 (2018-03-11)
+--------------------
+
+* Git: :tag:`dejafu-1.3.1.0`
+* Hackage: :hackage:`dejafu-1.3.1.0`
+
+Added
+~~~~~
+
+* (:pull:`246`) ``Generic`` instances for:
+
+    * ``Test.DejaFu.Types.ThreadId``
+    * ``Test.DejaFu.Types.CRefId``
+    * ``Test.DejaFu.Types.MVarId``
+    * ``Test.DejaFu.Types.TVarId``
+    * ``Test.DejaFu.Types.Id``
+    * ``Test.DejaFu.Types.ThreadAction``
+    * ``Test.DejaFu.Types.Lookahead``
+    * ``Test.DejaFu.Types.TAction``
+    * ``Test.DejaFu.Types.Decision``
+    * ``Test.DejaFu.Types.Failure``
+    * ``Test.DejaFu.Types.Bounds``
+    * ``Test.DejaFu.Types.PreemptionBound``
+    * ``Test.DejaFu.Types.FairBound``
+    * ``Test.DejaFu.Types.LengthBound``
+    * ``Test.DejaFu.Types.Discard``
+    * ``Test.DejaFu.Types.MemType``
+    * ``Test.DejaFu.Types.MonadFailException``
+
+* (:pull:`246`) ``NFData`` instance for
+  ``Test.DejaFu.Types.MonadFailException``
+
+Fixed
+~~~~~
+
+* (:issue:`199`) Missing cases in the ``NFData`` instances for
+  ``Test.DejaFu.Types.ThreadAction`` and ``TAction``
+
+
 1.3.0.3 (2018-03-11)
 --------------------
 

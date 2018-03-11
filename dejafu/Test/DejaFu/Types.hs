@@ -1,12 +1,14 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 -- |
 -- Module      : Test.DejaFu.Types
--- Copyright   : (c) 2017 Michael Walker
+-- Copyright   : (c) 2017--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : GeneralizedNewtypeDeriving
+-- Portability : DeriveGeneric, GeneralizedNewtypeDeriving, StandaloneDeriving
 --
 -- Common types and functions used throughout DejaFu.
 module Test.DejaFu.Types where
@@ -15,6 +17,7 @@ import           Control.DeepSeq   (NFData(..))
 import           Control.Exception (Exception(..), MaskingState(..),
                                     SomeException)
 import           Data.Function     (on)
+import           GHC.Generics      (Generic)
 
 -------------------------------------------------------------------------------
 -- * Identifiers
@@ -28,6 +31,9 @@ newtype ThreadId = ThreadId Id
 instance Show ThreadId where
   show (ThreadId id_) = show id_
 
+-- | @since 1.3.1.0
+deriving instance Generic ThreadId
+
 -- | Every @CRef@ has a unique identifier.
 --
 -- @since 1.0.0.0
@@ -36,6 +42,9 @@ newtype CRefId = CRefId Id
 
 instance Show CRefId where
   show (CRefId id_) = show id_
+
+-- | @since 1.3.1.0
+deriving instance Generic CRefId
 
 -- | Every @MVar@ has a unique identifier.
 --
@@ -46,6 +55,9 @@ newtype MVarId = MVarId Id
 instance Show MVarId where
   show (MVarId id_) = show id_
 
+-- | @since 1.3.1.0
+deriving instance Generic MVarId
+
 -- | Every @TVar@ has a unique identifier.
 --
 -- @since 1.0.0.0
@@ -55,10 +67,15 @@ newtype TVarId = TVarId Id
 instance Show TVarId where
   show (TVarId id_) = show id_
 
+-- | @since 1.3.1.0
+deriving instance Generic TVarId
+
 -- | An identifier for a thread, @MVar@, @CRef@, or @TVar@.
 --
 -- The number is the important bit.  The string is to make execution
 -- traces easier to read, but is meaningless.
+--
+-- @since 1.0.0.0
 data Id = Id (Maybe String) {-# UNPACK #-} !Int
 
 instance Eq Id where
@@ -71,8 +88,10 @@ instance Show Id where
   show (Id (Just n) _) = n
   show (Id _ i) = show i
 
-instance NFData Id where
-  rnf (Id n i) = rnf (n, i)
+-- | @since 1.3.1.0
+deriving instance Generic Id
+
+instance NFData Id
 
 -- | The ID of the initial thread.
 --
@@ -181,12 +200,19 @@ data ThreadAction =
   -- ^ Execute an action with @dontCheck@.
   deriving (Eq, Show)
 
+-- | @since 1.3.1.0
+deriving instance Generic ThreadAction
+
+-- this makes me sad
 instance NFData ThreadAction where
   rnf (Fork t) = rnf t
   rnf (ForkOS t) = rnf t
-  rnf (ThreadDelay n) = rnf n
-  rnf (GetNumCapabilities c) = rnf c
-  rnf (SetNumCapabilities c) = rnf c
+  rnf (IsCurrentThreadBound b) = rnf b
+  rnf MyThreadId = ()
+  rnf (GetNumCapabilities i) = rnf i
+  rnf (SetNumCapabilities i) = rnf i
+  rnf Yield = ()
+  rnf (ThreadDelay i) = rnf i
   rnf (NewMVar m) = rnf m
   rnf (PutMVar m ts) = rnf (m, ts)
   rnf (BlockedPutMVar m) = rnf m
@@ -205,14 +231,22 @@ instance NFData ThreadAction where
   rnf (WriteCRef c) = rnf c
   rnf (CasCRef c b) = rnf (c, b)
   rnf (CommitCRef t c) = rnf (t, c)
-  rnf (STM tr ts) = rnf (tr, ts)
-  rnf (BlockedSTM tr) = rnf tr
+  rnf (STM as ts) = rnf (as, ts)
+  rnf (BlockedSTM as) = rnf as
+  rnf Catching = ()
+  rnf PopCatching = ()
+  rnf Throw = ()
   rnf (ThrowTo t) = rnf t
   rnf (BlockedThrowTo t) = rnf t
-  rnf (SetMasking b m) = b `seq` m `seq` ()
-  rnf (ResetMasking b m) = b `seq` m `seq` ()
-  rnf (DontCheck t) = rnf t
-  rnf a = a `seq` ()
+  rnf Killed = ()
+  rnf (SetMasking b m) = rnf (b, show m)
+  rnf (ResetMasking b m) = rnf (b, show m)
+  rnf LiftIO = ()
+  rnf Return = ()
+  rnf Stop = ()
+  rnf Subconcurrency = ()
+  rnf StopSubconcurrency = ()
+  rnf (DontCheck as) = rnf as
 
 -- | A one-step look-ahead at what a thread will do next.
 --
@@ -301,15 +335,27 @@ data Lookahead =
   -- ^ Will execute an action with @dontCheck@.
   deriving (Eq, Show)
 
+-- | @since 1.3.1.0
+deriving instance Generic Lookahead
+
+-- this also makes me sad
 instance NFData Lookahead where
-  rnf (WillThreadDelay n) = rnf n
-  rnf (WillSetNumCapabilities c) = rnf c
+  rnf WillFork = ()
+  rnf WillForkOS = ()
+  rnf WillIsCurrentThreadBound = ()
+  rnf WillMyThreadId = ()
+  rnf WillGetNumCapabilities = ()
+  rnf (WillSetNumCapabilities i) = rnf i
+  rnf WillYield = ()
+  rnf (WillThreadDelay i) = rnf i
+  rnf WillNewMVar = ()
   rnf (WillPutMVar m) = rnf m
   rnf (WillTryPutMVar m) = rnf m
   rnf (WillReadMVar m) = rnf m
   rnf (WillTryReadMVar m) = rnf m
   rnf (WillTakeMVar m) = rnf m
   rnf (WillTryTakeMVar m) = rnf m
+  rnf WillNewCRef = ()
   rnf (WillReadCRef c) = rnf c
   rnf (WillReadCRefCas c) = rnf c
   rnf (WillModCRef c) = rnf c
@@ -317,10 +363,19 @@ instance NFData Lookahead where
   rnf (WillWriteCRef c) = rnf c
   rnf (WillCasCRef c) = rnf c
   rnf (WillCommitCRef t c) = rnf (t, c)
+  rnf WillSTM = ()
+  rnf WillCatching = ()
+  rnf WillPopCatching = ()
+  rnf WillThrow = ()
   rnf (WillThrowTo t) = rnf t
-  rnf (WillSetMasking b m) = b `seq` m `seq` ()
-  rnf (WillResetMasking b m) = b `seq` m `seq` ()
-  rnf l = l `seq` ()
+  rnf (WillSetMasking b m) = rnf (b, show m)
+  rnf (WillResetMasking b m) = rnf (b, show m)
+  rnf WillLiftIO = ()
+  rnf WillReturn = ()
+  rnf WillStop = ()
+  rnf WillSubconcurrency = ()
+  rnf WillStopSubconcurrency = ()
+  rnf WillDontCheck = ()
 
 -- | All the actions that an STM transaction can perform.
 --
@@ -347,13 +402,11 @@ data TAction =
   -- ^ Terminate successfully and commit effects.
   deriving (Eq, Show)
 
+-- | @since 1.3.1.0
+deriving instance Generic TAction
+
 -- | @since 0.5.1.0
-instance NFData TAction where
-  rnf (TRead t) = rnf t
-  rnf (TWrite t) = rnf t
-  rnf (TOrElse tr mtr) = rnf (tr, mtr)
-  rnf (TCatch tr mtr) = rnf (tr, mtr)
-  rnf ta = ta `seq` ()
+instance NFData TAction
 
 -------------------------------------------------------------------------------
 -- * Traces
@@ -381,11 +434,11 @@ data Decision =
   -- ^ Pre-empt the running thread, and switch to another.
   deriving (Eq, Show)
 
+-- | @since 1.3.1.0
+deriving instance Generic Decision
+
 -- | @since 0.5.1.0
-instance NFData Decision where
-  rnf (Start t) = rnf t
-  rnf (SwitchTo t) = rnf t
-  rnf d = d `seq` ()
+instance NFData Decision
 
 -------------------------------------------------------------------------------
 -- * Failures
@@ -447,6 +500,9 @@ instance NFData Failure where
   rnf (UncaughtException e) = rnf (show e)
   rnf f = f `seq` ()
 
+-- | @since 1.3.1.0
+deriving instance Generic Failure
+
 -- | Check if a failure is an @InternalError@.
 --
 -- @since 0.9.0.0
@@ -500,12 +556,11 @@ data Bounds = Bounds
   , boundLength :: Maybe LengthBound
   } deriving (Eq, Ord, Read, Show)
 
+-- | @since 1.3.1.0
+deriving instance Generic Bounds
+
 -- | @since 0.5.1.0
-instance NFData Bounds where
-  rnf bs = rnf ( boundPreemp bs
-               , boundFair   bs
-               , boundLength bs
-               )
+instance NFData Bounds
 
 -- | Restrict the number of pre-emptive context switches allowed in an
 -- execution.
@@ -516,10 +571,11 @@ instance NFData Bounds where
 newtype PreemptionBound = PreemptionBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
+-- | @since 1.3.1.0
+deriving instance Generic PreemptionBound
+
 -- | @since 0.5.1.0
-instance NFData PreemptionBound where
-  -- not derived, so it can have a separate @since annotation
-  rnf (PreemptionBound i) = rnf i
+instance NFData PreemptionBound
 
 -- | Restrict the maximum difference between the number of yield or
 -- delay operations different threads have performed.
@@ -530,10 +586,11 @@ instance NFData PreemptionBound where
 newtype FairBound = FairBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
+-- | @since 1.3.1.0
+deriving instance Generic FairBound
+
 -- | @since 0.5.1.0
-instance NFData FairBound where
-  -- not derived, so it can have a separate @since annotation
-  rnf (FairBound i) = rnf i
+instance NFData FairBound
 
 -- | Restrict the maximum length (in terms of primitive actions) of an
 -- execution.
@@ -544,10 +601,11 @@ instance NFData FairBound where
 newtype LengthBound = LengthBound Int
   deriving (Enum, Eq, Ord, Num, Real, Integral, Read, Show)
 
+-- | @since 1.3.1.0
+deriving instance Generic LengthBound
+
 -- | @since 0.5.1.0
-instance NFData LengthBound where
-  -- not derived, so it can have a separate @since annotation
-  rnf (LengthBound i) = rnf i
+instance NFData LengthBound
 
 -------------------------------------------------------------------------------
 -- * Discarding results and traces
@@ -565,8 +623,10 @@ data Discard
   -- reported as a possible behaviour of the program.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)
 
-instance NFData Discard where
-  rnf d = d `seq` ()
+-- | @since 1.3.1.0
+deriving instance Generic Discard
+
+instance NFData Discard
 
 -- | Combine two discard values, keeping the weaker.
 --
@@ -628,9 +688,11 @@ data MemType =
   -- created.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)
 
+-- | @since 1.3.1.0
+deriving instance Generic MemType
+
 -- | @since 0.5.1.0
-instance NFData MemType where
-  rnf m = m `seq` ()
+instance NFData MemType
 
 -------------------------------------------------------------------------------
 -- * @MonadFail@
@@ -640,3 +702,9 @@ newtype MonadFailException = MonadFailException String
   deriving Show
 
 instance Exception MonadFailException
+
+-- | @since 1.3.1.0
+deriving instance Generic MonadFailException
+
+-- | @since 1.3.1.0
+instance NFData MonadFailException

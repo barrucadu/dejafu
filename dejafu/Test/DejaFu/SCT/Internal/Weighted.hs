@@ -1,6 +1,9 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 -- |
 -- Module      : Test.DejaFu.SCT.Internal.Weighted
--- Copyright   : (c) 2015--2017 Michael Walker
+-- Copyright   : (c) 2015--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -11,11 +14,12 @@
 -- public interface of this library.
 module Test.DejaFu.SCT.Internal.Weighted where
 
-import           Control.DeepSeq      (NFData(..))
+import           Control.DeepSeq      (NFData)
 import           Data.List.NonEmpty   (toList)
 import           Data.Map.Strict      (Map)
 import qualified Data.Map.Strict      as M
 import           Data.Maybe           (fromMaybe)
+import           GHC.Generics         (Generic)
 import           System.Random        (RandomGen, randomR)
 
 import           Test.DejaFu.Schedule (Scheduler(..))
@@ -30,12 +34,7 @@ data RandSchedState g = RandSchedState
   -- ^ The thread weights: used in determining which to run.
   , schedGen     :: g
   -- ^ The random number generator.
-  } deriving (Eq, Show)
-
-instance NFData g => NFData (RandSchedState g) where
-  rnf s = rnf ( schedWeights s
-              , schedGen     s
-              )
+  } deriving (Eq, Show, Generic, NFData)
 
 -- | Initial weighted random scheduler state.
 initialRandSchedState :: Maybe (Map ThreadId Int) -> g -> RandSchedState g
