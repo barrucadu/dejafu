@@ -132,7 +132,13 @@ instance Ca.MonadMask (ConcT r n) where
   mask                mb = toConc (AMasking MaskedInterruptible   (\f -> unC $ mb $ wrap f))
   uninterruptibleMask mb = toConc (AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f))
 
-#if MIN_VERSION_exceptions(0,9,0)
+#if MIN_VERSION_exceptions(0,10,0)
+  generalBracket acquire release use = Ca.mask $ \unmasked -> do
+    resource <- acquire
+    b <- unmasked (use resource) `Ca.catch` (\e -> release resource (Ca.ExitCaseException e) >> Ca.throwM e)
+    c <- release resource (Ca.ExitCaseSuccess b)
+    pure (b, c)
+#elif MIN_VERSION_exceptions(0,9,0)
   -- from https://github.com/fpco/stackage/issues/3315#issuecomment-368583481
   generalBracket acquire release cleanup use = Ca.mask $ \unmasked -> do
     resource <- acquire

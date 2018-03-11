@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                dejafu
-version:             1.3.0.2
+version:             1.3.0.3
 synopsis:            A library for unit-testing concurrent programs.
 
 description:
@@ -33,7 +33,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      dejafu-1.3.0.2
+  tag:      dejafu-1.3.0.3
 
 library
   exposed-modules:     Test.DejaFu
@@ -61,7 +61,7 @@ library
                      , concurrency       >=1.3 && <1.5
                      , containers        >=0.5 && <0.6
                      , deepseq           >=1.1 && <2
-                     , exceptions        >=0.7 && <0.10
+                     , exceptions        >=0.7 && <0.11
                      , leancheck         >=0.6 && <0.8
                      , profunctors       >=4.0 && <6.0
                      , random            >=1.0 && <1.2
