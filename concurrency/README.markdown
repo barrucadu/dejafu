@@ -30,9 +30,6 @@ complete. If there is something else you need, file an issue!
 This used to be part of dejafu, but with the dejafu-0.4.0.0 release,
 it was split out into its own package.
 
-The documentation of the latest developmental version is
-[available online][docs].
-
 Why this and not something else?
 --------------------------------
 
@@ -61,6 +58,5 @@ Bug reports, pull requests, and comments are very welcome!
 Feel free to contact me on GitHub, through IRC (#haskell on freenode),
 or email (mike@barrucadu.co.uk).
 
-[docs]:    https://docs.barrucadu.co.uk/concurrency/dejafu-0.4
 [async]:   https://hackage.haskell.org/package/async
 [parconc]: http://chimera.labs.oreilly.com/books/1230000000929
