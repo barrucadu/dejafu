@@ -1,6 +1,6 @@
 -- |
--- Module      : Test.DejaFu.utils
--- Copyright   : (c) 2017 Michael Walker
+-- Module      : Test.DejaFu.Utils
+-- Copyright   : (c) 2017--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -18,6 +18,13 @@ import           Test.DejaFu.Types
 
 -------------------------------------------------------------------------------
 -- * Traces
+
+-- | Turn a 'Trace' into an abbreviated form.
+--
+-- @since 1.3.2.0
+toTIdTrace :: Trace -> [(ThreadId, ThreadAction)]
+toTIdTrace =
+  tail . scanl (\(t, _) (d, _, a) -> (tidOf t d, a)) (initialThread, undefined)
 
 -- | Pretty-print a trace, including a key of the thread IDs (not
 -- including thread 0). Each line of the key is indented by two

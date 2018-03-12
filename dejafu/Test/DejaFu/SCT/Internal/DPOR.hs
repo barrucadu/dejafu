@@ -152,7 +152,8 @@ findSchedulePrefix dpor = case dporNext dpor of
 
 -- | Add a new trace to the stack.  This won't work if to-dos aren't explored depth-first.
 incorporateTrace
-  :: Bool
+  :: MemType
+  -> Bool
   -- ^ Whether the \"to-do\" point which was used to create this new
   -- execution was conservative or not.
   -> Trace
@@ -160,10 +161,10 @@ incorporateTrace
   -- and the action performed.
   -> DPOR
   -> DPOR
-incorporateTrace conservative trace dpor0 = grow initialDepState (initialDPORThread dpor0) trace dpor0 where
+incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initialDPORThread dpor0) trace dpor0 where
   grow state tid trc@((d, _, a):rest) dpor =
     let tid'   = tidOf tid d
-        state' = updateDepState state tid' a
+        state' = updateDepState memtype state tid' a
     in case dporNext dpor of
          Just (t, child)
            | t == tid' ->
@@ -184,7 +185,7 @@ incorporateTrace conservative trace dpor0 = grow initialDepState (initialDPORThr
 
   -- Construct a new subtree corresponding to a trace suffix.
   subtree state tid sleep ((_, _, a):rest) = validateDPOR "incorporateTrace (subtree)" $
-    let state' = updateDepState state tid a
+    let state' = updateDepState memtype state tid a
         sleep' = M.filterWithKey (\t a' -> not $ dependent state' tid a t a') sleep
     in DPOR
         { dporRunnable = S.fromList $ case rest of
@@ -218,7 +219,8 @@ incorporateTrace conservative trace dpor0 = grow initialDepState (initialDPORThr
 -- runnable, a dependency is imposed between this final action and
 -- everything else.
 findBacktrackSteps
-  :: BacktrackFunc
+  :: MemType
+  -> BacktrackFunc
   -- ^ Backtracking function. Given a list of backtracking points, and
   -- a thread to backtrack to at a specific point in that list, add
   -- the new backtracking points. There will be at least one: this
@@ -235,12 +237,12 @@ findBacktrackSteps
   -> Trace
   -- ^ The execution trace.
   -> [BacktrackStep]
-findBacktrackSteps backtrack boundKill = go initialDepState S.empty initialThread [] . F.toList where
+findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty initialThread [] . F.toList where
   -- Walk through the traces one step at a time, building up a list of
   -- new backtracking points.
   go state allThreads tid bs ((e,i):is) ((d,_,a):ts) =
     let tid' = tidOf tid d
-        state' = updateDepState state tid' a
+        state' = updateDepState memtype state tid' a
         this = BacktrackStep
           { bcktThreadid   = tid'
           , bcktDecision   = d
@@ -438,18 +440,19 @@ backtrackAt toAll bs0 = backtrackAt' . nubBy ((==) `on` fst') . sortOn fst' wher
 -- yielded. Furthermore, threads which /will/ yield are ignored in
 -- preference of those which will not.
 dporSched
-  :: IncrementalBoundFunc k
+  :: MemType
+  -> IncrementalBoundFunc k
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
   -> Scheduler (DPORSchedState k)
-dporSched boundf = Scheduler $ \prior threads s ->
+dporSched memtype boundf = Scheduler $ \prior threads s ->
   let
     -- The next scheduler state
     nextState rest = s
       { schedBPoints  = schedBPoints s |> (restrictToBound fst threads', rest)
       , schedDepState = nextDepState
       }
-    nextDepState = let ds = schedDepState s in maybe ds (uncurry $ updateDepState ds) prior
+    nextDepState = let ds = schedDepState s in maybe ds (uncurry $ updateDepState memtype ds) prior
 
     -- Pick a new thread to run, not considering bounds. Choose the
     -- current thread if available and it hasn't just yielded,
@@ -688,19 +691,20 @@ initialDepState = DepState M.empty S.empty M.empty
 
 -- | Update the dependency state with the action that has just
 -- happened.
-updateDepState :: DepState -> ThreadId -> ThreadAction -> DepState
-updateDepState depstate tid act = DepState
-  { depCRState   = updateCRState       act $ depCRState   depstate
-  , depMVState   = updateMVState       act $ depMVState   depstate
-  , depMaskState = updateMaskState tid act $ depMaskState depstate
+updateDepState :: MemType -> DepState -> ThreadId -> ThreadAction -> DepState
+updateDepState memtype depstate tid act = DepState
+  { depCRState   = updateCRState memtype act $ depCRState   depstate
+  , depMVState   = updateMVState         act $ depMVState   depstate
+  , depMaskState = updateMaskState tid   act $ depMaskState depstate
   }
 
 -- | Update the @CRef@ buffer state with the action that has just
 -- happened.
-updateCRState :: ThreadAction -> Map CRefId Bool -> Map CRefId Bool
-updateCRState (CommitCRef _ r) = M.delete r
-updateCRState (WriteCRef    r) = M.insert r True
-updateCRState ta
+updateCRState :: MemType -> ThreadAction -> Map CRefId Bool -> Map CRefId Bool
+updateCRState SequentialConsistency _ = const M.empty
+updateCRState _ (CommitCRef _ r) = M.delete r
+updateCRState _ (WriteCRef    r) = M.insert r True
+updateCRState _ ta
   | isBarrier $ simplifyAction ta = const M.empty
   | otherwise = id
 

@@ -39,7 +39,10 @@ data Settings n a = Settings
   , _discard :: Maybe (Either Failure a -> Maybe Discard)
   , _debugShow :: Maybe (a -> String)
   , _debugPrint :: Maybe (String -> n ())
+  , _debugFatal :: Bool
   , _earlyExit :: Maybe (Either Failure a -> Bool)
+  , _equality :: Maybe (a -> a -> Bool)
+  , _simplify  :: Bool
   }
 
 -- | How to explore the possible executions of a concurrent program.

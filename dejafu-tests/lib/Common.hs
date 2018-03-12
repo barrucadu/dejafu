@@ -2,32 +2,31 @@
 
 module Common (module Common, module Test.Tasty.DejaFu, T.TestTree, T.expectFail) where
 
-import           Control.Arrow                 (second)
-import           Control.Exception             (ArithException, ArrayException,
-                                                SomeException, displayException)
-import           Control.Monad                 (void)
-import qualified Control.Monad.Catch           as C
+import           Control.Arrow              (second)
+import           Control.Exception          (ArithException, ArrayException,
+                                             SomeException, displayException)
+import           Control.Monad              (void)
+import qualified Control.Monad.Catch        as C
 import           Control.Monad.Conc.Class
-import           Control.Monad.IO.Class        (liftIO)
+import           Control.Monad.IO.Class     (liftIO)
 import           Control.Monad.STM.Class
-import qualified Data.Map                      as Map
-import qualified Data.Set                      as Set
-import qualified Hedgehog                      as H
-import qualified Hedgehog.Gen                  as HGen
-import qualified Hedgehog.Range                as HRange
-import           System.Random                 (mkStdGen)
-import           Test.DejaFu                   (Failure, Predicate,
-                                                ProPredicate(..), Result(..),
-                                                Way, alwaysTrue, somewhereTrue)
-import           Test.DejaFu.Conc              (ConcIO, Scheduler(..),
-                                                randomSched, runConcurrent)
-import           Test.DejaFu.SCT.Internal.DPOR
+import qualified Data.Map                   as Map
+import qualified Data.Set                   as Set
+import qualified Hedgehog                   as H
+import qualified Hedgehog.Gen               as HGen
+import qualified Hedgehog.Range             as HRange
+import           System.Random              (mkStdGen)
+import           Test.DejaFu                (Failure, Predicate,
+                                             ProPredicate(..), Result(..), Way,
+                                             alwaysTrue, somewhereTrue)
+import           Test.DejaFu.Conc           (ConcIO, randomSched, runConcurrent)
+import           Test.DejaFu.SCT.Internal
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
-import qualified Test.Tasty                    as T
-import           Test.Tasty.DejaFu             hiding (testProperty)
-import qualified Test.Tasty.ExpectedFailure    as T
-import qualified Test.Tasty.Hedgehog           as H
+import qualified Test.Tasty                 as T
+import           Test.Tasty.DejaFu          hiding (testProperty)
+import qualified Test.Tasty.ExpectedFailure as T
+import qualified Test.Tasty.Hedgehog        as H
 
 -------------------------------------------------------------------------------
 -- Tests
@@ -55,8 +54,13 @@ data T where
   B :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> Bounds -> T
   TEST :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
 
-toSettings :: Applicative f => Way -> Settings f a
-toSettings w = fromWayAndMemType w defaultMemType
+toSettings :: (Applicative f, Eq a, Show a) => Way -> Settings f a
+toSettings w
+  = set ldebugFatal True
+  . set ldebugShow (Just show)
+  . set lequality (Just (==))
+  . set lsimplify True
+  $ fromWayAndMemType w defaultMemType
 
 defaultWays :: [(String, Way)]
 defaultWays = defaultWaysFor defaultBounds
@@ -106,36 +110,23 @@ prop_dep_fun conc = H.property $ do
     seed <- H.forAll genInt
     fs <- H.forAll $ genList HGen.bool
 
-    (efa1, tids1, efa2, tids2) <- liftIO $ runNorm seed (shuffle fs) mem
+    (efa1, tids1, efa2, tids2) <- liftIO $ runNorm
+      seed
+      (renumber mem 1 1 . permuteBy mem (map (\f _ _ -> f) fs))
+      mem
     H.footnote ("            to: " ++ show tids2)
     H.footnote ("rewritten from: " ++ show tids1)
     efa1 H.=== efa2
   where
-    shuffle = go initialDepState where
-      go ds (f:fs) (t1@(tid1, ta1):t2@(tid2, ta2):trc)
-        | independent ds tid1 ta1 tid2 ta2 && f = go' ds fs t2 (t1 : trc)
-        | otherwise = go' ds fs t1 (t2 : trc)
-      go _ _ trc = trc
-
-      go' ds fs t@(tid, ta) trc = t : go (updateDepState ds tid ta) fs trc
-
     runNorm seed norm memtype = do
       let g = mkStdGen seed
       (efa1, _, trc1) <- runConcurrent randomSched memtype g conc
       let tids1 = toTIdTrace trc1
-      (efa2, _, trc2) <- play memtype (norm tids1) conc
+      (efa2, _, trc2) <- replay (play memtype conc) (norm tids1)
       let tids2 = toTIdTrace trc2
       pure (efa1, map fst tids1, efa2, map fst tids2)
 
-    play = runConcurrent (Scheduler sched) where
-      sched prior runnable ((t, Stop):ts)
-        | any ((==t) . fst) runnable = (Just t, ts)
-        | otherwise = sched prior runnable ts
-      sched _ _ ((t, _):ts) = (Just t, ts)
-      sched _ _ _ = (Nothing, [])
-
-    toTIdTrace =
-      tail . scanl (\(t, _) (d, _, a) -> (tidOf t d, a)) (initialThread, undefined)
+    play memtype conc s g = runConcurrent s memtype g conc
 
 -------------------------------------------------------------------------------
 -- Exceptions

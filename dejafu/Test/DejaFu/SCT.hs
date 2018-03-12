@@ -1,13 +1,10 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE LambdaCase #-}
-
 -- |
 -- Module      : Test.DejaFu.SCT
 -- Copyright   : (c) 2015--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : BangPatterns, LambdaCase
+-- Portability : portable
 --
 -- Systematic testing for concurrent computations.
 module Test.DejaFu.SCT
@@ -50,6 +47,7 @@ import           System.Random                     (RandomGen, randomR)
 
 import           Test.DejaFu.Conc
 import           Test.DejaFu.Internal
+import           Test.DejaFu.SCT.Internal
 import           Test.DejaFu.SCT.Internal.DPOR
 import           Test.DejaFu.SCT.Internal.Weighted
 import           Test.DejaFu.Settings
@@ -199,13 +197,13 @@ runSCTWithSettings settings conc = case _way settings of
 
         check = findSchedulePrefix
 
-        step dp (prefix, conservative, sleep) run = do
+        step run dp (prefix, conservative, sleep) = do
           (res, s, trace) <- run
-            (dporSched (cBound cb0))
+            (dporSched (_memtype settings) (cBound cb0))
             (initialDPORSchedState sleep prefix)
 
-          let bpoints = findBacktrackSteps (cBacktrack cb0) (schedBoundKill s) (schedBPoints s) trace
-          let newDPOR = incorporateTrace conservative trace dp
+          let bpoints = findBacktrackSteps (_memtype settings) (cBacktrack cb0) (schedBoundKill s) (schedBPoints s) trace
+          let newDPOR = incorporateTrace (_memtype settings) conservative trace dp
 
           pure $ if schedIgnore s
                  then (force newDPOR, Nothing)
@@ -218,7 +216,7 @@ runSCTWithSettings settings conc = case _way settings of
         check (_, 0) = Nothing
         check s = Just s
 
-        step _ (g, n) run = do
+        step run _ (g, n) = do
           (res, s, trace) <- run
             (randSched $ \g' -> (1, g'))
             (initialRandSchedState Nothing g)
@@ -231,8 +229,8 @@ runSCTWithSettings settings conc = case _way settings of
         check (_, 0, _, _) = Nothing
         check s = Just s
 
-        step s (g, n, 0, _) run = step s (g, n, max 1 use0, M.empty) run
-        step _ (g, n, use, ws) run = do
+        step run s (g, n, 0, _) = step run s (g, n, max 1 use0, M.empty)
+        step run _ (g, n, use, ws) = do
           (res, s, trace) <- run
             (randSched $ randomR (1, 50))
             (initialRandSchedState (Just ws) g)
@@ -506,45 +504,6 @@ sctWeightedRandomDiscard :: (MonadConc n, MonadRef r n, RandomGen g)
 sctWeightedRandomDiscard discard memtype g lim use = runSCTWithSettings $
   set ldiscard (Just discard) (fromWayAndMemType (swarmy g lim use) memtype)
 {-# DEPRECATED sctWeightedRandomDiscard "Use runSCTWithSettings instead" #-}
-
--- | General-purpose SCT function.
-sct :: (MonadConc n, MonadRef r n)
-  => Settings n a
-  -- ^ The SCT settings ('Way' is ignored)
-  -> ([ThreadId] -> s)
-  -- ^ Initial state
-  -> (s -> Maybe t)
-  -- ^ State predicate
-  -> (s -> t -> (Scheduler g -> g -> n (Either Failure a, g, Trace)) -> n (s, Maybe (Either Failure a, Trace)))
-  -- ^ Run the computation and update the state
-  -> ConcT r n a
-  -> n [(Either Failure a, Trace)]
-sct settings s0 sfun srun conc
-    | canDCSnapshot conc = runForDCSnapshot conc >>= \case
-        Just (Right snap, _) -> go (runSnap snap) (fst (threadsFromDCSnapshot snap))
-        Just (Left f, trace) -> pure [(Left f, trace)]
-        _ -> do
-          debugPrint "Failed to construct snapshot, continuing without."
-          go runFull [initialThread]
-    | otherwise = go runFull [initialThread]
-  where
-    go run = go' Nothing . s0 where
-      go' (Just res) _ | earlyExit res = pure []
-      go' _ !s = case sfun s of
-        Just t -> srun s t run >>= \case
-          (s', Just (res, trace)) -> case discard res of
-            Just DiscardResultAndTrace -> go' (Just res) s'
-            Just DiscardTrace -> ((res, []):) <$> go' (Just res) s'
-            Nothing -> ((res, trace):) <$> go' (Just res) s'
-          (s', Nothing) -> go' Nothing s'
-        Nothing -> pure []
-
-    runFull sched s = runConcurrent sched (_memtype settings) s conc
-    runSnap snap sched s = runWithDCSnapshot sched (_memtype settings) s snap
-
-    debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
-    earlyExit = fromMaybe (const False) (_earlyExit settings)
-    discard = fromMaybe (const Nothing) (_discard settings)
 
 -------------------------------------------------------------------------------
 -- Utilities

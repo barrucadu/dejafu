@@ -4,7 +4,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal
--- Copyright   : (c) 2016--2017 Michael Walker
+-- Copyright   : (c) 2016--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -55,6 +55,20 @@ data CResult n r g a = CResult
   -- execution.
   , finalTrace :: SeqTrace
   , finalDecision :: Maybe (ThreadId, ThreadAction)
+  }
+
+-- | A snapshot of the concurrency state immediately after 'dontCheck'
+-- finishes.
+--
+-- @since 1.1.0.0
+data DCSnapshot r n a = DCSnapshot
+  { dcsContext :: Context n r ()
+  -- ^ The execution context.  The scheduler state is ignored when
+  -- restoring.
+  , dcsRestore :: Threads n r -> n ()
+  -- ^ Action to restore CRef, MVar, and TVar values.
+  , dcsRef :: r (Maybe (Either Failure a))
+  -- ^ Reference where the result will be written.
   }
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial

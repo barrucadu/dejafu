@@ -150,6 +150,44 @@ module Test.DejaFu.Settings
 
   , learlyExit
 
+  -- ** Representative traces
+
+  -- | There may be many different execution traces which give rise to
+  -- the same result, but some traces can be more complex than others.
+  --
+  -- By supplying an equality predicate on results, all but the
+  -- simplest trace for each distinct result can be thrown away.
+  --
+  -- __Slippage:__ Just comparing results can lead to different errors
+  -- which happen to have the same result comparing as equal.  For
+  -- example, all deadlocks have the same result (@Left Deadlock@),
+  -- but may have different causes.  See issue @#241@.
+
+  , lequality
+
+  -- ** Trace simplification
+
+  -- | There may be many ways to reveal the same bug, and dejafu is
+  -- not guaranteed to find the simplest way first.  This is
+  -- particularly problematic with random testing, where the schedules
+  -- generated tend to involve a lot of context switching.
+  -- Simplification produces smaller traces, which still have the same
+  -- essential behaviour.
+  --
+  -- __Performance:__ Simplification in dejafu, unlike shrinking in
+  -- most random testing tools, is quite cheap.  Simplification is
+  -- guaranteed to preserve semantics, so the test case does not need
+  -- to be re-run repeatedly during the simplification process.  The
+  -- test case is re-run only /once/, after the process completes, for
+  -- implementation reasons.
+  --
+  -- Concurrency tests can be rather large, however.  So
+  -- simplification is disabled by default, and it is /highly/
+  -- recommended to also use 'lequality', to reduce the number of
+  -- traces to simplify.
+
+  , lsimplify
+
   -- ** Debug output
 
   -- | You can opt to receive debugging messages by setting debugging
@@ -159,6 +197,12 @@ module Test.DejaFu.Settings
 
   , ldebugShow
   , ldebugPrint
+
+  -- | The debugging output includes both recoverable errors and
+  -- informative messages.  Those recoverable errors can be made fatal
+  -- instead.
+
+  , ldebugFatal
 
   -- * Lens helpers
   , get
@@ -196,7 +240,10 @@ fromWayAndMemType way memtype = Settings
   , _discard = Nothing
   , _debugShow = Nothing
   , _debugPrint = Nothing
+  , _debugFatal = False
   , _earlyExit = Nothing
+  , _equality = Nothing
+  , _simplify = False
   }
 
 -------------------------------------------------------------------------------
@@ -368,6 +415,24 @@ learlyExit :: Lens' (Settings n a) (Maybe (Either Failure a -> Bool))
 learlyExit afb s = (\b -> s {_earlyExit = b}) <$> afb (_earlyExit s)
 
 -------------------------------------------------------------------------------
+-- Representative traces
+
+-- | A lens into the equality predicate.
+--
+-- @since 1.3.2.0
+lequality :: Lens' (Settings n a) (Maybe (a -> a -> Bool))
+lequality afb s = (\b -> s {_equality = b}) <$> afb (_equality s)
+
+-------------------------------------------------------------------------------
+-- Simplification
+
+-- | A lens into the simplify flag.
+--
+-- @since 1.3.2.0
+lsimplify :: Lens' (Settings n a) Bool
+lsimplify afb s = (\b -> s {_simplify = b}) <$> afb (_simplify s)
+
+-------------------------------------------------------------------------------
 -- Debug output
 
 -- | A lens into the debug 'show' function.
@@ -381,6 +446,12 @@ ldebugShow afb s = (\b -> s {_debugShow = b}) <$> afb (_debugShow s)
 -- @since 1.2.0.0
 ldebugPrint :: Lens' (Settings n a) (Maybe (String -> n ()))
 ldebugPrint afb s = (\b -> s {_debugPrint = b}) <$> afb (_debugPrint s)
+
+-- | A lens into the make-recoverable-errors-fatal flag.
+--
+-- @since 1.3.2.0
+ldebugFatal :: Lens' (Settings n a) Bool
+ldebugFatal afb s = (\b -> s {_debugFatal = b}) <$> afb (_debugFatal s)
 
 -------------------------------------------------------------------------------
 -- Lens helpers
