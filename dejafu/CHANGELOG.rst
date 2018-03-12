@@ -7,8 +7,11 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-unreleased
-----------
+1.3.2.0 (2018-03-12)
+--------------------
+
+* Git: :tag:`dejafu-1.3.2.0`
+* Hackage: :hackage:`dejafu-1.3.2.0`
 
 Added
 ~~~~~
@@ -18,16 +21,17 @@ Added
     * ``Test.DejaFu.Settings.lequality``
     * ``Test.DejaFu.Settings.lsimplify``
 
-* ``Test.DejaFu.Utils.toTIdTrace`` to extract thread IDs from a trace.
+* (:pull:`248`) ``Test.DejaFu.Utils.toTIdTrace`` to extract thread IDs
+  from a trace.
 
-* SCT setting to make some recoverable errors fatal:
+* (:pull:`248`) SCT setting to make some recoverable errors fatal:
   ``Test.DejaFu.Settings.ldebugFatal``
 
 Performance
 ~~~~~~~~~~~
 
-* Prune some unnecessary interleavings of ``CRef`` actions in
-  systematic testing when using sequential consistency.
+* (:pull:`248`) Prune some unnecessary interleavings of ``CRef``
+  actions in systematic testing when using sequential consistency.
 
 
 1.3.1.0 (2018-03-11)

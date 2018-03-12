@@ -8,7 +8,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.STM
--- Copyright   : (c) 2017 Michael Walker
+-- Copyright   : (c) 2017--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental

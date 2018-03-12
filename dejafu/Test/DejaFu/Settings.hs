@@ -419,7 +419,7 @@ learlyExit afb s = (\b -> s {_earlyExit = b}) <$> afb (_earlyExit s)
 
 -- | A lens into the equality predicate.
 --
--- @since unreleased
+-- @since 1.3.2.0
 lequality :: Lens' (Settings n a) (Maybe (a -> a -> Bool))
 lequality afb s = (\b -> s {_equality = b}) <$> afb (_equality s)
 
@@ -428,7 +428,7 @@ lequality afb s = (\b -> s {_equality = b}) <$> afb (_equality s)
 
 -- | A lens into the simplify flag.
 --
--- @since unreleased
+-- @since 1.3.2.0
 lsimplify :: Lens' (Settings n a) Bool
 lsimplify afb s = (\b -> s {_simplify = b}) <$> afb (_simplify s)
 
@@ -449,7 +449,7 @@ ldebugPrint afb s = (\b -> s {_debugPrint = b}) <$> afb (_debugPrint s)
 
 -- | A lens into the make-recoverable-errors-fatal flag.
 --
--- @since unreleased
+-- @since 1.3.2.0
 ldebugFatal :: Lens' (Settings n a) Bool
 ldebugFatal afb s = (\b -> s {_debugFatal = b}) <$> afb (_debugFatal s)
 

@@ -21,7 +21,7 @@ import           Test.DejaFu.Types
 
 -- | Turn a 'Trace' into an abbreviated form.
 --
--- @since unreleased
+-- @since 1.3.2.0
 toTIdTrace :: Trace -> [(ThreadId, ThreadAction)]
 toTIdTrace =
   tail . scanl (\(t, _) (d, _, a) -> (tidOf t d, a)) (initialThread, undefined)
