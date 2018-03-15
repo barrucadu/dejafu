@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- Must come after TypeFamilies
@@ -12,7 +13,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, ExistentialQuantification, MultiParamTypeClasses, NoMonoLocalBinds, TypeFamilies
+-- Portability : CPP, ExistentialQuantification, MultiParamTypeClasses, NoMonoLocalBinds, RecordWildCards, TypeFamilies
 --
 -- 'MonadSTM' testing implementation, internal types and definitions.
 -- This module is NOT considered to form part of the public interface
@@ -204,14 +205,14 @@ stepTrans act idsource = case act of
         Just exc' -> transaction (TCatch trace . Just) (h exc') c
         Nothing   -> pure (SThrow exc, nothing, idsource, [], [], TCatch trace Nothing))
 
-    stepRead (ModelTVar tvid ref) c = do
-      val <- readRef ref
-      pure (c val, nothing, idsource, [tvid], [], TRead tvid)
+    stepRead ModelTVar{..} c = do
+      val <- readRef tvarRef
+      pure (c val, nothing, idsource, [tvarId], [], TRead tvarId)
 
-    stepWrite (ModelTVar tvid ref) a c = do
-      old <- readRef ref
-      writeRef ref a
-      pure (c, writeRef ref old, idsource, [], [tvid], TWrite tvid)
+    stepWrite ModelTVar{..} a c = do
+      old <- readRef tvarRef
+      writeRef tvarRef a
+      pure (c, writeRef tvarRef old, idsource, [], [tvarId], TWrite tvarId)
 
     stepNew n a c = do
       let (idsource', tvid) = nextTVId n idsource

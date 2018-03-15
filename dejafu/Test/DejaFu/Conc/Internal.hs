@@ -1,5 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
@@ -8,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : MultiParamTypeClasses, RankNTypes, ScopedTypeVariables
+-- Portability : MultiParamTypeClasses, RankNTypes, RecordWildCards, ScopedTypeVariables
 --
 -- Concurrent monads with a fixed scheduler: internal types and
 -- functions. This module is NOT considered to form part of the public
@@ -338,37 +339,37 @@ stepThread forSnapshot isFirst sched memtype tid action ctx = case action of
            )
 
     -- put a value into a @MVar@, blocking the thread until it's empty.
-    APutMVar cvar@(ModelMVar cvid _) a c -> synchronised $ do
-      (success, threads', woken, effect) <- putIntoMVar cvar a c tid (cThreads ctx)
-      simple threads' (if success then PutMVar cvid woken else BlockedPutMVar cvid) (const effect)
+    APutMVar mvar@ModelMVar{..} a c -> synchronised $ do
+      (success, threads', woken, effect) <- putIntoMVar mvar a c tid (cThreads ctx)
+      simple threads' (if success then PutMVar mvarId woken else BlockedPutMVar mvarId) (const effect)
 
     -- try to put a value into a @MVar@, without blocking.
-    ATryPutMVar cvar@(ModelMVar cvid _) a c -> synchronised $ do
-      (success, threads', woken, effect) <- tryPutIntoMVar cvar a c tid (cThreads ctx)
-      simple threads' (TryPutMVar cvid success woken) (const effect)
+    ATryPutMVar mvar@ModelMVar{..} a c -> synchronised $ do
+      (success, threads', woken, effect) <- tryPutIntoMVar mvar a c tid (cThreads ctx)
+      simple threads' (TryPutMVar mvarId success woken) (const effect)
 
     -- get the value from a @MVar@, without emptying, blocking the
     -- thread until it's full.
-    AReadMVar cvar@(ModelMVar cvid _) c -> synchronised $ do
-      (success, threads', _, _) <- readFromMVar cvar c tid (cThreads ctx)
-      simple threads' (if success then ReadMVar cvid else BlockedReadMVar cvid) noSnap
+    AReadMVar mvar@ModelMVar{..} c -> synchronised $ do
+      (success, threads', _, _) <- readFromMVar mvar c tid (cThreads ctx)
+      simple threads' (if success then ReadMVar mvarId else BlockedReadMVar mvarId) noSnap
 
     -- try to get the value from a @MVar@, without emptying, without
     -- blocking.
-    ATryReadMVar cvar@(ModelMVar cvid _) c -> synchronised $ do
-      (success, threads', _, _) <- tryReadFromMVar cvar c tid (cThreads ctx)
-      simple threads' (TryReadMVar cvid success) noSnap
+    ATryReadMVar mvar@ModelMVar{..} c -> synchronised $ do
+      (success, threads', _, _) <- tryReadFromMVar mvar c tid (cThreads ctx)
+      simple threads' (TryReadMVar mvarId success) noSnap
 
     -- take the value from a @MVar@, blocking the thread until it's
     -- full.
-    ATakeMVar cvar@(ModelMVar cvid _) c -> synchronised $ do
-      (success, threads', woken, effect) <- takeFromMVar cvar c tid (cThreads ctx)
-      simple threads' (if success then TakeMVar cvid woken else BlockedTakeMVar cvid) (const effect)
+    ATakeMVar mvar@ModelMVar{..} c -> synchronised $ do
+      (success, threads', woken, effect) <- takeFromMVar mvar c tid (cThreads ctx)
+      simple threads' (if success then TakeMVar mvarId woken else BlockedTakeMVar mvarId) (const effect)
 
     -- try to take the value from a @MVar@, without blocking.
-    ATryTakeMVar cvar@(ModelMVar cvid _) c -> synchronised $ do
-      (success, threads', woken, effect) <- tryTakeFromMVar cvar c tid (cThreads ctx)
-      simple threads' (TryTakeMVar cvid success woken) (const effect)
+    ATryTakeMVar mvar@ModelMVar{..} c -> synchronised $ do
+      (success, threads', woken, effect) <- tryTakeFromMVar mvar c tid (cThreads ctx)
+      simple threads' (TryTakeMVar mvarId success woken) (const effect)
 
     -- create a new @CRef@, using the next 'CRefId'.
     ANewCRef n a c -> do
@@ -382,47 +383,47 @@ stepThread forSnapshot isFirst sched memtype tid action ctx = case action of
            )
 
     -- read from a @CRef@.
-    AReadCRef cref@(ModelCRef crid _) c -> do
+    AReadCRef cref@ModelCRef{..} c -> do
       val <- readCRef cref tid
-      simple (goto (c val) tid (cThreads ctx)) (ReadCRef crid) noSnap
+      simple (goto (c val) tid (cThreads ctx)) (ReadCRef crefId) noSnap
 
     -- read from a @CRef@ for future compare-and-swap operations.
-    AReadCRefCas cref@(ModelCRef crid _) c -> do
+    AReadCRefCas cref@ModelCRef{..} c -> do
       tick <- readForTicket cref tid
-      simple (goto (c tick) tid (cThreads ctx)) (ReadCRefCas crid) noSnap
+      simple (goto (c tick) tid (cThreads ctx)) (ReadCRefCas crefId) noSnap
 
     -- modify a @CRef@.
-    AModCRef cref@(ModelCRef crid _) f c -> synchronised $ do
+    AModCRef cref@ModelCRef{..} f c -> synchronised $ do
       (new, val) <- f <$> readCRef cref tid
       effect <- writeImmediate cref new
-      simple (goto (c val) tid (cThreads ctx)) (ModCRef crid) (const effect)
+      simple (goto (c val) tid (cThreads ctx)) (ModCRef crefId) (const effect)
 
     -- modify a @CRef@ using a compare-and-swap.
-    AModCRefCas cref@(ModelCRef crid _) f c -> synchronised $ do
+    AModCRefCas cref@ModelCRef{..} f c -> synchronised $ do
       tick@(ModelTicket _ _ old) <- readForTicket cref tid
       let (new, val) = f old
       (_, _, effect) <- casCRef cref tid tick new
-      simple (goto (c val) tid (cThreads ctx)) (ModCRefCas crid) (const effect)
+      simple (goto (c val) tid (cThreads ctx)) (ModCRefCas crefId) (const effect)
 
     -- write to a @CRef@ without synchronising.
-    AWriteCRef cref@(ModelCRef crid _) a c -> case memtype of
+    AWriteCRef cref@ModelCRef{..} a c -> case memtype of
       -- write immediately.
       SequentialConsistency -> do
         effect <- writeImmediate cref a
-        simple (goto c tid (cThreads ctx)) (WriteCRef crid) (const effect)
+        simple (goto c tid (cThreads ctx)) (WriteCRef crefId) (const effect)
       -- add to buffer using thread id.
       TotalStoreOrder -> do
         wb' <- bufferWrite (cWriteBuf ctx) (tid, Nothing) cref a
-        pure (Succeeded ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Single (WriteCRef crid), noSnap)
+        pure (Succeeded ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Single (WriteCRef crefId), noSnap)
       -- add to buffer using both thread id and cref id
       PartialStoreOrder -> do
-        wb' <- bufferWrite (cWriteBuf ctx) (tid, Just crid) cref a
-        pure (Succeeded ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Single (WriteCRef crid), noSnap)
+        wb' <- bufferWrite (cWriteBuf ctx) (tid, Just crefId) cref a
+        pure (Succeeded ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Single (WriteCRef crefId), noSnap)
 
     -- perform a compare-and-swap on a @CRef@.
-    ACasCRef cref@(ModelCRef crid _) tick a c -> synchronised $ do
+    ACasCRef cref@ModelCRef{..} tick a c -> synchronised $ do
       (suc, tick', effect) <- casCRef cref tid tick a
-      simple (goto (c (suc, tick')) tid (cThreads ctx)) (CasCRef crid suc) (const effect)
+      simple (goto (c (suc, tick')) tid (cThreads ctx)) (CasCRef crefId suc) (const effect)
 
     -- commit a @CRef@ write
     ACommit t c -> do

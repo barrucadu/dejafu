@@ -61,25 +61,25 @@ instance Fail.MonadFail (ModelConc n r) where
 -- | An @MVar@ is modelled as a unique ID and a reference holding a
 -- @Maybe@ value.
 data ModelMVar r a = ModelMVar
-  { _mvarId  :: MVarId
-  , _mvarRef :: r (Maybe a)
+  { mvarId  :: MVarId
+  , mvarRef :: r (Maybe a)
   }
 
 -- | A @CRef@ is modelled as a unique ID and a reference holding
 -- thread-local values, the number of commits, and the most recent
 -- committed value.
 data ModelCRef r a = ModelCRef
-  { _crefId  :: CRefId
-  , _crefRef :: r (Map ThreadId a, Integer, a)
+  { crefId  :: CRefId
+  , crefRef :: r (Map ThreadId a, Integer, a)
   }
 
 -- | A @Ticket@ is modelled as the ID of the @ModelCRef@ it came from,
 -- the commits to the @ModelCRef@ at the time it was produced, and the
 -- value observed.
 data ModelTicket a = ModelTicket
-  { _ticketCRef   :: CRefId
-  , _ticketWrites :: Integer
-  , _ticketVal    :: a
+  { ticketCRef   :: CRefId
+  , ticketWrites :: Integer
+  , ticketVal    :: a
   }
 
 --------------------------------------------------------------------------------

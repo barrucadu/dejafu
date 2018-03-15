@@ -181,7 +181,7 @@ instance Monad n => C.MonadConc (ConcT r n) where
   readCRef   ref = toConc (AReadCRef    ref)
   readForCAS ref = toConc (AReadCRefCas ref)
 
-  peekTicket' _ = _ticketVal
+  peekTicket' _ = ticketVal
 
   writeCRef ref      a = toConc (\c -> AWriteCRef ref a (c ()))
   casCRef   ref tick a = toConc (ACasCRef ref tick a)
