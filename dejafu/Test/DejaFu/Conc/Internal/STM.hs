@@ -36,53 +36,53 @@ import qualified Control.Monad.Fail      as Fail
 #endif
 
 --------------------------------------------------------------------------------
--- * The @S@ monad
+-- * The @ModelSTM@ monad
 
 -- | The underlying monad is based on continuations over primitive
 -- actions.
 --
 -- This is not @Cont@ because we want to give it a custom @MonadFail@
 -- instance.
-newtype S n r a = S { runSTM :: (a -> STMAction n r) -> STMAction n r }
+newtype ModelSTM n r a = ModelSTM { runModelSTM :: (a -> STMAction n r) -> STMAction n r }
 
-instance Functor (S n r) where
-    fmap f m = S $ \c -> runSTM m (c . f)
+instance Functor (ModelSTM n r) where
+    fmap f m = ModelSTM $ \c -> runModelSTM m (c . f)
 
-instance Applicative (S n r) where
-    pure x  = S $ \c -> c x
-    f <*> v = S $ \c -> runSTM f (\g -> runSTM v (c . g))
+instance Applicative (ModelSTM n r) where
+    pure x  = ModelSTM $ \c -> c x
+    f <*> v = ModelSTM $ \c -> runModelSTM f (\g -> runModelSTM v (c . g))
 
-instance Monad (S n r) where
+instance Monad (ModelSTM n r) where
     return  = pure
-    m >>= k = S $ \c -> runSTM m (\x -> runSTM (k x) c)
+    m >>= k = ModelSTM $ \c -> runModelSTM m (\x -> runModelSTM (k x) c)
 
 #if MIN_VERSION_base(4,9,0)
     fail = Fail.fail
 
-instance Fail.MonadFail (S n r) where
+instance Fail.MonadFail (ModelSTM n r) where
 #endif
-    fail e = S $ \_ -> SThrow (MonadFailException e)
+    fail e = ModelSTM $ \_ -> SThrow (MonadFailException e)
 
-instance MonadThrow (S n r) where
-  throwM e = S $ \_ -> SThrow e
+instance MonadThrow (ModelSTM n r) where
+  throwM e = ModelSTM $ \_ -> SThrow e
 
-instance MonadCatch (S n r) where
-  catch stm handler = S $ SCatch handler stm
+instance MonadCatch (ModelSTM n r) where
+  catch stm handler = ModelSTM $ SCatch handler stm
 
-instance Alternative (S n r) where
-  a <|> b = S $ SOrElse a b
-  empty = S $ const SRetry
+instance Alternative (ModelSTM n r) where
+  a <|> b = ModelSTM $ SOrElse a b
+  empty = ModelSTM $ const SRetry
 
-instance MonadPlus (S n r)
+instance MonadPlus (ModelSTM n r)
 
-instance C.MonadSTM (S n r) where
-  type TVar (S n r) = TVar r
+instance C.MonadSTM (ModelSTM n r) where
+  type TVar (ModelSTM n r) = ModelTVar r
 
-  newTVarN n = S . SNew n
+  newTVarN n = ModelSTM . SNew n
 
-  readTVar = S . SRead
+  readTVar = ModelSTM . SRead
 
-  writeTVar tvar a = S $ \c -> SWrite tvar a (c ())
+  writeTVar tvar a = ModelSTM $ \c -> SWrite tvar a (c ())
 
 --------------------------------------------------------------------------------
 -- * Primitive actions
@@ -90,11 +90,11 @@ instance C.MonadSTM (S n r) where
 -- | STM transactions are represented as a sequence of primitive
 -- actions.
 data STMAction n r
-  = forall a e. Exception e => SCatch (e -> S n r a) (S n r a) (a -> STMAction n r)
-  | forall a. SRead  (TVar r a) (a -> STMAction n r)
-  | forall a. SWrite (TVar r a) a (STMAction n r)
-  | forall a. SOrElse (S n r a) (S n r a) (a -> STMAction n r)
-  | forall a. SNew String a (TVar r a -> STMAction n r)
+  = forall a e. Exception e => SCatch (e -> ModelSTM n r a) (ModelSTM n r a) (a -> STMAction n r)
+  | forall a. SRead  (ModelTVar r a) (a -> STMAction n r)
+  | forall a. SWrite (ModelTVar r a) a (STMAction n r)
+  | forall a. SOrElse (ModelSTM n r a) (ModelSTM n r a) (a -> STMAction n r)
+  | forall a. SNew String a (ModelTVar r a -> STMAction n r)
   | forall e. Exception e => SThrow e
   | SRetry
   | SStop (n ())
@@ -102,10 +102,12 @@ data STMAction n r
 --------------------------------------------------------------------------------
 -- * @TVar@s
 
--- | A 'TVar' is a tuple of a unique ID and the value contained. The
--- ID is so that blocked transactions can be re-run when a 'TVar' they
--- depend on has changed.
-newtype TVar r a = TVar (TVarId, r a)
+-- | A @TVar@ is modelled as a unique ID and a reference holding a
+-- value.
+data ModelTVar r a = ModelTVar
+  { tvarId  :: TVarId
+  , tvarRef :: r a
+  }
 
 --------------------------------------------------------------------------------
 -- * Output
@@ -131,7 +133,7 @@ data Result a =
 -- | Run a transaction, returning the result and new initial 'TVarId'.
 -- If the transaction failed, any effects are undone.
 runTransaction :: MonadRef r n
-  => S n r a
+  => ModelSTM n r a
   -> IdSource
   -> n (Result a, IdSource, [TAction])
 runTransaction ma tvid = do
@@ -143,11 +145,11 @@ runTransaction ma tvid = do
 -- If the transaction fails, its effects will automatically be undone,
 -- so the undo action returned will be @pure ()@.
 doTransaction :: MonadRef r n
-  => S n r a
+  => ModelSTM n r a
   -> IdSource
   -> n (Result a, n (), IdSource, [TAction])
 doTransaction ma idsource = do
-  (c, ref) <- runRefCont SStop (Just . Right) (runSTM ma)
+  (c, ref) <- runRefCont SStop (Just . Right) (runModelSTM ma)
   (idsource', undo, readen, written, trace) <- go ref c (pure ()) idsource [] [] []
   res <- readRef ref
 
@@ -202,11 +204,11 @@ stepTrans act idsource = case act of
         Just exc' -> transaction (TCatch trace . Just) (h exc') c
         Nothing   -> pure (SThrow exc, nothing, idsource, [], [], TCatch trace Nothing))
 
-    stepRead (TVar (tvid, ref)) c = do
+    stepRead (ModelTVar tvid ref) c = do
       val <- readRef ref
       pure (c val, nothing, idsource, [tvid], [], TRead tvid)
 
-    stepWrite (TVar (tvid, ref)) a c = do
+    stepWrite (ModelTVar tvid ref) a c = do
       old <- readRef ref
       writeRef ref a
       pure (c, writeRef ref old, idsource, [], [tvid], TWrite tvid)
@@ -214,7 +216,7 @@ stepTrans act idsource = case act of
     stepNew n a c = do
       let (idsource', tvid) = nextTVId n idsource
       ref <- newRef a
-      let tvar = TVar (tvid, ref)
+      let tvar = ModelTVar tvid ref
       pure (c tvar, nothing, idsource', [], [tvid], TNew tvid)
 
     stepOrElse a b c = cases TOrElse a c

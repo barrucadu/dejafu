@@ -84,7 +84,8 @@ import qualified Control.Monad.Fail                  as Fail
 #endif
 
 -- | @since 0.6.0.0
-newtype ConcT r n a = C { unC :: M n r a } deriving (Functor, Applicative, Monad)
+newtype ConcT r n a = C { unC :: ModelConc n r a }
+  deriving (Functor, Applicative, Monad)
 
 #if MIN_VERSION_base(4,9,0)
 -- | @since 0.9.1.0
@@ -98,16 +99,16 @@ instance Fail.MonadFail (ConcT r n) where
 type ConcIO = ConcT IORef IO
 
 toConc :: ((a -> Action n r) -> Action n r) -> ConcT r n a
-toConc = C . cont
+toConc = C . ModelConc
 
-wrap :: (M n r a -> M n r a) -> ConcT r n a -> ConcT r n a
+wrap :: (ModelConc n r a -> ModelConc n r a) -> ConcT r n a -> ConcT r n a
 wrap f = C . f . unC
 
 -- | @since 1.0.0.0
 instance IO.MonadIO n => IO.MonadIO (ConcT r n) where
   liftIO ma = toConc (\c -> ALift (fmap c (IO.liftIO ma)))
 
-instance Re.MonadRef (CRef r) (ConcT r n) where
+instance Re.MonadRef (ModelCRef r) (ConcT r n) where
   newRef a = toConc (ANewCRef "" a)
 
   readRef ref = toConc (AReadCRef ref)
@@ -116,7 +117,7 @@ instance Re.MonadRef (CRef r) (ConcT r n) where
 
   modifyRef ref f = toConc (AModCRef ref (\a -> (f a, ())))
 
-instance Re.MonadAtomicRef (CRef r) (ConcT r n) where
+instance Re.MonadAtomicRef (ModelCRef r) (ConcT r n) where
   atomicModifyRef ref f = toConc (AModCRef ref f)
 
 instance MonadTrans (ConcT r) where
@@ -148,15 +149,15 @@ instance Ca.MonadMask (ConcT r n) where
 #endif
 
 instance Monad n => C.MonadConc (ConcT r n) where
-  type MVar     (ConcT r n) = MVar r
-  type CRef     (ConcT r n) = CRef r
-  type Ticket   (ConcT r n) = Ticket
-  type STM      (ConcT r n) = S n r
+  type MVar     (ConcT r n) = ModelMVar r
+  type CRef     (ConcT r n) = ModelCRef r
+  type Ticket   (ConcT r n) = ModelTicket
+  type STM      (ConcT r n) = ModelSTM n r
   type ThreadId (ConcT r n) = ThreadId
 
   -- ----------
 
-  forkWithUnmaskN   n ma = toConc (AFork   n (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
+  forkWithUnmaskN   n ma = toConc (AFork n (\umask -> runModelConc (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
   forkOnWithUnmaskN n _  = C.forkWithUnmaskN n
   forkOSN n ma = forkOSWithUnmaskN n (const ma)
 
@@ -211,7 +212,7 @@ instance Monad n => C.MonadConc (ConcT r n) where
 -- move this into the instance defn when forkOSWithUnmaskN is added to MonadConc in 2018
 forkOSWithUnmaskN :: Applicative n => String -> ((forall a. ConcT r n a -> ConcT r n a) -> ConcT r n ()) -> ConcT r n ThreadId
 forkOSWithUnmaskN n ma
-  | C.rtsSupportsBoundThreads = toConc (AForkOS n (\umask -> runCont (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
+  | C.rtsSupportsBoundThreads = toConc (AForkOS n (\umask -> runModelConc (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
   | otherwise = fail "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
@@ -412,7 +413,7 @@ runWithDCSnapshot sched memtype s snapshot = do
 --
 -- @since 1.1.0.0
 canDCSnapshot :: ConcT r n a -> Bool
-canDCSnapshot (C (M k)) = lookahead (k undefined) == WillDontCheck
+canDCSnapshot (C (ModelConc k)) = lookahead (k undefined) == WillDontCheck
 
 -- | Get the threads which exist in a snapshot, partitioned into
 -- runnable and not runnable.

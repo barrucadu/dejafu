@@ -52,15 +52,15 @@ newtype WriteBuffer r = WriteBuffer
 -- write. Universally quantified over the value type so that the only
 -- thing which can be done with it is to write it to the reference.
 data BufferedWrite r where
-  BufferedWrite :: ThreadId -> CRef r a -> a -> BufferedWrite r
+  BufferedWrite :: ThreadId -> ModelCRef r a -> a -> BufferedWrite r
 
 -- | An empty write buffer.
 emptyBuffer :: WriteBuffer r
 emptyBuffer = WriteBuffer M.empty
 
 -- | Add a new write to the end of a buffer.
-bufferWrite :: MonadRef r n => WriteBuffer r -> (ThreadId, Maybe CRefId) -> CRef r a -> a -> n (WriteBuffer r)
-bufferWrite (WriteBuffer wb) k@(tid, _) cref@(CRef _ ref) new = do
+bufferWrite :: MonadRef r n => WriteBuffer r -> (ThreadId, Maybe CRefId) -> ModelCRef r a -> a -> n (WriteBuffer r)
+bufferWrite (WriteBuffer wb) k@(tid, _) cref@(ModelCRef _ ref) new = do
   -- Construct the new write buffer
   let write = singleton $ BufferedWrite tid cref new
   let buffer' = M.insertWith (flip (><)) k write wb
@@ -82,23 +82,23 @@ commitWrite w@(WriteBuffer wb) k = case maybe EmptyL viewl $ M.lookup k wb of
 
 -- | Read from a @CRef@, returning a newer thread-local non-committed
 -- write if there is one.
-readCRef :: MonadRef r n => CRef r a -> ThreadId -> n a
+readCRef :: MonadRef r n => ModelCRef r a -> ThreadId -> n a
 readCRef cref tid = do
   (val, _) <- readCRefPrim cref tid
   pure val
 
 -- | Read from a @CRef@, returning a @Ticket@ representing the current
 -- view of the thread.
-readForTicket :: MonadRef r n => CRef r a -> ThreadId -> n (Ticket a)
-readForTicket cref@(CRef crid _) tid = do
+readForTicket :: MonadRef r n => ModelCRef r a -> ThreadId -> n (ModelTicket a)
+readForTicket cref@(ModelCRef crid _) tid = do
   (val, count) <- readCRefPrim cref tid
-  pure (Ticket crid count val)
+  pure (ModelTicket crid count val)
 
 -- | Perform a compare-and-swap on a @CRef@ if the ticket is still
 -- valid. This is strict in the \"new\" value argument.
-casCRef :: MonadRef r n => CRef r a -> ThreadId -> Ticket a -> a -> n (Bool, Ticket a, n ())
-casCRef cref tid (Ticket _ cc _) !new = do
-  tick'@(Ticket _ cc' _) <- readForTicket cref tid
+casCRef :: MonadRef r n => ModelCRef r a -> ThreadId -> ModelTicket a -> a -> n (Bool, ModelTicket a, n ())
+casCRef cref tid (ModelTicket _ cc _) !new = do
+  tick'@(ModelTicket _ cc' _) <- readForTicket cref tid
 
   if cc == cc'
   then do
@@ -108,16 +108,16 @@ casCRef cref tid (Ticket _ cc _) !new = do
   else pure (False, tick', pure ())
 
 -- | Read the local state of a @CRef@.
-readCRefPrim :: MonadRef r n => CRef r a -> ThreadId -> n (a, Integer)
-readCRefPrim (CRef _ ref) tid = do
+readCRefPrim :: MonadRef r n => ModelCRef r a -> ThreadId -> n (a, Integer)
+readCRefPrim (ModelCRef _ ref) tid = do
   (vals, count, def) <- readRef ref
 
   pure (M.findWithDefault def tid vals, count)
 
 -- | Write and commit to a @CRef@ immediately, clearing the update map
 -- and incrementing the write count.
-writeImmediate :: MonadRef r n => CRef r a -> a -> n (n ())
-writeImmediate (CRef _ ref) a = do
+writeImmediate :: MonadRef r n => ModelCRef r a -> a -> n (n ())
+writeImmediate (ModelCRef _ ref) a = do
   (_, count, _) <- readRef ref
   let effect = writeRef ref (M.empty, count + 1, a)
   effect
@@ -135,7 +135,7 @@ addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
              | (k, b) <- M.toList wb
              , c <- maybeToList (go $ viewl b)
              ]
-  go (BufferedWrite tid (CRef crid _) _ :< _) = Just $ ACommit tid crid
+  go (BufferedWrite tid (ModelCRef crid _) _ :< _) = Just $ ACommit tid crid
   go EmptyL = Nothing
 
 -- | The ID of a commit thread.
@@ -156,40 +156,40 @@ data Blocking = Blocking | NonBlocking
 data Emptying = Emptying | NonEmptying
 
 -- | Put into a @MVar@, blocking if full.
-putIntoMVar :: MonadRef r n => MVar r a -> a -> Action n r
+putIntoMVar :: MonadRef r n => ModelMVar r a -> a -> Action n r
             -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId], n ())
 putIntoMVar cvar a c = mutMVar Blocking cvar a (const c)
 
 -- | Try to put into a @MVar@, not blocking if full.
-tryPutIntoMVar :: MonadRef r n => MVar r a -> a -> (Bool -> Action n r)
+tryPutIntoMVar :: MonadRef r n => ModelMVar r a -> a -> (Bool -> Action n r)
                -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId], n ())
 tryPutIntoMVar = mutMVar NonBlocking
 
 -- | Read from a @MVar@, blocking if empty.
-readFromMVar :: MonadRef r n => MVar r a -> (a -> Action n r)
+readFromMVar :: MonadRef r n => ModelMVar r a -> (a -> Action n r)
             -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId], n ())
 readFromMVar cvar c = seeMVar NonEmptying Blocking cvar (c . efromJust "readFromMVar")
 
 -- | Try to read from a @MVar@, not blocking if empty.
-tryReadFromMVar :: MonadRef r n => MVar r a -> (Maybe a -> Action n r)
+tryReadFromMVar :: MonadRef r n => ModelMVar r a -> (Maybe a -> Action n r)
                 -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId], n ())
 tryReadFromMVar = seeMVar NonEmptying NonBlocking
 
 -- | Take from a @MVar@, blocking if empty.
-takeFromMVar :: MonadRef r n => MVar r a -> (a -> Action n r)
+takeFromMVar :: MonadRef r n => ModelMVar r a -> (a -> Action n r)
              -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId], n ())
 takeFromMVar cvar c = seeMVar Emptying Blocking cvar (c . efromJust "takeFromMVar")
 
 -- | Try to take from a @MVar@, not blocking if empty.
-tryTakeFromMVar :: MonadRef r n => MVar r a -> (Maybe a -> Action n r)
+tryTakeFromMVar :: MonadRef r n => ModelMVar r a -> (Maybe a -> Action n r)
                 -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId], n ())
 tryTakeFromMVar = seeMVar Emptying NonBlocking
 
 -- | Mutate a @MVar@, in either a blocking or nonblocking way.
 mutMVar :: MonadRef r n
-        => Blocking -> MVar r a -> a -> (Bool -> Action n r)
+        => Blocking -> ModelMVar r a -> a -> (Bool -> Action n r)
         -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId], n ())
-mutMVar blocking (MVar cvid ref) a c threadid threads = do
+mutMVar blocking (ModelMVar cvid ref) a c threadid threads = do
   val <- readRef ref
 
   case val of
@@ -209,9 +209,9 @@ mutMVar blocking (MVar cvid ref) a c threadid threads = do
 -- | Read a @MVar@, in either a blocking or nonblocking
 -- way.
 seeMVar :: MonadRef r n
-        => Emptying -> Blocking -> MVar r a -> (Maybe a -> Action n r)
+        => Emptying -> Blocking -> ModelMVar r a -> (Maybe a -> Action n r)
         -> ThreadId -> Threads n r -> n (Bool, Threads n r, [ThreadId], n ())
-seeMVar emptying blocking (MVar cvid ref) c threadid threads = do
+seeMVar emptying blocking (ModelMVar cvid ref) c threadid threads = do
   val <- readRef ref
 
   case val of

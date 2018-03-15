@@ -81,7 +81,7 @@ runConcurrency :: (MonadConc n, MonadRef r n)
   -> g
   -> IdSource
   -> Int
-  -> M n r a
+  -> ModelConc n r a
   -> n (CResult n r g a)
 runConcurrency forSnapshot sched memtype g idsrc caps ma = do
   let ctx = Context { cSchedState = g
@@ -125,10 +125,10 @@ runConcurrency' :: (MonadConc n, MonadRef r n)
   -> Scheduler g
   -> MemType
   -> Context n r g
-  -> M n r a
+  -> ModelConc n r a
   -> n (CResult n r g a)
 runConcurrency' forSnapshot sched memtype ctx ma = do
-  (c, ref) <- runRefCont AStop (Just . Right) (runM ma)
+  (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
   let threads0 = launch' Unmasked initialThread (const c) (cThreads ctx)
   threads <- (if rtsSupportsBoundThreads then makeBound initialThread else pure) threads0
   runConcurrency'' forSnapshot sched memtype ref ctx { cThreads = threads}
@@ -331,42 +331,42 @@ stepThread forSnapshot isFirst sched memtype tid action ctx = case action of
     ANewMVar n c -> do
       let (idSource', newmvid) = nextMVId n (cIdSource ctx)
       ref <- newRef Nothing
-      let mvar = MVar newmvid ref
+      let mvar = ModelMVar newmvid ref
       pure ( Succeeded ctx { cThreads = goto (c mvar) tid (cThreads ctx), cIdSource = idSource' }
            , Single (NewMVar newmvid)
            , const (writeRef ref Nothing)
            )
 
     -- put a value into a @MVar@, blocking the thread until it's empty.
-    APutMVar cvar@(MVar cvid _) a c -> synchronised $ do
+    APutMVar cvar@(ModelMVar cvid _) a c -> synchronised $ do
       (success, threads', woken, effect) <- putIntoMVar cvar a c tid (cThreads ctx)
       simple threads' (if success then PutMVar cvid woken else BlockedPutMVar cvid) (const effect)
 
     -- try to put a value into a @MVar@, without blocking.
-    ATryPutMVar cvar@(MVar cvid _) a c -> synchronised $ do
+    ATryPutMVar cvar@(ModelMVar cvid _) a c -> synchronised $ do
       (success, threads', woken, effect) <- tryPutIntoMVar cvar a c tid (cThreads ctx)
       simple threads' (TryPutMVar cvid success woken) (const effect)
 
     -- get the value from a @MVar@, without emptying, blocking the
     -- thread until it's full.
-    AReadMVar cvar@(MVar cvid _) c -> synchronised $ do
+    AReadMVar cvar@(ModelMVar cvid _) c -> synchronised $ do
       (success, threads', _, _) <- readFromMVar cvar c tid (cThreads ctx)
       simple threads' (if success then ReadMVar cvid else BlockedReadMVar cvid) noSnap
 
     -- try to get the value from a @MVar@, without emptying, without
     -- blocking.
-    ATryReadMVar cvar@(MVar cvid _) c -> synchronised $ do
+    ATryReadMVar cvar@(ModelMVar cvid _) c -> synchronised $ do
       (success, threads', _, _) <- tryReadFromMVar cvar c tid (cThreads ctx)
       simple threads' (TryReadMVar cvid success) noSnap
 
     -- take the value from a @MVar@, blocking the thread until it's
     -- full.
-    ATakeMVar cvar@(MVar cvid _) c -> synchronised $ do
+    ATakeMVar cvar@(ModelMVar cvid _) c -> synchronised $ do
       (success, threads', woken, effect) <- takeFromMVar cvar c tid (cThreads ctx)
       simple threads' (if success then TakeMVar cvid woken else BlockedTakeMVar cvid) (const effect)
 
     -- try to take the value from a @MVar@, without blocking.
-    ATryTakeMVar cvar@(MVar cvid _) c -> synchronised $ do
+    ATryTakeMVar cvar@(ModelMVar cvid _) c -> synchronised $ do
       (success, threads', woken, effect) <- tryTakeFromMVar cvar c tid (cThreads ctx)
       simple threads' (TryTakeMVar cvid success woken) (const effect)
 
@@ -375,37 +375,37 @@ stepThread forSnapshot isFirst sched memtype tid action ctx = case action of
       let (idSource', newcrid) = nextCRId n (cIdSource ctx)
       let val = (M.empty, 0, a)
       ref <- newRef val
-      let cref = CRef newcrid ref
+      let cref = ModelCRef newcrid ref
       pure ( Succeeded ctx { cThreads = goto (c cref) tid (cThreads ctx), cIdSource = idSource' }
            , Single (NewCRef newcrid)
            , const (writeRef ref val)
            )
 
     -- read from a @CRef@.
-    AReadCRef cref@(CRef crid _) c -> do
+    AReadCRef cref@(ModelCRef crid _) c -> do
       val <- readCRef cref tid
       simple (goto (c val) tid (cThreads ctx)) (ReadCRef crid) noSnap
 
     -- read from a @CRef@ for future compare-and-swap operations.
-    AReadCRefCas cref@(CRef crid _) c -> do
+    AReadCRefCas cref@(ModelCRef crid _) c -> do
       tick <- readForTicket cref tid
       simple (goto (c tick) tid (cThreads ctx)) (ReadCRefCas crid) noSnap
 
     -- modify a @CRef@.
-    AModCRef cref@(CRef crid _) f c -> synchronised $ do
+    AModCRef cref@(ModelCRef crid _) f c -> synchronised $ do
       (new, val) <- f <$> readCRef cref tid
       effect <- writeImmediate cref new
       simple (goto (c val) tid (cThreads ctx)) (ModCRef crid) (const effect)
 
     -- modify a @CRef@ using a compare-and-swap.
-    AModCRefCas cref@(CRef crid _) f c -> synchronised $ do
-      tick@(Ticket _ _ old) <- readForTicket cref tid
+    AModCRefCas cref@(ModelCRef crid _) f c -> synchronised $ do
+      tick@(ModelTicket _ _ old) <- readForTicket cref tid
       let (new, val) = f old
       (_, _, effect) <- casCRef cref tid tick new
       simple (goto (c val) tid (cThreads ctx)) (ModCRefCas crid) (const effect)
 
     -- write to a @CRef@ without synchronising.
-    AWriteCRef cref@(CRef crid _) a c -> case memtype of
+    AWriteCRef cref@(ModelCRef crid _) a c -> case memtype of
       -- write immediately.
       SequentialConsistency -> do
         effect <- writeImmediate cref a
@@ -420,7 +420,7 @@ stepThread forSnapshot isFirst sched memtype tid action ctx = case action of
         pure (Succeeded ctx { cThreads = goto c tid (cThreads ctx), cWriteBuf = wb' }, Single (WriteCRef crid), noSnap)
 
     -- perform a compare-and-swap on a @CRef@.
-    ACasCRef cref@(CRef crid _) tick a c -> synchronised $ do
+    ACasCRef cref@(ModelCRef crid _) tick a c -> synchronised $ do
       (suc, tick', effect) <- casCRef cref tid tick a
       simple (goto (c (suc, tick')) tid (cThreads ctx)) (CasCRef crid suc) (const effect)
 
@@ -480,8 +480,8 @@ stepThread forSnapshot isFirst sched memtype tid action ctx = case action of
 
     -- run a subcomputation in an exception-catching context.
     ACatching h ma c ->
-      let a        = runCont ma (APopCatching . c)
-          e exc    = runCont (h exc) c
+      let a        = runModelConc ma (APopCatching . c)
+          e exc    = runModelConc (h exc) c
           threads' = goto a tid (catching e tid (cThreads ctx))
       in simple threads' Catching noSnap
 
@@ -493,11 +493,11 @@ stepThread forSnapshot isFirst sched memtype tid action ctx = case action of
     -- execute a subcomputation with a new masking state, and give it
     -- a function to run a computation with the current masking state.
     AMasking m ma c ->
-      let a = runCont (ma umask) (AResetMask False False m' . c)
-          m' = _masking $ elookup "stepThread.AMasking" tid (cThreads ctx)
+      let a        = runModelConc (ma umask) (AResetMask False False m' . c)
+          m'       = _masking $ elookup "stepThread.AMasking" tid (cThreads ctx)
           umask mb = resetMask True m' >> mb >>= \b -> resetMask False m >> pure b
-          resetMask typ ms = cont $ \k -> AResetMask typ True ms $ k ()
           threads' = goto a tid (mask m tid (cThreads ctx))
+          resetMask typ ms = ModelConc $ \k -> AResetMask typ True ms $ k ()
       in simple threads' (SetMasking False m) noSnap
 
 

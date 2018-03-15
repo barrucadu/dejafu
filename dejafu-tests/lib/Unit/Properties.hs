@@ -153,7 +153,7 @@ memoryProps = toTestList
   where
     crefProp
       :: (Monad m, Show a)
-      => (forall s. D.CRef (ST.STRef s) Int -> ST.ST s a)
+      => (forall s. D.ModelCRef (ST.STRef s) Int -> ST.ST s a)
       -> H.PropertyT m a
     crefProp p = do
       crefId <- H.forAll genCRefId
@@ -201,8 +201,8 @@ sctProps = toTestList
 -------------------------------------------------------------------------------
 -- Utils
 
-makeCRef :: D.CRefId -> ST.ST t (D.CRef (ST.STRef t) Int)
-makeCRef crid = D.CRef crid <$> ST.newSTRef (M.empty, 0, 42)
+makeCRef :: D.CRefId -> ST.ST t (D.ModelCRef (ST.STRef t) Int)
+makeCRef crid = D.ModelCRef crid <$> ST.newSTRef (M.empty, 0, 42)
 
 -- equality for writebuffers is a little tricky as we can't directly
 -- compare the buffered values, so we compare everything else:
@@ -224,7 +224,7 @@ eqWB (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
     ks1 = M.keys $ M.filter (not . S.null) wb1
     ks2 = M.keys $ M.filter (not . S.null) wb2
 
-    eqBW (Mem.BufferedWrite t1 (D.CRef crid1 ref1) _) (Mem.BufferedWrite t2 (D.CRef crid2 ref2) _) = do
+    eqBW (Mem.BufferedWrite t1 (D.ModelCRef crid1 ref1) _) (Mem.BufferedWrite t2 (D.ModelCRef crid2 ref2) _) = do
       d1 <- (\(m,i,_) -> (M.keys m, i)) <$> ST.readSTRef ref1
       d2 <- (\(m,i,_) -> (M.keys m, i)) <$> ST.readSTRef ref2
       pure (t1 == t2 && crid1 == crid2 && d1 == d2)

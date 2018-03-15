@@ -130,17 +130,17 @@ goto a = eadjust "goto" $ \thread -> thread { _continuation = a }
 
 -- | Start a thread with the given ID, inheriting the masking state
 -- from the parent thread. This ID must not already be in use!
-launch :: ThreadId -> ThreadId -> ((forall b. M n r b -> M n r b) -> Action n r) -> Threads n r -> Threads n r
+launch :: ThreadId -> ThreadId -> ((forall b. ModelConc n r b -> ModelConc n r b) -> Action n r) -> Threads n r -> Threads n r
 launch parent tid a threads = launch' ms tid a threads where
   ms = _masking (elookup "launch" parent threads)
 
 -- | Start a thread with the given ID and masking state. This must not already be in use!
-launch' :: MaskingState -> ThreadId -> ((forall b. M n r b -> M n r b) -> Action n r) -> Threads n r -> Threads n r
+launch' :: MaskingState -> ThreadId -> ((forall b. ModelConc n r b -> ModelConc n r b) -> Action n r) -> Threads n r -> Threads n r
 launch' ms tid a = einsert "launch'" tid thread where
   thread = Thread (a umask) Nothing [] ms Nothing
 
   umask mb = resetMask True Unmasked >> mb >>= \b -> resetMask False ms >> pure b
-  resetMask typ m = cont $ \k -> AResetMask typ True m $ k ()
+  resetMask typ m = ModelConc $ \k -> AResetMask typ True m $ k ()
 
 -- | Block a thread.
 block :: BlockedOn -> ThreadId -> Threads n r -> Threads n r
