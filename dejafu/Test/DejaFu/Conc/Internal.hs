@@ -43,7 +43,7 @@ import           Test.DejaFu.Schedule
 import           Test.DejaFu.Types
 
 --------------------------------------------------------------------------------
--- * Execution
+-- * Set-up
 
 -- | 'Trace' but as a sequence.
 type SeqTrace
@@ -97,32 +97,11 @@ runConcurrency forSnapshot sched memtype g idsrc caps ma = do
   killAllThreads (finalContext res)
   pure res
 
--- | Like 'runConcurrency' but starts from a snapshot.
-runConcurrencyWithSnapshot :: (MonadConc n, MonadRef r n)
-  => Scheduler g
-  -> MemType
-  -> Context n r g
-  -> (Threads n r -> n ())
-  -> r (Maybe (Either Failure a))
-  -> n (CResult n r g a)
-runConcurrencyWithSnapshot sched memtype ctx restore ref = do
-  let boundThreads = M.filter (isJust . _bound) (cThreads ctx)
-  threads <- foldrM makeBound (cThreads ctx) (M.keys boundThreads)
-  let ctx' = ctx { cThreads = threads }
-  restore (cThreads ctx')
-  res <- runConcurrency'' False sched memtype ref ctx { cThreads = threads}
-  killAllThreads (finalContext res)
-  pure res
-
--- | Kill the remaining threads
-killAllThreads :: MonadConc n => Context n r g -> n ()
-killAllThreads ctx =
-  let finalThreads = cThreads ctx
-  in mapM_ (`kill` finalThreads) (M.keys finalThreads)
-
 -- | Run a concurrent program using the given context, and without
 -- killing threads which remain at the end.  The context must have no
 -- main thread.
+--
+-- Only a separate function because @ADontCheck@ needs it.
 runConcurrency' :: (MonadConc n, MonadRef r n)
   => Bool
   -> Scheduler g
@@ -134,25 +113,47 @@ runConcurrency' forSnapshot sched memtype ctx ma = do
   (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
   let threads0 = launch' Unmasked initialThread (const c) (cThreads ctx)
   threads <- (if rtsSupportsBoundThreads then makeBound initialThread else pure) threads0
-  runConcurrency'' forSnapshot sched memtype ref ctx { cThreads = threads}
-
--- | Like 'runConcurrency'' but doesn't do *ANY* set up at all.
-runConcurrency'' :: (MonadConc n, MonadRef r n)
-  => Bool
-  -> Scheduler g
-  -> MemType
-  -> r (Maybe (Either Failure a))
-  -> Context n r g
-  -> n (CResult n r g a)
-runConcurrency'' forSnapshot sched memtype ref ctx = do
-  (finalCtx, trace, finalD, restore) <- runThreads forSnapshot sched memtype ref ctx
+  (finalC, finalT, finalD, finalR) <-
+    runThreads forSnapshot sched memtype ref ctx { cThreads = threads }
   pure CResult
-    { finalContext = finalCtx
-    , finalRef = ref
-    , finalRestore = restore
-    , finalTrace = trace
+    { finalContext  = finalC
+    , finalRef      = ref
+    , finalRestore  = finalR
+    , finalTrace    = finalT
     , finalDecision = finalD
     }
+
+-- | Like 'runConcurrency' but starts from a snapshot.
+runConcurrencyWithSnapshot :: (MonadConc n, MonadRef r n)
+  => Scheduler g
+  -> MemType
+  -> Context n r g
+  -> (Threads n r -> n ())
+  -> r (Maybe (Either Failure a))
+  -> n (CResult n r g a)
+runConcurrencyWithSnapshot sched memtype ctx restore ref = do
+  let boundThreads = M.filter (isJust . _bound) (cThreads ctx)
+  threads <- foldrM makeBound (cThreads ctx) (M.keys boundThreads)
+  restore threads
+  (finalC, finalT, finalD, finalR) <-
+    runThreads False sched memtype ref ctx { cThreads = threads }
+  killAllThreads finalC
+  pure CResult
+    { finalContext  = finalC
+    , finalRef      = ref
+    , finalRestore  = finalR
+    , finalTrace    = finalT
+    , finalDecision = finalD
+    }
+
+-- | Kill the remaining threads
+killAllThreads :: MonadConc n => Context n r g -> n ()
+killAllThreads ctx =
+  let finalThreads = cThreads ctx
+  in mapM_ (`kill` finalThreads) (M.keys finalThreads)
+
+-------------------------------------------------------------------------------
+-- * Execution
 
 -- | The context a collection of threads are running in.
 data Context n r g = Context
