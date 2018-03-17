@@ -126,7 +126,7 @@ prop_dep_fun conc = H.property $ do
       let tids2 = toTIdTrace trc2
       pure (efa1, map fst tids1, efa2, map fst tids2)
 
-    play memtype conc s g = runConcurrent s memtype g conc
+    play memtype c s g = runConcurrent s memtype g c
 
 -------------------------------------------------------------------------------
 -- Exceptions

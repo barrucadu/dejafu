@@ -5,7 +5,6 @@ import qualified Control.Exception                as E
 import           Control.Monad                    (zipWithM)
 import qualified Control.Monad.Conc.Class         as C
 import           Control.Monad.IO.Class           (liftIO)
-import qualified Control.Monad.ST                 as ST
 import qualified Data.Foldable                    as F
 import qualified Data.Map                         as M
 import qualified Data.Sequence                    as S

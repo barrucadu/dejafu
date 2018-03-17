@@ -31,7 +31,7 @@ discardTests = toTestList
         const (Just DiscardResultAndTrace)
     , check "Results failing the test are not present" [1, 2] $
         \x -> if x == Right 3 then Just DiscardResultAndTrace else Nothing
-    , testCase "No traces kept when they get discared" $ testDiscardTrace discarder testAction
+    , testCase "No traces kept when they get discared" $ testDiscardTrace testAction
     ]
   where
     check name xs f = testDejafuWithSettings (set ldiscard (Just f) defaultSettings) name (gives' xs) testAction
@@ -41,11 +41,12 @@ discardTests = toTestList
       _ <- fork $ putMVar mvar 2
       _ <- fork $ putMVar mvar 3
       readMVar mvar
+
     discarder (Right 2) = Just DiscardTrace
     discarder (Right 3) = Just DiscardResultAndTrace
     discarder  _ = Nothing
 
-    testDiscardTrace discarder action = do
+    testDiscardTrace action = do
       results <- runSCTWithSettings (set ldiscard (Just discarder) defaultSettings) action
       for_ results $ \(efa, trace) -> case discarder efa of
         Just DiscardResultAndTrace -> assertFailure "expected result to be discarded"
