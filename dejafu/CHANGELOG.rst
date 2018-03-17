@@ -27,6 +27,11 @@ Removed
 - (:issue:`198`) The ``Test.DejaFu.Types.Killed`` thread action, which
   was unused.
 
+Fixed
+~~~~~
+
+- (:issue:`250`) Add missing dependency for ``throwTo`` actions.
+
 
 1.3.2.0 (2018-03-12)
 --------------------
