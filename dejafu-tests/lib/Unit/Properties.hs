@@ -1,13 +1,14 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 module Unit.Properties where
 
 import qualified Control.Exception                as E
 import           Control.Monad                    (zipWithM)
+import qualified Control.Monad.Conc.Class         as C
+import           Control.Monad.IO.Class           (liftIO)
 import qualified Control.Monad.ST                 as ST
 import qualified Data.Foldable                    as F
 import qualified Data.Map                         as M
 import qualified Data.Sequence                    as S
-import qualified Data.STRef                       as ST
 import qualified Hedgehog                         as H
 import qualified Hedgehog.Gen                     as HGen
 import qualified Test.DejaFu.Conc.Internal.Common as D
@@ -108,9 +109,10 @@ memoryProps = toTestList
 
     , testProperty "commitWrite emptyBuffer k == emptyBuffer" $ do
         k <- H.forAll genWBKey
-        H.assert $ ST.runST $ do
+        res <- liftIO $ do
           wb <- Mem.commitWrite Mem.emptyBuffer k
           wb `eqWB` Mem.emptyBuffer
+        H.assert res
 
     , testProperty "commitWrite (bufferWrite emptyBuffer k a) k == emptyBuffer" $ do
         k <- H.forAll genWBKey
@@ -152,12 +154,12 @@ memoryProps = toTestList
     ]
   where
     crefProp
-      :: (Monad m, Show a)
-      => (forall s. D.ModelCRef (ST.STRef s) Int -> ST.ST s a)
-      -> H.PropertyT m a
+      :: Show a
+      => (D.ModelCRef IO Int -> IO a)
+      -> H.PropertyT IO a
     crefProp p = do
       crefId <- H.forAll genCRefId
-      pure $ ST.runST $ do
+      liftIO $ do
         cref <- makeCRef crefId
         p cref
 
@@ -201,8 +203,8 @@ sctProps = toTestList
 -------------------------------------------------------------------------------
 -- Utils
 
-makeCRef :: D.CRefId -> ST.ST t (D.ModelCRef (ST.STRef t) Int)
-makeCRef crid = D.ModelCRef crid <$> ST.newSTRef (M.empty, 0, 42)
+makeCRef :: D.CRefId -> IO (D.ModelCRef IO Int)
+makeCRef crid = D.ModelCRef crid <$> C.newCRef (M.empty, 0, 42)
 
 -- equality for writebuffers is a little tricky as we can't directly
 -- compare the buffered values, so we compare everything else:
@@ -213,7 +215,7 @@ makeCRef crid = D.ModelCRef crid <$> ST.newSTRef (M.empty, 0, 42)
 -- individual writes are compared like so:
 --  - the threadid and crefid must be the same
 --  - the cache and number of writes inside the ref must be the same
-eqWB :: Mem.WriteBuffer (ST.STRef t) -> Mem.WriteBuffer (ST.STRef t) -> ST.ST t Bool
+eqWB :: Mem.WriteBuffer IO -> Mem.WriteBuffer IO -> IO Bool
 eqWB (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
     [ (&&) (S.length ws1 == S.length ws2) <$> (and <$> zipWithM eqBW (F.toList ws1) (F.toList ws2))
     | k <- ks1
@@ -225,8 +227,8 @@ eqWB (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
     ks2 = M.keys $ M.filter (not . S.null) wb2
 
     eqBW (Mem.BufferedWrite t1 (D.ModelCRef crid1 ref1) _) (Mem.BufferedWrite t2 (D.ModelCRef crid2 ref2) _) = do
-      d1 <- (\(m,i,_) -> (M.keys m, i)) <$> ST.readSTRef ref1
-      d2 <- (\(m,i,_) -> (M.keys m, i)) <$> ST.readSTRef ref2
+      d1 <- (\(m,i,_) -> (M.keys m, i)) <$> C.readCRef ref1
+      d2 <- (\(m,i,_) -> (M.keys m, i)) <$> C.readCRef ref2
       pure (t1 == t2 && crid1 == crid2 && d1 == d2)
 
     andM [] = pure True

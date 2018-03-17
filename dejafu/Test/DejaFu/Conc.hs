@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -11,7 +10,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, FlexibleInstances, GeneralizedNewtypeDeriving, MultiParamTypeClasses, TypeFamilies
+-- Portability : CPP, FlexibleInstances, GeneralizedNewtypeDeriving, TypeFamilies
 --
 -- Deterministic traced execution of concurrent computations.
 --
@@ -59,11 +58,8 @@ module Test.DejaFu.Conc
 import           Control.Exception                   (MaskingState(..))
 import qualified Control.Monad.Catch                 as Ca
 import qualified Control.Monad.IO.Class              as IO
-import           Control.Monad.Ref                   (MonadRef)
-import qualified Control.Monad.Ref                   as Re
 import           Control.Monad.Trans.Class           (MonadTrans(..))
 import qualified Data.Foldable                       as F
-import           Data.IORef                          (IORef)
 import           Data.List                           (partition)
 import qualified Data.Map.Strict                     as M
 import           Data.Maybe                          (isNothing)
@@ -72,9 +68,8 @@ import           Test.DejaFu.Schedule
 import qualified Control.Monad.Conc.Class            as C
 import           Test.DejaFu.Conc.Internal
 import           Test.DejaFu.Conc.Internal.Common
-import           Test.DejaFu.Conc.Internal.STM
-import           Test.DejaFu.Conc.Internal.Threading (Thread(_blocking),
-                                                      Threads)
+import           Test.DejaFu.Conc.Internal.STM       (ModelSTM)
+import           Test.DejaFu.Conc.Internal.Threading (_blocking)
 import           Test.DejaFu.Internal
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
@@ -83,53 +78,40 @@ import           Test.DejaFu.Utils
 import qualified Control.Monad.Fail                  as Fail
 #endif
 
--- | @since 0.6.0.0
-newtype ConcT r n a = C { unC :: ModelConc n r a }
+-- | @since unreleased
+newtype ConcT n a = C { unC :: ModelConc n a }
   deriving (Functor, Applicative, Monad)
 
 #if MIN_VERSION_base(4,9,0)
--- | @since 0.9.1.0
-instance Fail.MonadFail (ConcT r n) where
+instance Fail.MonadFail (ConcT n) where
   fail = C . fail
 #endif
 
 -- | A 'MonadConc' implementation using @IO@.
 --
 -- @since 0.4.0.0
-type ConcIO = ConcT IORef IO
+type ConcIO = ConcT IO
 
-toConc :: ((a -> Action n r) -> Action n r) -> ConcT r n a
+toConc :: ((a -> Action n) -> Action n) -> ConcT n a
 toConc = C . ModelConc
 
-wrap :: (ModelConc n r a -> ModelConc n r a) -> ConcT r n a -> ConcT r n a
+wrap :: (ModelConc n a -> ModelConc n a) -> ConcT n a -> ConcT n a
 wrap f = C . f . unC
 
 -- | @since 1.0.0.0
-instance IO.MonadIO n => IO.MonadIO (ConcT r n) where
+instance IO.MonadIO n => IO.MonadIO (ConcT n) where
   liftIO ma = toConc (\c -> ALift (fmap c (IO.liftIO ma)))
 
-instance Re.MonadRef (ModelCRef r) (ConcT r n) where
-  newRef a = toConc (ANewCRef "" a)
-
-  readRef ref = toConc (AReadCRef ref)
-
-  writeRef ref a = toConc (\c -> AWriteCRef ref a (c ()))
-
-  modifyRef ref f = toConc (AModCRef ref (\a -> (f a, ())))
-
-instance Re.MonadAtomicRef (ModelCRef r) (ConcT r n) where
-  atomicModifyRef ref f = toConc (AModCRef ref f)
-
-instance MonadTrans (ConcT r) where
+instance MonadTrans ConcT where
   lift ma = toConc (\c -> ALift (fmap c ma))
 
-instance Ca.MonadCatch (ConcT r n) where
+instance Ca.MonadCatch (ConcT n) where
   catch ma h = toConc (ACatching (unC . h) (unC ma))
 
-instance Ca.MonadThrow (ConcT r n) where
+instance Ca.MonadThrow (ConcT n) where
   throwM e = toConc (\_ -> AThrow e)
 
-instance Ca.MonadMask (ConcT r n) where
+instance Ca.MonadMask (ConcT n) where
   mask                mb = toConc (AMasking MaskedInterruptible   (\f -> unC $ mb $ wrap f))
   uninterruptibleMask mb = toConc (AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f))
 
@@ -148,12 +130,12 @@ instance Ca.MonadMask (ConcT r n) where
     pure result
 #endif
 
-instance Monad n => C.MonadConc (ConcT r n) where
-  type MVar     (ConcT r n) = ModelMVar r
-  type CRef     (ConcT r n) = ModelCRef r
-  type Ticket   (ConcT r n) = ModelTicket
-  type STM      (ConcT r n) = ModelSTM n r
-  type ThreadId (ConcT r n) = ThreadId
+instance Monad n => C.MonadConc (ConcT n) where
+  type MVar     (ConcT n) = ModelMVar n
+  type CRef     (ConcT n) = ModelCRef n
+  type Ticket   (ConcT n) = ModelTicket
+  type STM      (ConcT n) = ModelSTM n
+  type ThreadId (ConcT n) = ThreadId
 
   -- ----------
 
@@ -210,9 +192,13 @@ instance Monad n => C.MonadConc (ConcT r n) where
   atomically = toConc . AAtom
 
 -- move this into the instance defn when forkOSWithUnmaskN is added to MonadConc in 2018
-forkOSWithUnmaskN :: Applicative n => String -> ((forall a. ConcT r n a -> ConcT r n a) -> ConcT r n ()) -> ConcT r n ThreadId
+forkOSWithUnmaskN :: Applicative n
+  => String
+  -> ((forall a. ConcT n a -> ConcT n a) -> ConcT n ())
+  -> ConcT n ThreadId
 forkOSWithUnmaskN n ma
-  | C.rtsSupportsBoundThreads = toConc (AForkOS n (\umask -> runModelConc (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
+  | C.rtsSupportsBoundThreads =
+    toConc (AForkOS n (\umask -> runModelConc (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
   | otherwise = fail "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
@@ -239,15 +225,15 @@ forkOSWithUnmaskN n ma
 -- be halted.
 --
 -- @since 1.0.0.0
-runConcurrent :: (C.MonadConc n, MonadRef r n)
+runConcurrent :: C.MonadConc n
   => Scheduler s
   -> MemType
   -> s
-  -> ConcT r n a
+  -> ConcT n a
   -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s ma = do
   res <- runConcurrency False sched memtype s initialIdSource 2 (unC ma)
-  out <- efromJust "runConcurrent" <$> Re.readRef (finalRef res)
+  out <- efromJust "runConcurrent" <$> C.readCRef (finalRef res)
   pure ( out
        , cSchedState (finalContext res)
        , F.toList (finalTrace res)
@@ -263,7 +249,7 @@ runConcurrent sched memtype s ma = do
 -- a failing computation.
 --
 -- @since 0.6.0.0
-subconcurrency :: ConcT r n a -> ConcT r n (Either Failure a)
+subconcurrency :: ConcT n a -> ConcT n (Either Failure a)
 subconcurrency ma = toConc (ASub (unC ma))
 
 -- | Run an arbitrary action which gets some special treatment:
@@ -301,9 +287,9 @@ subconcurrency ma = toConc (ASub (unC ma))
 dontCheck
   :: Maybe Int
   -- ^ An optional length bound.
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The action to execute.
-  -> ConcT r n a
+  -> ConcT n a
 dontCheck lb ma = toConc (ADontCheck lb (unC ma))
 
 -------------------------------------------------------------------------------
@@ -340,7 +326,7 @@ dontCheck lb ma = toConc (ADontCheck lb (unC ma))
 -- To safely use @IO@ in a snapshotted computation, __the combined effect must be idempotent__.
 -- You should either use actions which set the state to the final
 -- value directly, rather than modifying it (eg, using a combination
--- of @liftIO . readIORef@ and @liftIO . writeIORef@ here), or reset
+-- of @liftIO . readCRef@ and @liftIO . writeIORef@ here), or reset
 -- the state to a known value.  Both of these approaches will work:
 --
 -- @
@@ -373,12 +359,12 @@ dontCheck lb ma = toConc (ADontCheck lb (unC ma))
 -- needing to call this function yourself.
 --
 -- @since 1.1.0.0
-runForDCSnapshot :: (C.MonadConc n, MonadRef r n)
-  => ConcT r n a
-  -> n (Maybe (Either Failure (DCSnapshot r n a), Trace))
+runForDCSnapshot :: C.MonadConc n
+  => ConcT n a
+  -> n (Maybe (Either Failure (DCSnapshot n a), Trace))
 runForDCSnapshot ma = do
   res <- runConcurrency True roundRobinSchedNP SequentialConsistency () initialIdSource 2 (unC ma)
-  out <- Re.readRef (finalRef res)
+  out <- C.readCRef (finalRef res)
   pure $ case (finalRestore res, out) of
     (Just _, Just (Left f)) -> Just (Left f, F.toList (finalTrace res))
     (Just restore, _) -> Just (Right (DCSnapshot (finalContext res) restore (finalRef res)), F.toList (finalTrace res))
@@ -392,18 +378,18 @@ runForDCSnapshot ma = do
 -- needing to call this function yourself.
 --
 -- @since 1.1.0.0
-runWithDCSnapshot :: (C.MonadConc n, MonadRef r n)
+runWithDCSnapshot :: C.MonadConc n
   => Scheduler s
   -> MemType
   -> s
-  -> DCSnapshot r n a
+  -> DCSnapshot n a
   -> n (Either Failure a, s, Trace)
 runWithDCSnapshot sched memtype s snapshot = do
   let context = (dcsContext snapshot) { cSchedState = s }
   let restore = dcsRestore snapshot
   let ref = dcsRef snapshot
   res <- runConcurrencyWithSnapshot sched memtype context restore ref
-  out <- efromJust "runWithDCSnapshot" <$> Re.readRef (finalRef res)
+  out <- efromJust "runWithDCSnapshot" <$> C.readCRef (finalRef res)
   pure ( out
        , cSchedState (finalContext res)
        , F.toList (finalTrace res)
@@ -412,14 +398,14 @@ runWithDCSnapshot sched memtype s snapshot = do
 -- | Check if a 'DCSnapshot' can be taken from this computation.
 --
 -- @since 1.1.0.0
-canDCSnapshot :: ConcT r n a -> Bool
+canDCSnapshot :: ConcT n a -> Bool
 canDCSnapshot (C (ModelConc k)) = lookahead (k undefined) == WillDontCheck
 
 -- | Get the threads which exist in a snapshot, partitioned into
 -- runnable and not runnable.
 --
 -- @since 1.1.0.0
-threadsFromDCSnapshot :: DCSnapshot r n a -> ([ThreadId], [ThreadId])
+threadsFromDCSnapshot :: DCSnapshot n a -> ([ThreadId], [ThreadId])
 threadsFromDCSnapshot snapshot = partition isRunnable (M.keys threads) where
   threads = cThreads (dcsContext snapshot)
   isRunnable tid = isNothing (_blocking =<< M.lookup tid threads)

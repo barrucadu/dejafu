@@ -15,15 +15,15 @@
 -- library.
 module Test.DejaFu.Internal where
 
-import           Control.DeepSeq    (NFData)
-import           Control.Monad.Ref  (MonadRef(..))
-import           Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.Map.Strict    as M
-import           Data.Maybe         (fromMaybe)
-import           Data.Set           (Set)
-import qualified Data.Set           as S
-import           GHC.Generics       (Generic)
-import           System.Random      (RandomGen)
+import           Control.DeepSeq          (NFData)
+import qualified Control.Monad.Conc.Class as C
+import           Data.List.NonEmpty       (NonEmpty(..))
+import qualified Data.Map.Strict          as M
+import           Data.Maybe               (fromMaybe)
+import           Data.Set                 (Set)
+import qualified Data.Set                 as S
+import           GHC.Generics             (Generic)
+import           System.Random            (RandomGen)
 
 import           Test.DejaFu.Types
 
@@ -383,8 +383,12 @@ fatal src msg = error ("(dejafu: " ++ src ++ ") " ++ msg)
 -- | Run with a continuation that writes its value into a reference,
 -- returning the computation and the reference.  Using the reference
 -- is non-blocking, it is up to you to ensure you wait sufficiently.
-runRefCont :: MonadRef r n => (n () -> x) -> (a -> Maybe b) -> ((a -> x) -> x) -> n (x, r (Maybe b))
+runRefCont :: C.MonadConc n
+  => (n () -> x)
+  -> (a -> Maybe b)
+  -> ((a -> x) -> x)
+  -> n (x, C.CRef n (Maybe b))
 runRefCont act f k = do
-  ref <- newRef Nothing
-  let c = k (act . writeRef ref . f)
+  ref <- C.newCRef Nothing
+  let c = k (act . C.writeCRef ref . f)
   pure (c, ref)

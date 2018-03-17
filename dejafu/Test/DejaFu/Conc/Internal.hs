@@ -1,8 +1,6 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal
@@ -10,7 +8,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : MultiParamTypeClasses, MultiWayIf, RankNTypes, RecordWildCards, ScopedTypeVariables
+-- Portability : MultiWayIf, RankNTypes, RecordWildCards
 --
 -- Concurrent monads with a fixed scheduler: internal types and
 -- functions. This module is NOT considered to form part of the public
@@ -20,10 +18,7 @@ module Test.DejaFu.Conc.Internal where
 import           Control.Exception                   (Exception,
                                                       MaskingState(..),
                                                       toException)
-import           Control.Monad.Conc.Class            (MonadConc,
-                                                      rtsSupportsBoundThreads)
-import           Control.Monad.Ref                   (MonadRef, newRef, readRef,
-                                                      writeRef)
+import qualified Control.Monad.Conc.Class            as C
 import           Data.Foldable                       (foldrM, toList)
 import           Data.Functor                        (void)
 import           Data.List                           (sortOn)
@@ -50,10 +45,10 @@ type SeqTrace
   = Seq (Decision, [(ThreadId, Lookahead)], ThreadAction)
 
 -- | The result of running a concurrent program.
-data CResult n r g a = CResult
-  { finalContext :: Context n r g
-  , finalRef :: r (Maybe (Either Failure a))
-  , finalRestore :: Maybe (Threads n r -> n ())
+data CResult n g a = CResult
+  { finalContext :: Context n g
+  , finalRef :: C.CRef n (Maybe (Either Failure a))
+  , finalRestore :: Maybe (Threads n -> n ())
   -- ^ Meaningless if this result doesn't come from a snapshotting
   -- execution.
   , finalTrace :: SeqTrace
@@ -63,29 +58,29 @@ data CResult n r g a = CResult
 -- | A snapshot of the concurrency state immediately after 'dontCheck'
 -- finishes.
 --
--- @since 1.1.0.0
-data DCSnapshot r n a = DCSnapshot
-  { dcsContext :: Context n r ()
+-- @since unreleased
+data DCSnapshot n a = DCSnapshot
+  { dcsContext :: Context n ()
   -- ^ The execution context.  The scheduler state is ignored when
   -- restoring.
-  , dcsRestore :: Threads n r -> n ()
+  , dcsRestore :: Threads n -> n ()
   -- ^ Action to restore CRef, MVar, and TVar values.
-  , dcsRef :: r (Maybe (Either Failure a))
+  , dcsRef :: C.CRef n (Maybe (Either Failure a))
   -- ^ Reference where the result will be written.
   }
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
-runConcurrency :: (MonadConc n, MonadRef r n)
+runConcurrency :: C.MonadConc n
   => Bool
   -> Scheduler g
   -> MemType
   -> g
   -> IdSource
   -> Int
-  -> ModelConc n r a
-  -> n (CResult n r g a)
+  -> ModelConc n a
+  -> n (CResult n g a)
 runConcurrency forSnapshot sched memtype g idsrc caps ma = do
   let ctx = Context { cSchedState = g
                     , cIdSource   = idsrc
@@ -102,27 +97,27 @@ runConcurrency forSnapshot sched memtype g idsrc caps ma = do
 -- main thread.
 --
 -- Only a separate function because @ADontCheck@ needs it.
-runConcurrency' :: (MonadConc n, MonadRef r n)
+runConcurrency' :: C.MonadConc n
   => Bool
   -> Scheduler g
   -> MemType
-  -> Context n r g
-  -> ModelConc n r a
-  -> n (CResult n r g a)
+  -> Context n g
+  -> ModelConc n a
+  -> n (CResult n g a)
 runConcurrency' forSnapshot sched memtype ctx ma = do
   (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
   let threads0 = launch' Unmasked initialThread (const c) (cThreads ctx)
-  threads <- (if rtsSupportsBoundThreads then makeBound initialThread else pure) threads0
+  threads <- (if C.rtsSupportsBoundThreads then makeBound initialThread else pure) threads0
   runThreads forSnapshot sched memtype ref ctx { cThreads = threads }
 
 -- | Like 'runConcurrency' but starts from a snapshot.
-runConcurrencyWithSnapshot :: (MonadConc n, MonadRef r n)
+runConcurrencyWithSnapshot :: C.MonadConc n
   => Scheduler g
   -> MemType
-  -> Context n r g
-  -> (Threads n r -> n ())
-  -> r (Maybe (Either Failure a))
-  -> n (CResult n r g a)
+  -> Context n g
+  -> (Threads n -> n ())
+  -> C.CRef n (Maybe (Either Failure a))
+  -> n (CResult n g a)
 runConcurrencyWithSnapshot sched memtype ctx restore ref = do
   let boundThreads = M.filter (isJust . _bound) (cThreads ctx)
   threads <- foldrM makeBound (cThreads ctx) (M.keys boundThreads)
@@ -132,7 +127,7 @@ runConcurrencyWithSnapshot sched memtype ctx restore ref = do
   pure res
 
 -- | Kill the remaining threads
-killAllThreads :: MonadConc n => Context n r g -> n ()
+killAllThreads :: C.MonadConc n => Context n g -> n ()
 killAllThreads ctx =
   let finalThreads = cThreads ctx
   in mapM_ (`kill` finalThreads) (M.keys finalThreads)
@@ -141,26 +136,26 @@ killAllThreads ctx =
 -- * Execution
 
 -- | The context a collection of threads are running in.
-data Context n r g = Context
+data Context n g = Context
   { cSchedState :: g
   , cIdSource   :: IdSource
-  , cThreads    :: Threads n r
-  , cWriteBuf   :: WriteBuffer r
+  , cThreads    :: Threads n
+  , cWriteBuf   :: WriteBuffer n
   , cCaps       :: Int
   }
 
 -- | Run a collection of threads, until there are no threads left.
-runThreads :: (MonadConc n, MonadRef r n)
+runThreads :: C.MonadConc n
   => Bool
   -> Scheduler g
   -> MemType
-  -> r (Maybe (Either Failure a))
-  -> Context n r g
-  -> n (CResult n r g a)
+  -> C.CRef n (Maybe (Either Failure a))
+  -> Context n g
+  -> n (CResult n g a)
 runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty Nothing where
   -- signal failure & terminate
   die reason finalR finalT finalD finalC = do
-    writeRef ref (Just $ Left reason)
+    C.writeCRef ref (Just $ Left reason)
     stop finalR finalT finalD finalC
 
   -- just terminate; 'ref' must have been written to before calling
@@ -241,7 +236,7 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
       getPrior (SubC _ finalD) = finalD
 
 -- | Apply the context update from stepping an action.
-fixContext :: ThreadId -> What n r g -> Context n r g -> Context n r g
+fixContext :: ThreadId -> What n g -> Context n g -> Context n g
 fixContext chosen (Succeeded ctx@Context{..}) _ =
   ctx { cThreads = delCommitThreads $
         if (interruptible <$> M.lookup chosen cThreads) /= Just False
@@ -255,7 +250,7 @@ fixContext _ (Snap ctx@Context{..}) _ =
 
 -- | @unblockWaitingOn tid@ unblocks every thread blocked in a
 -- @throwTo tid@.
-unblockWaitingOn :: ThreadId -> Threads n r -> Threads n r
+unblockWaitingOn :: ThreadId -> Threads n -> Threads n
 unblockWaitingOn tid = fmap $ \thread -> case _blocking thread of
   Just (OnMask t) | t == tid -> thread { _blocking = Nothing }
   _ -> thread
@@ -272,12 +267,12 @@ data Act
   deriving (Eq, Show)
 
 -- | What a thread did, for execution purposes.
-data What n r g
-  = Succeeded (Context n r g)
+data What n g
+  = Succeeded (Context n g)
   -- ^ Action succeeded: continue execution.
   | Failed Failure
   -- ^ Action caused computation to fail: stop.
-  | Snap (Context n r g)
+  | Snap (Context n g)
   -- ^ Action was a snapshot point and we're in snapshot mode: stop.
 
 -- | Run a single thread one step, by dispatching on the type of
@@ -289,7 +284,7 @@ data What n r g
 --
 -- Note: the returned snapshot action will definitely not do the right
 -- thing with relaxed memory.
-stepThread :: forall n r g. (MonadConc n, MonadRef r n)
+stepThread :: C.MonadConc n
   => Bool
   -- ^ Should we record a snapshot?
   -> Bool
@@ -300,11 +295,11 @@ stepThread :: forall n r g. (MonadConc n, MonadRef r n)
   -- ^ The memory model to use.
   -> ThreadId
   -- ^ ID of the current thread
-  -> Action n r
+  -> Action n
   -- ^ Action to step
-  -> Context n r g
+  -> Context n g
   -- ^ The execution context.
-  -> n (What n r g, Act, Threads n r -> n ())
+  -> n (What n g, Act, Threads n -> n ())
 -- start a new thread, assigning it the next 'ThreadId'
 stepThread _ _ _ _ tid (AFork n a b) = \ctx@Context{..} -> pure $
   let (idSource', newtid) = nextTId n cIdSource
@@ -370,11 +365,11 @@ stepThread _ _ _ _ tid (ADelay n c) = \ctx@Context{..} ->
 -- create a new @MVar@, using the next 'MVarId'.
 stepThread _ _ _ _ tid (ANewMVar n c) = \ctx@Context{..} -> do
   let (idSource', newmvid) = nextMVId n cIdSource
-  ref <- newRef Nothing
+  ref <- C.newCRef Nothing
   let mvar = ModelMVar newmvid ref
   pure ( Succeeded ctx { cThreads = goto (c mvar) tid cThreads, cIdSource = idSource' }
        , Single (NewMVar newmvid)
-       , const (writeRef ref Nothing)
+       , const (C.writeCRef ref Nothing)
        )
 
 -- put a value into a @MVar@, blocking the thread until it's empty.
@@ -431,11 +426,11 @@ stepThread _ _ _ _ tid (ATryTakeMVar mvar@ModelMVar{..} c) = synchronised $ \ctx
 stepThread _ _ _ _  tid (ANewCRef n a c) = \ctx@Context{..} -> do
   let (idSource', newcrid) = nextCRId n cIdSource
   let val = (M.empty, 0, a)
-  ref <- newRef val
+  ref <- C.newCRef val
   let cref = ModelCRef newcrid ref
   pure ( Succeeded ctx { cThreads = goto (c cref) tid cThreads, cIdSource = idSource' }
        , Single (NewCRef newcrid)
-       , const (writeRef ref val)
+       , const (C.writeCRef ref val)
        )
 
 -- read from a @CRef@.
@@ -637,7 +632,7 @@ stepThread forSnapshot _ sched memtype tid (ASub ma c) = \ctx ->
      | M.size (cThreads ctx) > 1 -> pure (Failed IllegalSubconcurrency, Single Subconcurrency, const (pure ()))
      | otherwise -> do
          res <- runConcurrency False sched memtype (cSchedState ctx) (cIdSource ctx) (cCaps ctx) ma
-         out <- efromJust "stepThread.ASub" <$> readRef (finalRef res)
+         out <- efromJust "stepThread.ASub" <$> C.readCRef (finalRef res)
          pure ( Succeeded ctx
                 { cThreads    = goto (AStopSub (c out)) tid (cThreads ctx)
                 , cIdSource   = cIdSource (finalContext res)
@@ -665,11 +660,11 @@ stepThread forSnapshot isFirst _ _ tid (ADontCheck lb ma c) = \ctx ->
          threads' <- kill tid (cThreads ctx)
          let dcCtx = ctx { cThreads = threads', cSchedState = lb }
          res <- runConcurrency' forSnapshot dcSched SequentialConsistency dcCtx ma
-         out <- efromJust "stepThread.ADontCheck" <$> readRef (finalRef res)
+         out <- efromJust "stepThread.ADontCheck" <$> C.readCRef (finalRef res)
          case out of
            Right a -> do
              let threads'' = launch' Unmasked tid (const (c a)) (cThreads (finalContext res))
-             threads''' <- (if rtsSupportsBoundThreads then makeBound tid else pure) threads''
+             threads''' <- (if C.rtsSupportsBoundThreads then makeBound tid else pure) threads''
              pure ( (if forSnapshot then Snap else Succeeded) (finalContext res)
                     { cThreads = threads''', cSchedState = cSchedState ctx }
                   , Single (DontCheck (toList (finalTrace res)))
@@ -688,16 +683,16 @@ stepThread forSnapshot isFirst _ _ tid (ADontCheck lb ma c) = \ctx ->
 
 -- | Handle an exception being thrown from an @AAtom@, @AThrow@, or
 -- @AThrowTo@.
-stepThrow :: (MonadConc n, MonadRef r n, Exception e)
+stepThrow :: (C.MonadConc n, Exception e)
   => ThreadAction
   -- ^ Action to include in the trace.
   -> ThreadId
   -- ^ The thread receiving the exception.
   -> e
   -- ^ Exception to raise.
-  -> Context n r g
+  -> Context n g
   -- ^ The execution context.
-  -> n (What n r g, Act, Threads n r -> n ())
+  -> n (What n g, Act, Threads n -> n ())
 stepThrow act tid e ctx@Context{..} = case propagate some tid cThreads of
     Just ts' -> pure
       ( Succeeded ctx { cThreads = ts' }
@@ -720,12 +715,12 @@ stepThrow act tid e ctx@Context{..} = case propagate some tid cThreads of
     some = toException e
 
 -- | Helper for actions impose a write barrier.
-synchronised :: (Monad n, MonadRef r n)
-  => (Context n r g -> n (What n r g, Act, Threads n r -> n ()))
+synchronised :: C.MonadConc n
+  => (Context n g -> n (What n g, Act, Threads n -> n ()))
   -- ^ Action to run after the write barrier.
-  -> Context n r g
+  -> Context n g
   -- ^ The original execution context.
-  -> n (What n r g, Act, Threads n r -> n ())
+  -> n (What n g, Act, Threads n -> n ())
 synchronised ma ctx@Context{..} = do
   writeBarrier cWriteBuf
   ma ctx { cWriteBuf = emptyBuffer }

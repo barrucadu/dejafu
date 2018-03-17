@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -13,27 +12,27 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, ExistentialQuantification, MultiParamTypeClasses, NoMonoLocalBinds, RecordWildCards, TypeFamilies
+-- Portability : CPP, ExistentialQuantification, NoMonoLocalBinds, RecordWildCards, TypeFamilies
 --
 -- 'MonadSTM' testing implementation, internal types and definitions.
 -- This module is NOT considered to form part of the public interface
 -- of this library.
 module Test.DejaFu.Conc.Internal.STM where
 
-import           Control.Applicative     (Alternative(..))
-import           Control.Exception       (Exception, SomeException,
-                                          fromException, toException)
-import           Control.Monad           (MonadPlus(..))
-import           Control.Monad.Catch     (MonadCatch(..), MonadThrow(..))
-import           Control.Monad.Ref       (MonadRef, newRef, readRef, writeRef)
-import           Data.List               (nub)
+import           Control.Applicative      (Alternative(..))
+import           Control.Exception        (Exception, SomeException,
+                                           fromException, toException)
+import           Control.Monad            (MonadPlus(..))
+import           Control.Monad.Catch      (MonadCatch(..), MonadThrow(..))
+import qualified Control.Monad.Conc.Class as C
+import qualified Control.Monad.STM.Class  as S
+import           Data.List                (nub)
 
-import qualified Control.Monad.STM.Class as C
 import           Test.DejaFu.Internal
 import           Test.DejaFu.Types
 
 #if MIN_VERSION_base(4,9,0)
-import qualified Control.Monad.Fail      as Fail
+import qualified Control.Monad.Fail       as Fail
 #endif
 
 --------------------------------------------------------------------------------
@@ -44,40 +43,40 @@ import qualified Control.Monad.Fail      as Fail
 --
 -- This is not @Cont@ because we want to give it a custom @MonadFail@
 -- instance.
-newtype ModelSTM n r a = ModelSTM { runModelSTM :: (a -> STMAction n r) -> STMAction n r }
+newtype ModelSTM n a = ModelSTM { runModelSTM :: (a -> STMAction n) -> STMAction n }
 
-instance Functor (ModelSTM n r) where
+instance Functor (ModelSTM n) where
     fmap f m = ModelSTM $ \c -> runModelSTM m (c . f)
 
-instance Applicative (ModelSTM n r) where
+instance Applicative (ModelSTM n) where
     pure x  = ModelSTM $ \c -> c x
     f <*> v = ModelSTM $ \c -> runModelSTM f (\g -> runModelSTM v (c . g))
 
-instance Monad (ModelSTM n r) where
+instance Monad (ModelSTM n) where
     return  = pure
     m >>= k = ModelSTM $ \c -> runModelSTM m (\x -> runModelSTM (k x) c)
 
 #if MIN_VERSION_base(4,9,0)
     fail = Fail.fail
 
-instance Fail.MonadFail (ModelSTM n r) where
+instance Fail.MonadFail (ModelSTM n) where
 #endif
     fail e = ModelSTM $ \_ -> SThrow (MonadFailException e)
 
-instance MonadThrow (ModelSTM n r) where
+instance MonadThrow (ModelSTM n) where
   throwM e = ModelSTM $ \_ -> SThrow e
 
-instance MonadCatch (ModelSTM n r) where
+instance MonadCatch (ModelSTM n) where
   catch stm handler = ModelSTM $ SCatch handler stm
 
-instance Alternative (ModelSTM n r) where
+instance Alternative (ModelSTM n) where
   a <|> b = ModelSTM $ SOrElse a b
   empty = ModelSTM $ const SRetry
 
-instance MonadPlus (ModelSTM n r)
+instance MonadPlus (ModelSTM n)
 
-instance C.MonadSTM (ModelSTM n r) where
-  type TVar (ModelSTM n r) = ModelTVar r
+instance S.MonadSTM (ModelSTM n) where
+  type TVar (ModelSTM n) = ModelTVar n
 
   newTVarN n = ModelSTM . SNew n
 
@@ -90,12 +89,12 @@ instance C.MonadSTM (ModelSTM n r) where
 
 -- | STM transactions are represented as a sequence of primitive
 -- actions.
-data STMAction n r
-  = forall a e. Exception e => SCatch (e -> ModelSTM n r a) (ModelSTM n r a) (a -> STMAction n r)
-  | forall a. SRead  (ModelTVar r a) (a -> STMAction n r)
-  | forall a. SWrite (ModelTVar r a) a (STMAction n r)
-  | forall a. SOrElse (ModelSTM n r a) (ModelSTM n r a) (a -> STMAction n r)
-  | forall a. SNew String a (ModelTVar r a -> STMAction n r)
+data STMAction n
+  = forall a e. Exception e => SCatch (e -> ModelSTM n a) (ModelSTM n a) (a -> STMAction n)
+  | forall a. SRead  (ModelTVar n a) (a -> STMAction n)
+  | forall a. SWrite (ModelTVar n a) a (STMAction n)
+  | forall a. SOrElse (ModelSTM n a) (ModelSTM n a) (a -> STMAction n)
+  | forall a. SNew String a (ModelTVar n a -> STMAction n)
   | forall e. Exception e => SThrow e
   | SRetry
   | SStop (n ())
@@ -105,9 +104,9 @@ data STMAction n r
 
 -- | A @TVar@ is modelled as a unique ID and a reference holding a
 -- value.
-data ModelTVar r a = ModelTVar
+data ModelTVar n a = ModelTVar
   { tvarId  :: TVarId
-  , tvarRef :: r a
+  , tvarRef :: C.CRef n a
   }
 
 --------------------------------------------------------------------------------
@@ -133,8 +132,8 @@ data Result a =
 
 -- | Run a transaction, returning the result and new initial 'TVarId'.
 -- If the transaction failed, any effects are undone.
-runTransaction :: MonadRef r n
-  => ModelSTM n r a
+runTransaction :: C.MonadConc n
+  => ModelSTM n a
   -> IdSource
   -> n (Result a, IdSource, [TAction])
 runTransaction ma tvid = do
@@ -145,14 +144,14 @@ runTransaction ma tvid = do
 --
 -- If the transaction fails, its effects will automatically be undone,
 -- so the undo action returned will be @pure ()@.
-doTransaction :: MonadRef r n
-  => ModelSTM n r a
+doTransaction :: C.MonadConc n
+  => ModelSTM n a
   -> IdSource
   -> n (Result a, n (), IdSource, [TAction])
 doTransaction ma idsource = do
   (c, ref) <- runRefCont SStop (Just . Right) (runModelSTM ma)
   (idsource', undo, readen, written, trace) <- go ref c (pure ()) idsource [] [] []
-  res <- readRef ref
+  res <- C.readCRef ref
 
   case res of
     Just (Right val) -> pure (Success (nub readen) (nub written) val, undo, idsource', reverse trace)
@@ -173,18 +172,18 @@ doTransaction ma idsource = do
       case tact of
         TStop  -> pure (newIDSource, newUndo, newReaden, newWritten, TStop:newSofar)
         TRetry -> do
-          writeRef ref Nothing
+          C.writeCRef ref Nothing
           pure (newIDSource, newUndo, newReaden, newWritten, TRetry:newSofar)
         TThrow -> do
-          writeRef ref (Just . Left $ case act of SThrow e -> toException e; _ -> undefined)
+          C.writeCRef ref (Just . Left $ case act of SThrow e -> toException e; _ -> undefined)
           pure (newIDSource, newUndo, newReaden, newWritten, TThrow:newSofar)
         _ -> go ref newAct newUndo newIDSource newReaden newWritten newSofar
 
 -- | Run a transaction for one step.
-stepTrans :: MonadRef r n
-  => STMAction n r
+stepTrans :: C.MonadConc n
+  => STMAction n
   -> IdSource
-  -> n (STMAction n r, n (), IdSource, [TVarId], [TVarId], TAction)
+  -> n (STMAction n, n (), IdSource, [TVarId], [TVarId], TAction)
 stepTrans act idsource = case act of
   SCatch  h stm c -> stepCatch h stm c
   SRead   ref c   -> stepRead ref c
@@ -206,17 +205,17 @@ stepTrans act idsource = case act of
         Nothing   -> pure (SThrow exc, nothing, idsource, [], [], TCatch trace Nothing))
 
     stepRead ModelTVar{..} c = do
-      val <- readRef tvarRef
+      val <- C.readCRef tvarRef
       pure (c val, nothing, idsource, [tvarId], [], TRead tvarId)
 
     stepWrite ModelTVar{..} a c = do
-      old <- readRef tvarRef
-      writeRef tvarRef a
-      pure (c, writeRef tvarRef old, idsource, [], [tvarId], TWrite tvarId)
+      old <- C.readCRef tvarRef
+      C.writeCRef tvarRef a
+      pure (c, C.writeCRef tvarRef old, idsource, [], [tvarId], TWrite tvarId)
 
     stepNew n a c = do
       let (idsource', tvid) = nextTVId n idsource
-      ref <- newRef a
+      ref <- C.newCRef a
       let tvar = ModelTVar tvid ref
       pure (c tvar, nothing, idsource', [], [tvid], TNew tvid)
 

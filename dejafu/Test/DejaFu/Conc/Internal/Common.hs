@@ -16,6 +16,7 @@
 module Test.DejaFu.Conc.Internal.Common where
 
 import           Control.Exception             (Exception, MaskingState(..))
+import qualified Control.Monad.Conc.Class      as C
 import           Data.Map.Strict               (Map)
 import           Test.DejaFu.Conc.Internal.STM (ModelSTM)
 import           Test.DejaFu.Types
@@ -35,42 +36,41 @@ import qualified Control.Monad.Fail            as Fail
 -- current expression of threads and exception handlers very difficult
 -- (perhaps even not possible without significant reworking), so I
 -- abandoned the attempt.
-newtype ModelConc n r a = ModelConc { runModelConc :: (a -> Action n r) -> Action n r }
+newtype ModelConc n a = ModelConc { runModelConc :: (a -> Action n) -> Action n }
 
-instance Functor (ModelConc n r) where
-    fmap f m = ModelConc $ \ c -> runModelConc m (c . f)
+instance Functor (ModelConc n) where
+    fmap f m = ModelConc $ \c -> runModelConc m (c . f)
 
-instance Applicative (ModelConc n r) where
+instance Applicative (ModelConc n) where
     -- without the @AReturn@, a thread could lock up testing by
     -- entering an infinite loop (eg: @forever (return ())@)
     pure x  = ModelConc $ \c -> AReturn $ c x
     f <*> v = ModelConc $ \c -> runModelConc f (\g -> runModelConc v (c . g))
 
-instance Monad (ModelConc n r) where
+instance Monad (ModelConc n) where
     return  = pure
     m >>= k = ModelConc $ \c -> runModelConc m (\x -> runModelConc (k x) c)
 
 #if MIN_VERSION_base(4,9,0)
     fail = Fail.fail
 
--- | @since 0.7.1.2
-instance Fail.MonadFail (ModelConc n r) where
+instance Fail.MonadFail (ModelConc n) where
 #endif
     fail e = ModelConc $ \_ -> AThrow (MonadFailException e)
 
 -- | An @MVar@ is modelled as a unique ID and a reference holding a
 -- @Maybe@ value.
-data ModelMVar r a = ModelMVar
+data ModelMVar n a = ModelMVar
   { mvarId  :: MVarId
-  , mvarRef :: r (Maybe a)
+  , mvarRef :: C.CRef n (Maybe a)
   }
 
 -- | A @CRef@ is modelled as a unique ID and a reference holding
 -- thread-local values, the number of commits, and the most recent
 -- committed value.
-data ModelCRef r a = ModelCRef
+data ModelCRef n a = ModelCRef
   { crefId  :: CRefId
-  , crefRef :: r (Map ThreadId a, Integer, a)
+  , crefRef :: C.CRef n (Map ThreadId a, Integer, a)
   }
 
 -- | A @Ticket@ is modelled as the ID of the @ModelCRef@ it came from,
@@ -89,55 +89,55 @@ data ModelTicket a = ModelTicket
 -- only occur as a result of an action, and they cover (most of) the
 -- primitives of the concurrency. 'spawn' is absent as it is
 -- implemented in terms of 'newEmptyMVar', 'fork', and 'putMVar'.
-data Action n r =
-    AFork   String ((forall b. ModelConc n r b -> ModelConc n r b) -> Action n r) (ThreadId -> Action n r)
-  | AForkOS String ((forall b. ModelConc n r b -> ModelConc n r b) -> Action n r) (ThreadId -> Action n r)
-  | AIsBound (Bool -> Action n r)
-  | AMyTId (ThreadId -> Action n r)
+data Action n =
+    AFork   String ((forall b. ModelConc n b -> ModelConc n b) -> Action n) (ThreadId -> Action n)
+  | AForkOS String ((forall b. ModelConc n b -> ModelConc n b) -> Action n) (ThreadId -> Action n)
+  | AIsBound (Bool -> Action n)
+  | AMyTId (ThreadId -> Action n)
 
-  | AGetNumCapabilities (Int -> Action n r)
-  | ASetNumCapabilities Int (Action n r)
+  | AGetNumCapabilities (Int -> Action n)
+  | ASetNumCapabilities Int (Action n)
 
-  | forall a. ANewMVar String (ModelMVar r a -> Action n r)
-  | forall a. APutMVar     (ModelMVar r a) a (Action n r)
-  | forall a. ATryPutMVar  (ModelMVar r a) a (Bool -> Action n r)
-  | forall a. AReadMVar    (ModelMVar r a) (a -> Action n r)
-  | forall a. ATryReadMVar (ModelMVar r a) (Maybe a -> Action n r)
-  | forall a. ATakeMVar    (ModelMVar r a) (a -> Action n r)
-  | forall a. ATryTakeMVar (ModelMVar r a) (Maybe a -> Action n r)
+  | forall a. ANewMVar String (ModelMVar n a -> Action n)
+  | forall a. APutMVar     (ModelMVar n a) a (Action n)
+  | forall a. ATryPutMVar  (ModelMVar n a) a (Bool -> Action n)
+  | forall a. AReadMVar    (ModelMVar n a) (a -> Action n)
+  | forall a. ATryReadMVar (ModelMVar n a) (Maybe a -> Action n)
+  | forall a. ATakeMVar    (ModelMVar n a) (a -> Action n)
+  | forall a. ATryTakeMVar (ModelMVar n a) (Maybe a -> Action n)
 
-  | forall a.   ANewCRef String a (ModelCRef r a -> Action n r)
-  | forall a.   AReadCRef    (ModelCRef r a) (a -> Action n r)
-  | forall a.   AReadCRefCas (ModelCRef r a) (ModelTicket a -> Action n r)
-  | forall a b. AModCRef     (ModelCRef r a) (a -> (a, b)) (b -> Action n r)
-  | forall a b. AModCRefCas  (ModelCRef r a) (a -> (a, b)) (b -> Action n r)
-  | forall a.   AWriteCRef   (ModelCRef r a) a (Action n r)
-  | forall a.   ACasCRef     (ModelCRef r a) (ModelTicket a) a ((Bool, ModelTicket a) -> Action n r)
+  | forall a.   ANewCRef String a (ModelCRef n a -> Action n)
+  | forall a.   AReadCRef    (ModelCRef n a) (a -> Action n)
+  | forall a.   AReadCRefCas (ModelCRef n a) (ModelTicket a -> Action n)
+  | forall a b. AModCRef     (ModelCRef n a) (a -> (a, b)) (b -> Action n)
+  | forall a b. AModCRefCas  (ModelCRef n a) (a -> (a, b)) (b -> Action n)
+  | forall a.   AWriteCRef   (ModelCRef n a) a (Action n)
+  | forall a.   ACasCRef     (ModelCRef n a) (ModelTicket a) a ((Bool, ModelTicket a) -> Action n)
 
   | forall e.   Exception e => AThrow e
-  | forall e.   Exception e => AThrowTo ThreadId e (Action n r)
-  | forall a e. Exception e => ACatching (e -> ModelConc n r a) (ModelConc n r a) (a -> Action n r)
-  | APopCatching (Action n r)
-  | forall a. AMasking MaskingState ((forall b. ModelConc n r b -> ModelConc n r b) -> ModelConc n r a) (a -> Action n r)
-  | AResetMask Bool Bool MaskingState (Action n r)
+  | forall e.   Exception e => AThrowTo ThreadId e (Action n)
+  | forall a e. Exception e => ACatching (e -> ModelConc n a) (ModelConc n a) (a -> Action n)
+  | APopCatching (Action n)
+  | forall a. AMasking MaskingState ((forall b. ModelConc n b -> ModelConc n b) -> ModelConc n a) (a -> Action n)
+  | AResetMask Bool Bool MaskingState (Action n)
 
-  | forall a. AAtom (ModelSTM n r a) (a -> Action n r)
-  | ALift (n (Action n r))
-  | AYield  (Action n r)
-  | ADelay Int (Action n r)
-  | AReturn (Action n r)
+  | forall a. AAtom (ModelSTM n a) (a -> Action n)
+  | ALift (n (Action n))
+  | AYield  (Action n)
+  | ADelay Int (Action n)
+  | AReturn (Action n)
   | ACommit ThreadId CRefId
   | AStop (n ())
 
-  | forall a. ASub (ModelConc n r a) (Either Failure a -> Action n r)
-  | AStopSub (Action n r)
-  | forall a. ADontCheck (Maybe Int) (ModelConc n r a) (a -> Action n r)
+  | forall a. ASub (ModelConc n a) (Either Failure a -> Action n)
+  | AStopSub (Action n)
+  | forall a. ADontCheck (Maybe Int) (ModelConc n a) (a -> Action n)
 
 --------------------------------------------------------------------------------
 -- * Scheduling & Traces
 
 -- | Look as far ahead in the given continuation as possible.
-lookahead :: Action n r -> Lookahead
+lookahead :: Action n -> Lookahead
 lookahead (AFork _ _ _) = WillFork
 lookahead (AForkOS _ _ _) = WillForkOS
 lookahead (AIsBound _) = WillIsCurrentThreadBound

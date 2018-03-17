@@ -16,7 +16,6 @@
 module Test.DejaFu.SCT.Internal where
 
 import           Control.Monad.Conc.Class         (MonadConc)
-import           Control.Monad.Ref                (MonadRef)
 import           Data.Coerce                      (Coercible, coerce)
 import qualified Data.IntMap.Strict               as I
 import           Data.List                        (find, mapAccumL)
@@ -35,7 +34,7 @@ import           Test.DejaFu.Utils
 -- * Exploration
 
 -- | General-purpose SCT function.
-sct :: (MonadConc n, MonadRef r n)
+sct :: MonadConc n
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
   -> ([ThreadId] -> s)
@@ -44,7 +43,7 @@ sct :: (MonadConc n, MonadRef r n)
   -- ^ State predicate
   -> ((Scheduler g -> g -> n (Either Failure a, g, Trace)) -> s -> t -> n (s, Maybe (Either Failure a, Trace)))
   -- ^ Run the computation and update the state
-  -> ConcT r n a
+  -> ConcT n a
   -> n [(Either Failure a, Trace)]
 sct settings s0 sfun srun conc
     | canDCSnapshot conc = runForDCSnapshot conc >>= \case
@@ -80,7 +79,7 @@ sct settings s0 sfun srun conc
     debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
 
 -- | Like 'sct' but given a function to run the computation.
-sct' :: (MonadConc n, MonadRef r n)
+sct' :: MonadConc n
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
   -> s
@@ -147,7 +146,7 @@ sct' settings s0 sfun srun run nextTId nextCRId = go Nothing [] s0 where
 -- Unlike shrinking in randomised property-testing tools like
 -- QuickCheck or Hedgehog, we only run the test case /once/, at the
 -- end, rather than after every simplification step.
-simplifyExecution :: (MonadConc n, MonadRef r n)
+simplifyExecution :: MonadConc n
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
   -> (forall x. Scheduler x -> x -> n (Either Failure a, x, Trace))
@@ -185,7 +184,7 @@ simplifyExecution settings run nextTId nextCRId res trace
     p = either show debugShow
 
 -- | Replay an execution.
-replay :: (MonadConc n, MonadRef r n)
+replay :: MonadConc n
   => (forall x. Scheduler x -> x -> n (Either Failure a, x, Trace))
   -- ^ Run the computation
   -> [(ThreadId, ThreadAction)]

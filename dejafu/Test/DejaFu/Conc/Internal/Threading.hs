@@ -13,10 +13,10 @@
 -- form part of the public interface of this library.
 module Test.DejaFu.Conc.Internal.Threading where
 
-import qualified Control.Concurrent.Classy        as C
 import           Control.Exception                (Exception, MaskingState(..),
                                                    SomeException, fromException)
 import           Control.Monad                    (forever)
+import qualified Control.Monad.Conc.Class         as C
 import           Data.List                        (intersect)
 import           Data.Map.Strict                  (Map)
 import qualified Data.Map.Strict                  as M
@@ -30,34 +30,34 @@ import           Test.DejaFu.Types
 -- * Threads
 
 -- | Threads are stored in a map index by 'ThreadId'.
-type Threads n r = Map ThreadId (Thread n r)
+type Threads n = Map ThreadId (Thread n)
 
 -- | All the state of a thread.
-data Thread n r = Thread
-  { _continuation :: Action n r
+data Thread n = Thread
+  { _continuation :: Action n
   -- ^ The next action to execute.
   , _blocking     :: Maybe BlockedOn
   -- ^ The state of any blocks.
-  , _handlers     :: [Handler n r]
+  , _handlers     :: [Handler n]
   -- ^ Stack of exception handlers
   , _masking      :: MaskingState
   -- ^ The exception masking state.
-  , _bound        :: Maybe (BoundThread n r)
+  , _bound        :: Maybe (BoundThread n)
   -- ^ State for the associated bound thread, if it exists.
   }
 
 -- | The state of a bound thread.
-data BoundThread n r = BoundThread
-  { _runboundIO :: C.MVar n (n (Action n r))
+data BoundThread n = BoundThread
+  { _runboundIO :: C.MVar n (n (Action n))
   -- ^ Run an @IO@ action in the bound thread by writing to this.
-  , _getboundIO :: C.MVar n (Action n r)
+  , _getboundIO :: C.MVar n (Action n)
   -- ^ Get the result of the above by reading from this.
   , _boundTId   :: C.ThreadId n
   -- ^ Thread ID
   }
 
 -- | Construct a thread with just one action
-mkthread :: Action n r -> Thread n r
+mkthread :: Action n -> Thread n
 mkthread c = Thread c Nothing [] Unmasked Nothing
 
 --------------------------------------------------------------------------------
@@ -68,7 +68,7 @@ mkthread c = Thread c Nothing [] Unmasked Nothing
 data BlockedOn = OnMVarFull MVarId | OnMVarEmpty MVarId | OnTVar [TVarId] | OnMask ThreadId deriving Eq
 
 -- | Determine if a thread is blocked in a certain way.
-(~=) :: Thread n r -> BlockedOn -> Bool
+(~=) :: Thread n -> BlockedOn -> Bool
 thread ~= theblock = case (_blocking thread, theblock) of
   (Just (OnMVarFull  _), OnMVarFull  _) -> True
   (Just (OnMVarEmpty _), OnMVarEmpty _) -> True
@@ -80,11 +80,11 @@ thread ~= theblock = case (_blocking thread, theblock) of
 -- * Exceptions
 
 -- | An exception handler.
-data Handler n r = forall e. Exception e => Handler (e -> MaskingState -> Action n r)
+data Handler n = forall e. Exception e => Handler (e -> MaskingState -> Action n)
 
 -- | Propagate an exception upwards, finding the closest handler
 -- which can deal with it.
-propagate :: SomeException -> ThreadId -> Threads n r -> Maybe (Threads n r)
+propagate :: SomeException -> ThreadId -> Threads n -> Maybe (Threads n)
 propagate e tid threads = raise <$> propagate' handlers where
   handlers = _handlers (elookup "propagate" tid threads)
 
@@ -94,23 +94,25 @@ propagate e tid threads = raise <$> propagate' handlers where
   propagate' (Handler h:hs) = maybe (propagate' hs) (\act -> Just (act, hs)) $ h <$> fromException e
 
 -- | Check if a thread can be interrupted by an exception.
-interruptible :: Thread n r -> Bool
-interruptible thread = _masking thread == Unmasked || (_masking thread == MaskedInterruptible && isJust (_blocking thread))
+interruptible :: Thread n -> Bool
+interruptible thread =
+  _masking thread == Unmasked ||
+  (_masking thread == MaskedInterruptible && isJust (_blocking thread))
 
 -- | Register a new exception handler.
-catching :: Exception e => (e -> Action n r) -> ThreadId -> Threads n r -> Threads n r
+catching :: Exception e => (e -> Action n) -> ThreadId -> Threads n -> Threads n
 catching h = eadjust "catching" $ \thread ->
   let ms0 = _masking thread
       h'  = Handler $ \e ms -> (if ms /= ms0 then AResetMask False False ms0 else id) (h e)
   in thread { _handlers = h' : _handlers thread }
 
 -- | Remove the most recent exception handler.
-uncatching :: ThreadId -> Threads n r -> Threads n r
+uncatching :: ThreadId -> Threads n -> Threads n
 uncatching = eadjust "uncatching" $ \thread ->
   thread { _handlers = etail "uncatching" (_handlers thread) }
 
 -- | Raise an exception in a thread.
-except :: (MaskingState -> Action n r) -> [Handler n r] -> ThreadId -> Threads n r -> Threads n r
+except :: (MaskingState -> Action n) -> [Handler n] -> ThreadId -> Threads n -> Threads n
 except actf hs = eadjust "except" $ \thread -> thread
   { _continuation = actf (_masking thread)
   , _handlers = hs
@@ -118,24 +120,24 @@ except actf hs = eadjust "except" $ \thread -> thread
   }
 
 -- | Set the masking state of a thread.
-mask :: MaskingState -> ThreadId -> Threads n r -> Threads n r
+mask :: MaskingState -> ThreadId -> Threads n -> Threads n
 mask ms = eadjust "mask" $ \thread -> thread { _masking = ms }
 
 --------------------------------------------------------------------------------
 -- * Manipulating threads
 
 -- | Replace the @Action@ of a thread.
-goto :: Action n r -> ThreadId -> Threads n r -> Threads n r
+goto :: Action n -> ThreadId -> Threads n -> Threads n
 goto a = eadjust "goto" $ \thread -> thread { _continuation = a }
 
 -- | Start a thread with the given ID, inheriting the masking state
 -- from the parent thread. This ID must not already be in use!
-launch :: ThreadId -> ThreadId -> ((forall b. ModelConc n r b -> ModelConc n r b) -> Action n r) -> Threads n r -> Threads n r
+launch :: ThreadId -> ThreadId -> ((forall b. ModelConc n b -> ModelConc n b) -> Action n) -> Threads n -> Threads n
 launch parent tid a threads = launch' ms tid a threads where
   ms = _masking (elookup "launch" parent threads)
 
 -- | Start a thread with the given ID and masking state. This must not already be in use!
-launch' :: MaskingState -> ThreadId -> ((forall b. ModelConc n r b -> ModelConc n r b) -> Action n r) -> Threads n r -> Threads n r
+launch' :: MaskingState -> ThreadId -> ((forall b. ModelConc n b -> ModelConc n b) -> Action n) -> Threads n -> Threads n
 launch' ms tid a = einsert "launch'" tid thread where
   thread = Thread (a umask) Nothing [] ms Nothing
 
@@ -143,13 +145,13 @@ launch' ms tid a = einsert "launch'" tid thread where
   resetMask typ m = ModelConc $ \k -> AResetMask typ True m $ k ()
 
 -- | Block a thread.
-block :: BlockedOn -> ThreadId -> Threads n r -> Threads n r
+block :: BlockedOn -> ThreadId -> Threads n -> Threads n
 block blockedOn = eadjust "block" $ \thread -> thread { _blocking = Just blockedOn }
 
 -- | Unblock all threads waiting on the appropriate block. For 'TVar'
 -- blocks, this will wake all threads waiting on at least one of the
 -- given 'TVar's.
-wake :: BlockedOn -> Threads n r -> (Threads n r, [ThreadId])
+wake :: BlockedOn -> Threads n -> (Threads n, [ThreadId])
 wake blockedOn threads = (unblock <$> threads, M.keys $ M.filter isBlocked threads) where
   unblock thread
     | isBlocked thread = thread { _blocking = Nothing }
@@ -163,7 +165,7 @@ wake blockedOn threads = (unblock <$> threads, M.keys $ M.filter isBlocked threa
 -- ** Bound threads
 
 -- | Turn a thread into a bound thread.
-makeBound :: C.MonadConc n => ThreadId -> Threads n r -> n (Threads n r)
+makeBound :: C.MonadConc n => ThreadId -> Threads n -> n (Threads n)
 makeBound tid threads = do
     runboundIO <- C.newEmptyMVar
     getboundIO <- C.newEmptyMVar
@@ -178,7 +180,7 @@ makeBound tid threads = do
 -- | Kill a thread and remove it from the thread map.
 --
 -- If the thread is bound, the worker thread is cleaned up.
-kill :: C.MonadConc n => ThreadId -> Threads n r -> n (Threads n r)
+kill :: C.MonadConc n => ThreadId -> Threads n -> n (Threads n)
 kill tid threads = do
   let thread = elookup "kill" tid threads
   maybe (pure ()) (C.killThread . _boundTId) (_bound thread)
@@ -187,7 +189,7 @@ kill tid threads = do
 -- | Run an action.
 --
 -- If the thread is bound, the action is run in the worker thread.
-runLiftedAct :: C.MonadConc n => ThreadId -> Threads n r -> n (Action n r) -> n (Action n r)
+runLiftedAct :: C.MonadConc n => ThreadId -> Threads n -> n (Action n) -> n (Action n)
 runLiftedAct tid threads ma = case _bound =<< M.lookup tid threads of
   Just bt -> do
     C.putMVar (_runboundIO bt) ma

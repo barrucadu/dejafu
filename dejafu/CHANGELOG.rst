@@ -7,6 +7,24 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Changed
+~~~~~~~
+
+- (:issue:`201`) ``Test.DejaFu.Conc.ConcT r n a`` drops its ``r``
+  parameter, becoming ``ConcT n a``.
+
+- (:issue:`201`) All functions drop the ``MonadConc`` constraint.
+
+Removed
+~~~~~~~
+
+- (:issue:`201`) The ``MonadRef`` and ``MonadAtomicRef`` instances for
+  ``Test.DejaFu.Conc.ConcT``.
+
+
 1.3.2.0 (2018-03-12)
 --------------------
 
