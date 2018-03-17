@@ -58,7 +58,7 @@ data CResult n g a = CResult
 -- | A snapshot of the concurrency state immediately after 'dontCheck'
 -- finishes.
 --
--- @since unreleased
+-- @since 1.4.0.0
 data DCSnapshot n a = DCSnapshot
   { dcsContext :: Context n ()
   -- ^ The execution context.  The scheduler state is ignored when

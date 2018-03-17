@@ -78,7 +78,7 @@ import           Test.DejaFu.Utils
 import qualified Control.Monad.Fail                  as Fail
 #endif
 
--- | @since unreleased
+-- | @since 1.4.0.0
 newtype ConcT n a = C { unC :: ModelConc n a }
   deriving (Functor, Applicative, Monad)
 
