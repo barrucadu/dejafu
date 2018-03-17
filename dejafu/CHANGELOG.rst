@@ -24,6 +24,9 @@ Removed
 - (:issue:`201`) The ``MonadRef`` and ``MonadAtomicRef`` instances for
   ``Test.DejaFu.Conc.ConcT``.
 
+- (:issue:`198`) The ``Test.DejaFu.Types.Killed`` thread action, which
+  was unused.
+
 
 1.3.2.0 (2018-03-12)
 --------------------

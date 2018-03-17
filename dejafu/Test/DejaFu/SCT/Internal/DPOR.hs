@@ -589,9 +589,8 @@ dependent ds t1 a1 t2 a2 = case (a1, a2) of
   (BlockedSTM _, STM _ _)      -> checkSTM
   (BlockedSTM _, BlockedSTM _) -> checkSTM
 
-  _ -> case (,) <$> rewind a1 <*> rewind a2 of
-    Just (l1, l2) -> dependent' ds t1 a1 t2 l2 && dependent' ds t2 a2 t1 l1
-    _ -> dependentActions ds (simplifyAction a1) (simplifyAction a2)
+  _ -> dependent' ds t1 a1 t2 (rewind a2)
+    && dependent' ds t2 a2 t1 (rewind a1)
 
   where
     -- STM actions A and B are dependent if A wrote to anything B

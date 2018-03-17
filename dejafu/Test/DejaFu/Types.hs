@@ -104,7 +104,7 @@ initialThread = ThreadId (Id (Just "main") 0)
 
 -- | All the actions that a thread can perform.
 --
--- @since 1.1.0.0
+-- @since unreleased
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -175,8 +175,6 @@ data ThreadAction =
   -- ^ Throw an exception to a thread.
   | BlockedThrowTo ThreadId
   -- ^ Get blocked on a 'throwTo'.
-  | Killed
-  -- ^ Killed by an uncaught exception.
   | SetMasking Bool MaskingState
   -- ^ Set the masking state. If 'True', this is being used to set the
   -- masking state to the original state in the argument passed to a
@@ -238,7 +236,6 @@ instance NFData ThreadAction where
   rnf Throw = ()
   rnf (ThrowTo t) = rnf t
   rnf (BlockedThrowTo t) = rnf t
-  rnf Killed = ()
   rnf (SetMasking b m) = rnf (b, show m)
   rnf (ResetMasking b m) = rnf (b, show m)
   rnf LiftIO = ()

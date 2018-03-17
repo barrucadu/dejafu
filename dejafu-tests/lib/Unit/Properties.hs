@@ -79,9 +79,7 @@ commonProps :: [TestTree]
 commonProps = toTestList
   [ testProperty "simplifyAction a == simplifyLookahead (rewind a)" $ do
       act <- H.forAll genThreadAction
-      case D.rewind act of
-        Just lh -> D.simplifyAction act H.=== D.simplifyLookahead lh
-        Nothing -> H.discard
+      D.simplifyAction act H.=== D.simplifyLookahead (D.rewind act)
 
   , testProperty "isBarrier a ==> synchronises a r" $ do
       a <- H.forAll (HGen.filter D.isBarrier genActionType)
@@ -171,9 +169,7 @@ sctProps = toTestList
       ds <- H.forAll genDepState
       tid <- H.forAll genThreadId
       act <- H.forAll (HGen.filter (SCT.canInterrupt ds tid) genThreadAction)
-      case D.rewind act of
-        Just lh -> H.assert (SCT.canInterruptL ds tid lh)
-        Nothing -> H.discard
+      H.assert (SCT.canInterruptL ds tid (D.rewind act))
 
   , testProperty "dependent ==> dependent'" $ do
       ds <- H.forAll genDepState
@@ -181,9 +177,7 @@ sctProps = toTestList
       tid2 <- H.forAll genThreadId
       ta1 <- H.forAll genThreadAction
       ta2 <- H.forAll (HGen.filter (SCT.dependent ds tid1 ta1 tid2) genThreadAction)
-      case D.rewind ta2 of
-        Just lh -> H.assert (SCT.dependent' ds tid1 ta1 tid2 lh)
-        Nothing -> H.discard
+      H.assert (SCT.dependent' ds tid1 ta1 tid2 (D.rewind ta2))
 
   , testProperty "dependent x y == dependent y x" $ do
       ds <- H.forAll genDepState
@@ -308,7 +302,6 @@ genThreadAction = HGen.choice
   , pure D.Throw
   , D.ThrowTo <$> genThreadId
   , D.BlockedThrowTo <$> genThreadId
-  , pure D.Killed
   , D.SetMasking <$> HGen.bool <*> genMaskingState
   , D.ResetMasking <$> HGen.bool <*> genMaskingState
   , pure D.LiftIO
