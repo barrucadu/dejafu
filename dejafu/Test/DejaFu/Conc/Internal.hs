@@ -113,15 +113,7 @@ runConcurrency' forSnapshot sched memtype ctx ma = do
   (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
   let threads0 = launch' Unmasked initialThread (const c) (cThreads ctx)
   threads <- (if rtsSupportsBoundThreads then makeBound initialThread else pure) threads0
-  (finalC, finalT, finalD, finalR) <-
-    runThreads forSnapshot sched memtype ref ctx { cThreads = threads }
-  pure CResult
-    { finalContext  = finalC
-    , finalRef      = ref
-    , finalRestore  = finalR
-    , finalTrace    = finalT
-    , finalDecision = finalD
-    }
+  runThreads forSnapshot sched memtype ref ctx { cThreads = threads }
 
 -- | Like 'runConcurrency' but starts from a snapshot.
 runConcurrencyWithSnapshot :: (MonadConc n, MonadRef r n)
@@ -135,16 +127,9 @@ runConcurrencyWithSnapshot sched memtype ctx restore ref = do
   let boundThreads = M.filter (isJust . _bound) (cThreads ctx)
   threads <- foldrM makeBound (cThreads ctx) (M.keys boundThreads)
   restore threads
-  (finalC, finalT, finalD, finalR) <-
-    runThreads False sched memtype ref ctx { cThreads = threads }
-  killAllThreads finalC
-  pure CResult
-    { finalContext  = finalC
-    , finalRef      = ref
-    , finalRestore  = finalR
-    , finalTrace    = finalT
-    , finalDecision = finalD
-    }
+  res <- runThreads False sched memtype ref ctx { cThreads = threads }
+  killAllThreads (finalContext res)
+  pure res
 
 -- | Kill the remaining threads
 killAllThreads :: MonadConc n => Context n r g -> n ()
@@ -171,21 +156,43 @@ runThreads :: (MonadConc n, MonadRef r n)
   -> MemType
   -> r (Maybe (Either Failure a))
   -> Context n r g
-  -> n (Context n r g, SeqTrace, Maybe (ThreadId, ThreadAction), Maybe (Threads n r -> n ()))
-runThreads forSnapshot sched memtype ref = go (const $ pure ()) Seq.empty Nothing where
-  go restore sofar prior ctx
+  -> n (CResult n r g a)
+runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty Nothing where
+  -- signal failure & terminate
+  die reason finalR finalT finalD finalC = do
+    writeRef ref (Just $ Left reason)
+    stop finalR finalT finalD finalC
+
+  -- just terminate; 'ref' must have been written to before calling
+  -- this
+  stop finalR finalT finalD finalC = pure CResult
+    { finalContext  = finalC
+    , finalRef      = ref
+    , finalRestore  = if forSnapshot then Just finalR else Nothing
+    , finalTrace    = finalT
+    , finalDecision = finalD
+    }
+
+  -- check for termination, pick a thread, and call 'step'
+  schedule restore sofar prior ctx
     | isTerminated  = stop restore sofar prior ctx
-    | isDeadlocked  = die restore sofar prior Deadlock ctx
-    | isSTMLocked   = die restore sofar prior STMDeadlock ctx
+    | isDeadlocked  = die Deadlock restore sofar prior ctx
+    | isSTMLocked   = die STMDeadlock restore sofar prior ctx
     | otherwise =
       let ctx' = ctx { cSchedState = g' }
       in case choice of
            Just chosen -> case M.lookup chosen threadsc of
              Just thread
-               | isBlocked thread -> die restore sofar prior InternalError ctx'
-               | otherwise -> step chosen thread ctx'
-             Nothing -> die restore sofar prior InternalError ctx'
-           Nothing -> die restore sofar prior Abort ctx'
+               | isBlocked thread -> die InternalError restore sofar prior ctx'
+               | otherwise ->
+                 let decision
+                       | Just chosen == (fst <$> prior) = Continue
+                       | (fst <$> prior) `notElem` map (Just . fst) runnable' = Start chosen
+                       | otherwise = SwitchTo chosen
+                     alternatives = filter (\(t, _) -> t /= chosen) runnable'
+                 in step decision alternatives chosen thread restore sofar prior ctx'
+             Nothing -> die InternalError restore sofar prior ctx'
+           Nothing -> die Abort restore sofar prior ctx'
     where
       (choice, g')  = scheduleThread sched prior (efromList "runThreads" runnable') (cSchedState ctx)
       runnable'     = [(t, lookahead (_continuation a)) | (t, a) <- sortOn fst $ M.assocs runnable]
@@ -201,59 +208,57 @@ runThreads forSnapshot sched memtype ref = go (const $ pure ()) Seq.empty Nothin
       isSTMLocked = M.null (M.filter (not . isBlocked) threads) &&
         ((~=  OnTVar []) <$> M.lookup initialThread threads) == Just True
 
-      unblockWaitingOn tid = fmap unblock where
-        unblock thrd = case _blocking thrd of
-          Just (OnMask t) | t == tid -> thrd { _blocking = Nothing }
-          _ -> thrd
+  -- run the chosen thread for one step and then pass control back to
+  -- 'schedule'
+  step decision alternatives chosen thread restore sofar prior ctx = do
+      (res, actOrTrc, actionSnap) <- stepThread
+          forSnapshot
+          (isNothing prior)
+          sched
+          memtype
+          chosen
+          (_continuation thread)
+          ctx
+      let sofar' = sofar <> getTrc actOrTrc
+      let prior' = getPrior actOrTrc
+      let restore' threads' =
+            if forSnapshot
+            then restore threads' >> actionSnap threads'
+            else restore threads'
+      let ctx' = fixContext chosen res ctx
+      case res of
+        Succeeded _ ->
+          schedule restore' sofar' prior' ctx'
+        Failed failure ->
+          die failure restore' sofar' prior' ctx'
+        Snap _ ->
+          stop actionSnap sofar' prior' ctx'
+    where
+      getTrc (Single a) = Seq.singleton (decision, alternatives, a)
+      getTrc (SubC as _) = (decision, alternatives, Subconcurrency) <| as
 
-      die restore' sofar' finalD reason finalCtx = do
-        writeRef ref (Just $ Left reason)
-        stop restore' sofar' finalD finalCtx
+      getPrior (Single a) = Just (chosen, a)
+      getPrior (SubC _ finalD) = finalD
 
-      stop restore' sofar' finalD finalCtx =
-        pure (finalCtx, sofar', finalD, if forSnapshot then Just restore' else Nothing)
+-- | Apply the context update from stepping an action.
+fixContext :: ThreadId -> What n r g -> Context n r g -> Context n r g
+fixContext chosen (Succeeded ctx@Context{..}) _ =
+  ctx { cThreads = delCommitThreads $
+        if (interruptible <$> M.lookup chosen cThreads) /= Just False
+        then unblockWaitingOn chosen cThreads
+        else cThreads
+      }
+fixContext _ (Failed _) ctx@Context{..} =
+  ctx { cThreads = delCommitThreads cThreads }
+fixContext _ (Snap ctx@Context{..}) _ =
+  ctx { cThreads = delCommitThreads cThreads }
 
-      step chosen thread ctx' = do
-          (res, actOrTrc, actionSnap) <- stepThread
-              forSnapshot
-              (isNothing prior)
-              sched
-              memtype
-              chosen
-              (_continuation thread)
-              ctx { cSchedState = g' }
-          let trc    = getTrc actOrTrc
-          let sofar' = sofar <> trc
-          let prior' = getPrior actOrTrc
-          let restore' threads' =
-                if forSnapshot
-                then restore threads' >> actionSnap threads'
-                else restore threads'
-          case res of
-            Succeeded ctx'' ->
-              let threads' = if (interruptible <$> M.lookup chosen (cThreads ctx'')) /= Just False
-                             then unblockWaitingOn chosen (cThreads ctx'')
-                             else cThreads ctx''
-                  ctx''' = ctx'' { cThreads = delCommitThreads threads' }
-              in go restore' sofar' prior' ctx'''
-            Failed failure ->
-              let ctx'' = ctx' { cThreads = delCommitThreads threads }
-              in die restore' sofar' prior' failure ctx''
-            Snap ctx'' ->
-              stop actionSnap sofar' prior' ctx''
-        where
-          decision
-            | Just chosen == (fst <$> prior) = Continue
-            | (fst <$> prior) `notElem` map (Just . fst) runnable' = Start chosen
-            | otherwise = SwitchTo chosen
-
-          getTrc (Single a) = Seq.singleton (decision, alternatives, a)
-          getTrc (SubC as _) = (decision, alternatives, Subconcurrency) <| as
-
-          alternatives = filter (\(t, _) -> t /= chosen) runnable'
-
-          getPrior (Single a) = Just (chosen, a)
-          getPrior (SubC _ finalD) = finalD
+-- | @unblockWaitingOn tid@ unblocks every thread blocked in a
+-- @throwTo tid@.
+unblockWaitingOn :: ThreadId -> Threads n r -> Threads n r
+unblockWaitingOn tid = fmap $ \thread -> case _blocking thread of
+  Just (OnMask t) | t == tid -> thread { _blocking = Nothing }
+  _ -> thread
 
 --------------------------------------------------------------------------------
 -- * Single-step execution
