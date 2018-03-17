@@ -306,11 +306,11 @@ hacksTests = toTestList
         takeMVar out
 
     , djfuT "Thread IDs are consistent between the inner action and the outside" (sometimesFailsWith isUncaughtException) $ do
-        (tid, trigger) <- dontCheck Nothing $ do
+        trigger <- dontCheck Nothing $ do
           me <- myThreadId
           v <- newEmptyMVar
-          t <- fork $ takeMVar v >> killThread me
-          pure (t, v)
+          _ <- fork $ takeMVar v >> killThread me
+          pure v
         putMVar trigger ()
 
     , djfuT "Inner action is run under sequential consistency" (gives' [1]) $ do

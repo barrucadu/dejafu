@@ -7,6 +7,35 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.4.0.0 (2018-03-17)
+--------------------
+
+* Git: :tag:`dejafu-1.4.0.0`
+* Hackage: :hackage:`dejafu-1.4.0.0`
+
+Changed
+~~~~~~~
+
+- (:issue:`201`) ``Test.DejaFu.Conc.ConcT r n a`` drops its ``r``
+  parameter, becoming ``ConcT n a``.
+
+- (:issue:`201`) All functions drop the ``MonadConc`` constraint.
+
+Removed
+~~~~~~~
+
+- (:issue:`201`) The ``MonadRef`` and ``MonadAtomicRef`` instances for
+  ``Test.DejaFu.Conc.ConcT``.
+
+- (:issue:`198`) The ``Test.DejaFu.Types.Killed`` thread action, which
+  was unused.
+
+Fixed
+~~~~~
+
+- (:issue:`250`) Add missing dependency for ``throwTo`` actions.
+
+
 1.3.2.0 (2018-03-12)
 --------------------
 

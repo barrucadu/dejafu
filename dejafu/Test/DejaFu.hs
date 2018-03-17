@@ -1,5 +1,4 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TupleSections #-}
 
 {- |
@@ -273,7 +272,6 @@ import           Control.DeepSeq          (NFData(..))
 import           Control.Monad            (unless, when)
 import           Control.Monad.Conc.Class (MonadConc)
 import           Control.Monad.IO.Class   (MonadIO(..))
-import           Control.Monad.Ref        (MonadRef)
 import           Data.Function            (on)
 import           Data.List                (intercalate, intersperse)
 import           Data.Maybe               (catMaybes, isJust, isNothing,
@@ -329,8 +327,8 @@ let relaxed = do
 -- False
 --
 -- @since 1.0.0.0
-autocheck :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
-  => ConcT r n a
+autocheck :: (MonadConc n, MonadIO n, Eq a, Show a)
+  => ConcT n a
   -- ^ The computation to test.
   -> n Bool
 autocheck = autocheckWithSettings defaultSettings
@@ -363,12 +361,12 @@ autocheck = autocheckWithSettings defaultSettings
 -- False
 --
 -- @since 1.0.0.0
-autocheckWay :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
+autocheckWay :: (MonadConc n, MonadIO n, Eq a, Show a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The computation to test.
   -> n Bool
 autocheckWay way = autocheckWithSettings . fromWayAndMemType way
@@ -400,10 +398,10 @@ autocheckWay way = autocheckWithSettings . fromWayAndMemType way
 -- False
 --
 -- @since 1.2.0.0
-autocheckWithSettings :: (MonadConc n, MonadIO n, MonadRef r n, Eq a, Show a)
+autocheckWithSettings :: (MonadConc n, MonadIO n, Eq a, Show a)
   => Settings n a
   -- ^ The SCT settings.
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The computation to test.
   -> n Bool
 autocheckWithSettings settings = dejafusWithSettings settings
@@ -427,12 +425,12 @@ autocheckWithSettings settings = dejafusWithSettings settings
 -- False
 --
 -- @since 1.0.0.0
-dejafu :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
+dejafu :: (MonadConc n, MonadIO n, Show b)
   => String
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The computation to test.
   -> n Bool
 dejafu = dejafuWithSettings defaultSettings
@@ -457,7 +455,7 @@ dejafu = dejafuWithSettings defaultSettings
 -- False
 --
 -- @since 1.0.0.0
-dejafuWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
+dejafuWay :: (MonadConc n, MonadIO n, Show b)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
@@ -466,7 +464,7 @@ dejafuWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The computation to test.
   -> n Bool
 dejafuWay way = dejafuWithSettings . fromWayAndMemType way
@@ -483,14 +481,14 @@ dejafuWay way = dejafuWithSettings . fromWayAndMemType way
 -- False
 --
 -- @since 1.2.0.0
-dejafuWithSettings :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
+dejafuWithSettings :: (MonadConc n, MonadIO n, Show b)
   => Settings n a
   -- ^ The SCT settings.
   -> String
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The computation to test.
   -> n Bool
 dejafuWithSettings settings name test =
@@ -506,7 +504,7 @@ dejafuWithSettings settings name test =
 -- False
 --
 -- @since 1.0.0.0
-dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
+dejafuDiscard :: (MonadConc n, MonadIO n, Show b)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
@@ -517,7 +515,7 @@ dejafuDiscard :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The computation to test.
   -> n Bool
 dejafuDiscard discard way =
@@ -536,10 +534,10 @@ dejafuDiscard discard way =
 -- False
 --
 -- @since 1.0.0.0
-dejafus :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
+dejafus :: (MonadConc n, MonadIO n, Show b)
   => [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The computation to test.
   -> n Bool
 dejafus = dejafusWithSettings defaultSettings
@@ -558,14 +556,14 @@ dejafus = dejafusWithSettings defaultSettings
 -- False
 --
 -- @since 1.0.0.0
-dejafusWay :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
+dejafusWay :: (MonadConc n, MonadIO n, Show b)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The computation to test.
   -> n Bool
 dejafusWay way = dejafusWithSettings . fromWayAndMemType way
@@ -583,12 +581,12 @@ dejafusWay way = dejafusWithSettings . fromWayAndMemType way
 -- False
 --
 -- @since 1.2.0.0
-dejafusWithSettings :: (MonadConc n, MonadIO n, MonadRef r n, Show b)
+dejafusWithSettings :: (MonadConc n, MonadIO n, Show b)
   => Settings n a
   -- ^ The SCT settings.
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The computation to test.
   -> n Bool
 dejafusWithSettings settings tests conc = do
@@ -659,10 +657,10 @@ instance Foldable Result where
 -- affect which failing traces are reported, when there is a failure.
 --
 -- @since 1.0.0.0
-runTest :: (MonadConc n, MonadRef r n)
+runTest :: MonadConc n
   => ProPredicate a b
   -- ^ The predicate to check
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The computation to test
   -> n (Result b)
 runTest = runTestWithSettings defaultSettings
@@ -675,14 +673,14 @@ runTest = runTestWithSettings defaultSettings
 -- affect which failing traces are reported, when there is a failure.
 --
 -- @since 1.0.0.0
-runTestWay :: (MonadConc n, MonadRef r n)
+runTestWay :: MonadConc n
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
   -> ProPredicate a b
   -- ^ The predicate to check
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The computation to test
   -> n (Result b)
 runTestWay way = runTestWithSettings . fromWayAndMemType way
@@ -694,12 +692,12 @@ runTestWay way = runTestWithSettings . fromWayAndMemType way
 -- affect which failing traces are reported, when there is a failure.
 --
 -- @since 1.2.0.0
-runTestWithSettings :: (MonadConc n, MonadRef r n)
+runTestWithSettings :: MonadConc n
   => Settings n a
   -- ^ The SCT settings.
   -> ProPredicate a b
   -- ^ The predicate to check
-  -> ConcT r n a
+  -> ConcT n a
   -- ^ The computation to test
   -> n (Result b)
 runTestWithSettings settings p conc =

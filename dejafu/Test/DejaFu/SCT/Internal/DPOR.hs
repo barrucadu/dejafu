@@ -578,6 +578,8 @@ dependent ds t1 a1 t2 a2 = case (a1, a2) of
   -- actually blocked. 'dependent'' has to assume that all
   -- potentially-blocking operations can block, and so is more
   -- pessimistic in this case.
+  (ThrowTo t, ThrowTo u)
+    | t == t2 && u == t1 -> canInterrupt ds t1 a1 || canInterrupt ds t2 a2
   (ThrowTo t, _) | t == t2 -> canInterrupt ds t2 a2 && a2 /= Stop
   (_, ThrowTo t) | t == t1 -> canInterrupt ds t1 a1 && a1 /= Stop
 
@@ -589,9 +591,8 @@ dependent ds t1 a1 t2 a2 = case (a1, a2) of
   (BlockedSTM _, STM _ _)      -> checkSTM
   (BlockedSTM _, BlockedSTM _) -> checkSTM
 
-  _ -> case (,) <$> rewind a1 <*> rewind a2 of
-    Just (l1, l2) -> dependent' ds t1 a1 t2 l2 && dependent' ds t2 a2 t1 l1
-    _ -> dependentActions ds (simplifyAction a1) (simplifyAction a2)
+  _ -> dependent' ds t1 a1 t2 (rewind a2)
+    && dependent' ds t2 a2 t1 (rewind a1)
 
   where
     -- STM actions A and B are dependent if A wrote to anything B
@@ -612,6 +613,8 @@ dependent' ds t1 a1 t2 l2 = case (a1, l2) of
   -- thread and if the actions can be interrupted. We can also
   -- slightly improve on that by not considering interrupting the
   -- normal termination of a thread: it doesn't make a difference.
+  (ThrowTo t, WillThrowTo u)
+    | t == t2 && u == t1 -> canInterrupt ds t1 a1 || canInterruptL ds t2 l2
   (ThrowTo t, _)     | t == t2 -> canInterruptL ds t2 l2 && l2 /= WillStop
   (_, WillThrowTo t) | t == t1 -> canInterrupt  ds t1 a1 && a1 /= Stop
 

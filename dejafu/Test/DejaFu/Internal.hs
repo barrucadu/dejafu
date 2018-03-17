@@ -15,15 +15,15 @@
 -- library.
 module Test.DejaFu.Internal where
 
-import           Control.DeepSeq    (NFData)
-import           Control.Monad.Ref  (MonadRef(..))
-import           Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.Map.Strict    as M
-import           Data.Maybe         (fromMaybe)
-import           Data.Set           (Set)
-import qualified Data.Set           as S
-import           GHC.Generics       (Generic)
-import           System.Random      (RandomGen)
+import           Control.DeepSeq          (NFData)
+import qualified Control.Monad.Conc.Class as C
+import           Data.List.NonEmpty       (NonEmpty(..))
+import qualified Data.Map.Strict          as M
+import           Data.Maybe               (fromMaybe)
+import           Data.Set                 (Set)
+import qualified Data.Set                 as S
+import           GHC.Generics             (Generic)
+import           System.Random            (RandomGen)
 
 import           Test.DejaFu.Types
 
@@ -155,50 +155,49 @@ tvarsRead act = S.fromList $ case act of
     tvarsOf' _ = []
 
 -- | Convert a 'ThreadAction' into a 'Lookahead': \"rewind\" what has
--- happened. 'Killed' has no 'Lookahead' counterpart.
-rewind :: ThreadAction -> Maybe Lookahead
-rewind (Fork _) = Just WillFork
-rewind (ForkOS _) = Just WillForkOS
-rewind (IsCurrentThreadBound _) = Just WillIsCurrentThreadBound
-rewind MyThreadId = Just WillMyThreadId
-rewind (GetNumCapabilities _) = Just WillGetNumCapabilities
-rewind (SetNumCapabilities i) = Just (WillSetNumCapabilities i)
-rewind Yield = Just WillYield
-rewind (ThreadDelay n) = Just (WillThreadDelay n)
-rewind (NewMVar _) = Just WillNewMVar
-rewind (PutMVar c _) = Just (WillPutMVar c)
-rewind (BlockedPutMVar c) = Just (WillPutMVar c)
-rewind (TryPutMVar c _ _) = Just (WillTryPutMVar c)
-rewind (ReadMVar c) = Just (WillReadMVar c)
-rewind (BlockedReadMVar c) = Just (WillReadMVar c)
-rewind (TryReadMVar c _) = Just (WillTryReadMVar c)
-rewind (TakeMVar c _) = Just (WillTakeMVar c)
-rewind (BlockedTakeMVar c) = Just (WillTakeMVar c)
-rewind (TryTakeMVar c _ _) = Just (WillTryTakeMVar c)
-rewind (NewCRef _) = Just WillNewCRef
-rewind (ReadCRef c) = Just (WillReadCRef c)
-rewind (ReadCRefCas c) = Just (WillReadCRefCas c)
-rewind (ModCRef c) = Just (WillModCRef c)
-rewind (ModCRefCas c) = Just (WillModCRefCas c)
-rewind (WriteCRef c) = Just (WillWriteCRef c)
-rewind (CasCRef c _) = Just (WillCasCRef c)
-rewind (CommitCRef t c) = Just (WillCommitCRef t c)
-rewind (STM _ _) = Just WillSTM
-rewind (BlockedSTM _) = Just WillSTM
-rewind Catching = Just WillCatching
-rewind PopCatching = Just WillPopCatching
-rewind Throw = Just WillThrow
-rewind (ThrowTo t) = Just (WillThrowTo t)
-rewind (BlockedThrowTo t) = Just (WillThrowTo t)
-rewind Killed = Nothing
-rewind (SetMasking b m) = Just (WillSetMasking b m)
-rewind (ResetMasking b m) = Just (WillResetMasking b m)
-rewind LiftIO = Just WillLiftIO
-rewind Return = Just WillReturn
-rewind Stop = Just WillStop
-rewind Subconcurrency = Just WillSubconcurrency
-rewind StopSubconcurrency = Just WillStopSubconcurrency
-rewind (DontCheck _) = Just WillDontCheck
+-- happened.
+rewind :: ThreadAction -> Lookahead
+rewind (Fork _) = WillFork
+rewind (ForkOS _) = WillForkOS
+rewind (IsCurrentThreadBound _) = WillIsCurrentThreadBound
+rewind MyThreadId = WillMyThreadId
+rewind (GetNumCapabilities _) = WillGetNumCapabilities
+rewind (SetNumCapabilities i) = WillSetNumCapabilities i
+rewind Yield = WillYield
+rewind (ThreadDelay n) = WillThreadDelay n
+rewind (NewMVar _) = WillNewMVar
+rewind (PutMVar c _) = WillPutMVar c
+rewind (BlockedPutMVar c) = WillPutMVar c
+rewind (TryPutMVar c _ _) = WillTryPutMVar c
+rewind (ReadMVar c) = WillReadMVar c
+rewind (BlockedReadMVar c) = WillReadMVar c
+rewind (TryReadMVar c _) = WillTryReadMVar c
+rewind (TakeMVar c _) = WillTakeMVar c
+rewind (BlockedTakeMVar c) = WillTakeMVar c
+rewind (TryTakeMVar c _ _) = WillTryTakeMVar c
+rewind (NewCRef _) = WillNewCRef
+rewind (ReadCRef c) = WillReadCRef c
+rewind (ReadCRefCas c) = WillReadCRefCas c
+rewind (ModCRef c) = WillModCRef c
+rewind (ModCRefCas c) = WillModCRefCas c
+rewind (WriteCRef c) = WillWriteCRef c
+rewind (CasCRef c _) = WillCasCRef c
+rewind (CommitCRef t c) = WillCommitCRef t c
+rewind (STM _ _) = WillSTM
+rewind (BlockedSTM _) = WillSTM
+rewind Catching = WillCatching
+rewind PopCatching = WillPopCatching
+rewind Throw = WillThrow
+rewind (ThrowTo t) = WillThrowTo t
+rewind (BlockedThrowTo t) = WillThrowTo t
+rewind (SetMasking b m) = WillSetMasking b m
+rewind (ResetMasking b m) = WillResetMasking b m
+rewind LiftIO = WillLiftIO
+rewind Return = WillReturn
+rewind Stop = WillStop
+rewind Subconcurrency = WillSubconcurrency
+rewind StopSubconcurrency = WillStopSubconcurrency
+rewind (DontCheck _) = WillDontCheck
 
 -- | Check if an operation could enable another thread.
 willRelease :: Lookahead -> Bool
@@ -303,7 +302,7 @@ tidsOf _ = S.empty
 -- This is used in the SCT code to help determine interesting
 -- alternative scheduling decisions.
 simplifyAction :: ThreadAction -> ActionType
-simplifyAction = maybe UnsynchronisedOther simplifyLookahead . rewind
+simplifyAction = simplifyLookahead . rewind
 
 -- | Variant of 'simplifyAction' that takes a 'Lookahead'.
 simplifyLookahead :: Lookahead -> ActionType
@@ -383,8 +382,12 @@ fatal src msg = error ("(dejafu: " ++ src ++ ") " ++ msg)
 -- | Run with a continuation that writes its value into a reference,
 -- returning the computation and the reference.  Using the reference
 -- is non-blocking, it is up to you to ensure you wait sufficiently.
-runRefCont :: MonadRef r n => (n () -> x) -> (a -> Maybe b) -> ((a -> x) -> x) -> n (x, r (Maybe b))
+runRefCont :: C.MonadConc n
+  => (n () -> x)
+  -> (a -> Maybe b)
+  -> ((a -> x) -> x)
+  -> n (x, C.CRef n (Maybe b))
 runRefCont act f k = do
-  ref <- newRef Nothing
-  let c = k (act . writeRef ref . f)
+  ref <- C.newCRef Nothing
+  let c = k (act . C.writeCRef ref . f)
   pure (c, ref)
