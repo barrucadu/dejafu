@@ -133,7 +133,10 @@ instance Monad n => C.MonadConc (ConcT n) where
 
   forkWithUnmaskN   n ma = toConc (AFork n (\umask -> runModelConc (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
   forkOnWithUnmaskN n _  = C.forkWithUnmaskN n
-  forkOSN n ma = forkOSWithUnmaskN n (const ma)
+  forkOSWithUnmaskN n ma
+    | C.rtsSupportsBoundThreads =
+      toConc (AForkOS n (\umask -> runModelConc (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
+    | otherwise = fail "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
 
   isCurrentThreadBound = toConc AIsBound
 
@@ -182,16 +185,6 @@ instance Monad n => C.MonadConc (ConcT n) where
   -- ----------
 
   atomically = toConc . AAtom
-
--- move this into the instance defn when forkOSWithUnmaskN is added to MonadConc in 2018
-forkOSWithUnmaskN :: Applicative n
-  => String
-  -> ((forall a. ConcT n a -> ConcT n a) -> ConcT n ())
-  -> ConcT n ThreadId
-forkOSWithUnmaskN n ma
-  | C.rtsSupportsBoundThreads =
-    toConc (AForkOS n (\umask -> runModelConc (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
-  | otherwise = fail "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the

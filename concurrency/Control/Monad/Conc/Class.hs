@@ -59,6 +59,7 @@ module Control.Monad.Conc.Class
   -- ** Named Threads
   , forkN
   , forkOnN
+  , forkOSN
 
   -- * Exceptions
   , throw
@@ -146,7 +147,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Do not be put off by the use of @UndecidableInstances@, it is safe
 -- here.
 --
--- @since 1.4.0.0
+-- @since 1.5.0.0
 class ( Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -155,7 +156,7 @@ class ( Monad m
   {-# MINIMAL
         (forkWithUnmask | forkWithUnmaskN)
       , (forkOnWithUnmask | forkOnWithUnmaskN)
-      , (forkOS | forkOSN)
+      , (forkOSWithUnmask | forkOSWithUnmaskN)
       , isCurrentThreadBound
       , getNumCapabilities
       , setNumCapabilities
@@ -273,20 +274,30 @@ class ( Monad m
   -- necessary if you need to call foreign (non-Haskell) libraries
   -- that make use of thread-local state, such as OpenGL.
   --
-  -- > forkOS = forkOSN ""
+  -- > forkOS ma = forkOSWithUnmask (const ma)
   --
   -- @since 1.3.0.0
   forkOS :: m () -> m (ThreadId m)
-  forkOS = forkOSN ""
+  forkOS ma = forkOSWithUnmask (const ma)
 
-  -- | Like 'forkOS', but the thread is given a name which may be used
-  -- to present more useful debugging information.
+  -- | Like 'forkOS', but the child thread is passed a function that
+  -- can be used to unmask asynchronous exceptions. This function
+  -- should not be used within a 'mask' or 'uninterruptibleMask'.
   --
-  -- > forkOSN _ = forkOS
+  -- > forkOSWithUnmask = forkOSWithUnmaskN ""
   --
-  -- @since 1.3.0.0
-  forkOSN :: String -> m () -> m (ThreadId m)
-  forkOSN _ = forkOS
+  -- @since 1.5.0.0
+  forkOSWithUnmask :: ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
+  forkOSWithUnmask = forkOSWithUnmaskN ""
+
+  -- | Like 'forkOSWithUnmask', but the thread is given a name which
+  -- may be used to present more useful debugging information.
+  --
+  -- > forkOSWithUnmaskN _ = forkOSWithUnmask
+  --
+  -- @since 1.5.0.0
+  forkOSWithUnmaskN :: String -> ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
+  forkOSWithUnmaskN _ = forkOSWithUnmask
 
   -- | Returns 'True' if the calling thread is bound, that is, if it
   -- is safe to use foreign libraries that rely on thread-local state
@@ -545,6 +556,13 @@ forkN name ma = forkWithUnmaskN name (const ma)
 forkOnN :: MonadConc m => String -> Int -> m () -> m (ThreadId m)
 forkOnN name i ma = forkOnWithUnmaskN name i (const ma)
 
+-- | Like 'forkOS', but the thread is given a name which may be used
+-- to present more useful debugging information.
+--
+-- @since 1.5.0.0
+forkOSN :: MonadConc m => String -> m () -> m (ThreadId m)
+forkOSN name ma = forkOSWithUnmaskN name (const ma)
+
 -- | Run the computation passed as the first argument.  If the calling
 -- thread is not /bound/, a bound thread is created temporarily.
 -- @runInBoundThread@ doesn't finish until the inner computation
@@ -701,16 +719,17 @@ instance MonadConc IO where
 
   forkWithUnmask   = IO.forkIOWithUnmask
   forkOnWithUnmask = IO.forkOnWithUnmask
-
-  forkOSN n ma = forkOS $ do
-    labelMe n
-    ma
+  forkOSWithUnmask = IO.forkOSWithUnmask
 
   forkWithUnmaskN n ma = forkWithUnmask $ \umask -> do
     labelMe n
     ma umask
 
   forkOnWithUnmaskN n i ma = forkOnWithUnmask i $ \umask -> do
+    labelMe n
+    ma umask
+
+  forkOSWithUnmaskN n ma = forkOSWithUnmask $ \umask -> do
     labelMe n
     ma umask
 
@@ -781,14 +800,14 @@ instance MonadConc m => MonadConc (IsConc m) where
 
   fork     ma = toIsConc (fork     $ unIsConc ma)
   forkOn i ma = toIsConc (forkOn i $ unIsConc ma)
-
-  forkOS    ma = toIsConc (forkOS    $ unIsConc ma)
-  forkOSN n ma = toIsConc (forkOSN n $ unIsConc ma)
+  forkOS   ma = toIsConc (forkOS    $ unIsConc ma)
 
   forkWithUnmask        ma = toIsConc (forkWithUnmask        (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkWithUnmaskN   n   ma = toIsConc (forkWithUnmaskN   n   (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkOnWithUnmask    i ma = toIsConc (forkOnWithUnmask    i (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkOnWithUnmaskN n i ma = toIsConc (forkOnWithUnmaskN n i (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
+  forkOSWithUnmask      ma = toIsConc (forkOSWithUnmask      (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
+  forkOSWithUnmaskN n   ma = toIsConc (forkOSWithUnmaskN n   (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
 
   isCurrentThreadBound = toIsConc isCurrentThreadBound
 
@@ -835,12 +854,12 @@ instance C => MonadConc (T m) where                            { \
   forkOn = liftedF F . forkOn                                  ; \
   forkOS = liftedF F forkOS                                    ; \
                                                                  \
-  forkOSN = liftedF F . forkOSN                                ; \
-                                                                 \
   forkWithUnmask        = liftedFork F forkWithUnmask          ; \
   forkWithUnmaskN   n   = liftedFork F (forkWithUnmaskN   n  ) ; \
   forkOnWithUnmask    i = liftedFork F (forkOnWithUnmask    i) ; \
   forkOnWithUnmaskN n i = liftedFork F (forkOnWithUnmaskN n i) ; \
+  forkOSWithUnmask      = liftedFork F forkOSWithUnmask        ; \
+  forkOSWithUnmaskN n   = liftedFork F (forkOSWithUnmaskN n  ) ; \
                                                                  \
   isCurrentThreadBound = lift isCurrentThreadBound             ; \
                                                                  \

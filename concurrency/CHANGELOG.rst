@@ -10,6 +10,17 @@ standard Haskell versioning scheme.
 1.5.0.0 (unreleased)
 --------------------
 
+Added
+~~~~~
+
+* (:issue:`132`) ``forkOSWithUnmask`` in ``MonadConc``
+
+Changed
+~~~~~~~
+
+* (:issue:`132`) ``Control.Monad.Conc.Class.forkOSN`` is a top-level
+  definition.
+
 Miscellaneous
 ~~~~~~~~~~~~~
 
