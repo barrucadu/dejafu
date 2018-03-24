@@ -25,6 +25,8 @@ matrix:
     addons: {apt: {packages: [libgmp-dev]}}
   - env: MODE=test RESOLVER=lts-10.0 # GHC 8.2
     addons: {apt: {packages: [libgmp-dev]}}
+  - env: MODE=test RESOLVER=nightly-2018-03-23 # GHC 8.4
+    addons: {apt: {packages: [libgmp-dev]}}
   - env: MODE=test RESOLVER=nightly
     addons: {apt: {packages: [libgmp-dev]}}
   - env: MODE=doctest
