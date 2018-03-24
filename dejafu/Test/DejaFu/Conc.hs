@@ -57,6 +57,7 @@ module Test.DejaFu.Conc
 
 import           Control.Exception                   (MaskingState(..))
 import qualified Control.Monad.Catch                 as Ca
+import           Control.Monad.Fail                  (MonadFail)
 import qualified Control.Monad.IO.Class              as IO
 import           Control.Monad.Trans.Class           (MonadTrans(..))
 import qualified Data.Foldable                       as F
@@ -74,18 +75,9 @@ import           Test.DejaFu.Internal
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
 
-#if MIN_VERSION_base(4,9,0)
-import qualified Control.Monad.Fail                  as Fail
-#endif
-
 -- | @since 1.4.0.0
 newtype ConcT n a = C { unC :: ModelConc n a }
-  deriving (Functor, Applicative, Monad)
-
-#if MIN_VERSION_base(4,9,0)
-instance Fail.MonadFail (ConcT n) where
-  fail = C . fail
-#endif
+  deriving (Functor, Applicative, Monad, MonadFail)
 
 -- | A 'MonadConc' implementation using @IO@.
 --

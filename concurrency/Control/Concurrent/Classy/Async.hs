@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- |
@@ -7,7 +6,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
--- Portability : CPP, RankNTypes
+-- Portability : RankNTypes
 --
 -- This module is a version of the
 -- <https://hackage.haskell.org/package/async async> package. It
@@ -103,10 +102,7 @@ import           Control.Monad.Catch                 (finally, onException, try)
 import           Control.Monad.Conc.Class
 import           Control.Monad.STM.Class
 import           Data.Foldable                       (foldMap)
-
-#if MIN_VERSION_base(4,9,0)
 import           Data.Semigroup                      (Semigroup(..))
-#endif
 
 -----------------------------------------------------------------------------------------
 -- Asynchronous and Concurrent Actions
@@ -171,13 +167,9 @@ instance MonadConc m => Alternative (Concurrently m) where
   Concurrently as <|> Concurrently bs =
     Concurrently $ either id id <$> race as bs
 
-#if MIN_VERSION_base(4,9,0)
--- | Only defined for base >= 4.9.0.0
---
--- @since 1.1.2.0
+-- | @since 1.1.2.0
 instance (MonadConc m, Semigroup a) => Semigroup (Concurrently m a) where
   (<>) = liftA2 (<>)
-#endif
 
 -- | @since 1.1.2.0
 instance (MonadConc m, Monoid a) => Monoid (Concurrently m a) where

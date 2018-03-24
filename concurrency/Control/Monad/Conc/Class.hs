@@ -147,7 +147,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- here.
 --
 -- @since 1.4.0.0
-class ( Applicative m, Monad m
+class ( Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
       , Ord (ThreadId m), Show (ThreadId m)) => MonadConc m  where

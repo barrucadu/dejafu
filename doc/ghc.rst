@@ -11,7 +11,6 @@ The currently supported versions are:
    "8.4",  "",         "4.11.0.0"
    "8.2",  "LTS 10.0", "4.10.1.0"
    "8.0",  "LTS 9.0",  "4.9.1.0"
-   "7.10", "LTS 6.0",  "4.8.2.0"
 
 In practice, we may *compile with* older versions of GHC, but keeping
 them working is not a priority.

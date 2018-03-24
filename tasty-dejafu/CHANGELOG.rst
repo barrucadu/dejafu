@@ -7,6 +7,20 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.2.0.0 (unreleased)
+--------------------
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* GHC 7.10 support is dropped.  Dependency lower bounds are:
+
+    * :hackage:`base`: 4.9
+    * :hackage:`dejafu`: 1.5
+
+* The upper bound on :hackage:`dejafu` is 1.6.
+
+
 1.1.0.2 (2018-03-17)
 --------------------
 
