@@ -236,9 +236,9 @@ capabilityTests = toTestList
 hacksTests :: [TestTree]
 hacksTests = toTestList
   [ testGroup "Subconcurrency"
-    [ djfuS "Failures in subconcurrency can be observed" (gives' [True]) $ do
-        x <- subconcurrency (newEmptyMVar >>= readMVar)
-        pure (either (==Deadlock) (const False) x)
+    [ djfuS "Failures in subconcurrency can be observed" (gives' [True]) $
+        either (== Deadlock) (const False) <$>
+          subconcurrency (newEmptyMVar >>= readMVar)
 
     , djfuS "Actions after a failing subconcurrency still happen" (gives' [True]) $ do
         var <- newMVarInt 0

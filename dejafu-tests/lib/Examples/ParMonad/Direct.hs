@@ -333,8 +333,7 @@ baseSessionID = 1000
 {-# INLINE new  #-}
 -- | Creates a new @IVar@
 new :: MonadConc m => Par m (IVar m a)
-new  = io$ do r <- newCRef Empty
-              pure (IVar r)
+new  = io$ IVar <$> newCRef Empty
 
 {-# INLINE get  #-}
 -- | Read the value in an @IVar@.  The 'get' operation can only return when the
@@ -363,12 +362,10 @@ get (IVar vr) =
 --   In this scheduler, puts immediately execute woken work in the current thread.
 put_ (IVar vr) !content = do
    sched <- RD.ask
-   ks <- io$ do
-      ks <- atomicModifyCRef vr $ \case
+   ks <- io$ atomicModifyCRef vr $ \case
                Empty      -> (Full content, [])
                Full _     -> error "multiple put"
                Blocked ks -> (Full content, ks)
-      pure ks
    wakeUp sched ks content
 
 -- | When an IVar is filled in, continuations wake up.
