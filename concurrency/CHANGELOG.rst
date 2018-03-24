@@ -18,8 +18,8 @@ Added
 Changed
 ~~~~~~~
 
-* (:issue:`132`) ``Control.Monad.Conc.Class.forkOSN`` is a top-level
-  definition.
+* (:issue:`132`) ``Control.Monad.Conc.Class.fork``, ``forkOn``,
+  ``forkOS``, and ``forkOSN`` are top-level definitions.
 
 Miscellaneous
 ~~~~~~~~~~~~~

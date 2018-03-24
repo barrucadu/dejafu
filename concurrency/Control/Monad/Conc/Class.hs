@@ -31,8 +31,11 @@ module Control.Monad.Conc.Class
   ( MonadConc(..)
 
   -- * Threads
-  , spawn
+  , fork
+  , forkOn
+  , forkOS
   , forkFinally
+  , spawn
   , killThread
 
   -- ** Bound threads
@@ -212,15 +215,6 @@ class ( Monad m
   -- @since 1.0.0.0
   type ThreadId m :: *
 
-  -- | Fork a computation to happen concurrently. Communication may
-  -- happen over @MVar@s.
-  --
-  -- > fork ma = forkWithUnmask (const ma)
-  --
-  -- @since 1.0.0.0
-  fork :: m () -> m (ThreadId m)
-  fork ma = forkWithUnmask (const ma)
-
   -- | Like 'fork', but the child thread is passed a function that can
   -- be used to unmask asynchronous exceptions. This function should
   -- not be used within a 'mask' or 'uninterruptibleMask'.
@@ -240,18 +234,6 @@ class ( Monad m
   forkWithUnmaskN :: String -> ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
   forkWithUnmaskN _ = forkWithUnmask
 
-  -- | Fork a computation to happen on a specific processor. The
-  -- specified int is the /capability number/, typically capabilities
-  -- correspond to physical processors or cores but this is
-  -- implementation dependent. The int is interpreted modulo to the
-  -- total number of capabilities as returned by 'getNumCapabilities'.
-  --
-  -- > forkOn c ma = forkOnWithUnmask c (const ma)
-  --
-  -- @since 1.0.0.0
-  forkOn :: Int -> m () -> m (ThreadId m)
-  forkOn c ma = forkOnWithUnmask c (const ma)
-
   -- | Like 'forkWithUnmask', but the child thread is pinned to the
   -- given CPU, as with 'forkOn'.
   --
@@ -269,16 +251,6 @@ class ( Monad m
   -- @since 1.0.0.0
   forkOnWithUnmaskN :: String -> Int -> ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
   forkOnWithUnmaskN _ = forkOnWithUnmask
-
-  -- | Fork a computation to happen in a /bound thread/, which is
-  -- necessary if you need to call foreign (non-Haskell) libraries
-  -- that make use of thread-local state, such as OpenGL.
-  --
-  -- > forkOS ma = forkOSWithUnmask (const ma)
-  --
-  -- @since 1.3.0.0
-  forkOS :: m () -> m (ThreadId m)
-  forkOS ma = forkOSWithUnmask (const ma)
 
   -- | Like 'forkOS', but the child thread is passed a function that
   -- can be used to unmask asynchronous exceptions. This function
@@ -511,15 +483,30 @@ class ( Monad m
 
 -- Threads
 
--- | Create a concurrent computation for the provided action, and
--- return a @MVar@ which can be used to query the result.
+-- | Fork a computation to happen concurrently. Communication may
+-- happen over @MVar@s.
 --
--- @since 1.0.0.0
-spawn :: MonadConc m => m a -> m (MVar m a)
-spawn ma = do
-  cvar <- newEmptyMVar
-  _ <- fork $ ma >>= putMVar cvar
-  pure cvar
+-- @since 1.5.0.0
+fork :: MonadConc m => m () -> m (ThreadId m)
+fork ma = forkWithUnmask (const ma)
+
+-- | Fork a computation to happen on a specific processor. The
+-- specified int is the /capability number/, typically capabilities
+-- correspond to physical processors or cores but this is
+-- implementation dependent. The int is interpreted modulo to the
+-- total number of capabilities as returned by 'getNumCapabilities'.
+--
+-- @since 1.5.0.0
+forkOn :: MonadConc m => Int -> m () -> m (ThreadId m)
+forkOn c ma = forkOnWithUnmask c (const ma)
+
+-- | Fork a computation to happen in a /bound thread/, which is
+-- necessary if you need to call foreign (non-Haskell) libraries
+-- that make use of thread-local state, such as OpenGL.
+--
+-- @since 1.5.0.0
+forkOS :: MonadConc m => m () -> m (ThreadId m)
+forkOS ma = forkOSWithUnmask (const ma)
 
 -- | Fork a thread and call the supplied function when the thread is
 -- about to terminate, with an exception or a returned value. The
@@ -533,6 +520,16 @@ forkFinally :: MonadConc m => m a -> (Either SomeException a -> m ()) -> m (Thre
 forkFinally action and_then =
   mask $ \restore ->
     fork $ Ca.try (restore action) >>= and_then
+
+-- | Create a concurrent computation for the provided action, and
+-- return a @MVar@ which can be used to query the result.
+--
+-- @since 1.0.0.0
+spawn :: MonadConc m => m a -> m (MVar m a)
+spawn ma = do
+  cvar <- newEmptyMVar
+  _ <- fork $ ma >>= putMVar cvar
+  pure cvar
 
 -- | Raise the 'ThreadKilled' exception in the target thread. Note
 -- that if the thread is prepared to catch this exception, it won't
@@ -713,10 +710,6 @@ instance MonadConc IO where
   type Ticket   IO = IO.Ticket
   type ThreadId IO = IO.ThreadId
 
-  fork   = IO.forkIO
-  forkOn = IO.forkOn
-  forkOS = IO.forkOS
-
   forkWithUnmask   = IO.forkIOWithUnmask
   forkOnWithUnmask = IO.forkOnWithUnmask
   forkOSWithUnmask = IO.forkOSWithUnmask
@@ -797,11 +790,6 @@ instance MonadConc m => MonadConc (IsConc m) where
   type Ticket   (IsConc m) = Ticket   m
   type ThreadId (IsConc m) = ThreadId m
 
-
-  fork     ma = toIsConc (fork     $ unIsConc ma)
-  forkOn i ma = toIsConc (forkOn i $ unIsConc ma)
-  forkOS   ma = toIsConc (forkOS    $ unIsConc ma)
-
   forkWithUnmask        ma = toIsConc (forkWithUnmask        (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkWithUnmaskN   n   ma = toIsConc (forkWithUnmaskN   n   (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkOnWithUnmask    i ma = toIsConc (forkOnWithUnmask    i (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
@@ -849,10 +837,6 @@ instance C => MonadConc (T m) where                            { \
   type CRef     (T m) = CRef m                                 ; \
   type Ticket   (T m) = Ticket m                               ; \
   type ThreadId (T m) = ThreadId m                             ; \
-                                                                 \
-  fork   = liftedF F fork                                      ; \
-  forkOn = liftedF F . forkOn                                  ; \
-  forkOS = liftedF F forkOS                                    ; \
                                                                  \
   forkWithUnmask        = liftedFork F forkWithUnmask          ; \
   forkWithUnmaskN   n   = liftedFork F (forkWithUnmaskN   n  ) ; \
