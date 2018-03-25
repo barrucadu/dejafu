@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -8,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : MultiWayIf, RankNTypes, RecordWildCards
+-- Portability : FlexibleContexts, MultiWayIf, RankNTypes, RecordWildCards
 --
 -- Concurrent monads with a fixed scheduler: internal types and
 -- functions. This module is NOT considered to form part of the public
@@ -28,6 +29,7 @@ import           Data.Maybe                          (fromMaybe, isJust,
 import           Data.Monoid                         ((<>))
 import           Data.Sequence                       (Seq, (<|))
 import qualified Data.Sequence                       as Seq
+import           GHC.Stack                           (HasCallStack)
 
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.Conc.Internal.Memory
@@ -72,7 +74,7 @@ data DCSnapshot n a = DCSnapshot
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
-runConcurrency :: C.MonadConc n
+runConcurrency :: (C.MonadConc n, HasCallStack)
   => Bool
   -> Scheduler g
   -> MemType
@@ -97,7 +99,7 @@ runConcurrency forSnapshot sched memtype g idsrc caps ma = do
 -- main thread.
 --
 -- Only a separate function because @ADontCheck@ needs it.
-runConcurrency' :: C.MonadConc n
+runConcurrency' :: (C.MonadConc n, HasCallStack)
   => Bool
   -> Scheduler g
   -> MemType
@@ -111,7 +113,7 @@ runConcurrency' forSnapshot sched memtype ctx ma = do
   runThreads forSnapshot sched memtype ref ctx { cThreads = threads }
 
 -- | Like 'runConcurrency' but starts from a snapshot.
-runConcurrencyWithSnapshot :: C.MonadConc n
+runConcurrencyWithSnapshot :: (C.MonadConc n, HasCallStack)
   => Scheduler g
   -> MemType
   -> Context n g
@@ -127,7 +129,7 @@ runConcurrencyWithSnapshot sched memtype ctx restore ref = do
   pure res
 
 -- | Kill the remaining threads
-killAllThreads :: C.MonadConc n => Context n g -> n ()
+killAllThreads :: (C.MonadConc n, HasCallStack) => Context n g -> n ()
 killAllThreads ctx =
   let finalThreads = cThreads ctx
   in mapM_ (`kill` finalThreads) (M.keys finalThreads)
@@ -145,7 +147,7 @@ data Context n g = Context
   }
 
 -- | Run a collection of threads, until there are no threads left.
-runThreads :: C.MonadConc n
+runThreads :: (C.MonadConc n, HasCallStack)
   => Bool
   -> Scheduler g
   -> MemType
@@ -189,7 +191,7 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
              Nothing -> die InternalError restore sofar prior ctx'
            Nothing -> die Abort restore sofar prior ctx'
     where
-      (choice, g')  = scheduleThread sched prior (efromList "runThreads" runnable') (cSchedState ctx)
+      (choice, g')  = scheduleThread sched prior (efromList runnable') (cSchedState ctx)
       runnable'     = [(t, lookahead (_continuation a)) | (t, a) <- sortOn fst $ M.assocs runnable]
       runnable      = M.filter (not . isBlocked) threadsc
       threadsc      = addCommitThreads (cWriteBuf ctx) threads
@@ -284,7 +286,7 @@ data What n g
 --
 -- Note: the returned snapshot action will definitely not do the right
 -- thing with relaxed memory.
-stepThread :: C.MonadConc n
+stepThread :: (C.MonadConc n, HasCallStack)
   => Bool
   -- ^ Should we record a snapshot?
   -> Bool
@@ -321,7 +323,7 @@ stepThread _ _ _ _ tid (AForkOS n a b) = \ctx@Context{..} -> do
 
 -- check if the current thread is bound
 stepThread _ _ _ _ tid (AIsBound c) = \ctx@Context{..} -> do
-  let isBound = isJust . _bound $ elookup "stepThread.AIsBound" tid cThreads
+  let isBound = isJust . _bound $ elookup tid cThreads
   pure ( Succeeded ctx { cThreads = goto (c isBound) tid cThreads }
        , Single (IsCurrentThreadBound isBound)
        , const (pure ())
@@ -596,7 +598,7 @@ stepThread _ _ _ _ tid (APopCatching a) = \ctx@Context{..} ->
 stepThread _ _ _ _ tid (AMasking m ma c) = \ctx@Context{..} -> pure $
   let resetMask typ ms = ModelConc $ \k -> AResetMask typ True ms $ k ()
       umask mb = resetMask True m' >> mb >>= \b -> resetMask False m >> pure b
-      m' = _masking $ elookup "stepThread.AMasking" tid cThreads
+      m' = _masking $ elookup tid cThreads
       a  = runModelConc (ma umask) (AResetMask False False m' . c)
   in ( Succeeded ctx { cThreads = goto a tid (mask m tid cThreads) }
      , Single (SetMasking False m)
@@ -632,7 +634,7 @@ stepThread forSnapshot _ sched memtype tid (ASub ma c) = \ctx ->
      | M.size (cThreads ctx) > 1 -> pure (Failed IllegalSubconcurrency, Single Subconcurrency, const (pure ()))
      | otherwise -> do
          res <- runConcurrency False sched memtype (cSchedState ctx) (cIdSource ctx) (cCaps ctx) ma
-         out <- efromJust "stepThread.ASub" <$> C.readCRef (finalRef res)
+         out <- efromJust <$> C.readCRef (finalRef res)
          pure ( Succeeded ctx
                 { cThreads    = goto (AStopSub (c out)) tid (cThreads ctx)
                 , cIdSource   = cIdSource (finalContext res)
@@ -660,7 +662,7 @@ stepThread forSnapshot isFirst _ _ tid (ADontCheck lb ma c) = \ctx ->
          threads' <- kill tid (cThreads ctx)
          let dcCtx = ctx { cThreads = threads', cSchedState = lb }
          res <- runConcurrency' forSnapshot dcSched SequentialConsistency dcCtx ma
-         out <- efromJust "stepThread.ADontCheck" <$> C.readCRef (finalRef res)
+         out <- efromJust <$> C.readCRef (finalRef res)
          case out of
            Right a -> do
              let threads'' = launch' Unmasked tid (const (c a)) (cThreads (finalContext res))

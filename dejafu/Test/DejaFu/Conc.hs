@@ -218,7 +218,7 @@ runConcurrent :: C.MonadConc n
   -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s ma = do
   res <- runConcurrency False sched memtype s initialIdSource 2 (unC ma)
-  out <- efromJust "runConcurrent" <$> C.readCRef (finalRef res)
+  out <- efromJust <$> C.readCRef (finalRef res)
   pure ( out
        , cSchedState (finalContext res)
        , F.toList (finalTrace res)
@@ -374,7 +374,7 @@ runWithDCSnapshot sched memtype s snapshot = do
   let restore = dcsRestore snapshot
   let ref = dcsRef snapshot
   res <- runConcurrencyWithSnapshot sched memtype context restore ref
-  out <- efromJust "runWithDCSnapshot" <$> C.readCRef (finalRef res)
+  out <- efromJust <$> C.readCRef (finalRef res)
   pure ( out
        , cSchedState (finalContext res)
        , F.toList (finalTrace res)

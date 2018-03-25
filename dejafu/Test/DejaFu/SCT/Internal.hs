@@ -20,6 +20,7 @@ import           Data.Coerce                      (Coercible, coerce)
 import qualified Data.IntMap.Strict               as I
 import           Data.List                        (find, mapAccumL)
 import           Data.Maybe                       (fromMaybe)
+import           GHC.Stack                        (HasCallStack)
 
 import           Test.DejaFu.Conc
 import           Test.DejaFu.Conc.Internal        (Context(..), DCSnapshot(..))
@@ -34,7 +35,7 @@ import           Test.DejaFu.Utils
 -- * Exploration
 
 -- | General-purpose SCT function.
-sct :: MonadConc n
+sct :: (MonadConc n, HasCallStack)
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
   -> ([ThreadId] -> s)
@@ -75,11 +76,11 @@ sct settings s0 sfun srun conc
     runFull sched s = runConcurrent sched (_memtype settings) s conc
     runSnap snap sched s = runWithDCSnapshot sched (_memtype settings) s snap
 
-    debugFatal = if _debugFatal settings then fatal "sct" else debugPrint
+    debugFatal = if _debugFatal settings then fatal else debugPrint
     debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
 
 -- | Like 'sct' but given a function to run the computation.
-sct' :: MonadConc n
+sct' :: (MonadConc n, HasCallStack)
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
   -> s
@@ -146,7 +147,7 @@ sct' settings s0 sfun srun run nextTId nextCRId = go Nothing [] s0 where
 -- Unlike shrinking in randomised property-testing tools like
 -- QuickCheck or Hedgehog, we only run the test case /once/, at the
 -- end, rather than after every simplification step.
-simplifyExecution :: MonadConc n
+simplifyExecution :: (MonadConc n, HasCallStack)
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
   -> (forall x. Scheduler x -> x -> n (Either Failure a, x, Trace))
@@ -178,7 +179,7 @@ simplifyExecution settings run nextTId nextCRId res trace
     simplifiedTrace = simplify (_memtype settings) tidTrace
     fixup = renumber (_memtype settings) (fromId nextTId) (fromId nextCRId)
 
-    debugFatal = if _debugFatal settings then fatal "sct" else debugPrint
+    debugFatal = if _debugFatal settings then fatal else debugPrint
     debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
     debugShow = fromMaybe (const "_") (_debugShow settings)
     p = either show debugShow

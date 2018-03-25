@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ViewPatterns #-}
 
 -- |
@@ -8,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : DeriveAnyClass, DeriveGeneric, ViewPatterns
+-- Portability : DeriveAnyClass, DeriveGeneric, FlexibleContexts, ViewPatterns
 --
 -- Internal types and functions for SCT via dynamic partial-order
 -- reduction.  This module is NOT considered to form part of the
@@ -31,6 +32,7 @@ import qualified Data.Sequence        as Sq
 import           Data.Set             (Set)
 import qualified Data.Set             as S
 import           GHC.Generics         (Generic)
+import           GHC.Stack            (HasCallStack)
 
 import           Test.DejaFu.Internal
 import           Test.DejaFu.Schedule (Scheduler(..))
@@ -69,13 +71,13 @@ data DPOR = DPOR
 --
 -- This is a reasonable thing to do, because if the state is corrupted
 -- then nothing sensible can happen anyway.
-validateDPOR :: String -> DPOR -> DPOR
-validateDPOR src dpor
-    | not (todo `S.isSubsetOf` runnable) = fatal src "thread exists in todo set but not runnable set"
-    | not (done `S.isSubsetOf` runnable) = fatal src "thread exists in done set but not runnable set"
-    | not (taken `S.isSubsetOf` done) = fatal src "thread exists in taken set but not done set"
-    | not (todo `disjoint` done) = fatal src "thread exists in both taken set and done set"
-    | not (maybe True (`S.member` done) next) = fatal src "taken thread does not exist in done set"
+validateDPOR :: HasCallStack => DPOR -> DPOR
+validateDPOR dpor
+    | not (todo `S.isSubsetOf` runnable) = fatal "thread exists in todo set but not runnable set"
+    | not (done `S.isSubsetOf` runnable) = fatal "thread exists in done set but not runnable set"
+    | not (taken `S.isSubsetOf` done) = fatal "thread exists in taken set but not done set"
+    | not (todo `disjoint` done) = fatal "thread exists in both taken set and done set"
+    | not (maybe True (`S.member` done) next) = fatal "taken thread does not exist in done set"
     | otherwise = dpor
   where
     done = dporDone dpor
@@ -151,8 +153,8 @@ findSchedulePrefix dpor = case dporNext dpor of
     sleeps = dporSleep dpor `M.union` dporTaken dpor
 
 -- | Add a new trace to the stack.  This won't work if to-dos aren't explored depth-first.
-incorporateTrace
-  :: MemType
+incorporateTrace :: HasCallStack
+  => MemType
   -> Bool
   -- ^ Whether the \"to-do\" point which was used to create this new
   -- execution was conservative or not.
@@ -168,9 +170,9 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
     in case dporNext dpor of
          Just (t, child)
            | t == tid' ->
-             validateDPOR "incorporateTrace (grow / Just)" $ dpor { dporNext = Just (tid', grow state' tid' rest child) }
-           | hasTodos child -> fatal "incorporateTrace" "replacing child with todos!"
-         _ -> validateDPOR "incorporateTrace (grow / Nothing)" $
+             validateDPOR $ dpor { dporNext = Just (tid', grow state' tid' rest child) }
+           | hasTodos child -> fatal "replacing child with todos!"
+         _ -> validateDPOR $
            let taken = M.insert tid' a (dporTaken dpor)
                sleep = dporSleep dpor `M.union` dporTaken dpor
            in dpor { dporTaken = if conservative then dporTaken dpor else taken
@@ -178,13 +180,13 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
                    , dporNext  = Just (tid', subtree state' tid' sleep trc)
                    , dporDone  = S.insert tid' (dporDone dpor)
                    }
-  grow _ _ [] _ = fatal "incorporateTrace" "trace exhausted without reading a to-do point!"
+  grow _ _ [] _ = fatal "trace exhausted without reading a to-do point!"
 
   -- check if there are to-do points in a tree
   hasTodos dpor = not (M.null (dporTodo dpor)) || (case dporNext dpor of Just (_, dpor') -> hasTodos dpor'; _ -> False)
 
   -- Construct a new subtree corresponding to a trace suffix.
-  subtree state tid sleep ((_, _, a):rest) = validateDPOR "incorporateTrace (subtree)" $
+  subtree state tid sleep ((_, _, a):rest) = validateDPOR $
     let state' = updateDepState memtype state tid a
         sleep' = M.filterWithKey (\t a' -> not $ dependent state' tid a t a') sleep
     in DPOR
@@ -205,7 +207,7 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
           ((d', _, a'):_) -> M.singleton (tidOf tid d') a'
           [] -> M.empty
         }
-  subtree _ _ _ [] = fatal "incorporateTrace" "subtree suffix empty!"
+  subtree _ _ _ [] = fatal "subtree suffix empty!"
 
 -- | Produce a list of new backtracking points from an execution
 -- trace. These are then used to inform new \"to-do\" points in the
@@ -299,8 +301,9 @@ findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty init
 
 -- | Add new backtracking points, if they have not already been
 -- visited and aren't in the sleep set.
-incorporateBacktrackSteps :: [BacktrackStep] -> DPOR -> DPOR
-incorporateBacktrackSteps (b:bs) dpor = validateDPOR "incorporateBacktrackSteps" dpor' where
+incorporateBacktrackSteps :: HasCallStack
+  => [BacktrackStep] -> DPOR -> DPOR
+incorporateBacktrackSteps (b:bs) dpor = validateDPOR dpor' where
   tid = bcktThreadid b
 
   dpor' = dpor
@@ -318,9 +321,9 @@ incorporateBacktrackSteps (b:bs) dpor = validateDPOR "incorporateBacktrackSteps"
 
   child = case dporNext dpor of
     Just (t, d)
-      | t /= tid -> fatal "incorporateBacktrackSteps" "incorporating wrong trace!"
+      | t /= tid -> fatal "incorporating wrong trace!"
       | otherwise -> incorporateBacktrackSteps bs d
-    Nothing -> fatal "incorporateBacktrackSteps" "child is missing!"
+    Nothing -> fatal "child is missing!"
 incorporateBacktrackSteps [] dpor = dpor
 
 -------------------------------------------------------------------------------
@@ -393,8 +396,8 @@ type BacktrackFunc
 -- | Add a backtracking point. If the thread isn't runnable, add all
 -- runnable threads. If the backtracking point is already present,
 -- don't re-add it UNLESS this would make it conservative.
-backtrackAt
-  :: (ThreadId -> BacktrackStep -> Bool)
+backtrackAt :: HasCallStack
+  => (ThreadId -> BacktrackStep -> Bool)
   -- ^ If this returns @True@, backtrack to all runnable threads,
   -- rather than just the given thread.
   -> BacktrackFunc
@@ -423,7 +426,7 @@ backtrackAt toAll bs0 = backtrackAt' . nubBy ((==) `on` fst') . sortOn fst' wher
         ((i',c',t'):is') -> go i' bs (i'-i0-1) c' t' is'
         [] -> bs
   go i0 (b:bs) i c tid is = b : go i0 bs (i-1) c tid is
-  go _ [] _ _ _ _ = fatal "backtrackAt" "ran out of schedule whilst backtracking!"
+  go _ [] _ _ _ _ = fatal "ran out of schedule whilst backtracking!"
 
   -- Backtrack to a single thread
   backtrackTo tid c = M.insert tid c . bcktBacktracks
@@ -439,8 +442,8 @@ backtrackAt toAll bs0 = backtrackAt' . nubBy ((==) `on` fst') . sortOn fst' wher
 -- the prior thread if it's (1) still runnable and (2) hasn't just
 -- yielded. Furthermore, threads which /will/ yield are ignored in
 -- preference of those which will not.
-dporSched
-  :: MemType
+dporSched :: HasCallStack
+  => MemType
   -> IncrementalBoundFunc k
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
@@ -501,7 +504,7 @@ dporSched memtype boundf = Scheduler $ \prior threads s ->
     decision = decisionOf (fst <$> prior) (S.fromList tids)
 
     -- Get the action of a thread
-    action t = efromJust "dporSched.action" (lookup t threads')
+    action t = efromJust (lookup t threads')
 
     -- The runnable thread IDs
     tids = map fst threads'

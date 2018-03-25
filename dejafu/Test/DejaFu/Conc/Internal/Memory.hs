@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -9,7 +10,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : BangPatterns, GADTs, LambdaCase, RecordWildCards
+-- Portability : BangPatterns, GADTs, FlexibleContexts, LambdaCase, RecordWildCards
 --
 -- Operations over @CRef@s and @MVar@s. This module is NOT considered
 -- to form part of the public interface of this library.
@@ -31,6 +32,7 @@ import           Data.Maybe                          (maybeToList)
 import           Data.Monoid                         ((<>))
 import           Data.Sequence                       (Seq, ViewL(..), singleton,
                                                       viewl, (><))
+import           GHC.Stack                           (HasCallStack)
 
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.Conc.Internal.Threading
@@ -174,13 +176,13 @@ tryPutIntoMVar :: C.MonadConc n
 tryPutIntoMVar = mutMVar NonBlocking
 
 -- | Read from a @MVar@, blocking if empty.
-readFromMVar :: C.MonadConc n
+readFromMVar :: (C.MonadConc n, HasCallStack)
   => ModelMVar n a
   -> (a -> Action n)
   -> ThreadId
   -> Threads n
   -> n (Bool, Threads n, [ThreadId], n ())
-readFromMVar cvar c = seeMVar NonEmptying Blocking cvar (c . efromJust "readFromMVar")
+readFromMVar cvar c = seeMVar NonEmptying Blocking cvar (c . efromJust)
 
 -- | Try to read from a @MVar@, not blocking if empty.
 tryReadFromMVar :: C.MonadConc n
@@ -192,13 +194,13 @@ tryReadFromMVar :: C.MonadConc n
 tryReadFromMVar = seeMVar NonEmptying NonBlocking
 
 -- | Take from a @MVar@, blocking if empty.
-takeFromMVar :: C.MonadConc n
+takeFromMVar :: (C.MonadConc n, HasCallStack)
   => ModelMVar n a
   -> (a -> Action n)
   -> ThreadId
   -> Threads n
   -> n (Bool, Threads n, [ThreadId], n ())
-takeFromMVar cvar c = seeMVar Emptying Blocking cvar (c . efromJust "takeFromMVar")
+takeFromMVar cvar c = seeMVar Emptying Blocking cvar (c . efromJust)
 
 -- | Try to take from a @MVar@, not blocking if empty.
 tryTakeFromMVar :: C.MonadConc n

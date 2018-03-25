@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 
 -- |
@@ -8,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : DeriveAnyClass, DeriveGeneric, GADTs
+-- Portability : DeriveAnyClass, DeriveGeneric, FlexibleContexts, GADTs
 --
 -- Internal types and functions used throughout DejaFu.  This module
 -- is NOT considered to form part of the public interface of this
@@ -23,6 +24,7 @@ import           Data.Maybe               (fromMaybe)
 import           Data.Set                 (Set)
 import qualified Data.Set                 as S
 import           GHC.Generics             (Generic)
+import           GHC.Stack                (HasCallStack, withFrozenCallStack)
 import           System.Random            (RandomGen)
 
 import           Test.DejaFu.Types
@@ -328,53 +330,53 @@ simplifyLookahead _ = UnsynchronisedOther
 
 -- | 'tail' but with a better error message if it fails.  Use this
 -- only where it shouldn't fail!
-etail :: String -> [a] -> [a]
-etail _ (_:xs) = xs
-etail src _ = fatal src "tail: empty list"
+etail :: HasCallStack => [a] -> [a]
+etail (_:xs) = xs
+etail _ = withFrozenCallStack $ fatal "tail: empty list"
 
 -- | '(!!)' but with a better error message if it fails.  Use this
 -- only where it shouldn't fail!
-eidx :: String -> [a] -> Int -> a
-eidx src xs i
+eidx :: HasCallStack => [a] -> Int -> a
+eidx xs i
   | i < length xs = xs !! i
-  | otherwise = fatal src "(!!): index too large"
+  | otherwise = withFrozenCallStack $ fatal "(!!): index too large"
 
 -- | 'fromJust' but with a better error message if it fails.  Use this
 -- only where it shouldn't fail!
-efromJust :: String -> Maybe a -> a
-efromJust _ (Just x) = x
-efromJust src _ = fatal src "fromJust: Nothing"
+efromJust :: HasCallStack => Maybe a -> a
+efromJust (Just x) = x
+efromJust _ = withFrozenCallStack $ fatal "fromJust: Nothing"
 
 -- | 'fromList' but with a better error message if it fails.  Use this
 -- only where it shouldn't fail!
-efromList :: String -> [a] -> NonEmpty a
-efromList _ (x:xs) = x:|xs
-efromList src _ = fatal src "fromList: empty list"
+efromList :: HasCallStack => [a] -> NonEmpty a
+efromList (x:xs) = x:|xs
+efromList _ = withFrozenCallStack $ fatal "fromList: empty list"
 
 -- | 'M.adjust' but which errors if the key is not present.  Use this
 -- only where it shouldn't fail!
-eadjust :: (Ord k, Show k) => String -> (v -> v) -> k -> M.Map k v -> M.Map k v
-eadjust src f k m = case M.lookup k m of
+eadjust :: (Ord k, Show k, HasCallStack) => (v -> v) -> k -> M.Map k v -> M.Map k v
+eadjust f k m = case M.lookup k m of
   Just v -> M.insert k (f v) m
-  Nothing -> fatal src ("adjust: key '" ++ show k ++ "' not found")
+  Nothing -> withFrozenCallStack $ fatal ("adjust: key '" ++ show k ++ "' not found")
 
 -- | 'M.insert' but which errors if the key is already present.  Use
 -- this only where it shouldn't fail!
-einsert :: (Ord k, Show k) => String -> k -> v -> M.Map k v -> M.Map k v
-einsert src k v m
-  | M.member k m = fatal src ("insert: key '" ++ show k ++ "' already present")
+einsert :: (Ord k, Show k, HasCallStack) => k -> v -> M.Map k v -> M.Map k v
+einsert k v m
+  | M.member k m = withFrozenCallStack $ fatal ("insert: key '" ++ show k ++ "' already present")
   | otherwise = M.insert k v m
 
 -- | 'M.lookup' but which errors if the key is not present.  Use this
 -- only where it shouldn't fail!
-elookup :: (Ord k, Show k) => String -> k -> M.Map k v -> v
-elookup src k =
-  fromMaybe (fatal src ("lookup: key '" ++ show k ++ "' not found")) .
+elookup :: (Ord k, Show k, HasCallStack) => k -> M.Map k v -> v
+elookup k =
+  fromMaybe (withFrozenCallStack $ fatal ("lookup: key '" ++ show k ++ "' not found")) .
   M.lookup k
 
 -- | 'error' but saying where it came from
-fatal :: String -> String -> a
-fatal src msg = error ("(dejafu: " ++ src ++ ") " ++ msg)
+fatal :: HasCallStack => String -> a
+fatal msg = withFrozenCallStack $ error ("(dejafu) " ++ msg)
 
 -------------------------------------------------------------------------------
 -- * Miscellaneous
