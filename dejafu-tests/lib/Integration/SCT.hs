@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-deprecations #-}
+
 module Integration.SCT where
 
 import           Control.Concurrent.Classy hiding (check)

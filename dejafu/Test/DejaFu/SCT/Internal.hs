@@ -96,7 +96,7 @@ sct' :: (MonadConc n, HasCallStack)
   -> CRefId
   -- ^ The first available @CRefId@
   -> n [(Either Failure a, Trace)]
-sct' settings s0 sfun srun run nextTId nextCRId = go Nothing [] s0 where
+sct' settings s0 sfun srun run nTId nCRId = go Nothing [] s0 where
   go (Just res) _ _ | earlyExit res = pure []
   go _ seen !s = case sfun s of
     Just t -> srun s t >>= \case
@@ -127,7 +127,7 @@ sct' settings s0 sfun srun run nextTId nextCRId = go Nothing [] s0 where
   dosimplify res trace seen s
     | not (_simplify settings) = ((res, trace) :) <$> go (Just res) seen s
     | otherwise = do
-        shrunk <- simplifyExecution settings run nextTId nextCRId res trace
+        shrunk <- simplifyExecution settings run nTId nCRId res trace
         (shrunk :) <$> go (Just res) seen s
 
   earlyExit = fromMaybe (const False) (_earlyExit settings)
@@ -160,7 +160,7 @@ simplifyExecution :: (MonadConc n, HasCallStack)
   -- ^ The expected result
   -> Trace
   -> n (Either Failure a, Trace)
-simplifyExecution settings run nextTId nextCRId res trace
+simplifyExecution settings run nTId nCRId res trace
     | tidTrace == simplifiedTrace = do
         debugPrint ("Simplifying new result '" ++ p res ++ "': no simplification possible!")
         pure (res, trace)
@@ -177,7 +177,7 @@ simplifyExecution settings run nextTId nextCRId res trace
   where
     tidTrace = toTIdTrace trace
     simplifiedTrace = simplify (_memtype settings) tidTrace
-    fixup = renumber (_memtype settings) (fromId nextTId) (fromId nextCRId)
+    fixup = renumber (_memtype settings) (fromId nTId) (fromId nCRId)
 
     debugFatal = if _debugFatal settings then fatal else debugPrint
     debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
@@ -334,14 +334,14 @@ renumber memtype tid0 crid0 = snd . mapAccumL go (I.empty, tid0, I.empty, crid0)
   -- I can't help but feel there should be some generic programming
   -- solution to this sort of thing (and to the many other functions
   -- operating over @ThreadAction@s / @Lookahead@s)
-  updateAction (tidmap, nexttid, cridmap, nextcrid) (Fork old) =
-    let tidmap' = I.insert (fromId old) nexttid tidmap
-        nexttid' = nexttid + 1
-    in ((tidmap', nexttid', cridmap, nextcrid), Fork (toId nexttid))
-  updateAction (tidmap, nexttid, cridmap, nextcrid) (ForkOS old) =
-    let tidmap' = I.insert (fromId old) nexttid tidmap
-        nexttid' = nexttid + 1
-    in ((tidmap', nexttid', cridmap, nextcrid), ForkOS (toId nexttid))
+  updateAction (tidmap, nTId, cridmap, nCRId) (Fork old) =
+    let tidmap' = I.insert (fromId old) nTId tidmap
+        nTId' = nTId + 1
+    in ((tidmap', nTId', cridmap, nCRId), Fork (toId nTId))
+  updateAction (tidmap, nTId, cridmap, nCRId) (ForkOS old) =
+    let tidmap' = I.insert (fromId old) nTId tidmap
+        nTId' = nTId + 1
+    in ((tidmap', nTId', cridmap, nCRId), ForkOS (toId nTId))
   updateAction s@(tidmap, _, _, _) (PutMVar mvid olds) =
     (s, PutMVar mvid (map (renumbered tidmap) olds))
   updateAction s@(tidmap, _, _, _) (TryPutMVar mvid b olds) =
@@ -350,10 +350,10 @@ renumber memtype tid0 crid0 = snd . mapAccumL go (I.empty, tid0, I.empty, crid0)
     (s, TakeMVar mvid (map (renumbered tidmap) olds))
   updateAction s@(tidmap, _, _, _) (TryTakeMVar mvid b olds) =
     (s, TryTakeMVar mvid b (map (renumbered tidmap) olds))
-  updateAction (tidmap, nexttid, cridmap, nextcrid) (NewCRef old) =
-    let cridmap' = I.insert (fromId old) nextcrid cridmap
-        nextcrid' = nextcrid + 1
-    in ((tidmap, nexttid, cridmap', nextcrid'), NewCRef (toId nextcrid))
+  updateAction (tidmap, nTId, cridmap, nCRId) (NewCRef old) =
+    let cridmap' = I.insert (fromId old) nCRId cridmap
+        nCRId' = nCRId + 1
+    in ((tidmap, nTId, cridmap', nCRId'), NewCRef (toId nCRId))
   updateAction s@(_, _, cridmap, _) (ReadCRef old) =
     (s, ReadCRef (renumbered cridmap old))
   updateAction s@(_, _, cridmap, _) (ReadCRefCas old) =

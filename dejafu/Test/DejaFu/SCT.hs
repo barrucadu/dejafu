@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-deprecations #-}
+
 -- |
 -- Module      : Test.DejaFu.SCT
 -- Copyright   : (c) 2015--2018 Michael Walker

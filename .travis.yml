@@ -46,11 +46,7 @@ before_install:
 
 # Run tests
 script:
-- stack --no-terminal build concurrency
-- stack --no-terminal build dejafu
-- stack --no-terminal build hunit-dejafu
-- stack --no-terminal build tasty-dejafu
-- stack --no-terminal build dejafu-tests
+- if [[ "$MODE" == "test" ]]; then stack --no-terminal build --ghc-options=-Werror; else stack --no-terminal build; fi
 
 - |
   echo -en 'travis_fold:start:script.test\\r'
