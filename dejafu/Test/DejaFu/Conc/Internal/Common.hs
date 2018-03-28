@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -8,7 +7,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, ExistentialQuantification, RankNTypes
+-- Portability : ExistentialQuantification, RankNTypes
 --
 -- Common types and utility functions for deterministic execution of
 -- 'MonadConc' implementations. This module is NOT considered to form
@@ -17,13 +16,10 @@ module Test.DejaFu.Conc.Internal.Common where
 
 import           Control.Exception             (Exception, MaskingState(..))
 import qualified Control.Monad.Conc.Class      as C
+import qualified Control.Monad.Fail            as Fail
 import           Data.Map.Strict               (Map)
 import           Test.DejaFu.Conc.Internal.STM (ModelSTM)
 import           Test.DejaFu.Types
-
-#if MIN_VERSION_base(4,9,0)
-import qualified Control.Monad.Fail            as Fail
-#endif
 
 --------------------------------------------------------------------------------
 -- * The @ModelConc@ Monad
@@ -51,11 +47,9 @@ instance Monad (ModelConc n) where
     return  = pure
     m >>= k = ModelConc $ \c -> runModelConc m (\x -> runModelConc (k x) c)
 
-#if MIN_VERSION_base(4,9,0)
     fail = Fail.fail
 
 instance Fail.MonadFail (ModelConc n) where
-#endif
     fail e = ModelConc $ \_ -> AThrow (MonadFailException e)
 
 -- | An @MVar@ is modelled as a unique ID and a reference holding a

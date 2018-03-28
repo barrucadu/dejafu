@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -12,7 +11,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, ExistentialQuantification, NoMonoLocalBinds, RecordWildCards, TypeFamilies
+-- Portability : ExistentialQuantification, NoMonoLocalBinds, RecordWildCards, TypeFamilies
 --
 -- 'MonadSTM' testing implementation, internal types and definitions.
 -- This module is NOT considered to form part of the public interface
@@ -25,15 +24,12 @@ import           Control.Exception        (Exception, SomeException,
 import           Control.Monad            (MonadPlus(..))
 import           Control.Monad.Catch      (MonadCatch(..), MonadThrow(..))
 import qualified Control.Monad.Conc.Class as C
+import qualified Control.Monad.Fail       as Fail
 import qualified Control.Monad.STM.Class  as S
 import           Data.List                (nub)
 
 import           Test.DejaFu.Internal
 import           Test.DejaFu.Types
-
-#if MIN_VERSION_base(4,9,0)
-import qualified Control.Monad.Fail       as Fail
-#endif
 
 --------------------------------------------------------------------------------
 -- * The @ModelSTM@ monad
@@ -56,11 +52,9 @@ instance Monad (ModelSTM n) where
     return  = pure
     m >>= k = ModelSTM $ \c -> runModelSTM m (\x -> runModelSTM (k x) c)
 
-#if MIN_VERSION_base(4,9,0)
     fail = Fail.fail
 
 instance Fail.MonadFail (ModelSTM n) where
-#endif
     fail e = ModelSTM $ \_ -> SThrow (MonadFailException e)
 
 instance MonadThrow (ModelSTM n) where

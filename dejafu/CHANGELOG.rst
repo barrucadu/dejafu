@@ -7,6 +7,24 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.5.0.0 - No More 7.10 (2018-03-28)
+-----------------------------------
+
+* Git: :tag:`dejafu-1.5.0.0`
+* Hackage: :hackage:`dejafu-1.5.0.0`
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* GHC 7.10 support is dropped.  Dependency lower bounds are:
+
+    * :hackage:`base`: 4.9
+    * :hackage:`concurrency`: 1.5
+    * :hackage:`transformers`: 0.5
+
+* The upper bound on :hackage:`concurrency` is 1.6.
+
+
 1.4.0.0 (2018-03-17)
 --------------------
 

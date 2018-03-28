@@ -57,6 +57,7 @@ module Test.DejaFu.Conc
 
 import           Control.Exception                   (MaskingState(..))
 import qualified Control.Monad.Catch                 as Ca
+import           Control.Monad.Fail                  (MonadFail)
 import qualified Control.Monad.IO.Class              as IO
 import           Control.Monad.Trans.Class           (MonadTrans(..))
 import qualified Data.Foldable                       as F
@@ -74,18 +75,9 @@ import           Test.DejaFu.Internal
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
 
-#if MIN_VERSION_base(4,9,0)
-import qualified Control.Monad.Fail                  as Fail
-#endif
-
 -- | @since 1.4.0.0
 newtype ConcT n a = C { unC :: ModelConc n a }
-  deriving (Functor, Applicative, Monad)
-
-#if MIN_VERSION_base(4,9,0)
-instance Fail.MonadFail (ConcT n) where
-  fail = C . fail
-#endif
+  deriving (Functor, Applicative, Monad, MonadFail)
 
 -- | A 'MonadConc' implementation using @IO@.
 --
@@ -141,7 +133,10 @@ instance Monad n => C.MonadConc (ConcT n) where
 
   forkWithUnmaskN   n ma = toConc (AFork n (\umask -> runModelConc (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
   forkOnWithUnmaskN n _  = C.forkWithUnmaskN n
-  forkOSN n ma = forkOSWithUnmaskN n (const ma)
+  forkOSWithUnmaskN n ma
+    | C.rtsSupportsBoundThreads =
+      toConc (AForkOS n (\umask -> runModelConc (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
+    | otherwise = fail "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
 
   isCurrentThreadBound = toConc AIsBound
 
@@ -191,16 +186,6 @@ instance Monad n => C.MonadConc (ConcT n) where
 
   atomically = toConc . AAtom
 
--- move this into the instance defn when forkOSWithUnmaskN is added to MonadConc in 2018
-forkOSWithUnmaskN :: Applicative n
-  => String
-  -> ((forall a. ConcT n a -> ConcT n a) -> ConcT n ())
-  -> ConcT n ThreadId
-forkOSWithUnmaskN n ma
-  | C.rtsSupportsBoundThreads =
-    toConc (AForkOS n (\umask -> runModelConc (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
-  | otherwise = fail "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
-
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a failure reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
@@ -233,7 +218,7 @@ runConcurrent :: C.MonadConc n
   -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s ma = do
   res <- runConcurrency False sched memtype s initialIdSource 2 (unC ma)
-  out <- efromJust "runConcurrent" <$> C.readCRef (finalRef res)
+  out <- efromJust <$> C.readCRef (finalRef res)
   pure ( out
        , cSchedState (finalContext res)
        , F.toList (finalTrace res)
@@ -389,7 +374,7 @@ runWithDCSnapshot sched memtype s snapshot = do
   let restore = dcsRestore snapshot
   let ref = dcsRef snapshot
   res <- runConcurrencyWithSnapshot sched memtype context restore ref
-  out <- efromJust "runWithDCSnapshot" <$> C.readCRef (finalRef res)
+  out <- efromJust <$> C.readCRef (finalRef res)
   pure ( out
        , cSchedState (finalContext res)
        , F.toList (finalTrace res)

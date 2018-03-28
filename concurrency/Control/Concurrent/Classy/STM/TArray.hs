@@ -37,9 +37,8 @@ newtype TArray stm i e = TArray (Array i (TVar stm e))
 instance MonadSTM stm => MArray (TArray stm) e stm where
   getBounds (TArray a) = pure (bounds a)
 
-  newArray b e = do
-    a <- rep (rangeSize b) (newTVar e)
-    pure $ TArray (listArray b a)
+  newArray b e =
+    TArray . listArray b <$> rep (rangeSize b) (newTVar e)
 
   newArray_ b = newArray b arrEleBottom
 

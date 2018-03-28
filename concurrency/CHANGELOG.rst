@@ -7,6 +7,33 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.5.0.0 - No More 7.10 (2018-03-28)
+-----------------------------------
+
+* Git: :tag:`concurrency-1.5.0.0`
+* Hackage: :hackage:`concurrency-1.5.0.0`
+
+Added
+~~~~~
+
+* (:issue:`132`) ``forkOSWithUnmask`` in ``MonadConc``
+
+Changed
+~~~~~~~
+
+* (:issue:`132`) ``Control.Monad.Conc.Class.fork``, ``forkOn``,
+  ``forkOS``, and ``forkOSN`` are top-level definitions.
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* GHC 7.10 support is dropped.  Dependency lower bounds are:
+
+    * :hackage:`base`: 4.9
+    * :hackage:`array`: 0.5.1
+    * :hackage:`transformers`: 0.5
+
+
 1.4.0.2 (2018-03-11)
 --------------------
 

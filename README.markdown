@@ -45,10 +45,10 @@ There are a few different packages under the Déjà Fu umbrella:
 
 |   | Version | Summary |
 | - | ------- | ------- |
-| [concurrency][h:conc]    | 1.4.0.2 | Typeclasses, functions, and data types for concurrency and STM. |
-| [dejafu][h:dejafu]       | 1.4.0.0 | Systematic testing for Haskell concurrency. |
-| [hunit-dejafu][h:hunit]  | 1.1.0.3 | Deja Fu support for the HUnit test framework. |
-| [tasty-dejafu][h:tasty]  | 1.1.0.2 | Deja Fu support for the Tasty test framework. |
+| [concurrency][h:conc]    | 1.5.0.0 | Typeclasses, functions, and data types for concurrency and STM. |
+| [dejafu][h:dejafu]       | 1.5.0.0 | Systematic testing for Haskell concurrency. |
+| [hunit-dejafu][h:hunit]  | 1.2.0.0 | Deja Fu support for the HUnit test framework. |
+| [tasty-dejafu][h:tasty]  | 1.2.0.0 | Deja Fu support for the Tasty test framework. |
 
 Each package has its own README and CHANGELOG in its subdirectory.
 

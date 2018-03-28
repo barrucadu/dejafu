@@ -9,4 +9,3 @@ packages:
 
 extra-deps:
 - hedgehog-0.5.2
-- tasty-hedgehog-0.1.0.1

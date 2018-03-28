@@ -19,11 +19,11 @@ cache:
 matrix:
   fast_finish: true
   include:
-  - env: MODE=test RESOLVER=lts-6.0 # GHC 7.10
-    addons: {apt: {packages: [libgmp-dev]}}
   - env: MODE=test RESOLVER=lts-9.0 # GHC 8.0
     addons: {apt: {packages: [libgmp-dev]}}
   - env: MODE=test RESOLVER=lts-10.0 # GHC 8.2
+    addons: {apt: {packages: [libgmp-dev]}}
+  - env: MODE=test RESOLVER=nightly-2018-03-23 # GHC 8.4
     addons: {apt: {packages: [libgmp-dev]}}
   - env: MODE=test RESOLVER=nightly
     addons: {apt: {packages: [libgmp-dev]}}
@@ -46,11 +46,7 @@ before_install:
 
 # Run tests
 script:
-- stack --no-terminal build concurrency
-- stack --no-terminal build dejafu
-- stack --no-terminal build hunit-dejafu
-- stack --no-terminal build tasty-dejafu
-- stack --no-terminal build dejafu-tests
+- if [[ "$MODE" == "test" ]]; then stack --no-terminal build --ghc-options=-Werror; else stack --no-terminal build; fi
 
 - |
   echo -en 'travis_fold:start:script.test\\r'

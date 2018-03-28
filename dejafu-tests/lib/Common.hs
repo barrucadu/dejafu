@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-deprecations -Wno-orphans #-}
+
 {-# LANGUAGE GADTs #-}
 
 module Common (module Common, module Test.Tasty.DejaFu, T.TestTree, T.expectFail) where
