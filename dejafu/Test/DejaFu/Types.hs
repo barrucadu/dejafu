@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 -- |
@@ -8,16 +9,20 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : DeriveGeneric, GeneralizedNewtypeDeriving, StandaloneDeriving
+-- Portability : DeriveGeneric, GeneralizedNewtypeDeriving, LambdaCase, StandaloneDeriving
 --
 -- Common types and functions used throughout DejaFu.
 module Test.DejaFu.Types where
 
-import           Control.DeepSeq   (NFData(..))
-import           Control.Exception (Exception(..), MaskingState(..),
-                                    SomeException)
-import           Data.Function     (on)
-import           GHC.Generics      (Generic)
+import           Control.DeepSeq                      (NFData(..))
+import           Control.Exception                    (Exception(..),
+                                                       MaskingState(..),
+                                                       SomeException)
+import           Data.Function                        (on)
+import           Data.Functor.Contravariant           (Contravariant(..))
+import           Data.Functor.Contravariant.Divisible (Divisible(..))
+import           Data.Semigroup                       (Semigroup(..))
+import           GHC.Generics                         (Generic)
 
 -------------------------------------------------------------------------------
 -- * Identifiers
@@ -625,41 +630,85 @@ deriving instance Generic Discard
 
 instance NFData Discard
 
--- | Combine two discard values, keeping the weaker.
+-- | A monoid for discard functions: combines two functions, keeping
+-- the weaker.
 --
 -- @Nothing@ is weaker than @Just DiscardTrace@, which is weaker than
 -- @Just DiscardResultAndTrace@.  This forms a commutative monoid
 -- where the unit is @const (Just DiscardResultAndTrace)@.
+--
+-- @since unreleased
+newtype Weaken a = Weaken
+  { getWeakDiscarder :: Either Failure a -> Maybe Discard }
+
+instance Semigroup (Weaken a) where
+  (<>) = divide (\efa -> (efa, efa))
+
+instance Monoid (Weaken a) where
+  mempty = conquer
+  mappend = (<>)
+
+instance Contravariant Weaken where
+  contramap f (Weaken d) = Weaken (d . fmap f)
+
+instance Divisible Weaken where
+  divide f (Weaken d1) (Weaken d2) = Weaken $ \case
+    Right a ->
+      let (b, c) = f a
+      in min (d1 (Right b)) (d2 (Right c))
+    Left e -> min (d1 (Left e)) (d2 (Left e))
+
+  conquer = Weaken (const (Just DiscardResultAndTrace))
+
+-- | Combine two discard functions, keeping the weaker.
 --
 -- @since 1.0.0.0
 weakenDiscard ::
      (Either Failure a -> Maybe Discard)
   -> (Either Failure a -> Maybe Discard)
   -> Either Failure a -> Maybe Discard
-weakenDiscard d1 d2 efa = case (d1 efa, d2 efa) of
-  (Nothing, _) -> Nothing
-  (_, Nothing) -> Nothing
-  (Just DiscardTrace, _) -> Just DiscardTrace
-  (_, Just DiscardTrace) -> Just DiscardTrace
-  _ -> Just DiscardResultAndTrace
+weakenDiscard d1 d2 =
+  getWeakDiscarder (Weaken d1 <> Weaken d2)
 
--- | Combine two discard functions, keeping the stronger.
+-- | A monoid for discard functions: combines two functions, keeping
+-- the stronger.
 --
 -- @Just DiscardResultAndTrace@ is stronger than @Just DiscardTrace@,
 -- which is stronger than @Nothing@.  This forms a commutative monoid
 -- where the unit is @const Nothing@.
+--
+-- @since unreleased
+newtype Strengthen a = Strengthen
+  { getStrongDiscarder :: Either Failure a -> Maybe Discard }
+
+instance Semigroup (Strengthen a) where
+  (<>) = divide (\efa -> (efa, efa))
+
+instance Monoid (Strengthen a) where
+  mempty = conquer
+  mappend = (<>)
+
+instance Contravariant Strengthen where
+  contramap f (Strengthen d) = Strengthen (d . fmap f)
+
+instance Divisible Strengthen where
+  divide f (Strengthen d1) (Strengthen d2) = Strengthen $ \case
+    Right a ->
+      let (b, c) = f a
+      in max (d1 (Right b)) (d2 (Right c))
+    Left e -> max (d1 (Left e)) (d2 (Left e))
+
+  conquer = Strengthen (const Nothing)
+
+-- | Combine two discard functions, keeping the stronger.
 --
 -- @since 1.0.0.0
 strengthenDiscard ::
      (Either Failure a -> Maybe Discard)
   -> (Either Failure a -> Maybe Discard)
   -> Either Failure a -> Maybe Discard
-strengthenDiscard d1 d2 efa = case (d1 efa, d2 efa) of
-  (Just DiscardResultAndTrace, _) -> Just DiscardResultAndTrace
-  (_, Just DiscardResultAndTrace) -> Just DiscardResultAndTrace
-  (Just DiscardTrace, _) -> Just DiscardTrace
-  (_, Just DiscardTrace) -> Just DiscardTrace
-  _ -> Nothing
+strengthenDiscard d1 d2 =
+  getStrongDiscarder (Strengthen d1 <> Strengthen d2)
 
 -------------------------------------------------------------------------------
 -- * Memory Models
