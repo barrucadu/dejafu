@@ -189,6 +189,12 @@ genFunction genKey genVal = (,) <$> genVal <*> genSmallMap genKey genVal
 applyFunction :: Ord k => (v, Map.Map k v) -> k -> v
 applyFunction (def, assocs) k = Map.findWithDefault def k assocs
 
+genPair :: H.Gen a -> H.Gen (a, a)
+genPair g = (,) <$> g <*> g
+
+genEither :: H.Gen l -> H.Gen r -> H.Gen (Either l r)
+genEither l r = HGen.choice [Left <$> l, Right <$> r]
+
 -------------------------------------------------------------------------------
 -- Utilities
 
