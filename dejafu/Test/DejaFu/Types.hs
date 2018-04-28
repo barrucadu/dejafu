@@ -637,7 +637,7 @@ instance NFData Discard
 -- @Just DiscardResultAndTrace@.  This forms a commutative monoid
 -- where the unit is @const (Just DiscardResultAndTrace)@.
 --
--- @since unreleased
+-- @since 1.5.1.0
 newtype Weaken a = Weaken
   { getWeakDiscarder :: Either Failure a -> Maybe Discard }
 
@@ -677,7 +677,7 @@ weakenDiscard d1 d2 =
 -- which is stronger than @Nothing@.  This forms a commutative monoid
 -- where the unit is @const Nothing@.
 --
--- @since unreleased
+-- @since 1.5.1.0
 newtype Strengthen a = Strengthen
   { getStrongDiscarder :: Either Failure a -> Maybe Discard }
 
