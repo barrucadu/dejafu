@@ -7,6 +7,21 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.5.1.0 (2018-03-29)
+--------------------
+
+* Git: :tag:`dejafu-1.5.1.0`
+* Hackage: :hackage:`dejafu-1.5.1.0`
+
+Added
+~~~~~
+
+- (:issue:`210`) ``Test.DejaFu.Types.Weaken`` and ``Strengthen``
+  newtype wrappers around discard functions, with ``Semigroup``,
+  ``Monoid``, ``Contravariant``, and ``Divisible`` instances
+  corresponding to ``weakenDiscard`` and ``strengthenDiscard``.
+
+
 1.5.0.0 - No More 7.10 (2018-03-28)
 -----------------------------------
 

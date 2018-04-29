@@ -49,6 +49,7 @@ library
                      , abstract-deque
                      , concurrency
                      , containers
+                     , contravariant
                      , deepseq
                      , dejafu
                      , exceptions

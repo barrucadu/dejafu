@@ -1,20 +1,24 @@
 {-# LANGUAGE TypeFamilies #-}
 module Unit.Properties where
 
-import qualified Control.Exception                as E
-import           Control.Monad                    (zipWithM)
-import qualified Control.Monad.Conc.Class         as C
-import           Control.Monad.IO.Class           (liftIO)
-import qualified Data.Foldable                    as F
-import qualified Data.Map                         as M
-import qualified Data.Sequence                    as S
-import qualified Hedgehog                         as H
-import qualified Hedgehog.Gen                     as HGen
-import qualified Test.DejaFu.Conc.Internal.Common as D
-import qualified Test.DejaFu.Conc.Internal.Memory as Mem
-import qualified Test.DejaFu.Internal             as D
-import qualified Test.DejaFu.SCT.Internal.DPOR    as SCT
-import qualified Test.DejaFu.Types                as D
+import qualified Control.Exception                    as E
+import           Control.Monad                        (zipWithM)
+import qualified Control.Monad.Conc.Class             as C
+import           Control.Monad.IO.Class               (liftIO)
+import           Data.Coerce                          (coerce)
+import qualified Data.Foldable                        as F
+import           Data.Functor.Contravariant           (contramap)
+import           Data.Functor.Contravariant.Divisible (conquer, divide)
+import qualified Data.Map                             as M
+import           Data.Semigroup                       ((<>))
+import qualified Data.Sequence                        as S
+import qualified Hedgehog                             as H
+import qualified Hedgehog.Gen                         as HGen
+import qualified Test.DejaFu.Conc.Internal.Common     as D
+import qualified Test.DejaFu.Conc.Internal.Memory     as Mem
+import qualified Test.DejaFu.Internal                 as D
+import qualified Test.DejaFu.SCT.Internal.DPOR        as SCT
+import qualified Test.DejaFu.Types                    as D
 
 import           Common
 
@@ -32,6 +36,8 @@ classLawProps :: [TestTree]
 classLawProps = toTestList
     [ testGroup "Id"      (eqord genId)
     , testGroup "Failure" (eqord genFailure)
+    , testGroup "Weaken"  (discardf min D.getWeakDiscarder)
+    , testGroup "Strengthen" (discardf max D.getStrongDiscarder)
     ]
   where
     eqord gen =
@@ -71,6 +77,80 @@ classLawProps = toTestList
           H.assert (x <= y)
           H.assert (y <= x)
       ]
+
+    discardf choose extract =
+        [ testProperty "Associativity (<>)" $ do
+            x <- coerce . applyFunction <$> H.forAll genDiscarder
+            y <- coerce . applyFunction <$> H.forAll genDiscarder
+            z <- coerce . applyFunction <$> H.forAll genDiscarder
+            x <> (y <> z) ==== (x <> y) <> z
+
+        , testProperty "Commutativity (<>)" $ do
+            x <- coerce . applyFunction <$> H.forAll genDiscarder
+            y <- coerce . applyFunction <$> H.forAll genDiscarder
+            x <> y ==== y <> x
+
+        , testProperty "Unit (<>)" $ do
+            x <- coerce . applyFunction <$> H.forAll genDiscarder
+            x <> mempty ==== x
+
+        , testProperty "Homomorphism (<>)" $ do
+            let o d1 d2 efa = d1 efa `choose` d2 efa
+            x <- coerce . applyFunction <$> H.forAll genDiscarder
+            y <- coerce . applyFunction <$> H.forAll genDiscarder
+            efa <- H.forAll genEfa
+            extract (x <> y) efa H.=== (extract x `o` extract y) efa
+
+        , testProperty "Identity (contramap)" $ do
+            x <- coerce . applyFunction <$> H.forAll genDiscarder
+            contramap id x ==== x
+
+        , testProperty "Associativity (divide + delta)" $ do
+            x <- coerce . applyFunction <$> H.forAll genDiscarder
+            y <- coerce . applyFunction <$> H.forAll genDiscarder
+            z <- coerce . applyFunction <$> H.forAll genDiscarder
+            divide delta (divide delta x y) z ==== divide delta x (divide delta y z)
+
+        , testProperty "Commutativity (divide + delta)" $ do
+            x <- coerce . applyFunction <$> H.forAll genDiscarder
+            y <- coerce . applyFunction <$> H.forAll genDiscarder
+            divide delta x y ==== divide delta y x
+
+        , testProperty "Unit (divide + delta)" $ do
+            x <- coerce . applyFunction <$> H.forAll genDiscarder
+            divide delta x conquer ==== x
+
+        , testProperty "Generalised Associativity (divide)" $ do
+            let genF = genFunc (genPair genSmallInt)
+            f <- applyFunction <$> H.forAll genF
+            g <- applyFunction <$> H.forAll genF
+            x <- coerce . applyFunction <$> H.forAll genDiscarder
+            y <- coerce . applyFunction <$> H.forAll genDiscarder
+            z <- coerce . applyFunction <$> H.forAll genDiscarder
+            let f' a = let (bc, d) = f a; (b, c) = g bc in (b, (c, d))
+            divide f (divide g x y) z ==== divide f' x (divide id y z)
+
+        , testProperty "Divisible / Contravariant Consistency (fst)" $ do
+            let genF = genFunc (genPair genSmallInt)
+            f <- applyFunction <$> H.forAll genF
+            x <- coerce . applyFunction <$> H.forAll genDiscarder
+            divide f x conquer ==== contramap (fst . f) x
+
+        , testProperty "Divisible / Contravariant Consistency (snd)" $ do
+            let genF = genFunc (genPair genSmallInt)
+            f <- applyFunction <$> H.forAll genF
+            x <- coerce . applyFunction <$> H.forAll genDiscarder
+            divide f conquer x ==== contramap (snd . f) x
+        ]
+      where
+        genFunc = genFunction genSmallInt
+
+        d1 ==== d2 = do
+          efa <- H.forAll genEfa
+          extract d1 efa H.=== extract d2 efa
+        infix 4 ====
+
+        delta x = (x, x)
 
 -------------------------------------------------------------------------------
 
@@ -363,3 +443,15 @@ genDepState = SCT.DepState
   <$> genSmallMap genCRefId HGen.bool
   <*> genSmallSet genMVarId
   <*> genSmallMap genThreadId genMaskingState
+
+genDiscarder :: H.Gen (Function (Either D.Failure Int) (Maybe D.Discard))
+genDiscarder = genFunction genEfa (HGen.maybe genDiscard)
+
+genEfa :: H.Gen (Either D.Failure Int)
+genEfa = genEither genFailure genSmallInt
+
+genDiscard :: H.Gen D.Discard
+genDiscard = HGen.element
+  [ D.DiscardTrace
+  , D.DiscardResultAndTrace
+  ]
