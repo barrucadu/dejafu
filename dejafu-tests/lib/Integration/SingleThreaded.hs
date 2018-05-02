@@ -167,6 +167,18 @@ stmTests = toTestList
 
   , djfu "MonadSTM is a MonadFail" (alwaysFailsWith isUncaughtException)
       (atomically $ fail "hello world" :: MonadConc m => m ())  -- avoid an ambiguous type
+
+  , djfu "'retry' is not caught by 'catch'" (gives' [True]) $
+      atomically
+        ((retry `catchSomeException` \_ -> pure False) `orElse` pure True)
+
+  , djfu "'throw' is not caught by 'orElse'" (gives' [True]) $
+      atomically
+        ((throwSTM Overflow `orElse` pure False) `catchSomeException` \_ -> pure True)
+
+  , djfu "'retry' in a nested 'orElse' only aborts the innermost" (gives' [True]) $
+      atomically
+       ((retry `orElse` pure True) `orElse` pure False)
   ]
 
 --------------------------------------------------------------------------------
