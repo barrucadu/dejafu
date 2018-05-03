@@ -15,56 +15,26 @@ cache:
   - $HOME/.cabal
   - $HOME/.stack
 
-# Goal: support latest 3 GHC major versions.
+addons:
+  apt:
+    packages:
+    - libgmp-dev
+
 matrix:
   fast_finish: true
-  include:
-  - env: MODE=test RESOLVER=lts-9.0 # GHC 8.0
-    addons: {apt: {packages: [libgmp-dev]}}
-  - env: MODE=test RESOLVER=lts-10.0 # GHC 8.2
-    addons: {apt: {packages: [libgmp-dev]}}
-  - env: MODE=test RESOLVER=nightly-2018-03-23 # GHC 8.4
-    addons: {apt: {packages: [libgmp-dev]}}
-  - env: MODE=test RESOLVER=nightly
-    addons: {apt: {packages: [libgmp-dev]}}
-  - env: MODE=doctest
-    addons: {apt: {packages: [libgmp-dev]}}
-  - env: MODE=style
-    addons: {apt: {packages: [libgmp-dev]}}
   allow_failures:
   - env: MODE=test RESOLVER=nightly
 
-# Download and unpack the stack executable
-before_install:
-- export PATH=/opt/ghc/$GHCVER/bin:$HOME/.local/bin:$PATH
-- mkdir -p ~/.local/bin
-- curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
-- if [[ ! -z "$RESOLVER" ]]; then if [[ -e ".travis/$RESOLVER.yaml" ]]; then mv .travis/$RESOLVER.yaml stack.yaml; else stack init --resolver=$RESOLVER --force; fi; fi
-- stack --no-terminal setup
-- if [[ "$MODE" == "style" ]]; then stack --no-terminal install stylish-haskell; fi
-- if [[ "$MODE" == "doctest" ]]; then stack --no-terminal install doctest; fi
+script: ./.travis/$MODE
 
-# Run tests
-script:
-- if [[ "$MODE" == "test" ]]; then stack --no-terminal build --ghc-options=-Werror; else stack --no-terminal build; fi
+jobs:
+  include:
+  - stage: check
+    env: MODE=doctest
+  - env: MODE=lint
 
-- |
-  echo -en 'travis_fold:start:script.test\\r'
-  set -ex
-  case "$MODE" in
-    style)
-      curl -sL https://raw.github.com/ndmitchell/weeder/master/misc/travis.sh | sh -s .
-      curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh  | sh -s .
-      stack exec ./style.sh
-      git diff --exit-code
-      ;;
-    test)
-      cd dejafu-tests
-      stack exec -- dejafu-tests +RTS -s
-      ;;
-    doctest)
-      stack exec -- bash -c "DEJAFU_DOCTEST=y doctest dejafu/Test"
-      ;;
-  esac
-  set +ex
-  echo -en 'travis_fold:end:script.test\\r'
+  - stage: test
+    env: MODE=test RESOLVER=lts-9.0            # GHC 8.0
+  - env: MODE=test RESOLVER=lts-10.0           # GHC 8.2
+  - env: MODE=test RESOLVER=nightly-2018-03-23 # GHC 8.4
+  - env: MODE=test RESOLVER=nightly
