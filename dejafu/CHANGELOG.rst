@@ -6,6 +6,14 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+unreleased
+----------
+
+Removed
+~~~~~~~
+
+* The deprecated module ``Test.DejaFu.Defaults``.
+
 
 1.5.1.0 (2018-03-29)
 --------------------

@@ -38,7 +38,6 @@ source-repository this
 library
   exposed-modules:     Test.DejaFu
                      , Test.DejaFu.Conc
-                     , Test.DejaFu.Defaults
                      , Test.DejaFu.Refinement
                      , Test.DejaFu.SCT
                      , Test.DejaFu.Settings
