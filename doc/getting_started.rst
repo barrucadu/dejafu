@@ -30,7 +30,7 @@ There are a few different packages under the Déjà Fu umbrella:
    ":hackage:`concurrency`",  "1.5.0.0", "Typeclasses, functions, and data types for concurrency and STM"
    ":hackage:`dejafu`",       "1.6.0.0", "Systematic testing for Haskell concurrency"
    ":hackage:`hunit-dejafu`", "1.2.0.1", "Déjà Fu support for the HUnit test framework"
-   ":hackage:`tasty-dejafu`", "1.2.0.1", "Déjà Fu support for the tasty test framework"
+   ":hackage:`tasty-dejafu`", "1.2.0.2", "Déjà Fu support for the tasty test framework"
 
 
 Installation
