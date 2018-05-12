@@ -6,6 +6,17 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+1.6.0.0 (2018-05-11)
+--------------------
+
+* Git: :tag:`dejafu-1.6.0.0`
+* Hackage: :hackage:`dejafu-1.6.0.0`
+
+Removed
+~~~~~~~
+
+* The deprecated module ``Test.DejaFu.Defaults``.
+
 
 1.5.1.0 (2018-03-29)
 --------------------
