@@ -11,146 +11,34 @@ provided to tweak how things work.
 Execution settings
 ------------------
 
-The ``autocheck``, ``dejafu``, and ``dejafus`` functions from
-``Test.DejaFu`` all have a variant which lets you specify the **memory
-model** used for ``CRef`` operations and the **way** in which
-schedules are explored.  These are ``autocheckWay``, ``dejafuWay``,
-and ``dejafusWay`` (plus ``IO`` variants).
-
-Memory model
-~~~~~~~~~~~~
-
-Threads running under modern multicore processors do not behave as a
-simple interleaving of the individual thread actions.  Processors do
-all sorts of complex things to increase speed, such as buffering
-writes.  For concurrent programs which make use of non-synchronised
-functions (such as ``readCRef`` coupled with ``writeCRef``) different
-memory models may yield different results.
-
-As an example, consider this program from the ``Data.IORef``
-documentation.  Two ``CRef`` variables are created, and two threads
-spawned to write to and read from both.  Each thread returns the value
-it observes.
+The ``autocheckWithSettings``, ``dejafuWithSettings``, and
+``dejafusWithSettings`` let you provide a ``Settings`` value, which
+controls some of Déjà Fu's behaviour:
 
 .. code-block:: haskell
 
-  example :: MonadConc m => m (Bool, Bool)
-  example = do
-    r1 <- newCRef False
-    r2 <- newCRef False
-    x <- spawn $ writeCRef r1 True >> readCRef r2
-    y <- spawn $ writeCRef r2 True >> readCRef r1
-    (,) <$> readMVar x <*> readMVar y
+  dejafuWithSettings mySettings "Assert the thing holds" myPredicate myAction
 
-Under a sequentially consistent memory model the possible results are
-``(True, True)``, ``(True, False)``, and ``(False, True)``.  Under
-total or partial store order, ``(False, False)`` is also a possible
-result, even though there is no interleaving of the threads which can
-lead to this.
+The available settings are:
 
-We can see this by testing with different memory models:
+* **"Way"**, how to explore the behaviours of the program under test.
 
-.. code-block:: none
+* **Memory model**, which affects how non-synchronised operations,
+  such as ``readCRef`` and ``writeCRef`` behave.
 
-  > autocheckWay defaultWay SequentialConsistency example
-  [pass] Never Deadlocks
-  [pass] No Exceptions
-  [fail] Consistent Result
-      (False,True) S0---------S1----S0--S2----S0--
+* **Discarding**, which allows throwing away uninteresting results,
+  rather than keeping them around in memory.
 
-      (True,True) S0---------S1-P2----S1---S0---
+* **Early exit**, which allows exiting as soon as a result matching a
+  predicate is found.
 
-      (True,False) S0---------S2----S1----S0---
-  False
+* **Representative traces**, keeping only one execution trace for each
+  distinct result.
 
-  > autocheckWay defaultWay TotalStoreOrder example
-  [pass] Never Deadlocks
-  [pass] No Exceptions
-  [fail] Consistent Result
-      (False,True) S0---------S1----S0--S2----S0--
+* **Trace simplification**, rewriting execution traces into a simpler
+  form (particularly effective with the random testing).
 
-      (False,False) S0---------S1--P2----S1--S0---
-
-      (True,False) S0---------S2----S1----S0---
-
-      (True,True) S0---------S1-C-S2----S1---S0---
-  False
-
-Traces for non-sequentially-consistent memory models show where
-``CRef`` writes are committed, which makes a write visible to all
-threads rather than just the one which performed the write.
-
-The default memory model is total store order, as that is how x86
-processors behave.
-
-Schedule bounds
-~~~~~~~~~~~~~~~
-
-Schedule bounding is an optimisation which only considers schedules
-within some bound.  This sacrifices completeness outside of the bound,
-but can drastically reduce the number of schedules to test, and is in
-fact necessary for non-terminating programs.
-
-There are three supported types of bounds:
-
-Pre-emption bounding
-  Restricts the number of pre-emptive context switches.  A context
-  switch is pre-emptive if the previously executing thread is not
-  blocked and did not explicitly yield.
-
-Fair bounding
-  Restricts how many times each thread can yield, by bounding the
-  maximum difference between the thread which has yielded the most,
-  and the thread which has yielded the least.
-
-Length bounding
-  Restricts how long an execution can be, in terms of Déjà Fu's
-  "primitive actions".
-
-The standard testing mechanism uses all three bounds.  Pre-emption +
-fair bounding is useful for programs which use spinlocks or yield for
-control flow, but which are otherwise terminating.  Length bounding
-makes it possible to test potentially non-terminating programs.
-
-If you wanted to disable pre-emption bounding, for example, you can do
-so like so:
-
-.. code-block:: haskell
-
-  dejafuWay (systematically defaultBounds { boundPreemp = Nothing })
-            defaultMemType
-            myAction
-            ("Assert the thing holds", myPredicate)
-
-
-Random scheduling
-~~~~~~~~~~~~~~~~~
-
-If you don't want to find all executions within the schedule bounds,
-and instead want to test a fixed number of executions, you can use
-random scheduling.
-
-There are three variants:
-
-``randomly randomGen numExecutions``
-  Perform the given number of executions using weighted random
-  scheduling.  On creation, a thread is given a random weight, which
-  is used to perform a nonuniform random selection amongst the
-  enabled (not blocked) threads at every scheduling point.
-
-``uniformly randomGen numExecutions``
-  Like ``randomly``, but rather than a weighted selection, it's a
-  uniform selection.
-
-These are all given as the first argument to ``dejafuWay`` (and its
-ilk), like ``systematically``.  So for example you could do this:
-
-.. code-block:: haskell
-
-  dejafuWay (randomly (mkStdGen 42) 1000)
-            defaultMemType
-            myAction
-            ("Assert the thing holds", myPredicate)
+See the ``Test.DejaFu.Settings`` module for more information.
 
 
 .. _performance:
@@ -166,8 +54,8 @@ Performance tuning
 
 * Can you sacrifice completeness?
 
-    Consider using the random testing functionality. See the ``*Way``
-    functions and ``Test.DejaFu.SCT.sct{Uniform,Weighted}Random``.
+    Consider using the random testing functionality. See the ``*WithSettings``
+    functions.
 
 * Would strictness help?
 
@@ -181,7 +69,7 @@ Performance tuning
 * Do you know something about the sort of results you care about?
 
     Consider discarding results you *don't* care about. See the
-    ``*Discard`` functions in ``Test.DejaFu``, ``Test.DejaFu.SCT``,
+    ``*WithSettings`` functions in ``Test.DejaFu``, ``Test.DejaFu.SCT``,
     and ``Test.{HUnit,Tasty}.DejaFu``.
 
 For example, let's say you want to know if your test case deadlocks,
@@ -191,13 +79,15 @@ could do it like this:
 
 .. code-block:: haskell
 
-  dejafuDiscard
-    -- "efa" == "either failure a", discard everything but deadlocks
-    (\efa -> Just (if either isDeadlock (const False) efa then DiscardTrace else DiscardResultAndTrace))
-    -- try 10000 executions with random scheduling
-    (randomly (mkStdGen 42) 10000)
-    -- use the default memory model
-    defaultMemType
+  dejafuWithSettings
+    ( set ldiscard
+      -- "efa" == "either failure a", discard everything but deadlocks
+      (Just $ \efa -> Just (if either isDeadlock (const False) efa then DiscardTrace else DiscardResultAndTrace))
+    . set lway
+      -- try 10000 executions with random scheduling
+      (randomly (mkStdGen 42) 10000)
+    $ defaultSettings
+    )
     -- the name of the test
     "Never Deadlocks"
     -- the predicate to check
