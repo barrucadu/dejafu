@@ -44,7 +44,7 @@ import qualified Data.Map.Strict                   as M
 import           Data.Maybe                        (fromMaybe)
 import           Data.Set                          (Set)
 import qualified Data.Set                          as S
-import           System.Random                     (RandomGen, randomR)
+import           System.Random                     (RandomGen)
 
 import           Test.DejaFu.Conc
 import           Test.DejaFu.Internal
@@ -211,7 +211,7 @@ runSCTWithSettings settings conc = case _way settings of
                  else (force (incorporateBacktrackSteps bpoints newDPOR), Just (res, trace))
     in sct settings initial check step conc
 
-  Uniform g0 lim0 ->
+  Randomly gen g0 lim0 ->
     let initial _ = (g0, max 0 lim0)
 
         check (_, 0) = Nothing
@@ -219,23 +219,9 @@ runSCTWithSettings settings conc = case _way settings of
 
         step run _ (g, n) = do
           (res, s, trace) <- run
-            (randSched $ \g' -> (1, g'))
-            (initialRandSchedState Nothing g)
+            (randSched gen)
+            (initialRandSchedState g)
           pure ((schedGen s, n-1), Just (res, trace))
-    in sct settings initial check step conc
-
-  Weighted g0 lim0 use0 ->
-    let initial _ = (g0, max 0 lim0, max 1 use0, M.empty)
-
-        check (_, 0, _, _) = Nothing
-        check s = Just s
-
-        step run s (g, n, 0, _) = step run s (g, n, max 1 use0, M.empty)
-        step run _ (g, n, use, ws) = do
-          (res, s, trace) <- run
-            (randSched $ randomR (1, 50))
-            (initialRandSchedState (Just ws) g)
-          pure ((schedGen s, n-1, use-1, schedWeights s), Just (res, trace))
     in sct settings initial check step conc
 
 -- | A variant of 'resultsSet' which takes a 'Settings' record.
@@ -466,7 +452,7 @@ sctUniformRandomDiscard discard memtype g lim = runSCTWithSettings $
 --
 -- This is not guaranteed to find all distinct results.
 --
--- @since 1.0.0.0
+-- @since 1.7.0.0
 sctWeightedRandom :: (MonadConc n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -474,8 +460,6 @@ sctWeightedRandom :: (MonadConc n, RandomGen g)
   -- ^ The random number generator.
   -> Int
   -- ^ The number of executions to perform.
-  -> Int
-  -- ^ The number of executions to use the same set of weights for.
   -> ConcT n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
@@ -487,7 +471,7 @@ sctWeightedRandom = sctWeightedRandomDiscard (const Nothing)
 --
 -- This is not guaranteed to find all distinct results.
 --
--- @since 1.0.0.0
+-- @since 1.7.0.0
 sctWeightedRandomDiscard :: (MonadConc n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
@@ -497,13 +481,11 @@ sctWeightedRandomDiscard :: (MonadConc n, RandomGen g)
   -- ^ The random number generator.
   -> Int
   -- ^ The number of executions to perform.
-  -> Int
-  -- ^ The number of executions to use the same set of weights for.
   -> ConcT n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
-sctWeightedRandomDiscard discard memtype g lim use = runSCTWithSettings $
-  set ldiscard (Just discard) (fromWayAndMemType (swarmy g lim use) memtype)
+sctWeightedRandomDiscard discard memtype g lim = runSCTWithSettings $
+  set ldiscard (Just discard) (fromWayAndMemType (randomly g lim) memtype)
 {-# DEPRECATED sctWeightedRandomDiscard "Use runSCTWithSettings instead" #-}
 
 -------------------------------------------------------------------------------

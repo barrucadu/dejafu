@@ -88,8 +88,7 @@ order.
 
 If you need to test things with /nondeterministc/ @IO@, see the
 'autocheckWay', 'dejafuWay', and 'dejafusWay' functions: the
-'randomly', 'uniformly', and 'swarmy' testing modes can cope with
-nondeterminism.
+'randomly' and 'uniformly' testing modes can cope with nondeterminism.
 -}
 module Test.DejaFu
   ( -- * Unit testing

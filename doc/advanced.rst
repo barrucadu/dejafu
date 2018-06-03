@@ -142,10 +142,6 @@ There are three variants:
   Like ``randomly``, but rather than a weighted selection, it's a
   uniform selection.
 
-``swarmy randomGen numExecutions numUses``
-  Like ``randomly``, but each set of thread weights is used for
-  ``numUses`` executions.
-
 These are all given as the first argument to ``dejafuWay`` (and its
 ilk), like ``systematically``.  So for example you could do this:
 
