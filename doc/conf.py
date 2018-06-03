@@ -48,7 +48,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Déjà Fu'
-copyright = u'2017, Michael Walker'
+copyright = u'2017--2018, Michael Walker'
 author = u'Michael Walker'
 
 # External link destinations

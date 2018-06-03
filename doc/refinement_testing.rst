@@ -103,7 +103,7 @@ functions.  These functions are:
 The signatures can have different state types, as long as the seed and
 observation types are the same.  This lets you compare different
 implementations of the same idea: for example, comparing a concurrent
-stack implemented using ``MVar`` with one implemented using ``IORef``.
+stack implemented using ``MVar`` with one implemented using ``CRef``.
 
 Properties can have parameters, given in the obvious way:
 

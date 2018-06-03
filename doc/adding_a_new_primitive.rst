@@ -156,7 +156,7 @@ Now we jump over to the ``Test.DejaFu.Internal`` module.  The
 
 .. code-block:: haskell
 
-  rewind (SetMVar c _) = Just (WillSetMVar c)
+  rewind (SetMVar c _) = WillSetMVar c
 
 Finally, we need to make sure the systematic testing will treat our
 new primitive correctly.  As setting the value of an ``MVar`` may

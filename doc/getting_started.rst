@@ -127,11 +127,11 @@ executions, and will in general explore the state-space quickly.
 
 If your test case is just too big for complete testing, there is also
 a random scheduling mode, which is necessarily *incomplete*.  However,
-Déjà Fu will tend to produce much more schedule variety than just
-running your test case in ``IO`` the same number of times, and so bugs
-will tend to crop up sooner.  Furthermore, as you get execution traces
-out, you can be certain that a bug has been fixed by simply following
-the trace by eye.
+Déjà Fu will tend to produce much more scheduling variety than just
+running your test case in ``IO`` a bunch of times, and so bugs will
+tend to crop up sooner.  Furthermore, as you get execution traces out,
+you can be certain that a bug has been fixed by following the trace by
+eye.
 
 **If you'd like to get involved with Déjà Fu**, check out :github:`the
 "good first issue" label on the issue tracker
