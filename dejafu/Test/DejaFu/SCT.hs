@@ -452,7 +452,7 @@ sctUniformRandomDiscard discard memtype g lim = runSCTWithSettings $
 --
 -- This is not guaranteed to find all distinct results.
 --
--- @since unreleased
+-- @since 1.7.0.0
 sctWeightedRandom :: (MonadConc n, RandomGen g)
   => MemType
   -- ^ The memory model to use for non-synchronised @CRef@ operations.
@@ -471,7 +471,7 @@ sctWeightedRandom = sctWeightedRandomDiscard (const Nothing)
 --
 -- This is not guaranteed to find all distinct results.
 --
--- @since unreleased
+-- @since 1.7.0.0
 sctWeightedRandomDiscard :: (MonadConc n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
