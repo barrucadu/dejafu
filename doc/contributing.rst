@@ -193,3 +193,27 @@ non-profiled build:
   Alloc rate    878,145,635 bytes per MUT second
 
   Productivity  73.4% of total user, 73.8% of total elapsed
+
+
+Heap profiling
+--------------
+
+GHC can tell you where the memory is going:
+
+.. code-block:: none
+
+  $ stack build --profile
+  $ stack exec  -- dejafu-tests +RTS -hc
+  $ hp2ps -c dejafu-tests.hp
+
+This will produce a graph of memory usage over time, as a postscript
+file, broken down by cost-centre which produced the data.  There are a
+few different views:
+
+- ``-hm`` breaks down the graph by module
+- ``-hd`` breaks down the graph by closure description
+- ``-hy`` breaks down the graph by type
+
+I typically find ``-hd`` and ``-hy`` most useful.  If you're feeling
+particularly brave, you can try ``-hr``, which is intended to help
+track down memory leaks caused by unevaluated thunks.
