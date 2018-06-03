@@ -72,7 +72,6 @@ defaultWaysFor b =
   [ ("systematically", systematically b)
   , ("uniformly", uniformly (mkStdGen 0) 100)
   , ("randomly", randomly (mkStdGen 0) 100)
-  , ("swarmy", swarmy (mkStdGen 0) 100 10)
   ]
 
 testGroup :: IsTest t => String -> t -> T.TestTree

@@ -6,6 +6,23 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+unreleased
+----------
+
+Changed
+~~~~~~~
+
+* (:issue:`237`) ``Test.DejaFu.SCT.sctWeightedRandom`` and
+  ``sctWeightedRandomDiscard`` no longer take the number of executions
+  to use the same weights for as a parameter.
+
+Removed
+~~~~~~~
+
+* (:issue:`237`) The deprecated function
+  ``Test.DejaFu.Settings.swarmy``.
+
+
 1.6.0.0 (2018-05-11)
 --------------------
 

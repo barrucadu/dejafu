@@ -207,14 +207,11 @@ module Test.DejaFu.Settings
   -- * Lens helpers
   , get
   , set
-
-  -- * Deprecated
-  , swarmy
   ) where
 
 import           Control.Applicative   (Const(..))
 import           Data.Functor.Identity (Identity(..))
-import           System.Random         (RandomGen)
+import           System.Random         (RandomGen, randomR)
 
 import           Test.DejaFu.Internal  (Settings(..), Way(..))
 import           Test.DejaFu.Types
@@ -288,7 +285,7 @@ randomly :: RandomGen g
   -> Int
   -- ^ The number of executions to try.
   -> Way
-randomly g lim = Weighted g lim 1
+randomly = Randomly $ randomR (1, 50)
 
 -- | Randomly execute a program, exploring a fixed number of
 -- executions.
@@ -305,29 +302,7 @@ uniformly :: RandomGen g
   -> Int
   -- ^ The number of executions to try.
   -> Way
-uniformly = Uniform
-
--- | Randomly execute a program, exploring a fixed number of
--- executions.
---
--- Threads are scheduled by a weighted random selection, where weights
--- are assigned randomly on thread creation.
---
--- This is not guaranteed to find all distinct results (unlike
--- 'systematically').
---
--- @since 0.7.0.0
-swarmy :: RandomGen g
-  => g
-  -- ^ The random generator to drive the scheduling.
-  -> Int
-  -- ^ The number of executions to try.
-  -> Int
-  -- ^ The number of executions to use the thread weights for.
-  -> Way
--- when this is removed, simplify the Weighted logic to not do re-use
-swarmy = Weighted
-{-# DEPRECATED swarmy "Use randomly instead.  If you have a case where swarmy works better, please comment on issue #237." #-}
+uniformly = Randomly $ \g -> (1, g)
 
 -------------------------------------------------------------------------------
 -- Schedule bounds

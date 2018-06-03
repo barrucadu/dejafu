@@ -52,13 +52,11 @@ data Settings n a = Settings
 -- @since 0.7.0.0
 data Way where
   Systematic :: Bounds -> Way
-  Weighted   :: RandomGen g => g -> Int -> Int -> Way
-  Uniform    :: RandomGen g => g -> Int -> Way
+  Randomly   :: RandomGen g => (g -> (Int, g)) -> g -> Int -> Way
 
 instance Show Way where
-  show (Systematic bs)  = "Systematic (" ++ show bs ++ ")"
-  show (Weighted _ n t) = "Weighted <gen> " ++ show (n, t)
-  show (Uniform  _ n)   = "Uniform <gen> " ++ show n
+  show (Systematic bs) = "Systematic (" ++ show bs ++ ")"
+  show (Randomly _ _ n) = "Randomly <f> <gen> " ++ show n
 
 -------------------------------------------------------------------------------
 -- * Identifiers

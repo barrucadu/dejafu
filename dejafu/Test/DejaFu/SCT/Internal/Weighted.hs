@@ -18,7 +18,6 @@ import           Control.DeepSeq      (NFData)
 import           Data.List.NonEmpty   (toList)
 import           Data.Map.Strict      (Map)
 import qualified Data.Map.Strict      as M
-import           Data.Maybe           (fromMaybe)
 import           GHC.Generics         (Generic)
 import           System.Random        (RandomGen, randomR)
 
@@ -37,8 +36,8 @@ data RandSchedState g = RandSchedState
   } deriving (Eq, Show, Generic, NFData)
 
 -- | Initial weighted random scheduler state.
-initialRandSchedState :: Maybe (Map ThreadId Int) -> g -> RandSchedState g
-initialRandSchedState = RandSchedState . fromMaybe M.empty
+initialRandSchedState :: g -> RandSchedState g
+initialRandSchedState = RandSchedState M.empty
 
 -- | Weighted random scheduler: assigns to each new thread a weight,
 -- and makes a weighted random choice out of the runnable threads at
