@@ -3,7 +3,7 @@ module Examples.ParMonad where
 import           Control.Monad.Conc.Class (MonadConc)
 import           Control.Monad.IO.Class   (MonadIO)
 import           System.Random            (mkStdGen)
-import           Test.DejaFu              (deadlocksNever, deadlocksSometimes)
+import           Test.DejaFu              (deadlocksSometimes)
 
 import qualified Examples.ParMonad.Direct as Par
 
@@ -12,7 +12,7 @@ import           Common
 tests :: [TestTree]
 tests = toTestList
   [ W "random testing exposes a deadlock" parFilter deadlocksSometimes ("randomly", randomly (mkStdGen 0) 150)
-  , W "systematic testing does not" parFilter deadlocksNever ("systematically", systematically defaultBounds)
+  , W "so does systematic testing" parFilter deadlocksSometimes ("systematically", systematically defaultBounds)
   ]
 
 parFilter :: (MonadConc m, MonadIO m) => m Bool

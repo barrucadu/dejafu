@@ -309,12 +309,15 @@ uniformly = Randomly $ \g -> (1, g)
 
 -- | All bounds enabled, using their default values.
 --
--- @since 0.2.0.0
+-- There is no default length bound, so set one if your computation
+-- may not terminate!
+--
+-- @since unreleased
 defaultBounds :: Bounds
 defaultBounds = Bounds
   { boundPreemp = Just defaultPreemptionBound
   , boundFair   = Just defaultFairBound
-  , boundLength = Just defaultLengthBound
+  , boundLength = Nothing
   }
 
 -- | A sensible default preemption bound: 2.
@@ -335,12 +338,11 @@ defaultPreemptionBound = 2
 defaultFairBound :: FairBound
 defaultFairBound = 5
 
--- | A sensible default length bound: 250.
+-- | There is no default length bound.
 --
--- Based on the assumption that anything which executes for much
--- longer (or even this long) will take ages to test.
+-- This is only suitable if your computation will always terminate!
 --
--- @since 0.2.0.0
+-- @since unreleased
 defaultLengthBound :: LengthBound
 defaultLengthBound = 250
 
