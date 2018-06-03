@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+source .travis/setup.sh
+
+$stack build --ghc-options=-Werror
+
+cd dejafu-tests
+$stack exec -- dejafu-tests +RTS -s
