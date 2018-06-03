@@ -61,8 +61,8 @@ To test ``IO``-using code, there are some rules you need to follow:
 1. Given the same set of scheduling decisions, your ``IO`` code must
    be deterministic [#]_
 
-2. As ``IO`` values can't be broken up into smaller chunks, they
-   should be kept small; otherwise dejafu may miss buggy interleavings
+2. As dejafu can't inspect ``IO`` values, they should be kept small;
+   otherwise dejafu may miss buggy interleavings
 
 3. You absolutely cannot block on the action of another thread inside
    ``IO``, or the test execution will just deadlock.
