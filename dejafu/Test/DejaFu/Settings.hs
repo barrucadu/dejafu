@@ -312,7 +312,7 @@ uniformly = Randomly $ \g -> (1, g)
 -- There is no default length bound, so set one if your computation
 -- may not terminate!
 --
--- @since unreleased
+-- @since 1.8.0.0
 defaultBounds :: Bounds
 defaultBounds = Bounds
   { boundPreemp = Just defaultPreemptionBound
@@ -342,7 +342,7 @@ defaultFairBound = 5
 --
 -- This is only suitable if your computation will always terminate!
 --
--- @since unreleased
+-- @since 1.8.0.0
 defaultLengthBound :: LengthBound
 defaultLengthBound = 250
 
