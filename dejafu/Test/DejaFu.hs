@@ -754,7 +754,7 @@ representative p = p
 
 -- | Check that a computation never fails.
 --
--- @since unreleased
+-- @since 1.9.1.0
 successful :: Predicate a
 successful = alwaysTrue (either (const False) (const True))
 
