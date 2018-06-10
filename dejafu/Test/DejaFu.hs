@@ -26,17 +26,15 @@ let example = do
 We can test it with dejafu like so:
 
 >>> autocheck example
-[pass] Never Deadlocks
-[pass] No Exceptions
-[fail] Consistent Result
+[pass] Successful
+[fail] Deterministic
     "hello" S0----S1--S0--
 <BLANKLINE>
     "world" S0----S2--S0--
 False
 
 The 'autocheck' function takes a concurrent program to test and looks
-for some common unwanted behaviours: deadlocks, uncaught exceptions in
-the main thread, and nondeterminism.  Here we see the program is
+for concurrency errors and nondeterminism.  Here we see the program is
 nondeterministic, dejafu gives us all the distinct results it found
 and, for each, a summarised execution trace leading to that result:
 
@@ -317,13 +315,12 @@ let relaxed = do
 
 -- | Automatically test a computation.
 --
--- In particular, look for deadlocks, uncaught exceptions, and
--- multiple return values.  Returns @True@ if all tests pass
+-- In particular, concurrency errors and nondeterminism.  Returns
+-- @True@ if all tests pass
 --
 -- >>> autocheck example
--- [pass] Never Deadlocks
--- [pass] No Exceptions
--- [fail] Consistent Result
+-- [pass] Successful
+-- [fail] Deterministic
 --     "hello" S0----S1--S0--
 -- <BLANKLINE>
 --     "world" S0----S2--S0--
@@ -340,9 +337,8 @@ autocheck = autocheckWithSettings defaultSettings
 -- memory model.
 --
 -- >>> autocheckWay defaultWay defaultMemType relaxed
--- [pass] Never Deadlocks
--- [pass] No Exceptions
--- [fail] Consistent Result
+-- [pass] Successful
+-- [fail] Deterministic
 --     (False,True) S0---------S1----S0--S2----S0--
 -- <BLANKLINE>
 --     (False,False) S0---------S1--P2----S1--S0---
@@ -353,9 +349,8 @@ autocheck = autocheckWithSettings defaultSettings
 -- False
 --
 -- >>> autocheckWay defaultWay SequentialConsistency relaxed
--- [pass] Never Deadlocks
--- [pass] No Exceptions
--- [fail] Consistent Result
+-- [pass] Successful
+-- [fail] Deterministic
 --     (False,True) S0---------S1----S0--S2----S0--
 -- <BLANKLINE>
 --     (True,True) S0---------S1-P2----S1---S0---
@@ -377,9 +372,8 @@ autocheckWay way = autocheckWithSettings . fromWayAndMemType way
 -- | Variant of 'autocheck' which takes a settings record.
 --
 -- >>> autocheckWithSettings (fromWayAndMemType defaultWay defaultMemType) relaxed
--- [pass] Never Deadlocks
--- [pass] No Exceptions
--- [fail] Consistent Result
+-- [pass] Successful
+-- [fail] Deterministic
 --     (False,True) S0---------S1----S0--S2----S0--
 -- <BLANKLINE>
 --     (False,False) S0---------S1--P2----S1--S0---
@@ -390,9 +384,8 @@ autocheckWay way = autocheckWithSettings . fromWayAndMemType way
 -- False
 --
 -- >>> autocheckWithSettings (fromWayAndMemType defaultWay SequentialConsistency) relaxed
--- [pass] Never Deadlocks
--- [pass] No Exceptions
--- [fail] Consistent Result
+-- [pass] Successful
+-- [fail] Deterministic
 --     (False,True) S0---------S1----S0--S2----S0--
 -- <BLANKLINE>
 --     (True,True) S0---------S1-P2----S1---S0---
@@ -408,9 +401,8 @@ autocheckWithSettings :: (MonadConc n, MonadIO n, Eq a, Show a)
   -- ^ The computation to test.
   -> n Bool
 autocheckWithSettings settings = dejafusWithSettings settings
-  [ ("Never Deadlocks",   representative deadlocksNever)
-  , ("No Exceptions",     representative exceptionsNever)
-  , ("Consistent Result", alwaysSame) -- already representative
+  [ ("Successful", representative successful)
+  , ("Deterministic", alwaysSame) -- already representative
   ]
 
 -- | Check a predicate and print the result to stdout, return 'True'

@@ -19,6 +19,10 @@ Added
 Changed
 ~~~~~~~
 
+* ``Test.DejaFu.autocheck`` and related functions use the
+  ``successful`` predicate, rather than looking specifically for
+  deadlocks and uncaught exceptions.
+
 * (:issue:`259`) The ``Test.DejaFu.alwaysSame``, ``alwaysSameOn``,
   ``alwaysSameBy``, and ``notAlwaysSame`` predicates fail if the
   computation under test fails.

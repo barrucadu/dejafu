@@ -82,16 +82,15 @@ we'll get onto that shortly.  First, the result of testing:
 .. code-block:: none
 
   > autocheck myFunction
-  [pass] Never Deadlocks
-  [pass] No Exceptions
-  [fail] Consistent Result
+  [pass] Successful
+  [fail] Deterministic
       "hello" S0----S1--S0--
 
       "world" S0----S2--S0--
   False
 
-There are no deadlocks or uncaught exceptions, which is good; but the
-program is (as you probably spotted) nondeterministic!
+There are no concurrency errors, which is good; but the program is (as
+you probably spotted) nondeterministic!
 
 Along with each result, Déjà Fu gives us a representative execution
 trace in an abbreviated form.  ``Sn`` means that thread ``n`` started
