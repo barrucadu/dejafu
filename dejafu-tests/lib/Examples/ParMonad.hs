@@ -12,7 +12,6 @@ import           Common
 tests :: [TestTree]
 tests = toTestList
   [ W "random testing exposes a deadlock" parFilter deadlocksSometimes ("randomly", randomly (mkStdGen 0) 150)
-  , W "so does systematic testing" parFilter deadlocksSometimes ("systematically", systematically defaultBounds)
   ]
 
 parFilter :: (MonadConc m, MonadIO m) => m Bool

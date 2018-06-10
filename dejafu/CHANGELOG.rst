@@ -7,6 +7,20 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.9.0.0 (2018-06-10)
+--------------------
+
+* Git: :tag:`dejafu-1.9.0.0`
+* Hackage: :hackage:`dejafu-1.9.0.0`
+
+Changed
+~~~~~~~
+
+* (:issue:`190`) ``Test.DejaFu.Types.Throw`` and ``ThrowTo`` have a
+  ``Bool`` parameter, which is ``True`` if the exception kills the
+  thread.
+
+
 1.8.0.0 (2018-06-03)
 --------------------
 

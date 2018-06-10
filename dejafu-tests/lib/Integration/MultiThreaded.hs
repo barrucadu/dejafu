@@ -211,10 +211,25 @@ exceptionTests = toTestList
       killThread tid
       readMVar y
 
+  , djfuT "A mask can be escaped" (gives [Left Deadlock, Right ()]) $ do
+      x <- newEmptyMVar
+      y <- newEmptyMVar
+      tid <- fork $ mask $ \umask -> putMVar x () >> umask (putMVar y ())
+      readMVar x
+      killThread tid
+      readMVar y
+
   , djfuT "Throwing to an uninterruptible thread blocks" (gives [Left Deadlock]) $ do
       x <- newEmptyMVar
       y <- newEmptyMVar
       tid <- fork $ uninterruptibleMask $ \_ -> putMVar x () >> takeMVar y
+      readMVar x
+      killThread tid
+
+  , djfuT "An uninterruptible mask can be escaped" (gives' [()]) $ do
+      x <- newEmptyMVar
+      y <- newEmptyMVar
+      tid <- fork $ uninterruptibleMask $ \umask -> putMVar x () >> umask (takeMVar y)
       readMVar x
       killThread tid
 

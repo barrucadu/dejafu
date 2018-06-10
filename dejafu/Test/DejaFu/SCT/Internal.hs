@@ -368,8 +368,8 @@ renumber memtype tid0 crid0 = snd . mapAccumL go (I.empty, tid0, I.empty, crid0)
     (s, CasCRef (renumbered cridmap old) b)
   updateAction s@(tidmap, _, _, _) (STM tas olds) =
     (s, STM tas (map (renumbered tidmap) olds))
-  updateAction s@(tidmap, _, _, _) (ThrowTo old) =
-    (s, ThrowTo (renumbered tidmap old))
+  updateAction s@(tidmap, _, _, _) (ThrowTo old b) =
+    (s, ThrowTo (renumbered tidmap old) b)
   updateAction s@(tidmap, _, _, _) (BlockedThrowTo old) =
     (s, BlockedThrowTo (renumbered tidmap old))
   updateAction s act = (s, act)

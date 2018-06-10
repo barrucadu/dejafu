@@ -109,7 +109,7 @@ initialThread = ThreadId (Id (Just "main") 0)
 
 -- | All the actions that a thread can perform.
 --
--- @since 1.4.0.0
+-- @since 1.9.0.0
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -174,10 +174,12 @@ data ThreadAction =
   -- ^ Register a new exception handler
   | PopCatching
   -- ^ Pop the innermost exception handler from the stack.
-  | Throw
-  -- ^ Throw an exception.
-  | ThrowTo ThreadId
-  -- ^ Throw an exception to a thread.
+  | Throw Bool
+  -- ^ Throw an exception.  If the 'Bool' is @True@, then this killed
+  -- the thread.
+  | ThrowTo ThreadId Bool
+  -- ^ Throw an exception to a thread.  If the 'Bool' is @True@, then
+  -- this killed the thread.
   | BlockedThrowTo ThreadId
   -- ^ Get blocked on a 'throwTo'.
   | SetMasking Bool MaskingState
@@ -238,8 +240,8 @@ instance NFData ThreadAction where
   rnf (BlockedSTM as) = rnf as
   rnf Catching = ()
   rnf PopCatching = ()
-  rnf Throw = ()
-  rnf (ThrowTo t) = rnf t
+  rnf (Throw b) = rnf b
+  rnf (ThrowTo t b) = rnf (t, b)
   rnf (BlockedThrowTo t) = rnf t
   rnf (SetMasking b m) = rnf (b, show m)
   rnf (ResetMasking b m) = rnf (b, show m)

@@ -564,7 +564,7 @@ independent ds t1 a1 t2 a2
     -- :(
     --
     -- See #191 / #190
-    check _ (ThrowTo t) tid _ | t == tid = True
+    check _ (ThrowTo t _) tid _ | t == tid = True
     check _ (BlockedThrowTo t) tid _ | t == tid = True
     -- can't re-order an unsynchronised write with something which synchronises that CRef.
     check _ (simplifyAction -> UnsynchronisedWrite r) _ (simplifyAction -> a) | synchronises a r = True
@@ -581,10 +581,10 @@ dependent ds t1 a1 t2 a2 = case (a1, a2) of
   -- actually blocked. 'dependent'' has to assume that all
   -- potentially-blocking operations can block, and so is more
   -- pessimistic in this case.
-  (ThrowTo t, ThrowTo u)
+  (ThrowTo t _, ThrowTo u _)
     | t == t2 && u == t1 -> canInterrupt ds t1 a1 || canInterrupt ds t2 a2
-  (ThrowTo t, _) | t == t2 -> canInterrupt ds t2 a2 && a2 /= Stop
-  (_, ThrowTo t) | t == t1 -> canInterrupt ds t1 a1 && a1 /= Stop
+  (ThrowTo t _, _) | t == t2 -> canInterrupt ds t2 a2 && a2 /= Stop
+  (_, ThrowTo t _) | t == t1 -> canInterrupt ds t1 a1 && a1 /= Stop
 
   -- Dependency of STM transactions can be /greatly/ improved here, as
   -- the 'Lookahead' does not know which @TVar@s will be touched, and
@@ -616,9 +616,9 @@ dependent' ds t1 a1 t2 l2 = case (a1, l2) of
   -- thread and if the actions can be interrupted. We can also
   -- slightly improve on that by not considering interrupting the
   -- normal termination of a thread: it doesn't make a difference.
-  (ThrowTo t, WillThrowTo u)
+  (ThrowTo t _, WillThrowTo u)
     | t == t2 && u == t1 -> canInterrupt ds t1 a1 || canInterruptL ds t2 l2
-  (ThrowTo t, _)     | t == t2 -> canInterruptL ds t2 l2 && l2 /= WillStop
+  (ThrowTo t _, _)   | t == t2 -> canInterruptL ds t2 l2 && l2 /= WillStop
   (_, WillThrowTo t) | t == t1 -> canInterrupt  ds t1 a1 && a1 /= Stop
 
   -- Another worst-case: assume all STM is dependent.
@@ -732,6 +732,8 @@ updateMaskState tid (Fork tid2) = \masks -> case M.lookup tid masks of
   Nothing -> masks
 updateMaskState tid (SetMasking   _ ms) = M.insert tid ms
 updateMaskState tid (ResetMasking _ ms) = M.insert tid ms
+updateMaskState tid (Throw True) = M.delete tid
+updateMaskState _ (ThrowTo tid True) = M.delete tid
 updateMaskState tid Stop = M.delete tid
 updateMaskState _ _ = id
 
