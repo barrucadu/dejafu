@@ -151,6 +151,8 @@ possible, to reduce memory usage.
 
   , Predicate
   , ProPredicate(..)
+  , alwaysSame
+  , notAlwaysSame
   , abortsNever
   , abortsAlways
   , abortsSometimes
@@ -172,10 +174,8 @@ usage.
 -}
 
   , representative
-  , alwaysSame
   , alwaysSameOn
   , alwaysSameBy
-  , notAlwaysSame
   , alwaysTrue
   , somewhereTrue
   , alwaysNothing
