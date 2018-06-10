@@ -251,6 +251,20 @@ exceptionTests = toTestList
       catchArithException
         (spawn (throwTo tid Overflow) >>= readMVar)
         (\_ -> pure ())
+
+  , djfuT "A child thread inherits the masking state of the parent" (gives [Left Deadlock]) $ do
+      x <- newEmptyMVar
+      y <- newEmptyMVar
+      tid <- uninterruptibleMask $ \_ -> fork (putMVar x () >> takeMVar y)
+      readMVar x
+      killThread tid
+
+  , djfuT "A child thread can unmask" (gives' [()]) $ do
+      x <- newEmptyMVar
+      y <- newEmptyMVar
+      tid <- uninterruptibleMask $ \_ -> forkWithUnmask (\unmask -> putMVar x () >> unmask (takeMVar y))
+      readMVar x
+      killThread tid
   ]
 
 --------------------------------------------------------------------------------
