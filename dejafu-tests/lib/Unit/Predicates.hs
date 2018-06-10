@@ -29,11 +29,11 @@ alwaysSameBy = toTestList
 
 notAlwaysSameBy :: [TestTree]
 notAlwaysSameBy = toTestList
-  [ fails  "Equal successes"   (D.notAlwaysSameBy (/=)) [Right 1, Right 1, Right 1]
-  , passes "Unequal successes" (D.notAlwaysSameBy (/=)) [Right 1, Right 2, Right 3]
-  , fails  "Equal failures"    (D.notAlwaysSameBy (/=)) [Left D.Deadlock, Left D.Deadlock, Left D.Deadlock]
-  , fails  "Unequal failures"  (D.notAlwaysSameBy (/=)) [Left D.Deadlock, Left D.STMDeadlock, Left D.Abort]
-  , fails  "Mixed failures and successes" (D.notAlwaysSameBy (/=)) [Left D.Deadlock, Right 1, Right 1]
+  [ fails  "Equal successes"   (D.notAlwaysSameBy (==)) [Right 1, Right 1, Right 1]
+  , passes "Unequal successes" (D.notAlwaysSameBy (==)) [Right 1, Right 2, Right 3]
+  , fails  "Equal failures"    (D.notAlwaysSameBy (==)) [Left D.Deadlock, Left D.Deadlock, Left D.Deadlock]
+  , fails  "Unequal failures"  (D.notAlwaysSameBy (==)) [Left D.Deadlock, Left D.STMDeadlock, Left D.Abort]
+  , fails  "Mixed failures and successes" (D.notAlwaysSameBy (==)) [Left D.Deadlock, Right 1, Right 1]
   ]
 
 -------------------------------------------------------------------------------

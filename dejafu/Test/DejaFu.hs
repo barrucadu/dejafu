@@ -862,23 +862,26 @@ alwaysSameBy f = ProPredicate
 -- | Check that a computation never fails, and gives multiple distinct
 -- successful results.
 --
--- > notAlwaysSame = notAlwaysSameBy (/=)
+-- > notAlwaysSame = notAlwaysSameBy (==)
 --
 -- @since 1.0.0.0
 notAlwaysSame :: Eq a => Predicate a
-notAlwaysSame = notAlwaysSameBy (/=)
+notAlwaysSame = notAlwaysSameBy (==)
 
 -- | Check that a computation never fails, and gives multiple distinct
 -- (according to the provided function) successful results.
 --
--- > notAlwaysSameOn = notAlwaysSameBy ((/=) `on` f)
+-- > notAlwaysSameOn = notAlwaysSameBy ((==) `on` f)
 --
 -- @since unreleased
 notAlwaysSameOn :: Eq b => (a -> b) -> Predicate a
-notAlwaysSameOn f = notAlwaysSameBy ((/=) `on` f)
+notAlwaysSameOn f = notAlwaysSameBy ((==) `on` f)
 
 -- | Check that a computation never fails, and gives multiple distinct
 -- successful results, by applying a transformation on results.
+--
+-- This inverts the condition, so (eg) @notAlwaysSameBy (==)@ will
+-- pass if there are unequal results.
 --
 -- @since unreleased
 notAlwaysSameBy :: (a -> a -> Bool) -> Predicate a
@@ -895,7 +898,7 @@ notAlwaysSameBy f = ProPredicate
               _ -> res { _failures = failures ++ _failures res, _pass = False }
     }
   where
-    (.*.) = f `on` (efromRight . fst)
+    y1 .*. y2 = not (on f (efromRight . fst) y1 y2)
 
     go [y1,y2] res
       | y1 .*. y2 = res { _pass = True }
