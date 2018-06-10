@@ -7,6 +7,19 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.9.1.0 (2018-06-10)
+--------------------
+
+* Git: :tag:`dejafu-1.9.1.0`
+* Hackage: :hackage:`dejafu-1.9.1.0`
+
+Added
+~~~~~
+
+* A ``Test.DejaFu.successful`` predicate, to check that a computation
+  never fails.
+
+
 1.9.0.0 (2018-06-10)
 --------------------
 
