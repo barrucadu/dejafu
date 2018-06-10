@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 
 {- |
@@ -7,7 +6,7 @@ Copyright   : (c) 2015--2018 Michael Walker
 License     : MIT
 Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 Stability   : experimental
-Portability : LambdaCase, MultiParamTypeClasses, TupleSections
+Portability : TupleSections
 
 dejafu is a library for unit-testing concurrent Haskell programs,
 written using the [concurrency](https://hackage.haskell.org/package/concurrency)
@@ -177,6 +176,8 @@ usage.
   , representative
   , alwaysSameOn
   , alwaysSameBy
+  , notAlwaysSameOn
+  , notAlwaysSameBy
   , alwaysTrue
   , somewhereTrue
   , alwaysNothing
@@ -866,22 +867,49 @@ alwaysSameBy f = ProPredicate
         (_, _) -> defaultFail (failures ++ simpleSuccesses)
   }
 
--- | Check that the result of a computation is not always the same.
+-- | Check that a computation never fails, and gives multiple distinct
+-- successful results.
+--
+-- > notAlwaysSame = notAlwaysSameBy (/=)
 --
 -- @since 1.0.0.0
 notAlwaysSame :: Eq a => Predicate a
-notAlwaysSame = ProPredicate
+notAlwaysSame = notAlwaysSameBy (/=)
+
+-- | Check that a computation never fails, and gives multiple distinct
+-- (according to the provided function) successful results.
+--
+-- > notAlwaysSameOn = notAlwaysSameBy ((/=) `on` f)
+--
+-- @since unreleased
+notAlwaysSameOn :: Eq b => (a -> b) -> Predicate a
+notAlwaysSameOn f = notAlwaysSameBy ((/=) `on` f)
+
+-- | Check that a computation never fails, and gives multiple distinct
+-- successful results, by applying a transformation on results.
+--
+-- @since unreleased
+notAlwaysSameBy :: (a -> a -> Bool) -> Predicate a
+notAlwaysSameBy f = ProPredicate
     { pdiscard = const Nothing
-    , peval = \case
-        [x] -> defaultFail [x]
-        xs  -> go xs (defaultFail [])
+    , peval = \xs ->
+        let (failures, successes) = partition (isLeft . fst) xs
+        in case successes of
+          [x] -> defaultFail (x : failures)
+          _  ->
+            let res = go successes (defaultFail [])
+            in case failures of
+              [] -> res
+              _ -> res { _failures = failures ++ _failures res, _pass = False }
     }
   where
+    (.*.) = f `on` (efromRight . fst)
+
     go [y1,y2] res
-      | fst y1 /= fst y2 = res { _pass = True }
+      | y1 .*. y2 = res { _pass = True }
       | otherwise = res { _failures = y1 : y2 : _failures res }
     go (y1:y2:ys) res
-      | fst y1 /= fst y2 = go (y2:ys) res { _pass = True }
+      | y1 .*. y2 = go (y2:ys) res { _pass = True }
       | otherwise = go (y2:ys) res { _failures = y1 : y2 : _failures res }
     go _ res = res
 
