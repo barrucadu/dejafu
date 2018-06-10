@@ -109,7 +109,7 @@ initialThread = ThreadId (Id (Just "main") 0)
 
 -- | All the actions that a thread can perform.
 --
--- @since unreleased
+-- @since 1.9.0.0
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
