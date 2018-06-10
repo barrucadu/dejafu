@@ -151,6 +151,7 @@ possible, to reduce memory usage.
 
   , Predicate
   , ProPredicate(..)
+  , successful
   , alwaysSame
   , notAlwaysSame
   , abortsNever
@@ -750,6 +751,12 @@ representative p = p
       let result = peval p xs
       in result { _failures = simplestsBy (==) (_failures result) }
   }
+
+-- | Check that a computation never fails.
+--
+-- @since unreleased
+successful :: Predicate a
+successful = alwaysTrue (either (const False) (const True))
 
 -- | Check that a computation never aborts.
 --
