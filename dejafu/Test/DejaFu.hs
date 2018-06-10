@@ -753,6 +753,9 @@ representative p = p
 
 -- | Check that a computation never aborts.
 --
+-- Any result other than an abort, including other 'Failure's, is
+-- allowed.
+--
 -- @since 1.0.0.0
 abortsNever :: Predicate a
 abortsNever = alwaysTrue (not . either (==Abort) (const False))
@@ -765,11 +768,17 @@ abortsAlways = alwaysTrue $ either (==Abort) (const False)
 
 -- | Check that a computation aborts at least once.
 --
+-- Any result other than an abort, including other 'Failure's, is
+-- allowed.
+--
 -- @since 1.0.0.0
 abortsSometimes :: Predicate a
 abortsSometimes = somewhereTrue $ either (==Abort) (const False)
 
 -- | Check that a computation never deadlocks.
+--
+-- Any result other than a deadlock, including other 'Failure's, is
+-- allowed.
 --
 -- @since 1.0.0.0
 deadlocksNever :: Predicate a
@@ -783,11 +792,17 @@ deadlocksAlways = alwaysTrue $ either isDeadlock (const False)
 
 -- | Check that a computation deadlocks at least once.
 --
+-- Any result other than a deadlock, including other 'Failure's, is
+-- allowed.
+--
 -- @since 1.0.0.0
 deadlocksSometimes :: Predicate a
 deadlocksSometimes = somewhereTrue $ either isDeadlock (const False)
 
 -- | Check that a computation never fails with an uncaught exception.
+--
+-- Any result other than an uncaught exception, including other
+-- 'Failure's, is allowed.
 --
 -- @since 1.0.0.0
 exceptionsNever :: Predicate a
@@ -800,6 +815,9 @@ exceptionsAlways :: Predicate a
 exceptionsAlways = alwaysTrue $ either isUncaughtException (const False)
 
 -- | Check that a computation fails with an uncaught exception at least once.
+--
+-- Any result other than an uncaught exception, including other
+-- 'Failure's, is allowed.
 --
 -- @since 1.0.0.0
 exceptionsSometimes :: Predicate a
