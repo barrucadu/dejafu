@@ -539,7 +539,7 @@ stepThread _ _ _ _ tid (AAtom stm c) = synchronised $ \ctx@Context{..} -> do
            )
     Exception e -> do
       let act = STM trace []
-      res' <- stepThrow act tid e ctx
+      res' <- stepThrow (const act) tid e ctx
       pure $ case res' of
         (Succeeded ctx', _, effect') -> (Succeeded ctx' { cIdSource = idSource' }, Single act, effect')
         (Failed err, _, effect') -> (Failed err, Single act, effect')
@@ -573,7 +573,7 @@ stepThread _ _ _ _ tid (AThrowTo t e c) = synchronised $ \ctx@Context{..} ->
            )
        Nothing -> pure
          (Succeeded ctx { cThreads = threads' }
-         , Single (ThrowTo t)
+         , Single (ThrowTo t False)
          , const (pure ())
          )
 
@@ -686,7 +686,7 @@ stepThread forSnapshot isFirst _ _ tid (ADontCheck lb ma c) = \ctx ->
 -- | Handle an exception being thrown from an @AAtom@, @AThrow@, or
 -- @AThrowTo@.
 stepThrow :: (C.MonadConc n, Exception e)
-  => ThreadAction
+  => (Bool -> ThreadAction)
   -- ^ Action to include in the trace.
   -> ThreadId
   -- ^ The thread receiving the exception.
@@ -698,19 +698,19 @@ stepThrow :: (C.MonadConc n, Exception e)
 stepThrow act tid e ctx@Context{..} = case propagate some tid cThreads of
     Just ts' -> pure
       ( Succeeded ctx { cThreads = ts' }
-      , Single act
+      , Single (act False)
       , const (pure ())
       )
     Nothing
       | tid == initialThread -> pure
         ( Failed (UncaughtException some)
-        , Single act
+        , Single (act True)
         , const (pure ())
         )
       | otherwise -> do
           ts' <- kill tid cThreads
           pure ( Succeeded ctx { cThreads = ts' }
-               , Single act
+               , Single (act True)
                , const (pure ())
                )
   where

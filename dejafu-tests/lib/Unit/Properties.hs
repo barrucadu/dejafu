@@ -378,8 +378,8 @@ genThreadAction = HGen.choice
   , D.BlockedSTM <$> genSmallList genTAction
   , pure D.Catching
   , pure D.PopCatching
-  , pure D.Throw
-  , D.ThrowTo <$> genThreadId
+  , D.Throw <$> HGen.bool
+  , D.ThrowTo <$> genThreadId <*> HGen.bool
   , D.BlockedThrowTo <$> genThreadId
   , D.SetMasking <$> HGen.bool <*> genMaskingState
   , D.ResetMasking <$> HGen.bool <*> genMaskingState
