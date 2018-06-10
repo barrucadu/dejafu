@@ -7,6 +7,17 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Changed
+~~~~~~~
+
+* (:issue:`259`) The ``Test.DejaFu.alwaysSame``, ``alwaysSameOn``, and
+  ``alwaysSameBy`` predicates fail if the computation under test
+  fails.
+
+
 1.9.1.0 (2018-06-10)
 --------------------
 

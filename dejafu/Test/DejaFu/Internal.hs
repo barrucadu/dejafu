@@ -351,6 +351,12 @@ efromList :: HasCallStack => [a] -> NonEmpty a
 efromList (x:xs) = x:|xs
 efromList _ = withFrozenCallStack $ fatal "fromList: empty list"
 
+-- | 'fromRight' but with a better error message if it fails.  Use
+-- this only where it shouldn't fail!
+efromRight :: HasCallStack => Either a b -> b
+efromRight (Right b) = b
+efromRight _ = withFrozenCallStack $ fatal "fromRight: Left"
+
 -- | 'M.adjust' but which errors if the key is not present.  Use this
 -- only where it shouldn't fail!
 eadjust :: (Ord k, Show k, HasCallStack) => (v -> v) -> k -> M.Map k v -> M.Map k v

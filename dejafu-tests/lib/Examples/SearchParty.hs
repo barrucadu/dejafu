@@ -42,7 +42,7 @@ concFilter = unsafeRunFind $ [0..5] @! const True
 
 -- | Check that two lists of results are equal, modulo order.
 checkResultLists :: Ord a => Predicate [a]
-checkResultLists = alwaysSameOn (fmap sort)
+checkResultLists = alwaysSameOn sort
 
 -------------------------------------------------------------------------------
 

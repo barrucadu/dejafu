@@ -272,14 +272,16 @@ import           Control.DeepSeq          (NFData(..))
 import           Control.Monad            (unless, when)
 import           Control.Monad.Conc.Class (MonadConc)
 import           Control.Monad.IO.Class   (MonadIO(..))
+import           Data.Either              (isLeft)
 import           Data.Function            (on)
-import           Data.List                (intercalate, intersperse)
+import           Data.List                (intercalate, intersperse, partition)
 import           Data.Maybe               (catMaybes, isJust, isNothing,
                                            mapMaybe)
 import           Data.Profunctor          (Profunctor(..))
 import           System.Environment       (lookupEnv)
 
 import           Test.DejaFu.Conc
+import           Test.DejaFu.Internal
 import           Test.DejaFu.Refinement
 import           Test.DejaFu.SCT
 import           Test.DejaFu.Settings
@@ -830,36 +832,38 @@ exceptionsAlways = alwaysTrue $ either isUncaughtException (const False)
 exceptionsSometimes :: Predicate a
 exceptionsSometimes = somewhereTrue $ either isUncaughtException (const False)
 
--- | Check that the result of a computation is always the same. In
--- particular this means either: (a) it always fails in the same way,
--- or (b) it never fails and the values returned are all equal.
+-- | Check that a computation always gives the same, successful,
+-- result.
 --
 -- > alwaysSame = alwaysSameBy (==)
 --
--- @since 1.0.0.0
+-- @since unreleased
 alwaysSame :: Eq a => Predicate a
 alwaysSame = alwaysSameBy (==)
 
--- | Check that the result of a computation is always the same by
--- comparing the result of a function on every result.
+-- | Check that a computation always gives the same (according to the
+-- provided function), successful, result.
 --
 -- > alwaysSameOn = alwaysSameBy ((==) `on` f)
 --
--- @since 1.0.0.0
-alwaysSameOn :: Eq b => (Either Failure a -> b) -> Predicate a
+-- @since unreleased
+alwaysSameOn :: Eq b => (a -> b) -> Predicate a
 alwaysSameOn f = alwaysSameBy ((==) `on` f)
 
 -- | Check that the result of a computation is always the same, using
 -- some transformation on results.
 --
--- @since 1.0.0.0
-alwaysSameBy :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
+-- @since unreleased
+alwaysSameBy :: (a -> a -> Bool) -> Predicate a
 alwaysSameBy f = ProPredicate
   { pdiscard = const Nothing
-  , peval = \xs -> case simplestsBy f xs of
-      []  -> defaultPass
-      [_] -> defaultPass
-      xs' -> defaultFail xs'
+  , peval = \xs ->
+      let (failures, successes) = partition (isLeft . fst) xs
+          simpleSuccesses = simplestsBy (f `on` efromRight) successes
+      in case (failures, simpleSuccesses) of
+        ([], []) -> defaultPass
+        ([], [_]) -> defaultPass
+        (_, _) -> defaultFail (failures ++ simpleSuccesses)
   }
 
 -- | Check that the result of a computation is not always the same.
