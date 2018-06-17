@@ -12,8 +12,8 @@ Most tests will look something like this:
 
   dejafu "Assert the thing holds" myPredicate myAction
 
-The ``dejafu`` function comes from ``Test.DejaFu``.  It can't deal
-with testcases which need ``MonadIO``, use ``dejafuIO`` for that.
+The ``dejafu`` function comes from ``Test.DejaFu``.  Another useful
+function is ``dejafuWithSettings``; see :ref:`settings`.
 
 
 Actions
@@ -141,9 +141,10 @@ These let you say exactly what you want the results to be.  Your test
 will fail if it has any extra results, or misses a result.
 
 You can check multiple predicates against the same collection of
-results using the ``dejafus`` and ``dejafusIO`` functions.  These
-avoid recomputing the results, and so may be faster than multiple
-``dejafu`` / ``dejafuIO`` calls.  See :ref:`performance`.
+results using the ``dejafus`` and ``dejafusWithSettings`` functions.
+These avoid recomputing the results, and so may be faster than
+multiple ``dejafu`` / ``dejafuWithSettings`` calls; see
+:ref:`performance`.
 
 
 Using HUnit and Tasty
@@ -169,5 +170,4 @@ Our example from the start becomes:
 
   testDejafu "Assert the thing holds" myPredicate myAction
 
-The ``autocheck`` and ``autocheckIO`` functions are exposed as
-``testAuto`` and ``testAutoIO``.
+The ``autocheck`` function is exposed as ``testAuto``.
