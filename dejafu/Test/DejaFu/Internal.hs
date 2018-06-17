@@ -45,6 +45,7 @@ data Settings n a = Settings
   , _earlyExit :: Maybe (Either Failure a -> Bool)
   , _equality :: Maybe (a -> a -> Bool)
   , _simplify  :: Bool
+  , _safeIO :: Bool
   }
 
 -- | How to explore the possible executions of a concurrent program.

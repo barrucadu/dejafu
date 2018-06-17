@@ -176,7 +176,7 @@ simplifyExecution settings run nTId nCRId res trace
             pure (res, trace)
   where
     tidTrace = toTIdTrace trace
-    simplifiedTrace = simplify (_memtype settings) tidTrace
+    simplifiedTrace = simplify (_safeIO settings) (_memtype settings) tidTrace
     fixup = renumber (_memtype settings) (fromId nTId) (fromId nCRId)
 
     debugFatal = if _debugFatal settings then fatal else debugPrint
@@ -207,10 +207,10 @@ replay run = run (Scheduler (const sched)) where
 
 -- | Simplify a trace by permuting adjacent independent actions to
 -- reduce context switching.
-simplify :: MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-simplify memtype trc0 = loop (length trc0) (prepare trc0) where
-  prepare = dropCommits memtype . lexicoNormalForm memtype
-  step = pushForward memtype . pullBack memtype
+simplify :: Bool -> MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
+simplify safeIO memtype trc0 = loop (length trc0) (prepare trc0) where
+  prepare = dropCommits safeIO memtype . lexicoNormalForm safeIO memtype
+  step = pushForward safeIO memtype . pullBack safeIO memtype
 
   loop 0 trc = trc
   loop n trc =
@@ -218,34 +218,35 @@ simplify memtype trc0 = loop (length trc0) (prepare trc0) where
     in if trc' /= trc then loop (n-1) trc' else trc
 
 -- | Put a trace into lexicographic (by thread ID) normal form.
-lexicoNormalForm :: MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-lexicoNormalForm memtype = go where
+lexicoNormalForm :: Bool -> MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
+lexicoNormalForm safeIO memtype = go where
   go trc =
-    let trc' = permuteBy memtype (repeat (>)) trc
+    let trc' = permuteBy safeIO memtype (repeat (>)) trc
     in if trc == trc' then trc else go trc'
 
 -- | Swap adjacent independent actions in the trace if a predicate
 -- holds.
 permuteBy
-  :: MemType
+  :: Bool
+  -> MemType
   -> [ThreadId -> ThreadId -> Bool]
   -> [(ThreadId, ThreadAction)]
   -> [(ThreadId, ThreadAction)]
-permuteBy memtype = go initialDepState where
+permuteBy safeIO memtype = go initialDepState where
   go ds (p:ps) (t1@(tid1, ta1):t2@(tid2, ta2):trc)
-    | independent ds tid1 ta1 tid2 ta2 && p tid1 tid2 = go' ds ps t2 (t1 : trc)
+    | independent safeIO ds tid1 ta1 tid2 ta2 && p tid1 tid2 = go' ds ps t2 (t1 : trc)
     | otherwise = go' ds ps t1 (t2 : trc)
   go _ _ trc = trc
 
   go' ds ps t@(tid, ta) trc = t : go (updateDepState memtype ds tid ta) ps trc
 
 -- | Throw away commit actions which are followed by a memory barrier.
-dropCommits :: MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-dropCommits SequentialConsistency = id
-dropCommits memtype = go initialDepState where
+dropCommits :: Bool -> MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
+dropCommits _ SequentialConsistency = id
+dropCommits safeIO memtype = go initialDepState where
   go ds (t1@(tid1, ta1@(CommitCRef _ _)):t2@(tid2, ta2):trc)
     | isBarrier (simplifyAction ta2) = go ds (t2:trc)
-    | independent ds tid1 ta1 tid2 ta2 = t2 : go (updateDepState memtype ds tid2 ta2) (t1:trc)
+    | independent safeIO ds tid1 ta1 tid2 ta2 = t2 : go (updateDepState memtype ds tid2 ta2) (t1:trc)
   go ds (t@(tid,ta):trc) = t : go (updateDepState memtype ds tid ta) trc
   go _ [] = []
 
@@ -256,8 +257,8 @@ dropCommits memtype = go initialDepState where
 -- act3)]@, where @act2@ and @act3@ are independent.  In this case
 -- 'pullBack' will swap them, giving the sequence @[(tidA, act1),
 -- (tidA, act3), (tidB, act2)]@.  It works for arbitrary separations.
-pullBack :: MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-pullBack memtype = go initialDepState where
+pullBack :: Bool -> MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
+pullBack safeIO memtype = go initialDepState where
   go ds (t1@(tid1, ta1):trc@((tid2, _):_)) =
     let ds' = updateDepState memtype ds tid1 ta1
         trc' = if tid1 /= tid2
@@ -271,7 +272,7 @@ pullBack memtype = go initialDepState where
       | tid == tid0 = Just (t, trc)
       | otherwise = case fgo (updateDepState memtype ds tid ta) trc of
           Just (ft@(ftid, fa), trc')
-            | independent ds tid ta ftid fa -> Just (ft, t:trc')
+            | independent safeIO ds tid ta ftid fa -> Just (ft, t:trc')
           _ -> Nothing
     fgo _ _ = Nothing
 
@@ -285,8 +286,8 @@ pullBack memtype = go initialDepState where
 -- act3)]@, where @act1@ and @act2@ are independent.  In this case
 -- 'pushForward' will swap them, giving the sequence @[(tidB, act2),
 -- (tidA, act1), (tidA, act3)]@.  It works for arbitrary separations.
-pushForward :: MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-pushForward memtype = go initialDepState where
+pushForward :: Bool -> MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
+pushForward safeIO memtype = go initialDepState where
   go ds (t1@(tid1, ta1):trc@((tid2, _):_)) =
     let ds' = updateDepState memtype ds tid1 ta1
     in if tid1 /= tid2
@@ -297,7 +298,7 @@ pushForward memtype = go initialDepState where
   findAction tid0 ta0 = fgo where
     fgo ds (t@(tid, ta):trc)
       | tid == tid0 = Just ((tid0, ta0) : t : trc)
-      | independent ds tid0 ta0 tid ta = (t:) <$> fgo (updateDepState memtype ds tid ta) trc
+      | independent safeIO ds tid0 ta0 tid ta = (t:) <$> fgo (updateDepState memtype ds tid ta) trc
       | otherwise = Nothing
     fgo _ _ = Nothing
 

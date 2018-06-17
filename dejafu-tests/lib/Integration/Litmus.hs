@@ -49,7 +49,7 @@ litmusTest name act sq tso pso = testGroup name
   [ testDejafuWithSettings (set lmemtype SequentialConsistency (toSettings defaultWay)) "SQ"  (gives' sq)  act
   , testDejafuWithSettings (set lmemtype TotalStoreOrder       (toSettings defaultWay)) "TSO" (gives' tso) act
   , testDejafuWithSettings (set lmemtype PartialStoreOrder     (toSettings defaultWay)) "PSO" (gives' pso) act
-  , H.testProperty "dependency func." (prop_dep_fun act)
+  , H.testProperty "dependency func." (prop_dep_fun False act)
   ]
 
 -- | Run a litmus test against the three different memory models, and

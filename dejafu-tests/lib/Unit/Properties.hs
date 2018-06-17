@@ -251,20 +251,22 @@ sctProps = toTestList
       H.assert (SCT.canInterruptL ds tid (D.rewind act))
 
   , testProperty "dependent ==> dependent'" $ do
+      safeIO <- H.forAll HGen.bool
       ds <- H.forAll genDepState
       tid1 <- H.forAll genThreadId
       tid2 <- H.forAll genThreadId
       ta1 <- H.forAll genThreadAction
-      ta2 <- H.forAll (HGen.filter (SCT.dependent ds tid1 ta1 tid2) genThreadAction)
-      H.assert (SCT.dependent' ds tid1 ta1 tid2 (D.rewind ta2))
+      ta2 <- H.forAll (HGen.filter (SCT.dependent safeIO ds tid1 ta1 tid2) genThreadAction)
+      H.assert (SCT.dependent' safeIO ds tid1 ta1 tid2 (D.rewind ta2))
 
   , testProperty "dependent x y == dependent y x" $ do
+      safeIO <- H.forAll HGen.bool
       ds <- H.forAll genDepState
       tid1 <- H.forAll genThreadId
       tid2 <- H.forAll genThreadId
       ta1 <- H.forAll genThreadAction
       ta2 <- H.forAll genThreadAction
-      SCT.dependent ds tid1 ta1 tid2 ta2 H.=== SCT.dependent ds tid2 ta2 tid1 ta1
+      SCT.dependent safeIO ds tid1 ta1 tid2 ta2 H.=== SCT.dependent safeIO ds tid2 ta2 tid1 ta1
 
   , testProperty "dependentActions x y == dependentActions y x" $ do
       ds <- H.forAll genDepState

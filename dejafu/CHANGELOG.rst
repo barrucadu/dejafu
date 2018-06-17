@@ -7,6 +7,20 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.10.1.0 (2018-06-17)
+---------------------
+
+* Git: :tag:`dejafu-1.10.1.0`
+* Hackage: :hackage:`dejafu-1.10.1.0`
+
+Added
+~~~~~
+
+* (:issue:`224`) The ``Test.DejaFu.Settings.lsafeIO`` option, for when
+  all lifted IO is thread-safe (such as exclusively managing
+  thread-local state).
+
+
 1.10.0.0 (2018-06-17)
 ---------------------
 
