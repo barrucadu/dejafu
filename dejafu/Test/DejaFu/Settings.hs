@@ -188,6 +188,20 @@ module Test.DejaFu.Settings
 
   , lsimplify
 
+  -- ** Safe IO
+
+  -- | Normally, dejafu has to assume any IO action can influence any
+  -- other IO action, as there is no way to peek inside them.
+  -- However, this adds considerable overhead to systematic testing.
+  -- A perfectly legitimate use of IO is in managing thread-local
+  -- state, such as a PRNG; in this case, there is no point in
+  -- exploring interleavings of IO actions from other threads.
+  --
+  -- __Warning:__ Enabling this option is /unsound/ if your IO is not
+  -- thread safe!
+
+  , lsafeIO
+
   -- ** Debug output
 
   -- | You can opt to receive debugging messages by setting debugging
@@ -241,6 +255,7 @@ fromWayAndMemType way memtype = Settings
   , _earlyExit = Nothing
   , _equality = Nothing
   , _simplify = False
+  , _safeIO = False
   }
 
 -------------------------------------------------------------------------------
@@ -408,6 +423,15 @@ lequality afb s = (\b -> s {_equality = b}) <$> afb (_equality s)
 -- @since 1.3.2.0
 lsimplify :: Lens' (Settings n a) Bool
 lsimplify afb s = (\b -> s {_simplify = b}) <$> afb (_simplify s)
+
+-------------------------------------------------------------------------------
+-- Safe IO
+
+-- | A lens into the safe IO flag.
+--
+-- @since unreleased
+lsafeIO :: Lens' (Settings n a) Bool
+lsafeIO afb s = (\b -> s {_safeIO = b}) <$> afb (_safeIO s)
 
 -------------------------------------------------------------------------------
 -- Debug output

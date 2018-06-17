@@ -38,6 +38,9 @@ The available settings are:
 * **Trace simplification**, rewriting execution traces into a simpler
   form (particularly effective with the random testing).
 
+* **Safe IO**, pruning needless schedules when your IO is only used to
+  manage thread-local state.
+
 See the ``Test.DejaFu.Settings`` module for more information.
 
 
