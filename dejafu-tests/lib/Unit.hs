@@ -11,14 +11,16 @@ import           Test.Tasty.Hedgehog (HedgehogDiscardLimit(..),
 import           Test.Tasty.Options  (IsOption(..), OptionDescription(..))
 import           Text.Read           (readMaybe)
 
-import qualified Unit.Properties     as P
+import qualified Unit.Predicates     as PE
+import qualified Unit.Properties     as PO
 
 import           Common
 
 -- | Run all the unit tests.
 tests :: [TestTree]
 tests = map applyHedgehogOptions
-  [ testGroup "Properties" P.tests
+  [ testGroup "Predicates" PE.tests
+  , testGroup "Properties" PO.tests
   ]
 
 -- | Tasty options

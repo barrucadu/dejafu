@@ -116,6 +116,8 @@ to it from a different thread).
   ``alwaysSameOn f``,"is like ``alwaysSame``, but transforms the results with ``f`` first"
   ``alwaysSameBy f``,"is like ``alwaysSame``, but uses ``f`` instead of ``(==)`` to compare"
   ``notAlwaysSame``,"checks that the computation is nondeterministic"
+  ``notAlwaysSameOn f``,"is like ``notAlwaysSame``, but transforms the results with ``f`` first"
+  ``notAlwaysSameBy f``,"is like ``notAlwaysSame``, but uses ``f`` instead of ``(==)`` to compare"
 
 Checking for **determinism** will also find nondeterministic failures:
 deadlocking (for instance) is still a result of a test!

@@ -27,10 +27,10 @@ There are a few different packages under the Déjà Fu umbrella:
 .. csv-table::
    :header: "Package", "Version", "Summary"
 
-   ":hackage:`concurrency`",  "1.5.0.0", "Typeclasses, functions, and data types for concurrency and STM"
-   ":hackage:`dejafu`",       "1.9.1.0", "Systematic testing for Haskell concurrency"
-   ":hackage:`hunit-dejafu`", "1.2.0.4", "Déjà Fu support for the HUnit test framework"
-   ":hackage:`tasty-dejafu`", "1.2.0.5", "Déjà Fu support for the tasty test framework"
+   ":hackage:`concurrency`",  "1.5.0.0",  "Typeclasses, functions, and data types for concurrency and STM"
+   ":hackage:`dejafu`",       "1.10.0.0", "Systematic testing for Haskell concurrency"
+   ":hackage:`hunit-dejafu`", "1.2.0.5",  "Déjà Fu support for the HUnit test framework"
+   ":hackage:`tasty-dejafu`", "1.2.0.6",  "Déjà Fu support for the tasty test framework"
 
 
 Installation
@@ -82,16 +82,15 @@ we'll get onto that shortly.  First, the result of testing:
 .. code-block:: none
 
   > autocheck myFunction
-  [pass] Never Deadlocks
-  [pass] No Exceptions
-  [fail] Consistent Result
+  [pass] Successful
+  [fail] Deterministic
       "hello" S0----S1--S0--
 
       "world" S0----S2--S0--
   False
 
-There are no deadlocks or uncaught exceptions, which is good; but the
-program is (as you probably spotted) nondeterministic!
+There are no concurrency errors, which is good; but the program is (as
+you probably spotted) nondeterministic!
 
 Along with each result, Déjà Fu gives us a representative execution
 trace in an abbreviated form.  ``Sn`` means that thread ``n`` started

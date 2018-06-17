@@ -7,6 +7,30 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.10.0.0 (2018-06-17)
+---------------------
+
+* Git: :tag:`dejafu-1.10.0.0`
+* Hackage: :hackage:`dejafu-1.10.0.0`
+
+Added
+~~~~~
+
+* The ``Test.DejaFu.notAlwaysSameOn`` and ``notAlwaysSameBy``
+  predicates, generalising ``notAlwaysSame``.
+
+Changed
+~~~~~~~
+
+* ``Test.DejaFu.autocheck`` and related functions use the
+  ``successful`` predicate, rather than looking specifically for
+  deadlocks and uncaught exceptions.
+
+* (:issue:`259`) The ``Test.DejaFu.alwaysSame``, ``alwaysSameOn``,
+  ``alwaysSameBy``, and ``notAlwaysSame`` predicates fail if the
+  computation under test fails.
+
+
 1.9.1.0 (2018-06-10)
 --------------------
 

@@ -1,4 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 
 {- |
@@ -7,7 +6,7 @@ Copyright   : (c) 2015--2018 Michael Walker
 License     : MIT
 Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 Stability   : experimental
-Portability : LambdaCase, MultiParamTypeClasses, TupleSections
+Portability : TupleSections
 
 dejafu is a library for unit-testing concurrent Haskell programs,
 written using the [concurrency](https://hackage.haskell.org/package/concurrency)
@@ -27,17 +26,15 @@ let example = do
 We can test it with dejafu like so:
 
 >>> autocheck example
-[pass] Never Deadlocks
-[pass] No Exceptions
-[fail] Consistent Result
+[pass] Successful
+[fail] Deterministic
     "hello" S0----S1--S0--
 <BLANKLINE>
     "world" S0----S2--S0--
 False
 
 The 'autocheck' function takes a concurrent program to test and looks
-for some common unwanted behaviours: deadlocks, uncaught exceptions in
-the main thread, and nondeterminism.  Here we see the program is
+for concurrency errors and nondeterminism.  Here we see the program is
 nondeterministic, dejafu gives us all the distinct results it found
 and, for each, a summarised execution trace leading to that result:
 
@@ -177,6 +174,8 @@ usage.
   , representative
   , alwaysSameOn
   , alwaysSameBy
+  , notAlwaysSameOn
+  , notAlwaysSameBy
   , alwaysTrue
   , somewhereTrue
   , alwaysNothing
@@ -272,14 +271,16 @@ import           Control.DeepSeq          (NFData(..))
 import           Control.Monad            (unless, when)
 import           Control.Monad.Conc.Class (MonadConc)
 import           Control.Monad.IO.Class   (MonadIO(..))
+import           Data.Either              (isLeft)
 import           Data.Function            (on)
-import           Data.List                (intercalate, intersperse)
+import           Data.List                (intercalate, intersperse, partition)
 import           Data.Maybe               (catMaybes, isJust, isNothing,
                                            mapMaybe)
 import           Data.Profunctor          (Profunctor(..))
 import           System.Environment       (lookupEnv)
 
 import           Test.DejaFu.Conc
+import           Test.DejaFu.Internal
 import           Test.DejaFu.Refinement
 import           Test.DejaFu.SCT
 import           Test.DejaFu.Settings
@@ -314,13 +315,12 @@ let relaxed = do
 
 -- | Automatically test a computation.
 --
--- In particular, look for deadlocks, uncaught exceptions, and
--- multiple return values.  Returns @True@ if all tests pass
+-- In particular, concurrency errors and nondeterminism.  Returns
+-- @True@ if all tests pass
 --
 -- >>> autocheck example
--- [pass] Never Deadlocks
--- [pass] No Exceptions
--- [fail] Consistent Result
+-- [pass] Successful
+-- [fail] Deterministic
 --     "hello" S0----S1--S0--
 -- <BLANKLINE>
 --     "world" S0----S2--S0--
@@ -337,9 +337,8 @@ autocheck = autocheckWithSettings defaultSettings
 -- memory model.
 --
 -- >>> autocheckWay defaultWay defaultMemType relaxed
--- [pass] Never Deadlocks
--- [pass] No Exceptions
--- [fail] Consistent Result
+-- [pass] Successful
+-- [fail] Deterministic
 --     (False,True) S0---------S1----S0--S2----S0--
 -- <BLANKLINE>
 --     (False,False) S0---------S1--P2----S1--S0---
@@ -350,9 +349,8 @@ autocheck = autocheckWithSettings defaultSettings
 -- False
 --
 -- >>> autocheckWay defaultWay SequentialConsistency relaxed
--- [pass] Never Deadlocks
--- [pass] No Exceptions
--- [fail] Consistent Result
+-- [pass] Successful
+-- [fail] Deterministic
 --     (False,True) S0---------S1----S0--S2----S0--
 -- <BLANKLINE>
 --     (True,True) S0---------S1-P2----S1---S0---
@@ -374,9 +372,8 @@ autocheckWay way = autocheckWithSettings . fromWayAndMemType way
 -- | Variant of 'autocheck' which takes a settings record.
 --
 -- >>> autocheckWithSettings (fromWayAndMemType defaultWay defaultMemType) relaxed
--- [pass] Never Deadlocks
--- [pass] No Exceptions
--- [fail] Consistent Result
+-- [pass] Successful
+-- [fail] Deterministic
 --     (False,True) S0---------S1----S0--S2----S0--
 -- <BLANKLINE>
 --     (False,False) S0---------S1--P2----S1--S0---
@@ -387,9 +384,8 @@ autocheckWay way = autocheckWithSettings . fromWayAndMemType way
 -- False
 --
 -- >>> autocheckWithSettings (fromWayAndMemType defaultWay SequentialConsistency) relaxed
--- [pass] Never Deadlocks
--- [pass] No Exceptions
--- [fail] Consistent Result
+-- [pass] Successful
+-- [fail] Deterministic
 --     (False,True) S0---------S1----S0--S2----S0--
 -- <BLANKLINE>
 --     (True,True) S0---------S1-P2----S1---S0---
@@ -405,9 +401,8 @@ autocheckWithSettings :: (MonadConc n, MonadIO n, Eq a, Show a)
   -- ^ The computation to test.
   -> n Bool
 autocheckWithSettings settings = dejafusWithSettings settings
-  [ ("Never Deadlocks",   representative deadlocksNever)
-  , ("No Exceptions",     representative exceptionsNever)
-  , ("Consistent Result", alwaysSame) -- already representative
+  [ ("Successful", representative successful)
+  , ("Deterministic", alwaysSame) -- already representative
   ]
 
 -- | Check a predicate and print the result to stdout, return 'True'
@@ -830,54 +825,86 @@ exceptionsAlways = alwaysTrue $ either isUncaughtException (const False)
 exceptionsSometimes :: Predicate a
 exceptionsSometimes = somewhereTrue $ either isUncaughtException (const False)
 
--- | Check that the result of a computation is always the same. In
--- particular this means either: (a) it always fails in the same way,
--- or (b) it never fails and the values returned are all equal.
+-- | Check that a computation always gives the same, successful,
+-- result.
 --
 -- > alwaysSame = alwaysSameBy (==)
 --
--- @since 1.0.0.0
+-- @since 1.10.0.0
 alwaysSame :: Eq a => Predicate a
 alwaysSame = alwaysSameBy (==)
 
--- | Check that the result of a computation is always the same by
--- comparing the result of a function on every result.
+-- | Check that a computation always gives the same (according to the
+-- provided function), successful, result.
 --
 -- > alwaysSameOn = alwaysSameBy ((==) `on` f)
 --
--- @since 1.0.0.0
-alwaysSameOn :: Eq b => (Either Failure a -> b) -> Predicate a
+-- @since 1.10.0.0
+alwaysSameOn :: Eq b => (a -> b) -> Predicate a
 alwaysSameOn f = alwaysSameBy ((==) `on` f)
 
 -- | Check that the result of a computation is always the same, using
 -- some transformation on results.
 --
--- @since 1.0.0.0
-alwaysSameBy :: (Either Failure a -> Either Failure a -> Bool) -> Predicate a
+-- @since 1.10.0.0
+alwaysSameBy :: (a -> a -> Bool) -> Predicate a
 alwaysSameBy f = ProPredicate
   { pdiscard = const Nothing
-  , peval = \xs -> case simplestsBy f xs of
-      []  -> defaultPass
-      [_] -> defaultPass
-      xs' -> defaultFail xs'
+  , peval = \xs ->
+      let (failures, successes) = partition (isLeft . fst) xs
+          simpleSuccesses = simplestsBy (f `on` efromRight) successes
+      in case (failures, simpleSuccesses) of
+        ([], []) -> defaultPass
+        ([], [_]) -> defaultPass
+        (_, _) -> defaultFail (failures ++ simpleSuccesses)
   }
 
--- | Check that the result of a computation is not always the same.
+-- | Check that a computation never fails, and gives multiple distinct
+-- successful results.
 --
--- @since 1.0.0.0
+-- > notAlwaysSame = notAlwaysSameBy (==)
+--
+-- @since 1.10.0.0
 notAlwaysSame :: Eq a => Predicate a
-notAlwaysSame = ProPredicate
+notAlwaysSame = notAlwaysSameBy (==)
+
+-- | Check that a computation never fails, and gives multiple distinct
+-- (according to the provided function) successful results.
+--
+-- > notAlwaysSameOn = notAlwaysSameBy ((==) `on` f)
+--
+-- @since 1.10.0.0
+notAlwaysSameOn :: Eq b => (a -> b) -> Predicate a
+notAlwaysSameOn f = notAlwaysSameBy ((==) `on` f)
+
+-- | Check that a computation never fails, and gives multiple distinct
+-- successful results, by applying a transformation on results.
+--
+-- This inverts the condition, so (eg) @notAlwaysSameBy (==)@ will
+-- pass if there are unequal results.
+--
+-- @since 1.10.0.0
+notAlwaysSameBy :: (a -> a -> Bool) -> Predicate a
+notAlwaysSameBy f = ProPredicate
     { pdiscard = const Nothing
-    , peval = \case
-        [x] -> defaultFail [x]
-        xs  -> go xs (defaultFail [])
+    , peval = \xs ->
+        let (failures, successes) = partition (isLeft . fst) xs
+        in case successes of
+          [x] -> defaultFail (x : failures)
+          _  ->
+            let res = go successes (defaultFail [])
+            in case failures of
+              [] -> res
+              _ -> res { _failures = failures ++ _failures res, _pass = False }
     }
   where
+    y1 .*. y2 = not (on f (efromRight . fst) y1 y2)
+
     go [y1,y2] res
-      | fst y1 /= fst y2 = res { _pass = True }
+      | y1 .*. y2 = res { _pass = True }
       | otherwise = res { _failures = y1 : y2 : _failures res }
     go (y1:y2:ys) res
-      | fst y1 /= fst y2 = go (y2:ys) res { _pass = True }
+      | y1 .*. y2 = go (y2:ys) res { _pass = True }
       | otherwise = go (y2:ys) res { _failures = y1 : y2 : _failures res }
     go _ res = res
 
