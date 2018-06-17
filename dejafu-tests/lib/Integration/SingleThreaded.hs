@@ -139,7 +139,7 @@ stmTests = toTestList
 
   , djfu "When a TVar is updated, its new value is visible in a later transaction" (gives' [True]) $ do
       ctv <- atomically $ newTVarInt 5
-      (5==) <$> atomically (readTVar ctv)
+      (5==) <$> readTVarConc ctv
 
   , djfu "Aborting a transaction blocks the thread" (gives [Left STMDeadlock])
       (atomically retry :: MonadConc m => m ()) -- avoid an ambiguous type
@@ -147,14 +147,14 @@ stmTests = toTestList
   , djfu "Aborting a transaction can be caught and recovered from" (gives' [True]) $ do
       ctv <- atomically $ newTVarInt 5
       atomically $ orElse retry (writeTVar ctv 6)
-      (6==) <$> atomically (readTVar ctv)
+      (6==) <$> readTVarConc ctv
 
   , djfu "An exception thrown in a transaction can be caught" (gives' [True]) $ do
       ctv <- atomically $ newTVarInt 5
       atomically $ catchArithException
         (throwSTM Overflow)
         (\_ -> writeTVar ctv 6)
-      (6==) <$> atomically (readTVar ctv)
+      (6==) <$> readTVarConc ctv
 
   , djfu "Nested exception handlers in transactions work" (gives' [True]) $ do
       ctv <- atomically $ newTVarInt 5
@@ -163,7 +163,7 @@ stmTests = toTestList
           (throwSTM Overflow)
           (\_ -> writeTVar ctv 0))
         (\_ -> writeTVar ctv 6)
-      (6==) <$> atomically (readTVar ctv)
+      (6==) <$> readTVarConc ctv
 
   , djfu "MonadSTM is a MonadFail" (alwaysFailsWith isUncaughtException)
       (atomically $ fail "hello world" :: MonadConc m => m ())  -- avoid an ambiguous type

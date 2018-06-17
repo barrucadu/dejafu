@@ -178,7 +178,7 @@ stmTests = toTestList
   [ djfuT "Transactions are atomic" (gives' [0,2]) $ do
       x <- atomically $ newTVarInt 0
       _ <- fork . atomically $ writeTVar x 1 >> writeTVar x 2
-      atomically $ readTVar x
+      readTVarConc x
 
   , djfuT "'retry' is the left identity of 'orElse'" (gives' [()]) $ do
       x <- atomically $ newTVar Nothing

@@ -45,7 +45,7 @@ tests = toTestList
         writeTVar v 2
         writeTVar v 3
         retry
-      atomically $ readTVar v
+      readTVarConc v
 
   , djfu "https://github.com/barrucadu/dejafu/issues/118" exceptionsAlways $
       catchSomeException

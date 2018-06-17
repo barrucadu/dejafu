@@ -9,6 +9,12 @@
 # Record patterns are just ugly.
 - ignore: {name: Use record patterns}
 
+# Don't prefer TupleSections
+- ignore: {name: Use tuple-section}
+
+# Inapplicable
+- ignore: {name: Use readTVarIO, within: Control.Monad.Conc.Class}
+
 # GHC treats infix $ specially wrt type checking, so that things like
 # "runST $ do ..." work even though they're impredicative.
 # Unfortunately, this means that HLint's "avoid lambda" warning for
