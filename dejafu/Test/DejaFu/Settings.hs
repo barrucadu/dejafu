@@ -429,7 +429,7 @@ lsimplify afb s = (\b -> s {_simplify = b}) <$> afb (_simplify s)
 
 -- | A lens into the safe IO flag.
 --
--- @since unreleased
+-- @since 1.10.1.0
 lsafeIO :: Lens' (Settings n a) Bool
 lsafeIO afb s = (\b -> s {_safeIO = b}) <$> afb (_safeIO s)
 
