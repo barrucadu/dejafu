@@ -830,7 +830,7 @@ exceptionsSometimes = somewhereTrue $ either isUncaughtException (const False)
 --
 -- > alwaysSame = alwaysSameBy (==)
 --
--- @since unreleased
+-- @since 1.10.0.0
 alwaysSame :: Eq a => Predicate a
 alwaysSame = alwaysSameBy (==)
 
@@ -839,14 +839,14 @@ alwaysSame = alwaysSameBy (==)
 --
 -- > alwaysSameOn = alwaysSameBy ((==) `on` f)
 --
--- @since unreleased
+-- @since 1.10.0.0
 alwaysSameOn :: Eq b => (a -> b) -> Predicate a
 alwaysSameOn f = alwaysSameBy ((==) `on` f)
 
 -- | Check that the result of a computation is always the same, using
 -- some transformation on results.
 --
--- @since unreleased
+-- @since 1.10.0.0
 alwaysSameBy :: (a -> a -> Bool) -> Predicate a
 alwaysSameBy f = ProPredicate
   { pdiscard = const Nothing
@@ -864,7 +864,7 @@ alwaysSameBy f = ProPredicate
 --
 -- > notAlwaysSame = notAlwaysSameBy (==)
 --
--- @since 1.0.0.0
+-- @since 1.10.0.0
 notAlwaysSame :: Eq a => Predicate a
 notAlwaysSame = notAlwaysSameBy (==)
 
@@ -873,7 +873,7 @@ notAlwaysSame = notAlwaysSameBy (==)
 --
 -- > notAlwaysSameOn = notAlwaysSameBy ((==) `on` f)
 --
--- @since unreleased
+-- @since 1.10.0.0
 notAlwaysSameOn :: Eq b => (a -> b) -> Predicate a
 notAlwaysSameOn f = notAlwaysSameBy ((==) `on` f)
 
@@ -883,7 +883,7 @@ notAlwaysSameOn f = notAlwaysSameBy ((==) `on` f)
 -- This inverts the condition, so (eg) @notAlwaysSameBy (==)@ will
 -- pass if there are unequal results.
 --
--- @since unreleased
+-- @since 1.10.0.0
 notAlwaysSameBy :: (a -> a -> Bool) -> Predicate a
 notAlwaysSameBy f = ProPredicate
     { pdiscard = const Nothing
