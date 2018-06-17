@@ -43,9 +43,10 @@ instance IsTest T where
   toTestList (T n c p) = toTestList (TEST n c p (map (second toSettings) defaultWays) True)
   toTestList (W n c p w) = toTestList (TEST n c p [second toSettings w] True)
   toTestList (B n c p b) = toTestList (TEST n c p (map (second toSettings) (defaultWaysFor b)) True)
-  toTestList (TEST n c p ss subc) = toTestList . testGroup n $
-    let mk (name, settings) = testDejafuWithSettings settings name p c
-    in map mk ss ++ [H.testProperty "dependency func." (prop_dep_fun c) | subc]
+  toTestList (TEST n c p ss subc) = toTestList (TEST' False n c p ss subc)
+  toTestList (TEST' b n c p ss subc) = toTestList . testGroup n $
+    let mk (name, settings) = testDejafuWithSettings (set lsafeIO b settings) name p c
+    in map mk ss ++ [H.testProperty "dependency func." (prop_dep_fun b c) | subc]
 
 instance IsTest t => IsTest [t] where
   toTestList = concatMap toTestList
@@ -55,6 +56,7 @@ data T where
   W :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> (String, Way) -> T
   B :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> Bounds -> T
   TEST :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
+  TEST' :: (Eq a, Show a) => Bool -> String -> ConcIO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
 
 toSettings :: (Applicative f, Eq a, Show a) => Way -> Settings f a
 toSettings w
@@ -105,15 +107,15 @@ testProperty name = H.testProperty name . H.property
 
 -- | Check that the independence function correctly decides
 -- commutativity for this program.
-prop_dep_fun :: (Eq a, Show a) => ConcIO a -> H.Property
-prop_dep_fun conc = H.property $ do
+prop_dep_fun :: (Eq a, Show a) => Bool -> ConcIO a -> H.Property
+prop_dep_fun safeIO conc = H.property $ do
     mem <- H.forAll HGen.enumBounded
     seed <- H.forAll genInt
     fs <- H.forAll $ genList HGen.bool
 
     (efa1, tids1, efa2, tids2) <- liftIO $ runNorm
       seed
-      (renumber mem 1 1 . permuteBy mem (map (\f _ _ -> f) fs))
+      (renumber mem 1 1 . permuteBy safeIO mem (map (\f _ _ -> f) fs))
       mem
     H.footnote ("            to: " ++ show tids2)
     H.footnote ("rewritten from: " ++ show tids1)

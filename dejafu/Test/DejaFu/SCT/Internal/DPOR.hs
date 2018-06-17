@@ -154,7 +154,9 @@ findSchedulePrefix dpor = case dporNext dpor of
 
 -- | Add a new trace to the stack.  This won't work if to-dos aren't explored depth-first.
 incorporateTrace :: HasCallStack
-  => MemType
+  => Bool
+  -- ^ True if all IO is thread-safe.
+  -> MemType
   -> Bool
   -- ^ Whether the \"to-do\" point which was used to create this new
   -- execution was conservative or not.
@@ -163,7 +165,7 @@ incorporateTrace :: HasCallStack
   -- and the action performed.
   -> DPOR
   -> DPOR
-incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initialDPORThread dpor0) trace dpor0 where
+incorporateTrace safeIO memtype conservative trace dpor0 = grow initialDepState (initialDPORThread dpor0) trace dpor0 where
   grow state tid trc@((d, _, a):rest) dpor =
     let tid'   = tidOf tid d
         state' = updateDepState memtype state tid' a
@@ -188,7 +190,7 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
   -- Construct a new subtree corresponding to a trace suffix.
   subtree state tid sleep ((_, _, a):rest) = validateDPOR $
     let state' = updateDepState memtype state tid a
-        sleep' = M.filterWithKey (\t a' -> not $ dependent state' tid a t a') sleep
+        sleep' = M.filterWithKey (\t a' -> not $ dependent safeIO state' tid a t a') sleep
     in DPOR
         { dporRunnable = S.fromList $ case rest of
             ((d', runnable, _):_) -> tidOf tid d' : map fst runnable
@@ -221,7 +223,9 @@ incorporateTrace memtype conservative trace dpor0 = grow initialDepState (initia
 -- runnable, a dependency is imposed between this final action and
 -- everything else.
 findBacktrackSteps
-  :: MemType
+  :: Bool
+  -- ^ True if all IO is thread-safe
+  -> MemType
   -> BacktrackFunc
   -- ^ Backtracking function. Given a list of backtracking points, and
   -- a thread to backtrack to at a specific point in that list, add
@@ -239,7 +243,7 @@ findBacktrackSteps
   -> Trace
   -- ^ The execution trace.
   -> [BacktrackStep]
-findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty initialThread [] . F.toList where
+findBacktrackSteps safeIO memtype backtrack boundKill = go initialDepState S.empty initialThread [] . F.toList where
   -- Walk through the traces one step at a time, building up a list of
   -- new backtracking points.
   go state allThreads tid bs ((e,i):is) ((d,_,a):ts) =
@@ -296,7 +300,7 @@ findBacktrackSteps memtype backtrack boundKill = go initialDepState S.empty init
             -- pre-empting the action UNLESS the pre-emption would
             -- possibly allow for a different relaxed memory stage.
             | isBlock (bcktAction b) && isBarrier (simplifyLookahead n) = False
-            | otherwise = dependent' (bcktState b) (bcktThreadid b) (bcktAction b) u n
+            | otherwise = dependent' safeIO (bcktState b) (bcktThreadid b) (bcktAction b) u n
     in backtrack bs idxs
 
 -- | Add new backtracking points, if they have not already been
@@ -443,12 +447,14 @@ backtrackAt toAll bs0 = backtrackAt' . nubBy ((==) `on` fst') . sortOn fst' wher
 -- yielded. Furthermore, threads which /will/ yield are ignored in
 -- preference of those which will not.
 dporSched :: HasCallStack
-  => MemType
+  => Bool
+  -- ^ True if all IO is thread safe.
+  -> MemType
   -> IncrementalBoundFunc k
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
   -> Scheduler (DPORSchedState k)
-dporSched memtype boundf = Scheduler $ \prior threads s ->
+dporSched safeIO memtype boundf = Scheduler $ \prior threads s ->
   let
     -- The next scheduler state
     nextState rest = s
@@ -523,7 +529,7 @@ dporSched memtype boundf = Scheduler $ \prior threads s ->
     [] ->
       let choices  = restrictToBound id initialise
           checkDep t a = case prior of
-            Just (tid, act) -> dependent (schedDepState s) tid act t a
+            Just (tid, act) -> dependent safeIO (schedDepState s) tid act t a
             Nothing -> False
           ssleep'  = M.filterWithKey (\t a -> not $ checkDep t a) $ schedSleep s
           choices' = filter (`notElem` M.keys ssleep') choices
@@ -546,12 +552,12 @@ dporSched memtype boundf = Scheduler $ \prior threads s ->
 --
 -- This should not be used to re-order traces which contain
 -- subconcurrency.
-independent :: DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
-independent ds t1 a1 t2 a2
+independent :: Bool -> DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
+independent safeIO ds t1 a1 t2 a2
     | t1 == t2 = False
     | check t1 a1 t2 a2 = False
     | check t2 a2 t1 a1 = False
-    | otherwise = not (dependent ds t1 a1 t2 a2)
+    | otherwise = not (dependent safeIO ds t1 a1 t2 a2)
   where
     -- @dontCheck@ must be the first thing in the computation.
     check _ (DontCheck _) _ _ = True
@@ -575,8 +581,8 @@ independent ds t1 a1 t2 a2
 -- This is basically the same as 'dependent'', but can make use of the
 -- additional information in a 'ThreadAction' to make better decisions
 -- in a few cases.
-dependent :: DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
-dependent ds t1 a1 t2 a2 = case (a1, a2) of
+dependent :: Bool -> DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
+dependent safeIO ds t1 a1 t2 a2 = case (a1, a2) of
   -- When masked interruptible, a thread can only be interrupted when
   -- actually blocked. 'dependent'' has to assume that all
   -- potentially-blocking operations can block, and so is more
@@ -594,8 +600,8 @@ dependent ds t1 a1 t2 a2 = case (a1, a2) of
   (BlockedSTM _, STM _ _)      -> checkSTM
   (BlockedSTM _, BlockedSTM _) -> checkSTM
 
-  _ -> dependent' ds t1 a1 t2 (rewind a2)
-    && dependent' ds t2 a2 t1 (rewind a1)
+  _ -> dependent' safeIO ds t1 a1 t2 (rewind a2)
+    && dependent' safeIO ds t2 a2 t1 (rewind a1)
 
   where
     -- STM actions A and B are dependent if A wrote to anything B
@@ -607,10 +613,10 @@ dependent ds t1 a1 t2 a2 = case (a1, a2) of
 --
 -- Termination of the initial thread is handled specially in the DPOR
 -- implementation.
-dependent' :: DepState -> ThreadId -> ThreadAction -> ThreadId -> Lookahead -> Bool
-dependent' ds t1 a1 t2 l2 = case (a1, l2) of
+dependent' :: Bool -> DepState -> ThreadId -> ThreadAction -> ThreadId -> Lookahead -> Bool
+dependent' safeIO ds t1 a1 t2 l2 = case (a1, l2) of
   -- Worst-case assumption: all IO is dependent.
-  (LiftIO, WillLiftIO) -> True
+  (LiftIO, WillLiftIO) -> not safeIO
 
   -- Throwing an exception is only dependent with actions in that
   -- thread and if the actions can be interrupted. We can also
