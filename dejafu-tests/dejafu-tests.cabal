@@ -68,8 +68,8 @@ library
   ghc-options:         -Wall
 
 executable dejafu-tests
-  main-is:             Main.hs
-
+  main-is:             MainTest.hs
+  other-modules:       Util
   build-depends:       base
                      , dejafu-tests
                      , tasty

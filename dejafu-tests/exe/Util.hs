@@ -1,17 +1,15 @@
-module Main where
+module Util (ingredients, tests) where
 
 import qualified Test.Tasty         as T
 import qualified Test.Tasty.Options as T
+import qualified Test.Tasty.Runners as T
 
 import qualified Examples           as E
 import qualified Integration        as I
 import qualified Unit               as U
 
-main :: IO ()
-main =
-  let ingredients = T.includingOptions options : T.defaultIngredients
-      runner = T.defaultMainWithIngredients ingredients
-  in runner tests
+ingredients :: [T.Ingredient]
+ingredients = T.includingOptions options : T.defaultIngredients
 
 tests :: T.TestTree
 tests = T.testGroup "Tests"
