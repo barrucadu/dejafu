@@ -1,0 +1,8 @@
+- package:
+  - name: dejafu-tests
+  - section:
+    - name: exe:dejafu-bench exe:dejafu-tests
+    - message:
+      - name: Module reused between components
+      - module:
+        - Util

@@ -68,9 +68,20 @@ library
   ghc-options:         -Wall
 
 executable dejafu-tests
-  main-is:             Main.hs
-
+  main-is:             MainTest.hs
+  other-modules:       Util
   build-depends:       base
+                     , dejafu-tests
+                     , tasty
+  hs-source-dirs:      exe
+  default-language:    Haskell2010
+  ghc-options:         -Wall -threaded -rtsopts
+
+executable dejafu-bench
+  main-is:             MainBench.hs
+  other-modules:       Util
+  build-depends:       base
+                     , criterion
                      , dejafu-tests
                      , tasty
   hs-source-dirs:      exe
