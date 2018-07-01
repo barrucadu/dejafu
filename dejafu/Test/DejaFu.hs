@@ -102,7 +102,7 @@ There are a few knobs to tweak to control the behaviour of dejafu.
 The defaults should generally be good enough, but if not you have a
 few tricks available.  The main two are: the 'Way', which controls how
 schedules are explored; and the 'MemType', which controls how reads
-and writes to @CRef@s behave; see "Test.DejaFu.Settings" for a
+and writes to @IORef@s behave; see "Test.DejaFu.Settings" for a
 complete listing.
 
 -}
@@ -301,10 +301,10 @@ let example = do
 
 >>> :{
 let relaxed = do
-      r1 <- newCRef False
-      r2 <- newCRef False
-      x <- spawn $ writeCRef r1 True >> readCRef r2
-      y <- spawn $ writeCRef r2 True >> readCRef r1
+      r1 <- newIORef False
+      r2 <- newIORef False
+      x <- spawn $ writeIORef r1 True >> readIORef r2
+      y <- spawn $ writeIORef r2 True >> readIORef r1
       (,) <$> readMVar x <*> readMVar y
 :}
 
@@ -363,7 +363,7 @@ autocheckWay :: (MonadConc n, MonadIO n, Eq a, Show a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> ConcT n a
   -- ^ The computation to test.
   -> n Bool
@@ -454,7 +454,7 @@ dejafuWay :: (MonadConc n, MonadIO n, Show b)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> String
   -- ^ The name of the test.
   -> ProPredicate a b
@@ -505,7 +505,7 @@ dejafuDiscard :: (MonadConc n, MonadIO n, Show b)
   -> Way
   -- ^ How to run the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> String
   -- ^ The name of the test.
   -> ProPredicate a b
@@ -555,7 +555,7 @@ dejafusWay :: (MonadConc n, MonadIO n, Show b)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
   -> ConcT n a
@@ -672,7 +672,7 @@ runTestWay :: MonadConc n
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> ProPredicate a b
   -- ^ The predicate to check
   -> ConcT n a

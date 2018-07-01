@@ -132,12 +132,12 @@ writeHotVarRaw :: MonadConc m => HotVar m a -> a -> m ()
 {-# INLINE readHotVar    #-}
 {-# INLINE writeHotVar   #-}
 
-type HotVar m a = CRef m a
-newHotVar     = newCRef
-modifyHotVar  = atomicModifyCRef
-modifyHotVar_ v fn = atomicModifyCRef v (\a -> (fn a, ()))
-readHotVar    = readCRef
-writeHotVar   = writeCRef
+type HotVar m a = IORef m a
+newHotVar     = newIORef
+modifyHotVar  = atomicModifyIORef
+modifyHotVar_ v fn = atomicModifyIORef v (\a -> (fn a, ()))
+readHotVar    = readIORef
+writeHotVar   = writeIORef
 
 readHotVarRaw  = readHotVar
 writeHotVarRaw = writeHotVar

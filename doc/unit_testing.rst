@@ -38,9 +38,9 @@ bugs.  Here they are:
 
   nondeterministic :: forall m. MonadConc m => m Int
   nondeterministic = do
-    var <- newCRef 0
+    var <- newIORef 0
     let settings = (defaultUpdateSettings :: UpdateSettings m ())
-          { updateAction = atomicModifyCRef var (\x -> (x+1, x)) }
+          { updateAction = atomicModifyIORef var (\x -> (x+1, x)) }
     auto <- mkAutoUpdate settings
     auto
     auto

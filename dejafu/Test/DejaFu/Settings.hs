@@ -59,22 +59,22 @@ module Test.DejaFu.Settings
 
   -- ** The @MemType@
 
-  -- | When executed on a multi-core processor some @CRef@ / @IORef@
+  -- | When executed on a multi-core processor some @IORef@ / @IORef@
   -- programs can exhibit \"relaxed memory\" behaviours, where the
   -- apparent behaviour of the program is not a simple interleaving of
   -- the actions of each thread.
   --
-  -- __Example:__ This is a simple program which creates two @CRef@s
+  -- __Example:__ This is a simple program which creates two @IORef@s
   -- containing @False@, and forks two threads.  Each thread writes
-  -- @True@ to one of the @CRef@s and reads the other.  The value that
+  -- @True@ to one of the @IORef@s and reads the other.  The value that
   -- each thread reads is communicated back through an @MVar@:
   --
   -- > >>> :{
   -- > let relaxed = do
-  -- >       r1 <- newCRef False
-  -- >       r2 <- newCRef False
-  -- >       x <- spawn $ writeCRef r1 True >> readCRef r2
-  -- >       y <- spawn $ writeCRef r2 True >> readCRef r1
+  -- >       r1 <- newIORef False
+  -- >       r2 <- newIORef False
+  -- >       x <- spawn $ writeIORef r1 True >> readIORef r2
+  -- >       y <- spawn $ writeIORef r2 True >> readIORef r1
   -- >       (,) <$> readMVar x <*> readMVar y
   -- > :}
   --
@@ -94,12 +94,12 @@ module Test.DejaFu.Settings
   -- > False
   --
   -- It's possible for both threads to read the value @False@, even
-  -- though each writes @True@ to the other @CRef@ before reading.
+  -- though each writes @True@ to the other @IORef@ before reading.
   -- This is because processors are free to re-order reads and writes
   -- to independent memory addresses in the name of performance.
   --
   -- Execution traces for relaxed memory computations can include
-  -- \"C\" actions, as above, which show where @CRef@ writes were
+  -- \"C\" actions, as above, which show where @IORef@ writes were
   -- explicitly /committed/, and made visible to other threads.
   --
   -- However, modelling this behaviour can require more executions.

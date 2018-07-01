@@ -76,23 +76,23 @@ These types live in ``Test.DejaFu.Types``:
     -- ^ Get blocked on a take.
     | TryTakeMVar MVarId Bool [ThreadId]
     -- ^ Try to take from a 'MVar', possibly waking up some threads.
-    | NewCRef CRefId
-    -- ^ Create a new 'CRef'.
-    | ReadCRef CRefId
-    -- ^ Read from a 'CRef'.
-    | ReadCRefCas CRefId
-    -- ^ Read from a 'CRef' for a future compare-and-swap.
-    | ModCRef CRefId
-    -- ^ Modify a 'CRef'.
-    | ModCRefCas CRefId
-    -- ^ Modify a 'CRef' using a compare-and-swap.
-    | WriteCRef CRefId
-    -- ^ Write to a 'CRef' without synchronising.
-    | CasCRef CRefId Bool
-    -- ^ Attempt to to a 'CRef' using a compare-and-swap, synchronising
+    | NewIORef IORefId
+    -- ^ Create a new 'IORef'.
+    | ReadIORef IORefId
+    -- ^ Read from a 'IORef'.
+    | ReadIORefCas IORefId
+    -- ^ Read from a 'IORef' for a future compare-and-swap.
+    | ModIORef IORefId
+    -- ^ Modify a 'IORef'.
+    | ModIORefCas IORefId
+    -- ^ Modify a 'IORef' using a compare-and-swap.
+    | WriteIORef IORefId
+    -- ^ Write to a 'IORef' without synchronising.
+    | CasIORef IORefId Bool
+    -- ^ Attempt to to a 'IORef' using a compare-and-swap, synchronising
     -- it.
-    | CommitCRef ThreadId CRefId
-    -- ^ Commit the last write to the given 'CRef' by the given thread,
+    | CommitIORef ThreadId IORefId
+    -- ^ Commit the last write to the given 'IORef' by the given thread,
     -- so that all threads can see the updated value.
     | STM TTrace [ThreadId]
     -- ^ An STM transaction was executed, possibly waking up some
@@ -210,13 +210,13 @@ continuation to call when it is done:
     | forall a. ATakeMVar    (MVar r a) (a -> Action n r)
     | forall a. ATryTakeMVar (MVar r a) (Maybe a -> Action n r)
 
-    | forall a.   ANewCRef String a (CRef r a -> Action n r)
-    | forall a.   AReadCRef    (CRef r a) (a -> Action n r)
-    | forall a.   AReadCRefCas (CRef r a) (Ticket a -> Action n r)
-    | forall a b. AModCRef     (CRef r a) (a -> (a, b)) (b -> Action n r)
-    | forall a b. AModCRefCas  (CRef r a) (a -> (a, b)) (b -> Action n r)
-    | forall a.   AWriteCRef   (CRef r a) a (Action n r)
-    | forall a.   ACasCRef     (CRef r a) (Ticket a) a ((Bool, Ticket a) -> Action n r)
+    | forall a.   ANewIORef String a (IORef r a -> Action n r)
+    | forall a.   AReadIORef    (IORef r a) (a -> Action n r)
+    | forall a.   AReadIORefCas (IORef r a) (Ticket a -> Action n r)
+    | forall a b. AModIORef     (IORef r a) (a -> (a, b)) (b -> Action n r)
+    | forall a b. AModIORefCas  (IORef r a) (a -> (a, b)) (b -> Action n r)
+    | forall a.   AWriteIORef   (IORef r a) a (Action n r)
+    | forall a.   ACasIORef     (IORef r a) (Ticket a) a ((Bool, Ticket a) -> Action n r)
 
     | forall e.   Exception e => AThrow e
     | forall e.   Exception e => AThrowTo ThreadId e (Action n r)
@@ -229,7 +229,7 @@ continuation to call when it is done:
     | ALift (n (Action n r))
     | AYield  (Action n r)
     | AReturn (Action n r)
-    | ACommit ThreadId CRefId
+    | ACommit ThreadId IORefId
     | AStop (n ())
 
     | forall a. ASub (M n r a) (Either Failure a -> Action n r)
@@ -293,9 +293,9 @@ variable ID", this is a naming convention from the past which I
 haven't updated yet.
 
 The tricky bit here is ``synchronised``.  It means that this action
-imposes a *memory barrier*: any uncommitted ``CRef`` writes get
+imposes a *memory barrier*: any uncommitted ``IORef`` writes get
 flushed when this action is performed.  Pretty much everything other
-than a couple of ``CRef`` operations impose a memory barrier.
+than a couple of ``IORef`` operations impose a memory barrier.
 Incidentally, this is what the ``SynchronisedWrite`` we mentioned
 above refers to.
 

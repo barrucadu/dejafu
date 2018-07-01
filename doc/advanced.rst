@@ -24,7 +24,7 @@ The available settings are:
 * **"Way"**, how to explore the behaviours of the program under test.
 
 * **Memory model**, which affects how non-synchronised operations,
-  such as ``readCRef`` and ``writeCRef`` behave.
+  such as ``readIORef`` and ``writeIORef`` behave.
 
 * **Discarding**, which allows throwing away uninteresting results,
   rather than keeping them around in memory.

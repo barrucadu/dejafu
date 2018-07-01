@@ -213,9 +213,9 @@ newEmptyMVarInt = newEmptyMVar
 newMVarInt :: MonadConc m => Int -> m (MVar m Int)
 newMVarInt = newMVar
 
--- | Create a monomorphic @CRef@.
-newCRefInt :: MonadConc m => Int -> m (CRef m Int)
-newCRefInt = newCRef
+-- | Create a monomorphic @IORef@.
+newIORefInt :: MonadConc m => Int -> m (IORef m Int)
+newIORefInt = newIORef
 
 -- | Create a monomorphic @TVar@.
 newTVarInt :: MonadSTM stm => Int -> stm (TVar stm Int)

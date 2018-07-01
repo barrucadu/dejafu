@@ -4,7 +4,7 @@
 module Integration.Async where
 
 import           Control.Concurrent.Classy.Async
-import           Control.Concurrent.Classy.CRef
+import           Control.Concurrent.Classy.IORef
 import           Control.Exception               (AsyncException(..), Exception,
                                                   SomeException, fromException)
 import           Control.Monad                   (when)
@@ -132,28 +132,28 @@ async_poll2 = do
 
 case_concurrently_ :: MonadConc m => m ()
 case_concurrently_ = do
-  ref <- newCRefInt 0
+  ref <- newIORefInt 0
   () <- concurrently_
-    (atomicModifyCRef ref (\x -> (x + 1, True)))
-    (atomicModifyCRef ref (\x -> (x + 2, 'x')))
-  res <- readCRef ref
+    (atomicModifyIORef ref (\x -> (x + 1, True)))
+    (atomicModifyIORef ref (\x -> (x + 2, 'x')))
+  res <- readIORef ref
   res @?= 3
 
 case_replicateConcurrently :: MonadConc m => m ()
 case_replicateConcurrently = do
-  ref <- newCRefInt 0
-  let action = atomicModifyCRef ref (\x -> (x + 1, x + 1))
+  ref <- newIORefInt 0
+  let action = atomicModifyIORef ref (\x -> (x + 1, x + 1))
   resList <- replicateConcurrently 4 action
-  resVal <- readCRef ref
+  resVal <- readIORef ref
   resVal @?= 4
   sort resList @?= [1..4]
 
 case_replicateConcurrently_ :: MonadConc m => m ()
 case_replicateConcurrently_ = do
-  ref <- newCRefInt 0
-  let action = atomicModifyCRef ref (\x -> (x + 1, x + 1))
+  ref <- newIORefInt 0
+  let action = atomicModifyIORef ref (\x -> (x + 1, x + 1))
   () <- replicateConcurrently_ 4 action
-  resVal <- readCRef ref
+  resVal <- readIORef ref
   resVal @?= 4
 
 -------------------------------------------------------------------------------

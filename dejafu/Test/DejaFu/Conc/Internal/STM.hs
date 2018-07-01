@@ -100,7 +100,7 @@ data STMAction n
 -- value.
 data ModelTVar n a = ModelTVar
   { tvarId  :: TVarId
-  , tvarRef :: C.CRef n a
+  , tvarRef :: C.IORef n a
   }
 
 --------------------------------------------------------------------------------
@@ -145,7 +145,7 @@ doTransaction :: C.MonadConc n
 doTransaction ma idsource = do
   (c, ref) <- runRefCont SStop (Just . Right) (runModelSTM ma)
   (idsource', undo, readen, written, trace) <- go ref c (pure ()) idsource [] [] []
-  res <- C.readCRef ref
+  res <- C.readIORef ref
 
   case res of
     Just (Right val) -> pure (Success (nub readen) (nub written) val, undo, idsource', reverse trace)
@@ -166,10 +166,10 @@ doTransaction ma idsource = do
       case tact of
         TStop  -> pure (newIDSource, newUndo, newReaden, newWritten, TStop:newSofar)
         TRetry -> do
-          C.writeCRef ref Nothing
+          C.writeIORef ref Nothing
           pure (newIDSource, newUndo, newReaden, newWritten, TRetry:newSofar)
         TThrow -> do
-          C.writeCRef ref (Just . Left $ case act of SThrow e -> toException e; _ -> undefined)
+          C.writeIORef ref (Just . Left $ case act of SThrow e -> toException e; _ -> undefined)
           pure (newIDSource, newUndo, newReaden, newWritten, TThrow:newSofar)
         _ -> go ref newAct newUndo newIDSource newReaden newWritten newSofar
 
@@ -199,17 +199,17 @@ stepTrans act idsource = case act of
         Nothing   -> pure (SThrow exc, nothing, idsource, [], [], TCatch trace Nothing))
 
     stepRead ModelTVar{..} c = do
-      val <- C.readCRef tvarRef
+      val <- C.readIORef tvarRef
       pure (c val, nothing, idsource, [tvarId], [], TRead tvarId)
 
     stepWrite ModelTVar{..} a c = do
-      old <- C.readCRef tvarRef
-      C.writeCRef tvarRef a
-      pure (c, C.writeCRef tvarRef old, idsource, [], [tvarId], TWrite tvarId)
+      old <- C.readIORef tvarRef
+      C.writeIORef tvarRef a
+      pure (c, C.writeIORef tvarRef old, idsource, [], [tvarId], TWrite tvarId)
 
     stepNew n a c = do
       let (idsource', tvid) = nextTVId n idsource
-      ref <- C.newCRef a
+      ref <- C.newIORef a
       let tvar = ModelTVar tvid ref
       pure (c tvar, nothing, idsource', [], [tvid], TNew tvid)
 

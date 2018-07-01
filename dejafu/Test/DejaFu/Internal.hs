@@ -65,17 +65,17 @@ instance Show Way where
 -- | The number of ID parameters was getting a bit unwieldy, so this
 -- hides them all away.
 data IdSource = IdSource
-  { _crids :: (Int, [String])
-  , _mvids :: (Int, [String])
-  , _tvids :: (Int, [String])
-  , _tids  :: (Int, [String])
+  { _iorids :: (Int, [String])
+  , _mvids  :: (Int, [String])
+  , _tvids  :: (Int, [String])
+  , _tids   :: (Int, [String])
   } deriving (Eq, Ord, Show, Generic, NFData)
 
--- | Get the next free 'CRefId'.
-nextCRId :: String -> IdSource -> (IdSource, CRefId)
-nextCRId name idsource =
-  let (crid, crids') = nextId name (_crids idsource)
-  in (idsource { _crids = crids' }, CRefId crid)
+-- | Get the next free 'IORefId'.
+nextIORId :: String -> IdSource -> (IdSource, IORefId)
+nextIORId name idsource =
+  let (iorid, iorids') = nextId name (_iorids idsource)
+  in (idsource { _iorids = iorids' }, IORefId iorid)
 
 -- | Get the next free 'MVarId'.
 nextMVId :: String -> IdSource -> (IdSource, MVarId)
@@ -176,14 +176,14 @@ rewind (TryReadMVar c _) = WillTryReadMVar c
 rewind (TakeMVar c _) = WillTakeMVar c
 rewind (BlockedTakeMVar c) = WillTakeMVar c
 rewind (TryTakeMVar c _ _) = WillTryTakeMVar c
-rewind (NewCRef _) = WillNewCRef
-rewind (ReadCRef c) = WillReadCRef c
-rewind (ReadCRefCas c) = WillReadCRefCas c
-rewind (ModCRef c) = WillModCRef c
-rewind (ModCRefCas c) = WillModCRefCas c
-rewind (WriteCRef c) = WillWriteCRef c
-rewind (CasCRef c _) = WillCasCRef c
-rewind (CommitCRef t c) = WillCommitCRef t c
+rewind (NewIORef _) = WillNewIORef
+rewind (ReadIORef c) = WillReadIORef c
+rewind (ReadIORefCas c) = WillReadIORefCas c
+rewind (ModIORef c) = WillModIORef c
+rewind (ModIORefCas c) = WillModIORefCas c
+rewind (WriteIORef c) = WillWriteIORef c
+rewind (CasIORef c _) = WillCasIORef c
+rewind (CommitIORef t c) = WillCommitIORef t c
 rewind (STM _ _) = WillSTM
 rewind (BlockedSTM _) = WillSTM
 rewind Catching = WillCatching
@@ -224,21 +224,21 @@ willRelease _ = False
 
 -- | A simplified view of the possible actions a thread can perform.
 data ActionType =
-    UnsynchronisedRead  CRefId
-  -- ^ A 'readCRef' or a 'readForCAS'.
-  | UnsynchronisedWrite CRefId
-  -- ^ A 'writeCRef'.
+    UnsynchronisedRead  IORefId
+  -- ^ A 'readIORef' or a 'readForCAS'.
+  | UnsynchronisedWrite IORefId
+  -- ^ A 'writeIORef'.
   | UnsynchronisedOther
   -- ^ Some other action which doesn't require cross-thread
   -- communication.
-  | PartiallySynchronisedCommit CRefId
+  | PartiallySynchronisedCommit IORefId
   -- ^ A commit.
-  | PartiallySynchronisedWrite  CRefId
-  -- ^ A 'casCRef'
-  | PartiallySynchronisedModify CRefId
-  -- ^ A 'modifyCRefCAS'
-  | SynchronisedModify  CRefId
-  -- ^ An 'atomicModifyCRef'.
+  | PartiallySynchronisedWrite  IORefId
+  -- ^ A 'casIORef'
+  | PartiallySynchronisedModify IORefId
+  -- ^ A 'modifyIORefCAS'
+  | SynchronisedModify  IORefId
+  -- ^ An 'atomicModifyIORef'.
   | SynchronisedRead    MVarId
   -- ^ A 'readMVar' or 'takeMVar' (or @try@/@blocked@ variants).
   | SynchronisedWrite   MVarId
@@ -256,26 +256,26 @@ isBarrier (SynchronisedWrite  _) = True
 isBarrier SynchronisedOther = True
 isBarrier _ = False
 
--- | Check if an action commits a given 'CRef'.
-isCommit :: ActionType -> CRefId -> Bool
+-- | Check if an action commits a given 'IORef'.
+isCommit :: ActionType -> IORefId -> Bool
 isCommit (PartiallySynchronisedCommit c) r = c == r
 isCommit (PartiallySynchronisedWrite  c) r = c == r
 isCommit (PartiallySynchronisedModify c) r = c == r
 isCommit _ _ = False
 
--- | Check if an action synchronises a given 'CRef'.
-synchronises :: ActionType -> CRefId -> Bool
+-- | Check if an action synchronises a given 'IORef'.
+synchronises :: ActionType -> IORefId -> Bool
 synchronises a r = isCommit a r || isBarrier a
 
--- | Get the 'CRef' affected.
-crefOf :: ActionType -> Maybe CRefId
-crefOf (UnsynchronisedRead  r) = Just r
-crefOf (UnsynchronisedWrite r) = Just r
-crefOf (SynchronisedModify  r) = Just r
-crefOf (PartiallySynchronisedCommit r) = Just r
-crefOf (PartiallySynchronisedWrite  r) = Just r
-crefOf (PartiallySynchronisedModify r) = Just r
-crefOf _ = Nothing
+-- | Get the 'IORef' affected.
+iorefOf :: ActionType -> Maybe IORefId
+iorefOf (UnsynchronisedRead  r) = Just r
+iorefOf (UnsynchronisedWrite r) = Just r
+iorefOf (SynchronisedModify  r) = Just r
+iorefOf (PartiallySynchronisedCommit r) = Just r
+iorefOf (PartiallySynchronisedWrite  r) = Just r
+iorefOf (PartiallySynchronisedModify r) = Just r
+iorefOf _ = Nothing
 
 -- | Get the 'MVar' affected.
 mvarOf :: ActionType -> Maybe MVarId
@@ -291,7 +291,7 @@ tidsOf (PutMVar _ tids) = S.fromList tids
 tidsOf (TryPutMVar _ _ tids) = S.fromList tids
 tidsOf (TakeMVar _ tids) = S.fromList tids
 tidsOf (TryTakeMVar _ _ tids) = S.fromList tids
-tidsOf (CommitCRef tid _) = S.singleton tid
+tidsOf (CommitIORef tid _) = S.singleton tid
 tidsOf (STM _ tids) = S.fromList tids
 tidsOf (ThrowTo tid _) = S.singleton tid
 tidsOf (BlockedThrowTo tid) = S.singleton tid
@@ -313,13 +313,13 @@ simplifyLookahead (WillReadMVar c)    = SynchronisedRead c
 simplifyLookahead (WillTryReadMVar c) = SynchronisedRead c
 simplifyLookahead (WillTakeMVar c)    = SynchronisedRead c
 simplifyLookahead (WillTryTakeMVar c)  = SynchronisedRead c
-simplifyLookahead (WillReadCRef r)     = UnsynchronisedRead r
-simplifyLookahead (WillReadCRefCas r)  = UnsynchronisedRead r
-simplifyLookahead (WillModCRef r)      = SynchronisedModify r
-simplifyLookahead (WillModCRefCas r)   = PartiallySynchronisedModify r
-simplifyLookahead (WillWriteCRef r)    = UnsynchronisedWrite r
-simplifyLookahead (WillCasCRef r)      = PartiallySynchronisedWrite r
-simplifyLookahead (WillCommitCRef _ r) = PartiallySynchronisedCommit r
+simplifyLookahead (WillReadIORef r)     = UnsynchronisedRead r
+simplifyLookahead (WillReadIORefCas r)  = UnsynchronisedRead r
+simplifyLookahead (WillModIORef r)      = SynchronisedModify r
+simplifyLookahead (WillModIORefCas r)   = PartiallySynchronisedModify r
+simplifyLookahead (WillWriteIORef r)    = UnsynchronisedWrite r
+simplifyLookahead (WillCasIORef r)      = PartiallySynchronisedWrite r
+simplifyLookahead (WillCommitIORef _ r) = PartiallySynchronisedCommit r
 simplifyLookahead WillSTM         = SynchronisedOther
 simplifyLookahead (WillThrowTo _) = SynchronisedOther
 simplifyLookahead _ = UnsynchronisedOther
@@ -393,8 +393,8 @@ runRefCont :: C.MonadConc n
   => (n () -> x)
   -> (a -> Maybe b)
   -> ((a -> x) -> x)
-  -> n (x, C.CRef n (Maybe b))
+  -> n (x, C.IORef n (Maybe b))
 runRefCont act f k = do
-  ref <- C.newCRef Nothing
-  let c = k (act . C.writeCRef ref . f)
+  ref <- C.newIORef Nothing
+  let c = k (act . C.writeIORef ref . f)
   pure (c, ref)

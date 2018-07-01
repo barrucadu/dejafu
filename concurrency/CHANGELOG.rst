@@ -7,6 +7,25 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.6.0.0 - IORefs (2018-07-01)
+-----------------------------
+
+* Git: :tag:`concurrency-1.6.0.0`
+* Hackage: :hackage:`concurrency-1.6.0.0`
+
+Added
+~~~~~
+
+* ``Control.Concurrent.Classy.CRef``, deprecated ``*CRef`` functions
+  and a ``CRef`` alias.
+
+Changed
+~~~~~~~
+
+* (:issue:`274`) ``CRef`` is now ``IORef``: all functions, modules,
+  and types have been renamed.
+
+
 1.5.0.0 - No More 7.10 (2018-03-28)
 -----------------------------------
 

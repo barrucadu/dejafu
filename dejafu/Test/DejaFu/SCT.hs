@@ -69,7 +69,7 @@ runSCT :: MonadConc n
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> ConcT n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
@@ -82,7 +82,7 @@ resultsSet :: (MonadConc n, Ord a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> ConcT n a
   -- ^ The computation to run many times.
   -> n (Set (Either Failure a))
@@ -100,7 +100,7 @@ runSCTDiscard :: MonadConc n
   -> Way
   -- ^ How to run the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> ConcT n a
   -- ^ The computation to run many times.
   -> n [(Either Failure a, Trace)]
@@ -116,7 +116,7 @@ resultsSetDiscard :: (MonadConc n, Ord a)
   -> Way
   -- ^ How to run the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> ConcT n a
   -- ^ The computation to run many times.
   -> n (Set (Either Failure a))
@@ -373,7 +373,7 @@ lBacktrack = backtrackAt (\_ _ -> False)
 -- @since 1.0.0.0
 sctBound :: MonadConc n
   => MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> Bounds
   -- ^ The combined bounds.
   -> ConcT n a
@@ -392,7 +392,7 @@ sctBoundDiscard :: MonadConc n
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> Bounds
   -- ^ The combined bounds.
   -> ConcT n a
@@ -412,7 +412,7 @@ sctBoundDiscard discard memtype cb = runSCTWithSettings $
 -- @since 1.0.0.0
 sctUniformRandom :: (MonadConc n, RandomGen g)
   => MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> g
   -- ^ The random number generator.
   -> Int
@@ -433,7 +433,7 @@ sctUniformRandomDiscard :: (MonadConc n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> g
   -- ^ The random number generator.
   -> Int
@@ -455,7 +455,7 @@ sctUniformRandomDiscard discard memtype g lim = runSCTWithSettings $
 -- @since 1.7.0.0
 sctWeightedRandom :: (MonadConc n, RandomGen g)
   => MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> g
   -- ^ The random number generator.
   -> Int
@@ -476,7 +476,7 @@ sctWeightedRandomDiscard :: (MonadConc n, RandomGen g)
   => (Either Failure a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> g
   -- ^ The random number generator.
   -> Int
@@ -533,7 +533,7 @@ yieldCountInc sofar prior (d, lnext) = case prior of
 
 -- | Determine if an action is a commit or not.
 isCommitRef :: ThreadAction -> Bool
-isCommitRef (CommitCRef _ _) = True
+isCommitRef (CommitIORef _ _) = True
 isCommitRef _ = False
 
 -- | Get the maximum difference between two ints in a list.

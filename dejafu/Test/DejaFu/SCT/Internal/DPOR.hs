@@ -572,7 +572,7 @@ independent safeIO ds t1 a1 t2 a2
     -- See #191 / #190
     check _ (ThrowTo t _) tid _ | t == tid = True
     check _ (BlockedThrowTo t) tid _ | t == tid = True
-    -- can't re-order an unsynchronised write with something which synchronises that CRef.
+    -- can't re-order an unsynchronised write with something which synchronises that IORef.
     check _ (simplifyAction -> UnsynchronisedWrite r) _ (simplifyAction -> a) | synchronises a r = True
     check _ _ _ _ = False
 
@@ -674,14 +674,14 @@ dependentActions ds a1 a2 = case (a1, a2) of
   (SynchronisedWrite v1, SynchronisedRead  v2) | v1 == v2 -> True
   (SynchronisedRead  v1, SynchronisedWrite v2) | v1 == v2 -> True
 
-  (_, _) -> maybe False (\r -> Just r == crefOf a2) (crefOf a1)
+  (_, _) -> maybe False (\r -> Just r == iorefOf a2) (iorefOf a1)
 
 -------------------------------------------------------------------------------
 -- ** Dependency function state
 
 data DepState = DepState
-  { depCRState :: Map CRefId Bool
-  -- ^ Keep track of which @CRef@s have buffered writes.
+  { depIOState :: Map IORefId Bool
+  -- ^ Keep track of which @IORef@s have buffered writes.
   , depMVState :: Set MVarId
   -- ^ Keep track of which @MVar@s are full.
   , depMaskState :: Map ThreadId MaskingState
@@ -692,7 +692,7 @@ data DepState = DepState
   } deriving (Eq, Show)
 
 instance NFData DepState where
-  rnf depstate = rnf ( depCRState depstate
+  rnf depstate = rnf ( depIOState depstate
                      , depMVState depstate
                      , [(t, m `seq` ()) | (t, m) <- M.toList (depMaskState depstate)]
                      )
@@ -705,17 +705,17 @@ initialDepState = DepState M.empty S.empty M.empty
 -- happened.
 updateDepState :: MemType -> DepState -> ThreadId -> ThreadAction -> DepState
 updateDepState memtype depstate tid act = DepState
-  { depCRState   = updateCRState memtype act $ depCRState   depstate
+  { depIOState   = updateCRState memtype act $ depIOState   depstate
   , depMVState   = updateMVState         act $ depMVState   depstate
   , depMaskState = updateMaskState tid   act $ depMaskState depstate
   }
 
--- | Update the @CRef@ buffer state with the action that has just
+-- | Update the @IORef@ buffer state with the action that has just
 -- happened.
-updateCRState :: MemType -> ThreadAction -> Map CRefId Bool -> Map CRefId Bool
+updateCRState :: MemType -> ThreadAction -> Map IORefId Bool -> Map IORefId Bool
 updateCRState SequentialConsistency _ = const M.empty
-updateCRState _ (CommitCRef _ r) = M.delete r
-updateCRState _ (WriteCRef    r) = M.insert r True
+updateCRState _ (CommitIORef _ r) = M.delete r
+updateCRState _ (WriteIORef    r) = M.insert r True
 updateCRState _ ta
   | isBarrier $ simplifyAction ta = const M.empty
   | otherwise = id
@@ -743,9 +743,9 @@ updateMaskState _ (ThrowTo tid True) = M.delete tid
 updateMaskState tid Stop = M.delete tid
 updateMaskState _ _ = id
 
--- | Check if a @CRef@ has a buffered write pending.
-isBuffered :: DepState -> CRefId -> Bool
-isBuffered depstate r = M.findWithDefault False r (depCRState depstate)
+-- | Check if a @IORef@ has a buffered write pending.
+isBuffered :: DepState -> IORefId -> Bool
+isBuffered depstate r = M.findWithDefault False r (depIOState depstate)
 
 -- | Check if an @MVar@ is full.
 isFull :: DepState -> MVarId -> Bool

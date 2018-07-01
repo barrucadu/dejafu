@@ -32,21 +32,17 @@ process:
 
    * ``TVar`` becomes ``TVar stm``
    * ``MVar`` becomes ``MVar m``
-   * ``IORef`` becomes ``CRef m`` [#]_
+   * ``IORef`` becomes ``IORef m``
 
 5. Some functions are renamed:
 
-   * ``*IORef*`` becomes ``*CRef*``
    * ``forkIO*`` becomes ``fork*``
-   * ``atomicModifyIORefCAS*`` becomes ``modifyCRefCAS*``
+   * ``atomicModifyIORefCAS*`` becomes ``modifyIORefCAS*``
 
 6. Fix the type errors
 
 If you're lucky enough to be starting a new concurrent Haskell
 project, you can just program against the ``MonadConc`` interface.
-
-.. [#] I felt that calling it ``IORef`` when there was no I/O involved
-        would be confusing, but this was perhaps a mistake.
 
 
 What if I really need I/O?

@@ -56,22 +56,22 @@ instance Fail.MonadFail (ModelConc n) where
 -- @Maybe@ value.
 data ModelMVar n a = ModelMVar
   { mvarId  :: MVarId
-  , mvarRef :: C.CRef n (Maybe a)
+  , mvarRef :: C.IORef n (Maybe a)
   }
 
--- | A @CRef@ is modelled as a unique ID and a reference holding
+-- | A @IORef@ is modelled as a unique ID and a reference holding
 -- thread-local values, the number of commits, and the most recent
 -- committed value.
-data ModelCRef n a = ModelCRef
-  { crefId  :: CRefId
-  , crefRef :: C.CRef n (Map ThreadId a, Integer, a)
+data ModelIORef n a = ModelIORef
+  { iorefId  :: IORefId
+  , iorefRef :: C.IORef n (Map ThreadId a, Integer, a)
   }
 
--- | A @Ticket@ is modelled as the ID of the @ModelCRef@ it came from,
--- the commits to the @ModelCRef@ at the time it was produced, and the
+-- | A @Ticket@ is modelled as the ID of the @ModelIORef@ it came from,
+-- the commits to the @ModelIORef@ at the time it was produced, and the
 -- value observed.
 data ModelTicket a = ModelTicket
-  { ticketCRef   :: CRefId
+  { ticketIORef  :: IORefId
   , ticketWrites :: Integer
   , ticketVal    :: a
   }
@@ -100,13 +100,13 @@ data Action n =
   | forall a. ATakeMVar    (ModelMVar n a) (a -> Action n)
   | forall a. ATryTakeMVar (ModelMVar n a) (Maybe a -> Action n)
 
-  | forall a.   ANewCRef String a (ModelCRef n a -> Action n)
-  | forall a.   AReadCRef    (ModelCRef n a) (a -> Action n)
-  | forall a.   AReadCRefCas (ModelCRef n a) (ModelTicket a -> Action n)
-  | forall a b. AModCRef     (ModelCRef n a) (a -> (a, b)) (b -> Action n)
-  | forall a b. AModCRefCas  (ModelCRef n a) (a -> (a, b)) (b -> Action n)
-  | forall a.   AWriteCRef   (ModelCRef n a) a (Action n)
-  | forall a.   ACasCRef     (ModelCRef n a) (ModelTicket a) a ((Bool, ModelTicket a) -> Action n)
+  | forall a.   ANewIORef String a (ModelIORef n a -> Action n)
+  | forall a.   AReadIORef    (ModelIORef n a) (a -> Action n)
+  | forall a.   AReadIORefCas (ModelIORef n a) (ModelTicket a -> Action n)
+  | forall a b. AModIORef     (ModelIORef n a) (a -> (a, b)) (b -> Action n)
+  | forall a b. AModIORefCas  (ModelIORef n a) (a -> (a, b)) (b -> Action n)
+  | forall a.   AWriteIORef   (ModelIORef n a) a (Action n)
+  | forall a.   ACasIORef     (ModelIORef n a) (ModelTicket a) a ((Bool, ModelTicket a) -> Action n)
 
   | forall e.   Exception e => AThrow e
   | forall e.   Exception e => AThrowTo ThreadId e (Action n)
@@ -120,7 +120,7 @@ data Action n =
   | AYield  (Action n)
   | ADelay Int (Action n)
   | AReturn (Action n)
-  | ACommit ThreadId CRefId
+  | ACommit ThreadId IORefId
   | AStop (n ())
 
   | forall a. ASub (ModelConc n a) (Either Failure a -> Action n)
@@ -145,14 +145,14 @@ lookahead (AReadMVar (ModelMVar m _) _) = WillReadMVar m
 lookahead (ATryReadMVar (ModelMVar m _) _) = WillTryReadMVar m
 lookahead (ATakeMVar (ModelMVar m _) _) = WillTakeMVar m
 lookahead (ATryTakeMVar (ModelMVar m _) _) = WillTryTakeMVar m
-lookahead (ANewCRef _ _ _) = WillNewCRef
-lookahead (AReadCRef (ModelCRef r _) _) = WillReadCRef r
-lookahead (AReadCRefCas (ModelCRef r _) _) = WillReadCRefCas r
-lookahead (AModCRef (ModelCRef r _) _ _) = WillModCRef r
-lookahead (AModCRefCas (ModelCRef r _) _ _) = WillModCRefCas r
-lookahead (AWriteCRef (ModelCRef r _) _ _) = WillWriteCRef r
-lookahead (ACasCRef (ModelCRef r _) _ _ _) = WillCasCRef r
-lookahead (ACommit t c) = WillCommitCRef t c
+lookahead (ANewIORef _ _ _) = WillNewIORef
+lookahead (AReadIORef (ModelIORef r _) _) = WillReadIORef r
+lookahead (AReadIORefCas (ModelIORef r _) _) = WillReadIORefCas r
+lookahead (AModIORef (ModelIORef r _) _ _) = WillModIORef r
+lookahead (AModIORefCas (ModelIORef r _) _ _) = WillModIORefCas r
+lookahead (AWriteIORef (ModelIORef r _) _ _) = WillWriteIORef r
+lookahead (ACasIORef (ModelIORef r _) _ _ _) = WillCasIORef r
+lookahead (ACommit t c) = WillCommitIORef t c
 lookahead (AAtom _ _) = WillSTM
 lookahead (AThrow _) = WillThrow
 lookahead (AThrowTo tid _ _) = WillThrowTo tid

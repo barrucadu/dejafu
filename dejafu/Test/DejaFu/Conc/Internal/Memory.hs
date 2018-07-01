@@ -12,14 +12,14 @@
 -- Stability   : experimental
 -- Portability : BangPatterns, GADTs, FlexibleContexts, LambdaCase, RecordWildCards
 --
--- Operations over @CRef@s and @MVar@s. This module is NOT considered
+-- Operations over @IORef@s and @MVar@s. This module is NOT considered
 -- to form part of the public interface of this library.
 --
--- Relaxed memory operations over @CRef@s are implemented with an
+-- Relaxed memory operations over @IORef@s are implemented with an
 -- explicit write buffer: one per thread for TSO, and one per
 -- thread/variable combination for PSO. Unsynchronised writes append
 -- to this buffer, and periodically separate threads commit from these
--- buffers to the \"actual\" @CRef@.
+-- buffers to the \"actual\" @IORef@.
 --
 -- This model comes from /Dynamic Partial Order Reduction for Relaxed
 -- Memory Models/, N. Zhang, M. Kusano, and C. Wang (2015).
@@ -40,93 +40,93 @@ import           Test.DejaFu.Internal
 import           Test.DejaFu.Types
 
 --------------------------------------------------------------------------------
--- * Manipulating @CRef@s
+-- * Manipulating @IORef@s
 
 -- | In non-sequentially-consistent memory models, non-synchronised
 -- writes get buffered.
 --
--- The @CRefId@ parameter is only used under PSO. Under TSO each
+-- The @IORefId@ parameter is only used under PSO. Under TSO each
 -- thread has a single buffer.
 newtype WriteBuffer n = WriteBuffer
-  { buffer :: Map (ThreadId, Maybe CRefId) (Seq (BufferedWrite n)) }
+  { buffer :: Map (ThreadId, Maybe IORefId) (Seq (BufferedWrite n)) }
 
 -- | A buffered write is a reference to the variable, and the value to
 -- write. Universally quantified over the value type so that the only
 -- thing which can be done with it is to write it to the reference.
 data BufferedWrite n where
-  BufferedWrite :: ThreadId -> ModelCRef n a -> a -> BufferedWrite n
+  BufferedWrite :: ThreadId -> ModelIORef n a -> a -> BufferedWrite n
 
 -- | An empty write buffer.
 emptyBuffer :: WriteBuffer n
 emptyBuffer = WriteBuffer M.empty
 
 -- | Add a new write to the end of a buffer.
-bufferWrite :: C.MonadConc n => WriteBuffer n -> (ThreadId, Maybe CRefId) -> ModelCRef n a -> a -> n (WriteBuffer n)
-bufferWrite (WriteBuffer wb) k@(tid, _) cref@ModelCRef{..} new = do
+bufferWrite :: C.MonadConc n => WriteBuffer n -> (ThreadId, Maybe IORefId) -> ModelIORef n a -> a -> n (WriteBuffer n)
+bufferWrite (WriteBuffer wb) k@(tid, _) ref@ModelIORef{..} new = do
   -- Construct the new write buffer
-  let write = singleton $ BufferedWrite tid cref new
+  let write = singleton $ BufferedWrite tid ref new
   let buffer' = M.insertWith (flip (><)) k write wb
 
-  -- Write the thread-local value to the @CRef@'s update map.
-  (locals, count, def) <- C.readCRef crefRef
-  C.writeCRef crefRef (M.insert tid new locals, count, def)
+  -- Write the thread-local value to the @IORef@'s update map.
+  (locals, count, def) <- C.readIORef iorefRef
+  C.writeIORef iorefRef (M.insert tid new locals, count, def)
 
   pure (WriteBuffer buffer')
 
 -- | Commit the write at the head of a buffer.
-commitWrite :: C.MonadConc n => WriteBuffer n -> (ThreadId, Maybe CRefId) -> n (WriteBuffer n)
+commitWrite :: C.MonadConc n => WriteBuffer n -> (ThreadId, Maybe IORefId) -> n (WriteBuffer n)
 commitWrite w@(WriteBuffer wb) k = case maybe EmptyL viewl $ M.lookup k wb of
-  BufferedWrite _ cref a :< rest -> do
-    _ <- writeImmediate cref a
+  BufferedWrite _ ref a :< rest -> do
+    _ <- writeImmediate ref a
     pure . WriteBuffer $ M.insert k rest wb
   EmptyL -> pure w
 
--- | Read from a @CRef@, returning a newer thread-local non-committed
+-- | Read from a @IORef@, returning a newer thread-local non-committed
 -- write if there is one.
-readCRef :: C.MonadConc n => ModelCRef n a -> ThreadId -> n a
-readCRef cref tid = do
-  (val, _) <- readCRefPrim cref tid
+readIORef :: C.MonadConc n => ModelIORef n a -> ThreadId -> n a
+readIORef ref tid = do
+  (val, _) <- readIORefPrim ref tid
   pure val
 
--- | Read from a @CRef@, returning a @Ticket@ representing the current
+-- | Read from a @IORef@, returning a @Ticket@ representing the current
 -- view of the thread.
-readForTicket :: C.MonadConc n => ModelCRef n a -> ThreadId -> n (ModelTicket a)
-readForTicket cref@ModelCRef{..} tid = do
-  (val, count) <- readCRefPrim cref tid
-  pure (ModelTicket crefId count val)
+readForTicket :: C.MonadConc n => ModelIORef n a -> ThreadId -> n (ModelTicket a)
+readForTicket ref@ModelIORef{..} tid = do
+  (val, count) <- readIORefPrim ref tid
+  pure (ModelTicket iorefId count val)
 
--- | Perform a compare-and-swap on a @CRef@ if the ticket is still
+-- | Perform a compare-and-swap on a @IORef@ if the ticket is still
 -- valid. This is strict in the \"new\" value argument.
-casCRef :: C.MonadConc n => ModelCRef n a -> ThreadId -> ModelTicket a -> a -> n (Bool, ModelTicket a, n ())
-casCRef cref tid (ModelTicket _ cc _) !new = do
-  tick'@(ModelTicket _ cc' _) <- readForTicket cref tid
+casIORef :: C.MonadConc n => ModelIORef n a -> ThreadId -> ModelTicket a -> a -> n (Bool, ModelTicket a, n ())
+casIORef ref tid (ModelTicket _ cc _) !new = do
+  tick'@(ModelTicket _ cc' _) <- readForTicket ref tid
 
   if cc == cc'
   then do
-    effect <- writeImmediate cref new
-    tick'' <- readForTicket cref tid
+    effect <- writeImmediate ref new
+    tick'' <- readForTicket ref tid
     pure (True, tick'', effect)
   else pure (False, tick', pure ())
 
--- | Read the local state of a @CRef@.
-readCRefPrim :: C.MonadConc n => ModelCRef n a -> ThreadId -> n (a, Integer)
-readCRefPrim ModelCRef{..} tid = do
-  (vals, count, def) <- C.readCRef crefRef
+-- | Read the local state of a @IORef@.
+readIORefPrim :: C.MonadConc n => ModelIORef n a -> ThreadId -> n (a, Integer)
+readIORefPrim ModelIORef{..} tid = do
+  (vals, count, def) <- C.readIORef iorefRef
   pure (M.findWithDefault def tid vals, count)
 
--- | Write and commit to a @CRef@ immediately, clearing the update map
+-- | Write and commit to a @IORef@ immediately, clearing the update map
 -- and incrementing the write count.
-writeImmediate :: C.MonadConc n => ModelCRef n a -> a -> n (n ())
-writeImmediate ModelCRef{..} a = do
-  (_, count, _) <- C.readCRef crefRef
-  let effect = C.writeCRef crefRef (M.empty, count + 1, a)
+writeImmediate :: C.MonadConc n => ModelIORef n a -> a -> n (n ())
+writeImmediate ModelIORef{..} a = do
+  (_, count, _) <- C.readIORef iorefRef
+  let effect = C.writeIORef iorefRef (M.empty, count + 1, a)
   effect
   pure effect
 
 -- | Flush all writes in the buffer.
 writeBarrier :: C.MonadConc n => WriteBuffer n -> n ()
 writeBarrier (WriteBuffer wb) = mapM_ flush $ M.elems wb where
-  flush = mapM_ $ \(BufferedWrite _ cref a) -> writeImmediate cref a
+  flush = mapM_ $ \(BufferedWrite _ ref a) -> writeImmediate ref a
 
 -- | Add phantom threads to the thread list to commit pending writes.
 addCommitThreads :: WriteBuffer n -> Threads n -> Threads n
@@ -135,13 +135,13 @@ addCommitThreads (WriteBuffer wb) ts = ts <> M.fromList phantoms where
              | (k, b) <- M.toList wb
              , c <- maybeToList (go $ viewl b)
              ]
-  go (BufferedWrite tid ModelCRef{..} _ :< _) = Just $ ACommit tid crefId
+  go (BufferedWrite tid ModelIORef{..} _ :< _) = Just $ ACommit tid iorefId
   go EmptyL = Nothing
 
 -- | The ID of a commit thread.
-commitThreadId :: ThreadId -> Maybe CRefId -> ThreadId
+commitThreadId :: ThreadId -> Maybe IORefId -> ThreadId
 commitThreadId (ThreadId (Id _ t)) = ThreadId . Id Nothing . negate . go where
-  go (Just (CRefId (Id _ c))) = t + 1 + c * 10000
+  go (Just (IORefId (Id _ c))) = t + 1 + c * 10000
   go Nothing = t + 1
 
 -- | Remove phantom threads.
@@ -220,7 +220,7 @@ mutMVar :: C.MonadConc n
   -> ThreadId
   -> Threads n
   -> n (Bool, Threads n, [ThreadId], n ())
-mutMVar blocking ModelMVar{..} a c threadid threads = C.readCRef mvarRef >>= \case
+mutMVar blocking ModelMVar{..} a c threadid threads = C.readIORef mvarRef >>= \case
   Just _ -> case blocking of
     Blocking ->
       let threads' = block (OnMVarEmpty mvarId) threadid threads
@@ -228,7 +228,7 @@ mutMVar blocking ModelMVar{..} a c threadid threads = C.readCRef mvarRef >>= \ca
     NonBlocking ->
       pure (False, goto (c False) threadid threads, [], pure ())
   Nothing -> do
-    let effect = C.writeCRef mvarRef $ Just a
+    let effect = C.writeIORef mvarRef $ Just a
     let (threads', woken) = wake (OnMVarFull mvarId) threads
     effect
     pure (True, goto (c True) threadid threads', woken, effect)
@@ -243,10 +243,10 @@ seeMVar :: C.MonadConc n
   -> ThreadId
   -> Threads n
   -> n (Bool, Threads n, [ThreadId], n ())
-seeMVar emptying blocking ModelMVar{..} c threadid threads = C.readCRef mvarRef >>= \case
+seeMVar emptying blocking ModelMVar{..} c threadid threads = C.readIORef mvarRef >>= \case
   val@(Just _) -> do
     let effect = case emptying of
-          Emptying -> C.writeCRef mvarRef Nothing
+          Emptying -> C.writeIORef mvarRef Nothing
           NonEmptying -> pure ()
     let (threads', woken) = wake (OnMVarEmpty mvarId) threads
     effect

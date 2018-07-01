@@ -18,7 +18,7 @@ tests :: [TestTree]
 tests =
   [ testGroup "Threading" threadingTests
   , testGroup "MVar" mvarTests
-  , testGroup "CRef" crefTests
+  , testGroup "IORef" iorefTests
   , testGroup "STM" stmTests
   , testGroup "Exceptions" exceptionTests
   , testGroup "Capabilities" capabilityTests
@@ -40,9 +40,9 @@ threadingTests = toTestList
       (/=) <$> myThreadId <*> readMVar tid
 
   , djfuT "A thread doesn't wait for its children before terminating" (gives' [Nothing, Just ()]) $ do
-      x <- newCRef Nothing
-      _ <- fork . writeCRef x $ Just ()
-      readCRef x
+      x <- newIORef Nothing
+      _ <- fork . writeIORef x $ Just ()
+      readIORef x
 
   , djfuT "The main thread is bound" (gives' [(True, True)]) $ do
       b1 <- isCurrentThreadBound
@@ -117,58 +117,58 @@ mvarTests = toTestList
 
 --------------------------------------------------------------------------------
 
-crefTests :: [TestTree]
-crefTests = toTestList
-  [ djfuT "Racey CRef computations are nondeterministic" (gives' [0,1]) $ do
-      x  <- newCRefInt 0
-      j1 <- spawn $ writeCRef x 0
-      j2 <- spawn $ writeCRef x 1
+iorefTests :: [TestTree]
+iorefTests = toTestList
+  [ djfuT "Racey IORef computations are nondeterministic" (gives' [0,1]) $ do
+      x  <- newIORefInt 0
+      j1 <- spawn $ writeIORef x 0
+      j2 <- spawn $ writeIORef x 1
       takeMVar j1
       takeMVar j2
-      readCRef x
+      readIORef x
 
-  , djfuT "CASing CRef changes its value" (gives' [0,1]) $ do
-      x <- newCRefInt 0
-      _ <- fork $ modifyCRefCAS x (const (1, ()))
-      readCRef x
+  , djfuT "CASing IORef changes its value" (gives' [0,1]) $ do
+      x <- newIORefInt 0
+      _ <- fork $ modifyIORefCAS x (const (1, ()))
+      readIORef x
 
   , djfuT "Racey CAS computations are nondeterministic" (gives' [(True, 2), (False, 2)]) $ do
-      x <- newCRefInt 0
+      x <- newIORefInt 0
       t <- readForCAS x
-      j <- spawn $ casCRef x t 1
-      writeCRef x 2
+      j <- spawn $ casIORef x t 1
+      writeIORef x 2
       b <- fst <$> readMVar j
-      v <- readCRef x
+      v <- readIORef x
       pure (b, v)
 
   , djfuT "A failed CAS gives an updated ticket" (gives' [(True, 1), (True, 2)]) $ do
-      x <- newCRefInt 0
+      x <- newIORefInt 0
       t <- readForCAS x
       v <- newEmptyMVar
       j <- spawn $ do
-        o@(f, t') <- casCRef x t 1
+        o@(f, t') <- casIORef x t 1
         takeMVar v
-        if f then pure o else casCRef x t' 1
-      writeCRef x 2
+        if f then pure o else casIORef x t' 1
+      writeIORef x 2
       putMVar v ()
       b <- fst <$> readMVar j
-      o <- readCRef x
+      o <- readIORef x
       pure (b, o)
 
   , djfuT "A ticket is only good for one CAS" (gives' [(True, False, 1), (False, True, 2)]) $ do
-      x  <- newCRefInt 0
+      x  <- newIORefInt 0
       t  <- readForCAS x
-      j1 <- spawn $ casCRef x t 1
-      j2 <- spawn $ casCRef x t 2
+      j1 <- spawn $ casIORef x t 1
+      j2 <- spawn $ casIORef x t 2
       b1 <- fst <$> readMVar j1
       b2 <- fst <$> readMVar j2
-      v  <- readCRef x
+      v  <- readIORef x
       pure (b1, b2, v)
 
-  , djfuT "CRef writes may be delayed" (gives' [0,1]) $ do
-      x <- newCRefInt 0
-      writeCRef x 1
-      takeMVar =<< spawn (readCRef x)
+  , djfuT "IORef writes may be delayed" (gives' [0,1]) $ do
+      x <- newIORefInt 0
+      writeIORef x 1
+      takeMVar =<< spawn (readIORef x)
   ]
 
 --------------------------------------------------------------------------------
@@ -312,18 +312,18 @@ hacksTests = toTestList
   , testGroup "DontCheck"
     [ djfuT "Inner action is run with a deterministic scheduler" (gives' [1]) $
         dontCheck Nothing $ do
-          r <- newCRefInt 1
-          _ <- fork (atomicWriteCRef r 2)
-          readCRef r
+          r <- newIORefInt 1
+          _ <- fork (atomicWriteIORef r 2)
+          readIORef r
 
     , djfuT "Threads created by the inner action persist in the outside" (gives' [1,2]) $ do
         (ref, trigger) <- dontCheck Nothing $ do
-          r <- newCRefInt 1
+          r <- newIORefInt 1
           v <- newEmptyMVar
-          _ <- fork (takeMVar v >> atomicWriteCRef r 2)
+          _ <- fork (takeMVar v >> atomicWriteIORef r 2)
           pure (r, v)
         putMVar trigger ()
-        readCRef ref
+        readIORef ref
 
     , djfuT "Bound threads created on the inside are bound on the outside" (gives' [True]) $ do
         (out, trigger) <- dontCheck Nothing $ do
@@ -344,10 +344,10 @@ hacksTests = toTestList
 
     , djfuT "Inner action is run under sequential consistency" (gives' [1]) $ do
         x <- dontCheck Nothing $ do
-          x <- newCRefInt 0
-          writeCRef x 1
+          x <- newIORefInt 0
+          writeIORef x 1
           pure x
-        takeMVar =<< spawn (readCRef x)
+        takeMVar =<< spawn (readIORef x)
     ]
   ]
 

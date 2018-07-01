@@ -215,13 +215,13 @@ work shortcircuit workitems = do
     -- If there's only one capability don't bother with threads.
     driver 1 res kill = do
       atomically . putTMVar kill $ failit res
-      remaining <- newCRef workitems
+      remaining <- newIORef workitems
       process remaining res
 
     -- Fork off as many threads as there are capabilities, and queue
     -- up the remaining work.
     driver caps res kill = do
-      remaining <- newCRef workitems
+      remaining <- newIORef workitems
       tids <- mapM (\cap -> forkOn cap $ process remaining res) [0..caps-1]
 
       -- Construct an action to short-circuit the computation.
@@ -236,7 +236,7 @@ work shortcircuit workitems = do
     -- Process a work item and store the result if it is a success,
     -- otherwise continue.
     process remaining res = do
-      mitem <- atomicModifyCRef remaining $ \rs -> if null rs then ([], Nothing) else (tail rs, Just $ head rs)
+      mitem <- atomicModifyIORef remaining $ \rs -> if null rs then ([], Nothing) else (tail rs, Just $ head rs)
       case mitem of
         Just item -> do
           fwrap  <- item
