@@ -150,7 +150,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Do not be put off by the use of @UndecidableInstances@, it is safe
 -- here.
 --
--- @since unreleased
+-- @since 1.6.0.0
 class ( Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -200,7 +200,7 @@ class ( Monad m
   -- relaxed memory effects if functions outside the set @newIORef@,
   -- @readIORef@, @atomicModifyIORef@, and @atomicWriteIORef@ are used.
   --
-  -- @since unreleased
+  -- @since 1.6.0.0
   type IORef m :: * -> *
 
   -- | When performing compare-and-swap operations on @IORef@s, a
@@ -378,7 +378,7 @@ class ( Monad m
   --
   -- > newIORef = newIORefN ""
   --
-  -- @since unreleased
+  -- @since 1.6.0.0
   newIORef :: a -> m (IORef m a)
   newIORef = newIORefN ""
 
@@ -387,7 +387,7 @@ class ( Monad m
   --
   -- > newIORefN _ = newIORef
   --
-  -- @since unreleased
+  -- @since 1.6.0.0
   newIORefN :: String -> a -> m (IORef m a)
   newIORefN _ = newIORef
 
@@ -395,20 +395,20 @@ class ( Monad m
   --
   -- > readIORef ioref = readForCAS ioref >>= peekTicket
   --
-  -- @since unreleased
+  -- @since 1.6.0.0
   readIORef :: IORef m a -> m a
   readIORef ioref = readForCAS ioref >>= peekTicket
 
   -- | Atomically modify the value stored in a reference. This imposes
   -- a full memory barrier.
   --
-  -- @since unreleased
+  -- @since 1.6.0.0
   atomicModifyIORef :: IORef m a -> (a -> (a, b)) -> m b
 
   -- | Write a new value into an @IORef@, without imposing a memory
   -- barrier. This means that relaxed memory effects can be observed.
   --
-  -- @since unreleased
+  -- @since 1.6.0.0
   writeIORef :: IORef m a -> a -> m ()
 
   -- | Replace the value stored in a reference, with the
@@ -416,14 +416,14 @@ class ( Monad m
   --
   -- > atomicWriteIORef r a = atomicModifyIORef r $ const (a, ())
   --
-  -- @since unreleased
+  -- @since 1.6.0.0
   atomicWriteIORef :: IORef m a -> a -> m ()
   atomicWriteIORef r a = atomicModifyIORef r $ const (a, ())
 
   -- | Read the current value stored in a reference, returning a
   -- @Ticket@, for use in future compare-and-swap operations.
   --
-  -- @since unreleased
+  -- @since 1.6.0.0
   readForCAS :: IORef m a -> m (Ticket m a)
 
   -- | Extract the actual Haskell value from a @Ticket@.
@@ -439,21 +439,21 @@ class ( Monad m
   --
   -- This is strict in the \"new\" value argument.
   --
-  -- @since unreleased
+  -- @since 1.6.0.0
   casIORef :: IORef m a -> Ticket m a -> a -> m (Bool, Ticket m a)
 
   -- | A replacement for 'atomicModifyIORef' using a compare-and-swap.
   --
   -- This is strict in the \"new\" value argument.
   --
-  -- @since unreleased
+  -- @since 1.6.0.0
   modifyIORefCAS :: IORef m a -> (a -> (a, b)) -> m b
 
   -- | A variant of 'modifyIORefCAS' which doesn't return a result.
   --
   -- > modifyIORefCAS_ ioref f = modifyIORefCAS ioref (\a -> (f a, ()))
   --
-  -- @since unreleased
+  -- @since 1.6.0.0
   modifyIORefCAS_ :: IORef m a -> (a -> a) -> m ()
   modifyIORefCAS_ ioref f = modifyIORefCAS ioref (\a -> (f a, ()))
 
@@ -690,7 +690,7 @@ peekTicket t = pure $ peekTicket' (Proxy :: Proxy m) (t :: Ticket m a)
 -- | Compare-and-swap a value in a @IORef@, returning an indication of
 -- success and the new value.
 --
--- @since unreleased
+-- @since 1.6.0.0
 cas :: MonadConc m => IORef m a -> a -> m (Bool, a)
 cas ioref a = do
   tick         <- readForCAS ioref

@@ -7,8 +7,11 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-unreleased - IORefs
--------------------
+1.6.0.0 - IORefs (2018-07-01)
+-----------------------------
+
+* Git: :tag:`concurrency-1.6.0.0`
+* Hackage: :hackage:`concurrency-1.6.0.0`
 
 Added
 ~~~~~

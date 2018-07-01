@@ -7,14 +7,19 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-unreleased - IORefs
--------------------
+1.11.0.0 - IORefs (2018-07-01)
+------------------------------
+
+* Git: :tag:`dejafu-1.11.0.0`
+* Hackage: :hackage:`dejafu-1.11.0.0`
 
 Changed
 ~~~~~~~
 
 * (:issue:`274`) ``CRef`` is now ``IORef``: all functions, data
   constructors, and types have been renamed.
+
+* The lower bound on :hackage:`concurrency` is 1.6.
 
 
 1.10.1.0 (2018-06-17)

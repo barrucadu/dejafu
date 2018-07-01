@@ -97,13 +97,13 @@ import           Control.Monad.Conc.Class
 --
 -- To avoid this problem, use 'modifyIORef'' instead.
 --
--- @since unreleased
+-- @since 1.6.0.0
 modifyIORef :: MonadConc m => IORef m a -> (a -> a) -> m ()
 modifyIORef ref f = readIORef ref >>= writeIORef ref . f
 
 -- | Strict version of 'modifyIORef'
 --
--- @since unreleased
+-- @since 1.6.0.0
 modifyIORef' :: MonadConc m => IORef m a -> (a -> a) -> m ()
 modifyIORef' ref f = do
   x <- readIORef ref
@@ -112,7 +112,7 @@ modifyIORef' ref f = do
 -- | Strict version of 'atomicModifyIORef'. This forces both the value
 -- stored in the @IORef@ as well as the value returned.
 --
--- @since unreleased
+-- @since 1.6.0.0
 atomicModifyIORef' :: MonadConc m => IORef m a -> (a -> (a,b)) -> m b
 atomicModifyIORef' ref f = do
   b <- atomicModifyIORef ref $ \a -> case f a of

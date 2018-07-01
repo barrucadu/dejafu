@@ -41,7 +41,7 @@ deriving instance Generic ThreadId
 
 -- | Every @IORef@ has a unique identifier.
 --
--- @since unreleased
+-- @since 1.11.0.0
 newtype IORefId = IORefId Id
   deriving (Eq, Ord, NFData, Generic)
 
@@ -106,7 +106,7 @@ initialThread = ThreadId (Id (Just "main") 0)
 
 -- | All the actions that a thread can perform.
 --
--- @since unreleased
+-- @since 1.11.0.0
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -248,7 +248,7 @@ instance NFData ThreadAction where
 
 -- | A one-step look-ahead at what a thread will do next.
 --
--- @since unreleased
+-- @since 1.11.0.0
 data Lookahead =
     WillFork
   -- ^ Will start a new thread.
