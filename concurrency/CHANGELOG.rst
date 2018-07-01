@@ -10,6 +10,12 @@ standard Haskell versioning scheme.
 unreleased - IORefs
 -------------------
 
+Added
+~~~~~
+
+* ``Control.Concurrent.Classy.CRef``, deprecated ``*CRef`` functions
+  and a ``CRef`` alias.
+
 Changed
 ~~~~~~~
 

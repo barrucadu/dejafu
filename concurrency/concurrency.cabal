@@ -41,6 +41,7 @@ library
                      , Control.Concurrent.Classy
                      , Control.Concurrent.Classy.Async
                      , Control.Concurrent.Classy.Chan
+                     , Control.Concurrent.Classy.CRef
                      , Control.Concurrent.Classy.IORef
                      , Control.Concurrent.Classy.MVar
                      , Control.Concurrent.Classy.QSem

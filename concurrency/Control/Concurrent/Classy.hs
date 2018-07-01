@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-deprecations #-}
+
 -- |
 -- Module      : Control.Concurrent.Classy
 -- Copyright   : (c) 2016 Michael Walker
@@ -22,6 +24,7 @@
 module Control.Concurrent.Classy
   ( module Control.Monad.Conc.Class
   , module Control.Concurrent.Classy.Chan
+  , module Control.Concurrent.Classy.CRef
   , module Control.Concurrent.Classy.IORef
   , module Control.Concurrent.Classy.MVar
   , module Control.Concurrent.Classy.STM
@@ -30,6 +33,7 @@ module Control.Concurrent.Classy
   ) where
 
 import           Control.Concurrent.Classy.Chan
+import           Control.Concurrent.Classy.CRef
 import           Control.Concurrent.Classy.IORef
 import           Control.Concurrent.Classy.MVar
 import           Control.Concurrent.Classy.QSem
