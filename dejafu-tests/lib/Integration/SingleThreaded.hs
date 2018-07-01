@@ -21,7 +21,7 @@ import           Common
 tests :: [TestTree]
 tests =
   [ testGroup "MVar" mvarTests
-  , testGroup "CRef" crefTests
+  , testGroup "IORef" iorefTests
   , testGroup "STM" stmTests
   , testGroup "Exceptions" exceptionTests
   , testGroup "Capabilities" capabilityTests
@@ -86,47 +86,47 @@ mvarTests = toTestList
 
 --------------------------------------------------------------------------------
 
-crefTests :: [TestTree]
-crefTests = toTestList
-  [ djfu "Reading a non-updated CRef gives its initial value" (gives' [True]) $ do
-      ref <- newCRefInt 5
-      (5==) <$> readCRef ref
+iorefTests :: [TestTree]
+iorefTests = toTestList
+  [ djfu "Reading a non-updated IORef gives its initial value" (gives' [True]) $ do
+      ref <- newIORefInt 5
+      (5==) <$> readIORef ref
 
-  , djfu "Reading an updated CRef gives its new value" (gives' [True]) $ do
-      ref <- newCRefInt 5
-      writeCRef ref 6
-      (6==) <$> readCRef ref
+  , djfu "Reading an updated IORef gives its new value" (gives' [True]) $ do
+      ref <- newIORefInt 5
+      writeIORef ref 6
+      (6==) <$> readIORef ref
 
-  , djfu "Updating a CRef by a function changes its value" (gives' [True]) $ do
-      ref <- newCRefInt 5
-      atomicModifyCRef ref (\i -> (i+1, ()))
-      (6==) <$> readCRef ref
+  , djfu "Updating a IORef by a function changes its value" (gives' [True]) $ do
+      ref <- newIORefInt 5
+      atomicModifyIORef ref (\i -> (i+1, ()))
+      (6==) <$> readIORef ref
 
-  , djfu "A ticket contains the value of the CRef at the time of its creation" (gives' [True]) $ do
-      ref  <- newCRefInt 5
+  , djfu "A ticket contains the value of the IORef at the time of its creation" (gives' [True]) $ do
+      ref  <- newIORefInt 5
       tick <- readForCAS ref
-      writeCRef ref 6
+      writeIORef ref 6
       (5==) <$> peekTicket tick
 
   , djfu "Compare-and-swap returns a ticket containing the new value" (gives' [True]) $ do
-      ref  <- newCRefInt 5
+      ref  <- newIORefInt 5
       tick <- readForCAS ref
-      (_, tick') <- casCRef ref tick 6
+      (_, tick') <- casIORef ref tick 6
       (6==) <$> peekTicket tick'
 
-  , djfu "Compare-and-swap on an unmodified CRef succeeds" (gives' [True]) $ do
-      ref  <- newCRefInt 5
+  , djfu "Compare-and-swap on an unmodified IORef succeeds" (gives' [True]) $ do
+      ref  <- newIORefInt 5
       tick <- readForCAS ref
-      (suc, _) <- casCRef ref tick 6
-      val <- readCRef ref
+      (suc, _) <- casIORef ref tick 6
+      val <- readIORef ref
       pure (suc && (6 == val))
 
-  , djfu "Compare-and-swap on a modified CRef fails" (gives' [True]) $ do
-      ref  <- newCRefInt 5
+  , djfu "Compare-and-swap on a modified IORef fails" (gives' [True]) $ do
+      ref  <- newIORefInt 5
       tick <- readForCAS ref
-      writeCRef ref 6
-      (suc, _) <- casCRef ref tick 7
-      val <- readCRef ref
+      writeIORef ref 6
+      (suc, _) <- casIORef ref tick 7
+      val <- readIORef ref
       pure (not suc && 7 /= val)
   ]
 
@@ -292,11 +292,11 @@ hacksTests = toTestList
     , toTestList . testGroup "Snapshotting" $ let snapshotTest n p conc = W n conc p ("randomly", randomly (mkStdGen 0) 150) in
       [ snapshotTest "State updates are applied correctly" (gives' [2]) $ do
           r <- dontCheck Nothing $ do
-            r <- newCRefInt 0
-            writeCRef r 1
-            writeCRef r 2
+            r <- newIORefInt 0
+            writeIORef r 1
+            writeIORef r 2
             pure r
-          readCRef r
+          readIORef r
 
       , snapshotTest "Lifted IO is re-run (1)" (gives' [2..151]) $ do
           r <- dontCheck Nothing $ do

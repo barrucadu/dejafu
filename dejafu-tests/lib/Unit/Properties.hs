@@ -162,12 +162,12 @@ commonProps = toTestList
 
   , testProperty "isBarrier a ==> synchronises a r" $ do
       a <- H.forAll (HGen.filter D.isBarrier genActionType)
-      r <- H.forAll genCRefId
+      r <- H.forAll genIORefId
       H.assert (D.synchronises a r)
 
   , testProperty "isCommit a r ==> synchronises a r" $ do
       a <- H.forAll genPartiallySynchronisedActionType
-      case D.crefOf a of
+      case D.iorefOf a of
         Just r -> H.assert (D.synchronises a r)
         _ -> H.discard
   ]
@@ -179,8 +179,8 @@ memoryProps = toTestList
     [ testProperty "bufferWrite emptyBuffer k c a /= emptyBuffer" $ do
         k <- H.forAll genWBKey
         a <- H.forAll genInt
-        res <- crefProp $ \cref -> do
-          wb <- Mem.bufferWrite Mem.emptyBuffer k cref a
+        res <- iorefProp $ \ioref -> do
+          wb <- Mem.bufferWrite Mem.emptyBuffer k ioref a
           wb `eqWB` Mem.emptyBuffer
         H.assert (not res)
 
@@ -194,8 +194,8 @@ memoryProps = toTestList
     , testProperty "commitWrite (bufferWrite emptyBuffer k a) k == emptyBuffer" $ do
         k <- H.forAll genWBKey
         a <- H.forAll genInt
-        res <- crefProp $ \cref -> do
-          wb1 <- Mem.bufferWrite Mem.emptyBuffer k cref a
+        res <- iorefProp $ \ioref -> do
+          wb1 <- Mem.bufferWrite Mem.emptyBuffer k ioref a
           wb2 <- Mem.commitWrite wb1 k
           wb2 `eqWB` Mem.emptyBuffer
         H.assert res
@@ -203,19 +203,19 @@ memoryProps = toTestList
     , testProperty "Single buffered write/read from same thread" $ do
         k@(tid, _) <- H.forAll genWBKey
         a <- H.forAll genInt
-        res <- crefProp $ \cref -> do
-          _ <- Mem.bufferWrite Mem.emptyBuffer k cref a
-          Mem.readCRef cref tid
+        res <- iorefProp $ \ioref -> do
+          _ <- Mem.bufferWrite Mem.emptyBuffer k ioref a
+          Mem.readIORef ioref tid
         a H.=== res
 
     , testProperty "Overriding buffered write/read from same thread" $ do
         k@(tid, _) <- H.forAll genWBKey
         a1 <- H.forAll genInt
         a2 <- H.forAll genInt
-        res <- crefProp $ \cref -> do
-          _ <- Mem.bufferWrite Mem.emptyBuffer k cref a1
-          _ <- Mem.bufferWrite Mem.emptyBuffer k cref a2
-          Mem.readCRef cref tid
+        res <- iorefProp $ \ioref -> do
+          _ <- Mem.bufferWrite Mem.emptyBuffer k ioref a1
+          _ <- Mem.bufferWrite Mem.emptyBuffer k ioref a2
+          Mem.readIORef ioref tid
         a2 H.=== res
 
     , testProperty "Buffered write/read from different thread" $ do
@@ -223,22 +223,22 @@ memoryProps = toTestList
         k2 <- H.forAll (HGen.filter ((/=tid) . fst) genWBKey)
         a1 <- H.forAll genInt
         a2 <- H.forAll genInt
-        res <- crefProp $ \cref -> do
-          _ <- Mem.bufferWrite Mem.emptyBuffer k1 cref a1
-          _ <- Mem.bufferWrite Mem.emptyBuffer k2 cref a2
-          Mem.readCRef cref tid
+        res <- iorefProp $ \ioref -> do
+          _ <- Mem.bufferWrite Mem.emptyBuffer k1 ioref a1
+          _ <- Mem.bufferWrite Mem.emptyBuffer k2 ioref a2
+          Mem.readIORef ioref tid
         a1 H.=== res
     ]
   where
-    crefProp
+    iorefProp
       :: Show a
-      => (D.ModelCRef IO Int -> IO a)
+      => (D.ModelIORef IO Int -> IO a)
       -> H.PropertyT IO a
-    crefProp p = do
-      crefId <- H.forAll genCRefId
+    iorefProp p = do
+      iorefId <- H.forAll genIORefId
       liftIO $ do
-        cref <- makeCRef crefId
-        p cref
+        ioref <- makeIORef iorefId
+        p ioref
 
 -------------------------------------------------------------------------------
 
@@ -278,8 +278,8 @@ sctProps = toTestList
 -------------------------------------------------------------------------------
 -- Utils
 
-makeCRef :: D.CRefId -> IO (D.ModelCRef IO Int)
-makeCRef crid = D.ModelCRef crid <$> C.newCRef (M.empty, 0, 42)
+makeIORef :: D.IORefId -> IO (D.ModelIORef IO Int)
+makeIORef iorid = D.ModelIORef iorid <$> C.newIORef (M.empty, 0, 42)
 
 -- equality for writebuffers is a little tricky as we can't directly
 -- compare the buffered values, so we compare everything else:
@@ -288,7 +288,7 @@ makeCRef crid = D.ModelCRef crid <$> C.newCRef (M.empty, 0, 42)
 --  - each pair of buffers for the same key must have an equal sequence of writes
 --
 -- individual writes are compared like so:
---  - the threadid and crefid must be the same
+--  - the threadid and iorefid must be the same
 --  - the cache and number of writes inside the ref must be the same
 eqWB :: Mem.WriteBuffer IO -> Mem.WriteBuffer IO -> IO Bool
 eqWB (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
@@ -301,10 +301,10 @@ eqWB (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
     ks1 = M.keys $ M.filter (not . S.null) wb1
     ks2 = M.keys $ M.filter (not . S.null) wb2
 
-    eqBW (Mem.BufferedWrite t1 (D.ModelCRef crid1 ref1) _) (Mem.BufferedWrite t2 (D.ModelCRef crid2 ref2) _) = do
-      d1 <- (\(m,i,_) -> (M.keys m, i)) <$> C.readCRef ref1
-      d2 <- (\(m,i,_) -> (M.keys m, i)) <$> C.readCRef ref2
-      pure (t1 == t2 && crid1 == crid2 && d1 == d2)
+    eqBW (Mem.BufferedWrite t1 (D.ModelIORef iorid1 ref1) _) (Mem.BufferedWrite t2 (D.ModelIORef iorid2 ref2) _) = do
+      d1 <- (\(m,i,_) -> (M.keys m, i)) <$> C.readIORef ref1
+      d2 <- (\(m,i,_) -> (M.keys m, i)) <$> C.readIORef ref2
+      pure (t1 == t2 && iorid1 == iorid2 && d1 == d2)
 
     andM [] = pure True
     andM (p:ps) = do
@@ -322,8 +322,8 @@ infixr 0 ==>
 genThreadId :: H.Gen D.ThreadId
 genThreadId = D.ThreadId <$> genId
 
-genCRefId :: H.Gen D.CRefId
-genCRefId = D.CRefId <$> genId
+genIORefId :: H.Gen D.IORefId
+genIORefId = D.IORefId <$> genId
 
 genMVarId :: H.Gen D.MVarId
 genMVarId = D.MVarId <$> genId
@@ -347,8 +347,8 @@ genFailure = HGen.element $
   , E.toException E.NonTermination
   ]
 
-genWBKey :: H.Gen (D.ThreadId, Maybe D.CRefId)
-genWBKey = (,) <$> genThreadId <*> HGen.maybe genCRefId
+genWBKey :: H.Gen (D.ThreadId, Maybe D.IORefId)
+genWBKey = (,) <$> genThreadId <*> HGen.maybe genIORefId
 
 genThreadAction :: H.Gen D.ThreadAction
 genThreadAction = HGen.choice
@@ -368,14 +368,14 @@ genThreadAction = HGen.choice
   , D.TakeMVar <$> genMVarId <*> genSmallList genThreadId
   , D.BlockedTakeMVar <$> genMVarId
   , D.TryTakeMVar <$> genMVarId <*> HGen.bool <*> genSmallList genThreadId
-  , D.NewCRef <$> genCRefId
-  , D.ReadCRef <$> genCRefId
-  , D.ReadCRefCas <$> genCRefId
-  , D.ModCRef <$> genCRefId
-  , D.ModCRefCas <$> genCRefId
-  , D.WriteCRef <$> genCRefId
-  , D.CasCRef <$> genCRefId <*> HGen.bool
-  , D.CommitCRef <$> genThreadId <*> genCRefId
+  , D.NewIORef <$> genIORefId
+  , D.ReadIORef <$> genIORefId
+  , D.ReadIORefCas <$> genIORefId
+  , D.ModIORef <$> genIORefId
+  , D.ModIORefCas <$> genIORefId
+  , D.WriteIORef <$> genIORefId
+  , D.CasIORef <$> genIORefId <*> HGen.bool
+  , D.CommitIORef <$> genThreadId <*> genIORefId
   , D.STM <$> genSmallList genTAction <*> genSmallList genThreadId
   , D.BlockedSTM <$> genSmallList genTAction
   , pure D.Catching
@@ -420,21 +420,21 @@ genActionType = HGen.choice
 
 genUnsynchronisedActionType :: H.Gen D.ActionType
 genUnsynchronisedActionType = HGen.choice
-  [ D.UnsynchronisedRead <$> genCRefId
-  , D.UnsynchronisedWrite <$> genCRefId
+  [ D.UnsynchronisedRead <$> genIORefId
+  , D.UnsynchronisedWrite <$> genIORefId
   , pure D.UnsynchronisedOther
   ]
 
 genPartiallySynchronisedActionType :: H.Gen D.ActionType
 genPartiallySynchronisedActionType = HGen.choice
-  [ D.PartiallySynchronisedCommit <$> genCRefId
-  , D.PartiallySynchronisedWrite <$> genCRefId
-  , D.PartiallySynchronisedModify <$> genCRefId
+  [ D.PartiallySynchronisedCommit <$> genIORefId
+  , D.PartiallySynchronisedWrite <$> genIORefId
+  , D.PartiallySynchronisedModify <$> genIORefId
   ]
 
 genSynchronisedActionType :: H.Gen D.ActionType
 genSynchronisedActionType = HGen.choice
-  [ D.SynchronisedModify <$> genCRefId
+  [ D.SynchronisedModify <$> genIORefId
   , D.SynchronisedRead <$> genMVarId
   , D.SynchronisedWrite <$> genMVarId
   , pure D.SynchronisedOther
@@ -442,7 +442,7 @@ genSynchronisedActionType = HGen.choice
 
 genDepState :: H.Gen SCT.DepState
 genDepState = SCT.DepState
-  <$> genSmallMap genCRefId HGen.bool
+  <$> genSmallMap genIORefId HGen.bool
   <*> genSmallSet genMVarId
   <*> genSmallMap genThreadId genMaskingState
 

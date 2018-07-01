@@ -49,7 +49,7 @@ type SeqTrace
 -- | The result of running a concurrent program.
 data CResult n g a = CResult
   { finalContext :: Context n g
-  , finalRef :: C.CRef n (Maybe (Either Failure a))
+  , finalRef :: C.IORef n (Maybe (Either Failure a))
   , finalRestore :: Maybe (Threads n -> n ())
   -- ^ Meaningless if this result doesn't come from a snapshotting
   -- execution.
@@ -66,8 +66,8 @@ data DCSnapshot n a = DCSnapshot
   -- ^ The execution context.  The scheduler state is ignored when
   -- restoring.
   , dcsRestore :: Threads n -> n ()
-  -- ^ Action to restore CRef, MVar, and TVar values.
-  , dcsRef :: C.CRef n (Maybe (Either Failure a))
+  -- ^ Action to restore IORef, MVar, and TVar values.
+  , dcsRef :: C.IORef n (Maybe (Either Failure a))
   -- ^ Reference where the result will be written.
   }
 
@@ -118,7 +118,7 @@ runConcurrencyWithSnapshot :: (C.MonadConc n, HasCallStack)
   -> MemType
   -> Context n g
   -> (Threads n -> n ())
-  -> C.CRef n (Maybe (Either Failure a))
+  -> C.IORef n (Maybe (Either Failure a))
   -> n (CResult n g a)
 runConcurrencyWithSnapshot sched memtype ctx restore ref = do
   let boundThreads = M.filter (isJust . _bound) (cThreads ctx)
@@ -151,13 +151,13 @@ runThreads :: (C.MonadConc n, HasCallStack)
   => Bool
   -> Scheduler g
   -> MemType
-  -> C.CRef n (Maybe (Either Failure a))
+  -> C.IORef n (Maybe (Either Failure a))
   -> Context n g
   -> n (CResult n g a)
 runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty Nothing where
   -- signal failure & terminate
   die reason finalR finalT finalD finalC = do
-    C.writeCRef ref (Just $ Left reason)
+    C.writeIORef ref (Just $ Left reason)
     stop finalR finalT finalD finalC
 
   -- just terminate; 'ref' must have been written to before calling
@@ -367,11 +367,11 @@ stepThread _ _ _ _ tid (ADelay n c) = \ctx@Context{..} ->
 -- create a new @MVar@, using the next 'MVarId'.
 stepThread _ _ _ _ tid (ANewMVar n c) = \ctx@Context{..} -> do
   let (idSource', newmvid) = nextMVId n cIdSource
-  ref <- C.newCRef Nothing
+  ref <- C.newIORef Nothing
   let mvar = ModelMVar newmvid ref
   pure ( Succeeded ctx { cThreads = goto (c mvar) tid cThreads, cIdSource = idSource' }
        , Single (NewMVar newmvid)
-       , const (C.writeCRef ref Nothing)
+       , const (C.writeIORef ref Nothing)
        )
 
 -- put a value into a @MVar@, blocking the thread until it's empty.
@@ -424,85 +424,85 @@ stepThread _ _ _ _ tid (ATryTakeMVar mvar@ModelMVar{..} c) = synchronised $ \ctx
        , const effect
        )
 
--- create a new @CRef@, using the next 'CRefId'.
-stepThread _ _ _ _  tid (ANewCRef n a c) = \ctx@Context{..} -> do
-  let (idSource', newcrid) = nextCRId n cIdSource
+-- create a new @IORef@, using the next 'IORefId'.
+stepThread _ _ _ _  tid (ANewIORef n a c) = \ctx@Context{..} -> do
+  let (idSource', newiorid) = nextIORId n cIdSource
   let val = (M.empty, 0, a)
-  ref <- C.newCRef val
-  let cref = ModelCRef newcrid ref
-  pure ( Succeeded ctx { cThreads = goto (c cref) tid cThreads, cIdSource = idSource' }
-       , Single (NewCRef newcrid)
-       , const (C.writeCRef ref val)
+  ioref <- C.newIORef val
+  let ref = ModelIORef newiorid ioref
+  pure ( Succeeded ctx { cThreads = goto (c ref) tid cThreads, cIdSource = idSource' }
+       , Single (NewIORef newiorid)
+       , const (C.writeIORef ioref val)
        )
 
--- read from a @CRef@.
-stepThread _ _ _ _  tid (AReadCRef cref@ModelCRef{..} c) = \ctx@Context{..} -> do
-  val <- readCRef cref tid
+-- read from a @IORef@.
+stepThread _ _ _ _  tid (AReadIORef ref@ModelIORef{..} c) = \ctx@Context{..} -> do
+  val <- readIORef ref tid
   pure ( Succeeded ctx { cThreads = goto (c val) tid cThreads }
-       , Single (ReadCRef crefId)
+       , Single (ReadIORef iorefId)
        , const (pure ())
        )
 
--- read from a @CRef@ for future compare-and-swap operations.
-stepThread _ _ _ _ tid (AReadCRefCas cref@ModelCRef{..} c) = \ctx@Context{..} -> do
-  tick <- readForTicket cref tid
+-- read from a @IORef@ for future compare-and-swap operations.
+stepThread _ _ _ _ tid (AReadIORefCas ref@ModelIORef{..} c) = \ctx@Context{..} -> do
+  tick <- readForTicket ref tid
   pure ( Succeeded ctx { cThreads = goto (c tick) tid cThreads }
-       , Single (ReadCRefCas crefId)
+       , Single (ReadIORefCas iorefId)
        , const (pure ())
        )
 
--- modify a @CRef@.
-stepThread _ _ _ _ tid (AModCRef cref@ModelCRef{..} f c) = synchronised $ \ctx@Context{..} -> do
-  (new, val) <- f <$> readCRef cref tid
-  effect <- writeImmediate cref new
+-- modify a @IORef@.
+stepThread _ _ _ _ tid (AModIORef ref@ModelIORef{..} f c) = synchronised $ \ctx@Context{..} -> do
+  (new, val) <- f <$> readIORef ref tid
+  effect <- writeImmediate ref new
   pure ( Succeeded ctx { cThreads = goto (c val) tid cThreads }
-       , Single (ModCRef crefId)
+       , Single (ModIORef iorefId)
        , const effect
        )
 
--- modify a @CRef@ using a compare-and-swap.
-stepThread _ _ _ _ tid (AModCRefCas cref@ModelCRef{..} f c) = synchronised $ \ctx@Context{..} -> do
-  tick@(ModelTicket _ _ old) <- readForTicket cref tid
+-- modify a @IORef@ using a compare-and-swap.
+stepThread _ _ _ _ tid (AModIORefCas ref@ModelIORef{..} f c) = synchronised $ \ctx@Context{..} -> do
+  tick@(ModelTicket _ _ old) <- readForTicket ref tid
   let (new, val) = f old
-  (_, _, effect) <- casCRef cref tid tick new
+  (_, _, effect) <- casIORef ref tid tick new
   pure ( Succeeded ctx { cThreads = goto (c val) tid cThreads }
-       , Single (ModCRefCas crefId)
+       , Single (ModIORefCas iorefId)
        , const effect
        )
 
--- write to a @CRef@ without synchronising.
-stepThread _ _ _ memtype tid (AWriteCRef cref@ModelCRef{..} a c) = \ctx@Context{..} -> case memtype of
+-- write to a @IORef@ without synchronising.
+stepThread _ _ _ memtype tid (AWriteIORef ref@ModelIORef{..} a c) = \ctx@Context{..} -> case memtype of
   -- write immediately.
   SequentialConsistency -> do
-    effect <- writeImmediate cref a
+    effect <- writeImmediate ref a
     pure ( Succeeded ctx { cThreads = goto c tid cThreads }
-         , Single (WriteCRef crefId)
+         , Single (WriteIORef iorefId)
          , const effect
          )
   -- add to buffer using thread id.
   TotalStoreOrder -> do
-    wb' <- bufferWrite cWriteBuf (tid, Nothing) cref a
+    wb' <- bufferWrite cWriteBuf (tid, Nothing) ref a
     pure ( Succeeded ctx { cThreads = goto c tid cThreads, cWriteBuf = wb' }
-         , Single (WriteCRef crefId)
+         , Single (WriteIORef iorefId)
          , const (pure ())
          )
-  -- add to buffer using both thread id and cref id
+  -- add to buffer using both thread id and IORef id
   PartialStoreOrder -> do
-    wb' <- bufferWrite cWriteBuf (tid, Just crefId) cref a
+    wb' <- bufferWrite cWriteBuf (tid, Just iorefId) ref a
     pure ( Succeeded ctx { cThreads = goto c tid cThreads, cWriteBuf = wb' }
-         , Single (WriteCRef crefId)
+         , Single (WriteIORef iorefId)
          , const (pure ())
          )
 
--- perform a compare-and-swap on a @CRef@.
-stepThread _ _ _ _ tid (ACasCRef cref@ModelCRef{..} tick a c) = synchronised $ \ctx@Context{..} -> do
-  (suc, tick', effect) <- casCRef cref tid tick a
+-- perform a compare-and-swap on a @IORef@.
+stepThread _ _ _ _ tid (ACasIORef ref@ModelIORef{..} tick a c) = synchronised $ \ctx@Context{..} -> do
+  (suc, tick', effect) <- casIORef ref tid tick a
   pure ( Succeeded ctx { cThreads = goto (c (suc, tick')) tid cThreads }
-       , Single (CasCRef crefId suc)
+       , Single (CasIORef iorefId suc)
        , const effect
        )
 
--- commit a @CRef@ write
+-- commit a @IORef@ write
 stepThread _ _ _ memtype _ (ACommit t c) = \ctx@Context{..} -> do
   wb' <- case memtype of
     -- shouldn't ever get here
@@ -511,11 +511,11 @@ stepThread _ _ _ memtype _ (ACommit t c) = \ctx@Context{..} -> do
     -- commit using the thread id.
     TotalStoreOrder ->
       commitWrite cWriteBuf (t, Nothing)
-    -- commit using the cref id.
+    -- commit using the IORef id.
     PartialStoreOrder ->
       commitWrite cWriteBuf (t, Just c)
   pure ( Succeeded ctx { cWriteBuf = wb' }
-       , Single (CommitCRef t c)
+       , Single (CommitIORef t c)
        , const (pure ())
        )
 
@@ -634,7 +634,7 @@ stepThread forSnapshot _ sched memtype tid (ASub ma c) = \ctx ->
      | M.size (cThreads ctx) > 1 -> pure (Failed IllegalSubconcurrency, Single Subconcurrency, const (pure ()))
      | otherwise -> do
          res <- runConcurrency False sched memtype (cSchedState ctx) (cIdSource ctx) (cCaps ctx) ma
-         out <- efromJust <$> C.readCRef (finalRef res)
+         out <- efromJust <$> C.readIORef (finalRef res)
          pure ( Succeeded ctx
                 { cThreads    = goto (AStopSub (c out)) tid (cThreads ctx)
                 , cIdSource   = cIdSource (finalContext res)
@@ -662,7 +662,7 @@ stepThread forSnapshot isFirst _ _ tid (ADontCheck lb ma c) = \ctx ->
          threads' <- kill tid (cThreads ctx)
          let dcCtx = ctx { cThreads = threads', cSchedState = lb }
          res <- runConcurrency' forSnapshot dcSched SequentialConsistency dcCtx ma
-         out <- efromJust <$> C.readCRef (finalRef res)
+         out <- efromJust <$> C.readIORef (finalRef res)
          case out of
            Right a -> do
              let threads'' = launch' Unmasked tid (const (c a)) (cThreads (finalContext res))

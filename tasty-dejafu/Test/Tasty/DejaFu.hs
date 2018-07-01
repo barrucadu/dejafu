@@ -148,7 +148,7 @@ testAutoWay :: (Eq a, Show a)
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> Conc.ConcIO a
   -- ^ The computation to test.
   -> TestTree
@@ -190,7 +190,7 @@ testDejafuWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> TestName
   -- ^ The name of the test.
   -> ProPredicate a b
@@ -224,7 +224,7 @@ testDejafuDiscard :: Show b
   -> Way
   -- ^ How to execute the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> String
   -- ^ The name of the test.
   -> ProPredicate a b
@@ -257,7 +257,7 @@ testDejafusWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> [(TestName, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
   -> Conc.ConcIO a
@@ -288,7 +288,7 @@ testDejafusDiscard :: Show b
   -> Way
   -- ^ How to execute the concurrent program.
   -> MemType
-  -- ^ The memory model to use for non-synchronised @CRef@ operations.
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> [(TestName, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
   -> Conc.ConcIO a

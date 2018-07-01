@@ -34,7 +34,7 @@ toTIdTrace =
 showTrace :: Trace -> String
 showTrace []  = "<trace discarded>"
 showTrace trc = intercalate "\n" $ go False trc : strkey where
-  go _ ((_,_,CommitCRef _ _):rest) = "C-" ++ go False rest
+  go _ ((_,_,CommitIORef _ _):rest) = "C-" ++ go False rest
   go _ ((Start    (ThreadId (Id _ i)),_,a):rest) = "S" ++ show i ++ "-" ++ go (didYield a) rest
   go y ((SwitchTo (ThreadId (Id _ i)),_,a):rest) = (if y then "p" else "P") ++ show i ++ "-" ++ go (didYield a) rest
   go _ ((Continue,_,a):rest) = '-' : go (didYield a) rest
@@ -63,7 +63,7 @@ simplestsBy f = map choose . collect where
   choose  = minimumBy . comparing $ \(_, trc) ->
     let switchTos = length . filter (\(d,_,_) -> case d of SwitchTo _ -> True; _ -> False)
         starts    = length . filter (\(d,_,_) -> case d of Start    _ -> True; _ -> False)
-        commits   = length . filter (\(_,_,a) -> case a of CommitCRef _ _ -> True; _ -> False)
+        commits   = length . filter (\(_,_,a) -> case a of CommitIORef _ _ -> True; _ -> False)
     in (switchTos trc, commits trc, length trc, starts trc)
 
   groupBy' res _ [] = res

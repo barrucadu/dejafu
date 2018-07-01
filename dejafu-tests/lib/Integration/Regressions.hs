@@ -16,9 +16,9 @@ import           QSemN
 tests :: [TestTree]
 tests = toTestList
   [ djfu "https://github.com/barrucadu/dejafu/issues/40" (gives' [0,1]) $ do
-      x <- newCRefInt 0
-      _ <- fork $ myThreadId >> writeCRef x 1
-      readCRef x
+      x <- newIORefInt 0
+      _ <- fork $ myThreadId >> writeIORef x 1
+      readIORef x
 
   , djfu "https://github.com/barrucadu/dejafu/issues/55" (gives' [True]) $ do
       a <- atomically newTQueue

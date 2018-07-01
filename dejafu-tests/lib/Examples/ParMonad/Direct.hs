@@ -119,7 +119,7 @@ _IDLING_ON = True
 
 type ROnly m = RD.ReaderT (Sched m) m
 
-newtype IVar m a = IVar (CRef m (IVarContents m a))
+newtype IVar m a = IVar (IORef m (IVarContents m a))
 
 data IVarContents m a = Full a | Empty | Blocked [a -> m ()]
 
@@ -205,7 +205,7 @@ runNewSessionAndWait name sched userComp = do
     _ <- modifyHotVar (activeSessions sched) (\ set -> (S.insert sid set, ()))
 
     -- Here we have an extra IORef... ugly.
-    ref <- newCRef (error$ "Empty session-result ref ("++name++") should never be touched (sid "++ show sid++", "++show tid ++")")
+    ref <- newIORef (error$ "Empty session-result ref ("++name++") should never be touched (sid "++ show sid++", "++show tid ++")")
     newFlag <- newHotVar False
     -- Push the new session:
     _ <- modifyHotVar (sessions sched) (\ ls -> (Session sid newFlag : ls, ()))
@@ -213,11 +213,11 @@ runNewSessionAndWait name sched userComp = do
     let userComp' = do ans <- userComp
                        -- This add-on to userComp will run only after userComp has completed successfully,
                        -- but that does NOT guarantee that userComp-forked computations have terminated:
-                       io$ do writeCRef ref ans
+                       io$ do writeIORef ref ans
                               writeHotVarRaw newFlag True
                               modifyHotVar (activeSessions sched) (\ set -> (S.delete sid set, ()))
         kont n = trivialCont$ "("++name++", sid "++show sid++", round "++show n++")"
-        loop n = do flg <- readCRef newFlag
+        loop n = do flg <- readIORef newFlag
                     unless flg $ do
                       rescheduleR 0 $ trivialCont$ "("++name++", sid "++show sid++")"
                       loop (n+1)
@@ -238,7 +238,7 @@ runNewSessionAndWait name sched userComp = do
     -- By returning here we ARE implicitly reengaging the scheduler, since we
     -- are already inside the rescheduleR loop on this thread
     -- (before runParIO was called in a nested fashion).
-    readCRef ref
+    readIORef ref
 
 
 {-# NOINLINE runParIO #-}
@@ -285,7 +285,7 @@ runParIO userComp = do
                          putMVar workerDone cpu
                  else do x <- runNewSessionAndWait "top-lvl main worker" sched userComp
                          -- When the main worker finishes we can tell the anonymous "system" workers:
-                         writeCRef topSessFlag True
+                         writeIORef topSessFlag True
                          putMVar mfin x
 
               unregisterWorker tid
@@ -333,7 +333,7 @@ baseSessionID = 1000
 {-# INLINE new  #-}
 -- | Creates a new @IVar@
 new :: MonadConc m => Par m (IVar m a)
-new  = io$ IVar <$> newCRef Empty
+new  = io$ IVar <$> newIORef Empty
 
 {-# INLINE get  #-}
 -- | Read the value in an @IVar@.  The 'get' operation can only return when the
@@ -342,7 +342,7 @@ new  = io$ IVar <$> newCRef Empty
 get (IVar vr) =
   callCC $ \kont ->
     do
-       e  <- io$ readCRef vr
+       e  <- io$ readIORef vr
        case e of
           Full a -> pure a
           _ -> do
@@ -351,7 +351,7 @@ get (IVar vr) =
             let resched = longjmpSched -- Invariant: kont must not be lost.
             -- Because we continue on the same processor the Sched stays the same:
             -- TODO: Try NOT using monadic values as first class.  Check for performance effect:
-            join . io$ atomicModifyCRef vr $ \case
+            join . io$ atomicModifyIORef vr $ \case
                       Empty      -> (Blocked [pushWork sch . kont], resched)
                       Full a     -> (Full a, pure a) -- kont is implicit here.
                       Blocked ks -> (Blocked (pushWork sch . kont:ks), resched)
@@ -362,7 +362,7 @@ get (IVar vr) =
 --   In this scheduler, puts immediately execute woken work in the current thread.
 put_ (IVar vr) !content = do
    sched <- RD.ask
-   ks <- io$ atomicModifyCRef vr $ \case
+   ks <- io$ atomicModifyIORef vr $ \case
                Empty      -> (Full content, [])
                Full _     -> error "multiple put"
                Blocked ks -> (Full content, ks)
@@ -445,8 +445,8 @@ rescheduleR cnt kont = do
   mtask  <- lift $ popWork mysched
   case mtask of
     Nothing -> do
-                  Session _ finRef:_ <- lift $ readCRef $ sessions mysched
-                  fin <- lift $ readCRef finRef
+                  Session _ finRef:_ <- lift $ readIORef $ sessions mysched
+                  fin <- lift $ readIORef finRef
                   if fin
                    then kont (error "Direct.hs: The result value from rescheduleR should not be used.")
                    else do

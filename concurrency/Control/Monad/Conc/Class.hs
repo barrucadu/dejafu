@@ -8,7 +8,7 @@
 
 -- |
 -- Module      : Control.Monad.Conc.Class
--- Copyright   : (c) 2016--2017 Michael Walker
+-- Copyright   : (c) 2016--2018 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -18,7 +18,7 @@
 -- monads.
 --
 -- __Deviations:__ An instance of @MonadConc@ is not required to be an
--- instance of @MonadFix@, unlike @IO@. The @CRef@, @MVar@, and
+-- instance of @MonadFix@, unlike @IO@. The @IORef@, @MVar@, and
 -- @Ticket@ types are not required to be instances of @Show@ or @Eq@,
 -- unlike their normal counterparts. The @threadCapability@,
 -- @threadWaitRead@, @threadWaitWrite@, @threadWaitReadSTM@,
@@ -150,7 +150,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Do not be put off by the use of @UndecidableInstances@, it is safe
 -- here.
 --
--- @since 1.5.0.0
+-- @since unreleased
 class ( Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -172,13 +172,13 @@ class ( Monad m
       , tryReadMVar
       , takeMVar
       , tryTakeMVar
-      , (newCRef | newCRefN)
-      , atomicModifyCRef
-      , writeCRef
+      , (newIORef | newIORefN)
+      , atomicModifyIORef
+      , writeIORef
       , readForCAS
       , peekTicket'
-      , casCRef
-      , modifyCRefCAS
+      , casIORef
+      , modifyIORefCAS
       , atomically
       , throwTo
     #-}
@@ -197,13 +197,13 @@ class ( Monad m
   type MVar m :: * -> *
 
   -- | The mutable non-blocking reference type. These may suffer from
-  -- relaxed memory effects if functions outside the set @newCRef@,
-  -- @readCRef@, @atomicModifyCRef@, and @atomicWriteCRef@ are used.
+  -- relaxed memory effects if functions outside the set @newIORef@,
+  -- @readIORef@, @atomicModifyIORef@, and @atomicWriteIORef@ are used.
   --
-  -- @since 1.0.0.0
-  type CRef m :: * -> *
+  -- @since unreleased
+  type IORef m :: * -> *
 
-  -- | When performing compare-and-swap operations on @CRef@s, a
+  -- | When performing compare-and-swap operations on @IORef@s, a
   -- @Ticket@ is a proof that a thread observed a specific previous
   -- value.
   --
@@ -376,55 +376,55 @@ class ( Monad m
 
   -- | Create a new reference.
   --
-  -- > newCRef = newCRefN ""
+  -- > newIORef = newIORefN ""
   --
-  -- @since 1.0.0.0
-  newCRef :: a -> m (CRef m a)
-  newCRef = newCRefN ""
+  -- @since unreleased
+  newIORef :: a -> m (IORef m a)
+  newIORef = newIORefN ""
 
   -- | Create a new reference, but it is given a name which may be
   -- used to present more useful debugging information.
   --
-  -- > newCRefN _ = newCRef
+  -- > newIORefN _ = newIORef
   --
-  -- @since 1.0.0.0
-  newCRefN :: String -> a -> m (CRef m a)
-  newCRefN _ = newCRef
+  -- @since unreleased
+  newIORefN :: String -> a -> m (IORef m a)
+  newIORefN _ = newIORef
 
   -- | Read the current value stored in a reference.
   --
-  -- > readCRef cref = readForCAS cref >>= peekTicket
+  -- > readIORef ioref = readForCAS ioref >>= peekTicket
   --
-  -- @since 1.0.0.0
-  readCRef :: CRef m a -> m a
-  readCRef cref = readForCAS cref >>= peekTicket
+  -- @since unreleased
+  readIORef :: IORef m a -> m a
+  readIORef ioref = readForCAS ioref >>= peekTicket
 
   -- | Atomically modify the value stored in a reference. This imposes
   -- a full memory barrier.
   --
-  -- @since 1.0.0.0
-  atomicModifyCRef :: CRef m a -> (a -> (a, b)) -> m b
+  -- @since unreleased
+  atomicModifyIORef :: IORef m a -> (a -> (a, b)) -> m b
 
-  -- | Write a new value into an @CRef@, without imposing a memory
+  -- | Write a new value into an @IORef@, without imposing a memory
   -- barrier. This means that relaxed memory effects can be observed.
   --
-  -- @since 1.0.0.0
-  writeCRef :: CRef m a -> a -> m ()
+  -- @since unreleased
+  writeIORef :: IORef m a -> a -> m ()
 
   -- | Replace the value stored in a reference, with the
-  -- barrier-to-reordering property that 'atomicModifyCRef' has.
+  -- barrier-to-reordering property that 'atomicModifyIORef' has.
   --
-  -- > atomicWriteCRef r a = atomicModifyCRef r $ const (a, ())
+  -- > atomicWriteIORef r a = atomicModifyIORef r $ const (a, ())
   --
-  -- @since 1.0.0.0
-  atomicWriteCRef :: CRef m a -> a -> m ()
-  atomicWriteCRef r a = atomicModifyCRef r $ const (a, ())
+  -- @since unreleased
+  atomicWriteIORef :: IORef m a -> a -> m ()
+  atomicWriteIORef r a = atomicModifyIORef r $ const (a, ())
 
   -- | Read the current value stored in a reference, returning a
   -- @Ticket@, for use in future compare-and-swap operations.
   --
-  -- @since 1.0.0.0
-  readForCAS :: CRef m a -> m (Ticket m a)
+  -- @since unreleased
+  readForCAS :: IORef m a -> m (Ticket m a)
 
   -- | Extract the actual Haskell value from a @Ticket@.
   --
@@ -434,28 +434,28 @@ class ( Monad m
   peekTicket' :: Proxy m -> Ticket m a -> a
 
   -- | Perform a machine-level compare-and-swap (CAS) operation on a
-  -- @CRef@. Returns an indication of success and a @Ticket@ for the
-  -- most current value in the @CRef@.
+  -- @IORef@. Returns an indication of success and a @Ticket@ for the
+  -- most current value in the @IORef@.
   --
   -- This is strict in the \"new\" value argument.
   --
-  -- @since 1.0.0.0
-  casCRef :: CRef m a -> Ticket m a -> a -> m (Bool, Ticket m a)
+  -- @since unreleased
+  casIORef :: IORef m a -> Ticket m a -> a -> m (Bool, Ticket m a)
 
-  -- | A replacement for 'atomicModifyCRef' using a compare-and-swap.
+  -- | A replacement for 'atomicModifyIORef' using a compare-and-swap.
   --
   -- This is strict in the \"new\" value argument.
   --
-  -- @since 1.0.0.0
-  modifyCRefCAS :: CRef m a -> (a -> (a, b)) -> m b
+  -- @since unreleased
+  modifyIORefCAS :: IORef m a -> (a -> (a, b)) -> m b
 
-  -- | A variant of 'modifyCRefCAS' which doesn't return a result.
+  -- | A variant of 'modifyIORefCAS' which doesn't return a result.
   --
-  -- > modifyCRefCAS_ cref f = modifyCRefCAS cref (\a -> (f a, ()))
+  -- > modifyIORefCAS_ ioref f = modifyIORefCAS ioref (\a -> (f a, ()))
   --
-  -- @since 1.0.0.0
-  modifyCRefCAS_ :: CRef m a -> (a -> a) -> m ()
-  modifyCRefCAS_ cref f = modifyCRefCAS cref (\a -> (f a, ()))
+  -- @since unreleased
+  modifyIORefCAS_ :: IORef m a -> (a -> a) -> m ()
+  modifyIORefCAS_ ioref f = modifyIORefCAS ioref (\a -> (f a, ()))
 
   -- | Perform an STM transaction atomically.
   --
@@ -687,14 +687,14 @@ newMVarN n a = do
 peekTicket :: forall m a. MonadConc m => Ticket m a -> m a
 peekTicket t = pure $ peekTicket' (Proxy :: Proxy m) (t :: Ticket m a)
 
--- | Compare-and-swap a value in a @CRef@, returning an indication of
+-- | Compare-and-swap a value in a @IORef@, returning an indication of
 -- success and the new value.
 --
--- @since 1.0.0.0
-cas :: MonadConc m => CRef m a -> a -> m (Bool, a)
-cas cref a = do
-  tick         <- readForCAS cref
-  (suc, tick') <- casCRef cref tick a
+-- @since unreleased
+cas :: MonadConc m => IORef m a -> a -> m (Bool, a)
+cas ioref a = do
+  tick         <- readForCAS ioref
+  (suc, tick') <- casIORef ioref tick a
   a'           <- peekTicket tick'
 
   pure (suc, a')
@@ -706,7 +706,7 @@ cas cref a = do
 instance MonadConc IO where
   type STM      IO = IO.STM
   type MVar     IO = IO.MVar
-  type CRef     IO = IO.IORef
+  type IORef    IO = IO.IORef
   type Ticket   IO = IO.Ticket
   type ThreadId IO = IO.ThreadId
 
@@ -728,30 +728,30 @@ instance MonadConc IO where
 
   isCurrentThreadBound = IO.isCurrentThreadBound
 
-  getNumCapabilities = IO.getNumCapabilities
-  setNumCapabilities = IO.setNumCapabilities
-  readMVar           = IO.readMVar
-  tryReadMVar        = IO.tryReadMVar
-  myThreadId         = IO.myThreadId
-  yield              = IO.yield
-  threadDelay        = IO.threadDelay
-  throwTo            = IO.throwTo
-  newEmptyMVar       = IO.newEmptyMVar
-  putMVar            = IO.putMVar
-  tryPutMVar         = IO.tryPutMVar
-  takeMVar           = IO.takeMVar
-  tryTakeMVar        = IO.tryTakeMVar
-  newCRef            = IO.newIORef
-  readCRef           = IO.readIORef
-  atomicModifyCRef   = IO.atomicModifyIORef
-  writeCRef          = IO.writeIORef
-  atomicWriteCRef    = IO.atomicWriteIORef
-  readForCAS         = IO.readForCAS
-  peekTicket' _      = IO.peekTicket
-  casCRef            = IO.casIORef
-  modifyCRefCAS      = IO.atomicModifyIORefCAS
-  atomically         = IO.atomically
-  readTVarConc       = IO.readTVarIO
+  getNumCapabilities  = IO.getNumCapabilities
+  setNumCapabilities  = IO.setNumCapabilities
+  readMVar            = IO.readMVar
+  tryReadMVar         = IO.tryReadMVar
+  myThreadId          = IO.myThreadId
+  yield               = IO.yield
+  threadDelay         = IO.threadDelay
+  throwTo             = IO.throwTo
+  newEmptyMVar        = IO.newEmptyMVar
+  putMVar             = IO.putMVar
+  tryPutMVar          = IO.tryPutMVar
+  takeMVar            = IO.takeMVar
+  tryTakeMVar         = IO.tryTakeMVar
+  newIORef            = IO.newIORef
+  readIORef           = IO.readIORef
+  atomicModifyIORef   = IO.atomicModifyIORef
+  writeIORef          = IO.writeIORef
+  atomicWriteIORef    = IO.atomicWriteIORef
+  readForCAS          = IO.readForCAS
+  peekTicket' _       = IO.peekTicket
+  casIORef            = IO.casIORef
+  modifyIORefCAS      = IO.atomicModifyIORefCAS
+  atomically          = IO.atomically
+  readTVarConc        = IO.readTVarIO
 
 -- | Label the current thread, if the given label is nonempty.
 labelMe :: String -> IO ()
@@ -786,7 +786,7 @@ fromIsConc = unIsConc
 instance MonadConc m => MonadConc (IsConc m) where
   type STM      (IsConc m) = IsSTM (STM m)
   type MVar     (IsConc m) = MVar     m
-  type CRef     (IsConc m) = CRef     m
+  type IORef    (IsConc m) = IORef    m
   type Ticket   (IsConc m) = Ticket   m
   type ThreadId (IsConc m) = ThreadId m
 
@@ -799,33 +799,33 @@ instance MonadConc m => MonadConc (IsConc m) where
 
   isCurrentThreadBound = toIsConc isCurrentThreadBound
 
-  getNumCapabilities = toIsConc getNumCapabilities
-  setNumCapabilities = toIsConc . setNumCapabilities
-  myThreadId         = toIsConc myThreadId
-  yield              = toIsConc yield
-  threadDelay        = toIsConc . threadDelay
-  throwTo t          = toIsConc . throwTo t
-  newEmptyMVar       = toIsConc newEmptyMVar
-  newEmptyMVarN      = toIsConc . newEmptyMVarN
-  readMVar           = toIsConc . readMVar
-  tryReadMVar        = toIsConc . tryReadMVar
-  putMVar v          = toIsConc . putMVar v
-  tryPutMVar v       = toIsConc . tryPutMVar v
-  takeMVar           = toIsConc . takeMVar
-  tryTakeMVar        = toIsConc . tryTakeMVar
-  newCRef            = toIsConc . newCRef
-  newCRefN n         = toIsConc . newCRefN n
-  readCRef           = toIsConc . readCRef
-  atomicModifyCRef r = toIsConc . atomicModifyCRef r
-  writeCRef r        = toIsConc . writeCRef r
-  atomicWriteCRef r  = toIsConc . atomicWriteCRef r
-  readForCAS         = toIsConc . readForCAS
-  peekTicket' _      = peekTicket' (Proxy :: Proxy m)
-  casCRef r t        = toIsConc . casCRef r t
-  modifyCRefCAS r    = toIsConc . modifyCRefCAS r
-  modifyCRefCAS_ r   = toIsConc . modifyCRefCAS_ r
-  atomically         = toIsConc . atomically . fromIsSTM
-  readTVarConc       = toIsConc . readTVarConc
+  getNumCapabilities  = toIsConc getNumCapabilities
+  setNumCapabilities  = toIsConc . setNumCapabilities
+  myThreadId          = toIsConc myThreadId
+  yield               = toIsConc yield
+  threadDelay         = toIsConc . threadDelay
+  throwTo t           = toIsConc . throwTo t
+  newEmptyMVar        = toIsConc newEmptyMVar
+  newEmptyMVarN       = toIsConc . newEmptyMVarN
+  readMVar            = toIsConc . readMVar
+  tryReadMVar         = toIsConc . tryReadMVar
+  putMVar v           = toIsConc . putMVar v
+  tryPutMVar v        = toIsConc . tryPutMVar v
+  takeMVar            = toIsConc . takeMVar
+  tryTakeMVar         = toIsConc . tryTakeMVar
+  newIORef            = toIsConc . newIORef
+  newIORefN n         = toIsConc . newIORefN n
+  readIORef           = toIsConc . readIORef
+  atomicModifyIORef r = toIsConc . atomicModifyIORef r
+  writeIORef r        = toIsConc . writeIORef r
+  atomicWriteIORef r  = toIsConc . atomicWriteIORef r
+  readForCAS          = toIsConc . readForCAS
+  peekTicket' _       = peekTicket' (Proxy :: Proxy m)
+  casIORef r t        = toIsConc . casIORef r t
+  modifyIORefCAS r    = toIsConc . modifyIORefCAS r
+  modifyIORefCAS_ r   = toIsConc . modifyIORefCAS_ r
+  atomically          = toIsConc . atomically . fromIsSTM
+  readTVarConc        = toIsConc . readTVarConc
 
 -------------------------------------------------------------------------------
 -- Transformer instances
@@ -834,7 +834,7 @@ instance MonadConc m => MonadConc (IsConc m) where
 instance C => MonadConc (T m) where                            { \
   type STM      (T m) = STM m                                  ; \
   type MVar     (T m) = MVar m                                 ; \
-  type CRef     (T m) = CRef m                                 ; \
+  type IORef    (T m) = IORef m                                ; \
   type Ticket   (T m) = Ticket m                               ; \
   type ThreadId (T m) = ThreadId m                             ; \
                                                                  \
@@ -847,33 +847,33 @@ instance C => MonadConc (T m) where                            { \
                                                                  \
   isCurrentThreadBound = lift isCurrentThreadBound             ; \
                                                                  \
-  getNumCapabilities = lift getNumCapabilities                 ; \
-  setNumCapabilities = lift . setNumCapabilities               ; \
-  myThreadId         = lift myThreadId                         ; \
-  yield              = lift yield                              ; \
-  threadDelay        = lift . threadDelay                      ; \
-  throwTo t          = lift . throwTo t                        ; \
-  newEmptyMVar       = lift newEmptyMVar                       ; \
-  newEmptyMVarN      = lift . newEmptyMVarN                    ; \
-  readMVar           = lift . readMVar                         ; \
-  tryReadMVar        = lift . tryReadMVar                      ; \
-  putMVar v          = lift . putMVar v                        ; \
-  tryPutMVar v       = lift . tryPutMVar v                     ; \
-  takeMVar           = lift . takeMVar                         ; \
-  tryTakeMVar        = lift . tryTakeMVar                      ; \
-  newCRef            = lift . newCRef                          ; \
-  newCRefN n         = lift . newCRefN n                       ; \
-  readCRef           = lift . readCRef                         ; \
-  atomicModifyCRef r = lift . atomicModifyCRef r               ; \
-  writeCRef r        = lift . writeCRef r                      ; \
-  atomicWriteCRef r  = lift . atomicWriteCRef r                ; \
-  readForCAS         = lift . readForCAS                       ; \
-  peekTicket' _      = peekTicket' (Proxy :: Proxy m)          ; \
-  casCRef r t        = lift . casCRef r t                      ; \
-  modifyCRefCAS r    = lift . modifyCRefCAS r                  ; \
-  modifyCRefCAS_ r   = lift . modifyCRefCAS_ r                 ; \
-  atomically         = lift . atomically                       ; \
-  readTVarConc       = lift . readTVarConc                     }
+  getNumCapabilities  = lift getNumCapabilities                ; \
+  setNumCapabilities  = lift . setNumCapabilities              ; \
+  myThreadId          = lift myThreadId                        ; \
+  yield               = lift yield                             ; \
+  threadDelay         = lift . threadDelay                     ; \
+  throwTo t           = lift . throwTo t                       ; \
+  newEmptyMVar        = lift newEmptyMVar                      ; \
+  newEmptyMVarN       = lift . newEmptyMVarN                   ; \
+  readMVar            = lift . readMVar                        ; \
+  tryReadMVar         = lift . tryReadMVar                     ; \
+  putMVar v           = lift . putMVar v                       ; \
+  tryPutMVar v        = lift . tryPutMVar v                    ; \
+  takeMVar            = lift . takeMVar                        ; \
+  tryTakeMVar         = lift . tryTakeMVar                     ; \
+  newIORef            = lift . newIORef                        ; \
+  newIORefN n         = lift . newIORefN n                     ; \
+  readIORef           = lift . readIORef                       ; \
+  atomicModifyIORef r = lift . atomicModifyIORef r             ; \
+  writeIORef r        = lift . writeIORef r                    ; \
+  atomicWriteIORef r  = lift . atomicWriteIORef r              ; \
+  readForCAS          = lift . readForCAS                      ; \
+  peekTicket' _       = peekTicket' (Proxy :: Proxy m)         ; \
+  casIORef r t        = lift . casIORef r t                    ; \
+  modifyIORefCAS r    = lift . modifyIORefCAS r                ; \
+  modifyIORefCAS_ r   = lift . modifyIORefCAS_ r               ; \
+  atomically          = lift . atomically                      ; \
+  readTVarConc        = lift . readTVarConc                    }
 
 -- | New threads inherit the reader state of their parent, but do not
 -- communicate results back.

@@ -3,7 +3,7 @@ module Integration.Names where
 import           Control.Concurrent.Classy hiding (check)
 import           Data.Maybe                (mapMaybe)
 import           Test.DejaFu.Conc          (ConcIO)
-import           Test.DejaFu.Internal      (crefOf, mvarOf, simplifyAction,
+import           Test.DejaFu.Internal      (iorefOf, mvarOf, simplifyAction,
                                             tidsOf, tvarsOf)
 import           Test.DejaFu.SCT           (runSCT)
 import           Test.DejaFu.Types
@@ -15,7 +15,7 @@ tests :: [TestTree]
 tests =
   toTestList
     [ testCase "MVar names" testMVarNames
-    , testCase "CRef names" testCRefNames
+    , testCase "IORef names" testIORefNames
     , testCase "TVar names" testTVarNames
     , testCase "Thread names" testThreadNames
     ]
@@ -52,24 +52,24 @@ testMVarNames =
       let validMVid = maybe False (`elem` [mvarName1, mvarName2]) . mvarName
       in all validMVid . mapMaybe mvar
 
-testCRefNames :: Assertion
-testCRefNames =
-  check "All traces should use only required CRef names" checkCRefs $ do
-    x <- newCRefN crefName1 (0::Int)
-    y <- newCRefN crefName2 (0::Int)
-    _ <- fork $ modifyCRefCAS x (const (1, ()))
-    _ <- fork $ writeCRef y 2
-    (,) <$> readCRef x <*> readCRef y
+testIORefNames :: Assertion
+testIORefNames =
+  check "All traces should use only required IORef names" checkIORefs $ do
+    x <- newIORefN iorefName1 (0::Int)
+    y <- newIORefN iorefName2 (0::Int)
+    _ <- fork $ modifyIORefCAS x (const (1, ()))
+    _ <- fork $ writeIORef y 2
+    (,) <$> readIORef x <*> readIORef y
   where
-    crefName1 = "cref-one"
-    crefName2 = "cref-two"
-    crefName (CRefId (Id (Just n) _)) = Just n
-    crefName _ = Nothing
-    cref (NewCRef ref) = Just ref
-    cref a = crefOf (simplifyAction a)
-    checkCRefs =
-      let validCRef = maybe False (`elem` [crefName1, crefName2]) . crefName
-      in all validCRef . mapMaybe cref
+    iorefName1 = "ioref-one"
+    iorefName2 = "ioref-two"
+    iorefName (IORefId (Id (Just n) _)) = Just n
+    iorefName _ = Nothing
+    ioref (NewIORef ref) = Just ref
+    ioref a = iorefOf (simplifyAction a)
+    checkIORefs =
+      let validIORef = maybe False (`elem` [iorefName1, iorefName2]) . iorefName
+      in all validIORef . mapMaybe ioref
 
 testTVarNames :: Assertion
 testTVarNames =

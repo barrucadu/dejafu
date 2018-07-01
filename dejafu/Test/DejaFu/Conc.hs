@@ -46,7 +46,7 @@ module Test.DejaFu.Conc
   , ThreadAction(..)
   , Lookahead(..)
   , MVarId
-  , CRefId
+  , IORefId
   , MaskingState(..)
   , showTrace
   , showFail
@@ -124,7 +124,7 @@ instance Ca.MonadMask (ConcT n) where
 
 instance Monad n => C.MonadConc (ConcT n) where
   type MVar     (ConcT n) = ModelMVar n
-  type CRef     (ConcT n) = ModelCRef n
+  type IORef    (ConcT n) = ModelIORef n
   type Ticket   (ConcT n) = ModelTicket
   type STM      (ConcT n) = ModelSTM n
   type ThreadId (ConcT n) = ThreadId
@@ -153,18 +153,18 @@ instance Monad n => C.MonadConc (ConcT n) where
 
   -- ----------
 
-  newCRefN n a = toConc (ANewCRef n a)
+  newIORefN n a = toConc (ANewIORef n a)
 
-  readCRef   ref = toConc (AReadCRef    ref)
-  readForCAS ref = toConc (AReadCRefCas ref)
+  readIORef   ref = toConc (AReadIORef    ref)
+  readForCAS ref = toConc (AReadIORefCas ref)
 
   peekTicket' _ = ticketVal
 
-  writeCRef ref      a = toConc (\c -> AWriteCRef ref a (c ()))
-  casCRef   ref tick a = toConc (ACasCRef ref tick a)
+  writeIORef ref      a = toConc (\c -> AWriteIORef ref a (c ()))
+  casIORef   ref tick a = toConc (ACasIORef ref tick a)
 
-  atomicModifyCRef ref f = toConc (AModCRef    ref f)
-  modifyCRefCAS    ref f = toConc (AModCRefCas ref f)
+  atomicModifyIORef ref f = toConc (AModIORef    ref f)
+  modifyIORefCAS    ref f = toConc (AModIORefCas ref f)
 
   -- ----------
 
@@ -218,7 +218,7 @@ runConcurrent :: C.MonadConc n
   -> n (Either Failure a, s, Trace)
 runConcurrent sched memtype s ma = do
   res <- runConcurrency False sched memtype s initialIdSource 2 (unC ma)
-  out <- efromJust <$> C.readCRef (finalRef res)
+  out <- efromJust <$> C.readIORef (finalRef res)
   pure ( out
        , cSchedState (finalContext res)
        , F.toList (finalTrace res)
@@ -284,7 +284,7 @@ dontCheck lb ma = toConc (ADontCheck lb (unC ma))
 --
 -- __Snapshotting @IO@:__ A snapshot captures entire state of your
 -- concurrent program: the state of every thread, the number of
--- capabilities, the values of any @CRef@s, @MVar@s, and @TVar@s, and
+-- capabilities, the values of any @IORef@s, @MVar@s, and @TVar@s, and
 -- records any @IO@ that you performed.
 --
 -- When restoring a snapshot this @IO@ is replayed, in order.  But the
@@ -311,7 +311,7 @@ dontCheck lb ma = toConc (ADontCheck lb (unC ma))
 -- To safely use @IO@ in a snapshotted computation, __the combined effect must be idempotent__.
 -- You should either use actions which set the state to the final
 -- value directly, rather than modifying it (eg, using a combination
--- of @liftIO . readCRef@ and @liftIO . writeIORef@ here), or reset
+-- of @liftIO . readIORef@ and @liftIO . writeIORef@ here), or reset
 -- the state to a known value.  Both of these approaches will work:
 --
 -- @
@@ -349,7 +349,7 @@ runForDCSnapshot :: C.MonadConc n
   -> n (Maybe (Either Failure (DCSnapshot n a), Trace))
 runForDCSnapshot ma = do
   res <- runConcurrency True roundRobinSchedNP SequentialConsistency () initialIdSource 2 (unC ma)
-  out <- C.readCRef (finalRef res)
+  out <- C.readIORef (finalRef res)
   pure $ case (finalRestore res, out) of
     (Just _, Just (Left f)) -> Just (Left f, F.toList (finalTrace res))
     (Just restore, _) -> Just (Right (DCSnapshot (finalContext res) restore (finalRef res)), F.toList (finalTrace res))
@@ -374,7 +374,7 @@ runWithDCSnapshot sched memtype s snapshot = do
   let restore = dcsRestore snapshot
   let ref = dcsRef snapshot
   res <- runConcurrencyWithSnapshot sched memtype context restore ref
-  out <- efromJust <$> C.readCRef (finalRef res)
+  out <- efromJust <$> C.readIORef (finalRef res)
   pure ( out
        , cSchedState (finalContext res)
        , F.toList (finalTrace res)

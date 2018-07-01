@@ -39,17 +39,14 @@ instance Show ThreadId where
 -- | @since 1.3.1.0
 deriving instance Generic ThreadId
 
--- | Every @CRef@ has a unique identifier.
+-- | Every @IORef@ has a unique identifier.
 --
--- @since 1.0.0.0
-newtype CRefId = CRefId Id
-  deriving (Eq, Ord, NFData)
+-- @since unreleased
+newtype IORefId = IORefId Id
+  deriving (Eq, Ord, NFData, Generic)
 
-instance Show CRefId where
-  show (CRefId id_) = show id_
-
--- | @since 1.3.1.0
-deriving instance Generic CRefId
+instance Show IORefId where
+  show (IORefId id_) = show id_
 
 -- | Every @MVar@ has a unique identifier.
 --
@@ -75,7 +72,7 @@ instance Show TVarId where
 -- | @since 1.3.1.0
 deriving instance Generic TVarId
 
--- | An identifier for a thread, @MVar@, @CRef@, or @TVar@.
+-- | An identifier for a thread, @MVar@, @IORef@, or @TVar@.
 --
 -- The number is the important bit.  The string is to make execution
 -- traces easier to read, but is meaningless.
@@ -109,7 +106,7 @@ initialThread = ThreadId (Id (Just "main") 0)
 
 -- | All the actions that a thread can perform.
 --
--- @since 1.9.0.0
+-- @since unreleased
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -147,23 +144,23 @@ data ThreadAction =
   -- ^ Get blocked on a take.
   | TryTakeMVar MVarId Bool [ThreadId]
   -- ^ Try to take from a 'MVar', possibly waking up some threads.
-  | NewCRef CRefId
-  -- ^ Create a new 'CRef'.
-  | ReadCRef CRefId
-  -- ^ Read from a 'CRef'.
-  | ReadCRefCas CRefId
-  -- ^ Read from a 'CRef' for a future compare-and-swap.
-  | ModCRef CRefId
-  -- ^ Modify a 'CRef'.
-  | ModCRefCas CRefId
-  -- ^ Modify a 'CRef' using a compare-and-swap.
-  | WriteCRef CRefId
-  -- ^ Write to a 'CRef' without synchronising.
-  | CasCRef CRefId Bool
-  -- ^ Attempt to to a 'CRef' using a compare-and-swap, synchronising
+  | NewIORef IORefId
+  -- ^ Create a new 'IORef'.
+  | ReadIORef IORefId
+  -- ^ Read from a 'IORef'.
+  | ReadIORefCas IORefId
+  -- ^ Read from a 'IORef' for a future compare-and-swap.
+  | ModIORef IORefId
+  -- ^ Modify a 'IORef'.
+  | ModIORefCas IORefId
+  -- ^ Modify a 'IORef' using a compare-and-swap.
+  | WriteIORef IORefId
+  -- ^ Write to a 'IORef' without synchronising.
+  | CasIORef IORefId Bool
+  -- ^ Attempt to to a 'IORef' using a compare-and-swap, synchronising
   -- it.
-  | CommitCRef ThreadId CRefId
-  -- ^ Commit the last write to the given 'CRef' by the given thread,
+  | CommitIORef ThreadId IORefId
+  -- ^ Commit the last write to the given 'IORef' by the given thread,
   -- so that all threads can see the updated value.
   | STM [TAction] [ThreadId]
   -- ^ An STM transaction was executed, possibly waking up some
@@ -203,10 +200,7 @@ data ThreadAction =
   -- ^ Stop executing an action with @subconcurrency@.
   | DontCheck Trace
   -- ^ Execute an action with @dontCheck@.
-  deriving (Eq, Show)
-
--- | @since 1.3.1.0
-deriving instance Generic ThreadAction
+  deriving (Eq, Generic, Show)
 
 -- this makes me sad
 instance NFData ThreadAction where
@@ -228,14 +222,14 @@ instance NFData ThreadAction where
   rnf (TakeMVar m ts) = rnf (m, ts)
   rnf (BlockedTakeMVar m) = rnf m
   rnf (TryTakeMVar m b ts) = rnf (m, b, ts)
-  rnf (NewCRef c) = rnf c
-  rnf (ReadCRef c) = rnf c
-  rnf (ReadCRefCas c) = rnf c
-  rnf (ModCRef c) = rnf c
-  rnf (ModCRefCas c) = rnf c
-  rnf (WriteCRef c) = rnf c
-  rnf (CasCRef c b) = rnf (c, b)
-  rnf (CommitCRef t c) = rnf (t, c)
+  rnf (NewIORef c) = rnf c
+  rnf (ReadIORef c) = rnf c
+  rnf (ReadIORefCas c) = rnf c
+  rnf (ModIORef c) = rnf c
+  rnf (ModIORefCas c) = rnf c
+  rnf (WriteIORef c) = rnf c
+  rnf (CasIORef c b) = rnf (c, b)
+  rnf (CommitIORef t c) = rnf (t, c)
   rnf (STM as ts) = rnf (as, ts)
   rnf (BlockedSTM as) = rnf as
   rnf Catching = ()
@@ -254,7 +248,7 @@ instance NFData ThreadAction where
 
 -- | A one-step look-ahead at what a thread will do next.
 --
--- @since 1.1.0.0
+-- @since unreleased
 data Lookahead =
     WillFork
   -- ^ Will start a new thread.
@@ -288,23 +282,23 @@ data Lookahead =
   -- ^ Will take from a 'MVar', possibly waking up some threads.
   | WillTryTakeMVar MVarId
   -- ^ Will try to take from a 'MVar', possibly waking up some threads.
-  | WillNewCRef
-  -- ^ Will create a new 'CRef'.
-  | WillReadCRef CRefId
-  -- ^ Will read from a 'CRef'.
-  | WillReadCRefCas CRefId
-  -- ^ Will read from a 'CRef' for a future compare-and-swap.
-  | WillModCRef CRefId
-  -- ^ Will modify a 'CRef'.
-  | WillModCRefCas CRefId
-  -- ^ Will modify a 'CRef' using a compare-and-swap.
-  | WillWriteCRef CRefId
-  -- ^ Will write to a 'CRef' without synchronising.
-  | WillCasCRef CRefId
-  -- ^ Will attempt to to a 'CRef' using a compare-and-swap,
+  | WillNewIORef
+  -- ^ Will create a new 'IORef'.
+  | WillReadIORef IORefId
+  -- ^ Will read from a 'IORef'.
+  | WillReadIORefCas IORefId
+  -- ^ Will read from a 'IORef' for a future compare-and-swap.
+  | WillModIORef IORefId
+  -- ^ Will modify a 'IORef'.
+  | WillModIORefCas IORefId
+  -- ^ Will modify a 'IORef' using a compare-and-swap.
+  | WillWriteIORef IORefId
+  -- ^ Will write to a 'IORef' without synchronising.
+  | WillCasIORef IORefId
+  -- ^ Will attempt to to a 'IORef' using a compare-and-swap,
   -- synchronising it.
-  | WillCommitCRef ThreadId CRefId
-  -- ^ Will commit the last write by the given thread to the 'CRef'.
+  | WillCommitIORef ThreadId IORefId
+  -- ^ Will commit the last write by the given thread to the 'IORef'.
   | WillSTM
   -- ^ Will execute an STM transaction, possibly waking up some
   -- threads.
@@ -337,10 +331,7 @@ data Lookahead =
   -- ^ Will stop executing an extion with @subconcurrency@.
   | WillDontCheck
   -- ^ Will execute an action with @dontCheck@.
-  deriving (Eq, Show)
-
--- | @since 1.3.1.0
-deriving instance Generic Lookahead
+  deriving (Eq, Generic, Show)
 
 -- this also makes me sad
 instance NFData Lookahead where
@@ -359,14 +350,14 @@ instance NFData Lookahead where
   rnf (WillTryReadMVar m) = rnf m
   rnf (WillTakeMVar m) = rnf m
   rnf (WillTryTakeMVar m) = rnf m
-  rnf WillNewCRef = ()
-  rnf (WillReadCRef c) = rnf c
-  rnf (WillReadCRefCas c) = rnf c
-  rnf (WillModCRef c) = rnf c
-  rnf (WillModCRefCas c) = rnf c
-  rnf (WillWriteCRef c) = rnf c
-  rnf (WillCasCRef c) = rnf c
-  rnf (WillCommitCRef t c) = rnf (t, c)
+  rnf WillNewIORef = ()
+  rnf (WillReadIORef c) = rnf c
+  rnf (WillReadIORefCas c) = rnf c
+  rnf (WillModIORef c) = rnf c
+  rnf (WillModIORefCas c) = rnf c
+  rnf (WillWriteIORef c) = rnf c
+  rnf (WillCasIORef c) = rnf c
+  rnf (WillCommitIORef t c) = rnf (t, c)
   rnf WillSTM = ()
   rnf WillCatching = ()
   rnf WillPopCatching = ()
@@ -715,13 +706,13 @@ strengthenDiscard d1 d2 =
 -------------------------------------------------------------------------------
 -- * Memory Models
 
--- | The memory model to use for non-synchronised 'CRef' operations.
+-- | The memory model to use for non-synchronised 'IORef' operations.
 --
 -- @since 0.4.0.0
 data MemType =
     SequentialConsistency
   -- ^ The most intuitive model: a program behaves as a simple
-  -- interleaving of the actions in different threads. When a 'CRef'
+  -- interleaving of the actions in different threads. When a 'IORef'
   -- is written to, that write is immediately visible to all threads.
   | TotalStoreOrder
   -- ^ Each thread has a write buffer. A thread sees its writes
@@ -729,9 +720,9 @@ data MemType =
   -- committed, which may happen later. Writes are committed in the
   -- same order that they are created.
   | PartialStoreOrder
-  -- ^ Each 'CRef' has a write buffer. A thread sees its writes
+  -- ^ Each 'IORef' has a write buffer. A thread sees its writes
   -- immediately, but other threads will only see writes when they are
-  -- committed, which may happen later. Writes to different 'CRef's
+  -- committed, which may happen later. Writes to different 'IORef's
   -- are not necessarily committed in the same order that they are
   -- created.
   deriving (Eq, Show, Read, Ord, Enum, Bounded)

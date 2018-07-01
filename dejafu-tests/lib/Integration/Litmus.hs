@@ -81,51 +81,51 @@ compareTest act = do
 -- reordered with other stores.
 intelWP21 :: MonadConc m => m (Int, Int)
 intelWP21 = snd <$> litmus2
-  (\x y -> writeCRef x 1 >> writeCRef y 1)
-  (\x y -> (,) <$> readCRef y <*> readCRef x)
+  (\x y -> writeIORef x 1 >> writeIORef y 1)
+  (\x y -> (,) <$> readIORef y <*> readIORef x)
 
 -- | Stores are not reordered with older loads.
 intelWP22 :: MonadConc m => m (Int, Int)
 intelWP22 = litmus2
-  (\x y -> do r1 <- readCRef x; writeCRef y 1; pure r1)
-  (\x y -> do r2 <- readCRef y; writeCRef x 1; pure r2)
+  (\x y -> do r1 <- readIORef x; writeIORef y 1; pure r1)
+  (\x y -> do r2 <- readIORef y; writeIORef x 1; pure r2)
 
 -- | Loads may be reordered with older stores to different locations.
 intelWP23 :: MonadConc m => m (Int, Int)
 intelWP23 = litmus2
-  (\x y -> writeCRef x 1 >> readCRef y)
-  (\x y -> writeCRef y 1 >> readCRef x)
+  (\x y -> writeIORef x 1 >> readIORef y)
+  (\x y -> writeIORef y 1 >> readIORef x)
 
 -- | Loads are not reordered with older stores to the same location.
 intelWP24 :: MonadConc m => m (Int, Int)
 intelWP24 = litmus2
-  (\x _ -> writeCRef x 1 >> readCRef x)
-  (\_ y -> writeCRef y 1 >> readCRef y)
+  (\x _ -> writeIORef x 1 >> readIORef x)
+  (\_ y -> writeIORef y 1 >> readIORef y)
 
 -- | Intra-processor forwarding is allowed
 intelWP25 :: MonadConc m => m ((Int, Int), (Int, Int))
 intelWP25 = litmus2
-  (\x y -> do writeCRef x 1; r1 <- readCRef x; r2 <- readCRef y; pure (r1, r2))
-  (\x y -> do writeCRef y 1; r3 <- readCRef y; r4 <- readCRef x; pure (r3, r4))
+  (\x y -> do writeIORef x 1; r1 <- readIORef x; r2 <- readIORef y; pure (r1, r2))
+  (\x y -> do writeIORef y 1; r3 <- readIORef y; r4 <- readIORef x; pure (r3, r4))
 
 -- | Stores are transitively visible.
 intelWP26 :: MonadConc m => m (Int, Int, Int)
 intelWP26 = do
-  x <- newCRef 0
-  y <- newCRef 0
-  j1 <- spawn (writeCRef x 1)
-  j2 <- spawn (do r1 <- readCRef x; writeCRef x 1; pure r1)
-  j3 <- spawn (do r2 <- readCRef y; r3 <- readCRef x; pure (r2,r3))
+  x <- newIORef 0
+  y <- newIORef 0
+  j1 <- spawn (writeIORef x 1)
+  j2 <- spawn (do r1 <- readIORef x; writeIORef x 1; pure r1)
+  j3 <- spawn (do r2 <- readIORef y; r3 <- readIORef x; pure (r2,r3))
   (\() r1 (r2,r3) -> (r1,r2,r3)) <$> readMVar j1 <*> readMVar j2 <*> readMVar j3
 
 -- | Total order on stores to the same location.
 intelWP27 :: MonadConc m => m ((Int, Int), (Int, Int))
 intelWP27 = do
-  x <- newCRef 0
-  j1 <- spawn (writeCRef x 1)
-  j2 <- spawn (writeCRef x 2)
-  j3 <- spawn (do r1 <- readCRef x; r2 <- readCRef x; pure (r1, r2))
-  j4 <- spawn (do r3 <- readCRef x; r4 <- readCRef x; pure (r3, r4))
+  x <- newIORef 0
+  j1 <- spawn (writeIORef x 1)
+  j2 <- spawn (writeIORef x 2)
+  j3 <- spawn (do r1 <- readIORef x; r2 <- readIORef x; pure (r1, r2))
+  j4 <- spawn (do r3 <- readIORef x; r4 <- readIORef x; pure (r3, r4))
   (\() () r12 r23 -> (r12, r23)) <$> readMVar j1 <*> readMVar j2 <*> readMVar j3 <*> readMVar j4
 
 -- | Independent Read Independent Write.
@@ -134,24 +134,24 @@ intelWP27 = do
 -- ((1,0),(1,0)). Intel (and TSO/PSO) forbid it.
 intelWP28 :: MonadConc m => m ((Int, Int), (Int, Int))
 intelWP28 = do
-  x <- newCRef 0
-  y <- newCRef 0
-  j1 <- spawn (writeCRef x 1)
-  j2 <- spawn (writeCRef y 1)
-  j3 <- spawn (do r1 <- readCRef x; r2 <- readCRef y; pure (r1, r2))
-  j4 <- spawn (do r3 <- readCRef y; r4 <- readCRef x; pure (r3, r4))
+  x <- newIORef 0
+  y <- newIORef 0
+  j1 <- spawn (writeIORef x 1)
+  j2 <- spawn (writeIORef y 1)
+  j3 <- spawn (do r1 <- readIORef x; r2 <- readIORef y; pure (r1, r2))
+  j4 <- spawn (do r3 <- readIORef y; r4 <- readIORef x; pure (r3, r4))
   (\() () r12 r23 -> (r12, r23)) <$> readMVar j1 <*> readMVar j2 <*> readMVar j3 <*> readMVar j4
 
 -------------------------------------------------------------------------------
 
--- | Create two @CRef@s, fork the two threads, and return the result.
+-- | Create two @IORef@s, fork the two threads, and return the result.
 litmus2 :: MonadConc m
-  => (CRef m Int -> CRef m Int -> m b)
-  -> (CRef m Int -> CRef m Int -> m c)
+  => (IORef m Int -> IORef m Int -> m b)
+  -> (IORef m Int -> IORef m Int -> m c)
   -> m (b, c)
 litmus2 thread1 thread2 = do
-  x <- newCRef 0
-  y <- newCRef 0
+  x <- newIORef 0
+  y <- newIORef 0
   j1 <- spawn (thread1 x y)
   j2 <- spawn (thread2 x y)
   (,) <$> readMVar j1 <*> readMVar j2

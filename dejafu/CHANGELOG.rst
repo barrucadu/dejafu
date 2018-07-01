@@ -7,6 +7,16 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased - IORefs
+-------------------
+
+Changed
+~~~~~~~
+
+* (:issue:`274`) ``CRef`` is now ``IORef``: all functions, data
+  constructors, and types have been renamed.
+
+
 1.10.1.0 (2018-06-17)
 ---------------------
 

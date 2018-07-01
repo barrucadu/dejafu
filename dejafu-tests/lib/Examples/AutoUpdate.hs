@@ -60,9 +60,9 @@ deadlocks = join (mkAutoUpdate defaultUpdateSettings)
 -- the program explicitly yields, the bounds don't need changing.
 nondeterministic :: forall m. MonadConc m => m Int
 nondeterministic = do
-  var <- newCRef 0
+  var <- newIORef 0
   let settings = (defaultUpdateSettings :: UpdateSettings m ())
-        { updateAction = atomicModifyCRef var (\x -> (x+1, x)) }
+        { updateAction = atomicModifyIORef var (\x -> (x+1, x)) }
   auto <- mkAutoUpdate settings
   void auto
   auto
@@ -84,7 +84,7 @@ defaultUpdateSettings = UpdateSettings
 
 mkAutoUpdate :: MonadConc m => UpdateSettings m a -> m (m a)
 mkAutoUpdate us = do
-    currRef      <- newCRef Nothing
+    currRef      <- newIORef Nothing
     needsRunning <- newEmptyMVar
     lastValue    <- newEmptyMVar
 
@@ -93,17 +93,17 @@ mkAutoUpdate us = do
 
         a <- catchSome $ updateAction us
 
-        writeCRef currRef $ Just a
+        writeIORef currRef $ Just a
         void $ tryTakeMVar lastValue
         putMVar lastValue a
 
         threadDelay $ updateFreq us
 
-        writeCRef currRef Nothing
+        writeIORef currRef Nothing
         void $ takeMVar lastValue
 
     pure $ do
-        mval <- readCRef currRef
+        mval <- readIORef currRef
         case mval of
             Just val -> pure val
             Nothing -> do

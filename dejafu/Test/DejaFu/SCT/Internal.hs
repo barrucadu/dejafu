@@ -70,8 +70,8 @@ sct settings s0 sfun srun conc
       sfun
       (srun (runSnap snap))
       (runSnap snap)
-      (toId $ 1 + fst (_tids  idsrc))
-      (toId $ 1 + fst (_crids idsrc))
+      (toId $ 1 + fst (_tids idsrc))
+      (toId $ 1 + fst (_iorids idsrc))
 
     runFull sched s = runConcurrent sched (_memtype settings) s conc
     runSnap snap sched s = runWithDCSnapshot sched (_memtype settings) s snap
@@ -93,8 +93,8 @@ sct' :: (MonadConc n, HasCallStack)
   -- ^ Just run the computation
   -> ThreadId
   -- ^ The first available @ThreadId@
-  -> CRefId
-  -- ^ The first available @CRefId@
+  -> IORefId
+  -- ^ The first available @IORefId@
   -> n [(Either Failure a, Trace)]
 sct' settings s0 sfun srun run nTId nCRId = go Nothing [] s0 where
   go (Just res) _ _ | earlyExit res = pure []
@@ -154,8 +154,8 @@ simplifyExecution :: (MonadConc n, HasCallStack)
   -- ^ Just run the computation
   -> ThreadId
   -- ^ The first available @ThreadId@
-  -> CRefId
-  -- ^ The first available @CRefId@
+  -> IORefId
+  -- ^ The first available @IORefId@
   -> Either Failure a
   -- ^ The expected result
   -> Trace
@@ -244,7 +244,7 @@ permuteBy safeIO memtype = go initialDepState where
 dropCommits :: Bool -> MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
 dropCommits _ SequentialConsistency = id
 dropCommits safeIO memtype = go initialDepState where
-  go ds (t1@(tid1, ta1@(CommitCRef _ _)):t2@(tid2, ta2):trc)
+  go ds (t1@(tid1, ta1@(CommitIORef _ _)):t2@(tid2, ta2):trc)
     | isBarrier (simplifyAction ta2) = go ds (t2:trc)
     | independent safeIO ds tid1 ta1 tid2 ta2 = t2 : go (updateDepState memtype ds tid2 ta2) (t1:trc)
   go ds (t@(tid,ta):trc) = t : go (updateDepState memtype ds tid ta) trc
@@ -302,11 +302,11 @@ pushForward safeIO memtype = go initialDepState where
       | otherwise = Nothing
     fgo _ _ = Nothing
 
--- | Re-number threads and CRefs.
+-- | Re-number threads and IORefs.
 --
--- Permuting forks or newCRefs makes the existing numbering invalid,
+-- Permuting forks or newIORefs makes the existing numbering invalid,
 -- which then causes problems for scheduling.  Just re-numbering
--- threads isn't enough, as CRef IDs are used to determine commit
+-- threads isn't enough, as IORef IDs are used to determine commit
 -- thread IDs.
 --
 -- Renumbered things will not fix their names, so don't rely on those
@@ -317,14 +317,14 @@ renumber
   -> Int
   -- ^ First free thread ID.
   -> Int
-  -- ^ First free @CRef@ ID.
+  -- ^ First free @IORef@ ID.
   -> [(ThreadId, ThreadAction)]
   -> [(ThreadId, ThreadAction)]
 renumber memtype tid0 crid0 = snd . mapAccumL go (I.empty, tid0, I.empty, crid0) where
-  go s@(tidmap, _, cridmap, _) (_, CommitCRef tid crid) =
+  go s@(tidmap, _, cridmap, _) (_, CommitIORef tid crid) =
     let tid'  = renumbered tidmap  tid
         crid' = renumbered cridmap crid
-        act' = CommitCRef tid' crid'
+        act' = CommitIORef tid' crid'
     in case memtype of
          PartialStoreOrder -> (s, (commitThreadId tid' (Just crid'), act'))
          _ -> (s, (commitThreadId tid' Nothing, act'))
@@ -351,22 +351,22 @@ renumber memtype tid0 crid0 = snd . mapAccumL go (I.empty, tid0, I.empty, crid0)
     (s, TakeMVar mvid (map (renumbered tidmap) olds))
   updateAction s@(tidmap, _, _, _) (TryTakeMVar mvid b olds) =
     (s, TryTakeMVar mvid b (map (renumbered tidmap) olds))
-  updateAction (tidmap, nTId, cridmap, nCRId) (NewCRef old) =
+  updateAction (tidmap, nTId, cridmap, nCRId) (NewIORef old) =
     let cridmap' = I.insert (fromId old) nCRId cridmap
         nCRId' = nCRId + 1
-    in ((tidmap, nTId, cridmap', nCRId'), NewCRef (toId nCRId))
-  updateAction s@(_, _, cridmap, _) (ReadCRef old) =
-    (s, ReadCRef (renumbered cridmap old))
-  updateAction s@(_, _, cridmap, _) (ReadCRefCas old) =
-    (s, ReadCRefCas (renumbered cridmap old))
-  updateAction s@(_, _, cridmap, _) (ModCRef old) =
-    (s, ModCRef (renumbered cridmap old))
-  updateAction s@(_, _, cridmap, _) (ModCRefCas old) =
-    (s, ModCRefCas (renumbered cridmap old))
-  updateAction s@(_, _, cridmap, _) (WriteCRef old) =
-    (s, WriteCRef (renumbered cridmap old))
-  updateAction s@(_, _, cridmap, _) (CasCRef old b) =
-    (s, CasCRef (renumbered cridmap old) b)
+    in ((tidmap, nTId, cridmap', nCRId'), NewIORef (toId nCRId))
+  updateAction s@(_, _, cridmap, _) (ReadIORef old) =
+    (s, ReadIORef (renumbered cridmap old))
+  updateAction s@(_, _, cridmap, _) (ReadIORefCas old) =
+    (s, ReadIORefCas (renumbered cridmap old))
+  updateAction s@(_, _, cridmap, _) (ModIORef old) =
+    (s, ModIORef (renumbered cridmap old))
+  updateAction s@(_, _, cridmap, _) (ModIORefCas old) =
+    (s, ModIORefCas (renumbered cridmap old))
+  updateAction s@(_, _, cridmap, _) (WriteIORef old) =
+    (s, WriteIORef (renumbered cridmap old))
+  updateAction s@(_, _, cridmap, _) (CasIORef old b) =
+    (s, CasIORef (renumbered cridmap old) b)
   updateAction s@(tidmap, _, _, _) (STM tas olds) =
     (s, STM tas (map (renumbered tidmap) olds))
   updateAction s@(tidmap, _, _, _) (ThrowTo old b) =
