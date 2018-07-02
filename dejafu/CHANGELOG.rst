@@ -7,6 +7,18 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.11.0.1 (2018-07-02)
+---------------------
+
+* Git: :tag:`dejafu-1.11.0.1`
+* Hackage: :hackage:`dejafu-1.11.0.1`
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`contravariant` is <1.6.
+
+
 1.11.0.0 - IORefs (2018-07-01)
 ------------------------------
 
