@@ -7,6 +7,15 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`profunctors` is <6.
+
+
 1.11.0.1 (2018-07-02)
 ---------------------
 
