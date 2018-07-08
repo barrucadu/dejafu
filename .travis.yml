@@ -38,3 +38,7 @@ jobs:
   - env: MODE=test RESOLVER=lts-10.0           # GHC 8.2
   - env: MODE=test RESOLVER=nightly-2018-03-23 # GHC 8.4
   - env: MODE=test RESOLVER=nightly
+
+  - stage: predeploy
+    if: branch=master
+    env: MODE=predeploy
