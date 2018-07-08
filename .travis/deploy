@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+source .travis/setup.sh
+
+for pkg in concurrency dejafu hunit-dejafu tasty-dejafu; do
+  echo "barrucadu\n${HACKAGE_PASSWORD}\nn" | $stack upload $pkg
+done
