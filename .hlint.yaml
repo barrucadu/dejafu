@@ -12,6 +12,9 @@
 # Don't prefer TupleSections
 - ignore: {name: Use tuple-section}
 
+# I don't think this helps
+- ignore: {name: "Avoid lambda using `infix`"}
+
 # Inapplicable
 - ignore: {name: Use readTVarIO, within: Control.Monad.Conc.Class}
 
