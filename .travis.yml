@@ -25,6 +25,9 @@ matrix:
   allow_failures:
   - env: MODE=test RESOLVER=nightly
 
+env:
+  secure: lpaUGUVI96HQ3Q++n8BHAbKE1l4U3g4NR4V40CCQYj0+RNHbdMmoKNA5kI65j6yFxVmLNdYp4NRRayyqb9UHrAVRCQiBnd94Mv4id6/M13JzF7UNCsUP0lbcNj86Zlce0lwUdnIWVS6OG0PHWQEPSUu0Hs5tPixfK7A0QXC01Cs=
+
 script: ./.travis/$MODE
 
 jobs:
@@ -38,3 +41,11 @@ jobs:
   - env: MODE=test RESOLVER=lts-10.0           # GHC 8.2
   - env: MODE=test RESOLVER=nightly-2018-03-23 # GHC 8.4
   - env: MODE=test RESOLVER=nightly
+
+  - stage: predeploy
+    if: branch=master
+    env: MODE=predeploy
+
+  - stage: deploy
+    if: branch=master AND type != pull_request
+    env: MODE=deploy
