@@ -3,9 +3,9 @@
 source .travis/setup.sh
 
 # do not echo hackage password!
-set +e
+set +x
 
 for pkg in concurrency dejafu hunit-dejafu tasty-dejafu; do
   echo "$stack upload $pkg"
-  echo "barrucadu\n${HACKAGE_PASSWORD}\nn" | $stack upload $pkg
+  echo -e "barrucadu\n${HACKAGE_PASSWORD}\nn" | $stack upload $pkg
 done

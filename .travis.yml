@@ -20,14 +20,9 @@ addons:
     packages:
     - libgmp-dev
 
-matrix:
-  fast_finish: true
-  allow_failures:
-  - env: MODE=test RESOLVER=nightly
-
 env:
   global:
-  - secure: lpaUGUVI96HQ3Q++n8BHAbKE1l4U3g4NR4V40CCQYj0+RNHbdMmoKNA5kI65j6yFxVmLNdYp4NRRayyqb9UHrAVRCQiBnd94Mv4id6/M13JzF7UNCsUP0lbcNj86Zlce0lwUdnIWVS6OG0PHWQEPSUu0Hs5tPixfK7A0QXC01Cs=
+  - secure: "J8fH1I5Etz1TpB8aZwtbFGp4GDgq5NCevVkthAAPLMMNRM+WYG5hznEq4GnvY0sWyBYhVuEapq31w+Mjx1PjiMaVeipdcd9+fOo/K//jg0BU8Jj9MpFHzHmmiE0HB35Dm8lro7QBPIgX0e59qbK7MScZ4JZTBqL3OS1y3mtxdks="
 
 script: ./.travis/$MODE
 
