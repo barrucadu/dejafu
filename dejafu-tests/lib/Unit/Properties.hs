@@ -442,7 +442,7 @@ genSynchronisedActionType = HGen.choice
 
 genDepState :: H.Gen SCT.DepState
 genDepState = SCT.DepState
-  <$> genSmallMap genIORefId HGen.bool
+  <$> genSmallMap genIORefId genSmallInt
   <*> genSmallSet genMVarId
   <*> genSmallMap genThreadId genMaskingState
 

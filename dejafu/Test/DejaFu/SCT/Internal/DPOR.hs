@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 
 -- |
@@ -9,7 +10,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : DeriveAnyClass, DeriveGeneric, FlexibleContexts, ViewPatterns
+-- Portability : DeriveAnyClass, DeriveGeneric, FlexibleContexts, LambdaCase, ViewPatterns
 --
 -- Internal types and functions for SCT via dynamic partial-order
 -- reduction.  This module is NOT considered to form part of the
@@ -680,7 +681,7 @@ dependentActions ds a1 a2 = case (a1, a2) of
 -- ** Dependency function state
 
 data DepState = DepState
-  { depIOState :: Map IORefId Bool
+  { depIOState :: Map IORefId Int
   -- ^ Keep track of which @IORef@s have buffered writes.
   , depMVState :: Set MVarId
   -- ^ Keep track of which @MVar@s are full.
@@ -712,10 +713,13 @@ updateDepState memtype depstate tid act = DepState
 
 -- | Update the @IORef@ buffer state with the action that has just
 -- happened.
-updateIOState :: MemType -> ThreadAction -> Map IORefId Bool -> Map IORefId Bool
+updateIOState :: MemType -> ThreadAction -> Map IORefId Int -> Map IORefId Int
 updateIOState SequentialConsistency _ = const M.empty
-updateIOState _ (CommitIORef _ r) = M.delete r
-updateIOState _ (WriteIORef    r) = M.insert r True
+updateIOState _ (CommitIORef _ r) = (`M.alter` r) $ \case
+  Just 1  -> Nothing
+  Just n  -> Just (n-1)
+  Nothing -> Nothing
+updateIOState _ (WriteIORef    r) = M.insertWith (+) r 1
 updateIOState _ ta
   | isBarrier $ simplifyAction ta = const M.empty
   | otherwise = id
@@ -745,7 +749,11 @@ updateMaskState _ _ = id
 
 -- | Check if a @IORef@ has a buffered write pending.
 isBuffered :: DepState -> IORefId -> Bool
-isBuffered depstate r = M.findWithDefault False r (depIOState depstate)
+isBuffered depstate r = numBuffered depstate r /= 0
+
+-- | Check how many buffered writes an @IORef@ has.
+numBuffered :: DepState -> IORefId -> Int
+numBuffered depstate r = M.findWithDefault 0 r (depIOState depstate)
 
 -- | Check if an @MVar@ is full.
 isFull :: DepState -> MVarId -> Bool
