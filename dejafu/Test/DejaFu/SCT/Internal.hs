@@ -244,8 +244,8 @@ permuteBy safeIO memtype = go initialDepState where
 dropCommits :: Bool -> MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
 dropCommits _ SequentialConsistency = id
 dropCommits safeIO memtype = go initialDepState where
-  go ds (t1@(tid1, ta1@(CommitIORef _ _)):t2@(tid2, ta2):trc)
-    | isBarrier (simplifyAction ta2) = go ds (t2:trc)
+  go ds (t1@(tid1, ta1@(CommitIORef _ iorefid)):t2@(tid2, ta2):trc)
+    | isBarrier (simplifyAction ta2) && numBuffered ds iorefid == 1 = go ds (t2:trc)
     | independent safeIO ds tid1 ta1 tid2 ta2 = t2 : go (updateDepState memtype ds tid2 ta2) (t1:trc)
   go ds (t@(tid,ta):trc) = t : go (updateDepState memtype ds tid ta) trc
   go _ [] = []

@@ -7,6 +7,19 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.11.0.3 (2018-07-15)
+---------------------
+
+* Git: :tag:`dejafu-1.11.0.3`
+* Hackage: :hackage:`dejafu-1.11.0.3`
+
+Fixed
+~~~~~
+
+* (:issue:`275`) In trace simplification, only remove a commit if
+  there are no other buffered writes for that same `IORef`.
+
+
 1.11.0.2 (2018-07-08)
 ---------------------
 
