@@ -42,12 +42,14 @@ Release Process
 
 11. Push tags to GitHub.
 
-12. Upload updated packages to Hackage.
+When the merge commit successfully builds on ``master`` the updated
+packages will be pushed to Hackage by Travis.
 
-See :commit:`75a02b9` and :tag:`dejafu-1.1.0.1` if any of this is
-unclear.
+See :pull:`284` and the Travis `build of its merge commit`__ if any of
+this is unclear.
 
 .. _PVP: https://pvp.haskell.org/
+.. __: https://travis-ci.org/barrucadu/dejafu/builds/404109093
 
 
 Pro tips
