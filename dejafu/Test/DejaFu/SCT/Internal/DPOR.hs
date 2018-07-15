@@ -705,18 +705,18 @@ initialDepState = DepState M.empty S.empty M.empty
 -- happened.
 updateDepState :: MemType -> DepState -> ThreadId -> ThreadAction -> DepState
 updateDepState memtype depstate tid act = DepState
-  { depIOState   = updateCRState memtype act $ depIOState   depstate
+  { depIOState   = updateIOState memtype act $ depIOState   depstate
   , depMVState   = updateMVState         act $ depMVState   depstate
   , depMaskState = updateMaskState tid   act $ depMaskState depstate
   }
 
 -- | Update the @IORef@ buffer state with the action that has just
 -- happened.
-updateCRState :: MemType -> ThreadAction -> Map IORefId Bool -> Map IORefId Bool
-updateCRState SequentialConsistency _ = const M.empty
-updateCRState _ (CommitIORef _ r) = M.delete r
-updateCRState _ (WriteIORef    r) = M.insert r True
-updateCRState _ ta
+updateIOState :: MemType -> ThreadAction -> Map IORefId Bool -> Map IORefId Bool
+updateIOState SequentialConsistency _ = const M.empty
+updateIOState _ (CommitIORef _ r) = M.delete r
+updateIOState _ (WriteIORef    r) = M.insert r True
+updateIOState _ ta
   | isBarrier $ simplifyAction ta = const M.empty
   | otherwise = id
 
