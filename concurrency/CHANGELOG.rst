@@ -10,6 +10,11 @@ standard Haskell versioning scheme.
 unreleased
 ----------
 
+Added
+~~~~~
+
+* (:issue:`287`) The ``Control.Concurrent.Classy.STM.TSem`` module.
+
 Miscellaneous
 ~~~~~~~~~~~~~
 
