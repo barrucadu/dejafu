@@ -21,6 +21,7 @@ module Control.Concurrent.Classy.STM.TVar
   , writeTVar
   , modifyTVar
   , modifyTVar'
+  , stateTVar
   , swapTVar
   , registerDelay
   ) where
@@ -46,6 +47,17 @@ modifyTVar' :: MonadSTM stm => TVar stm a -> (a -> a) -> stm ()
 modifyTVar' ctvar f = do
   a <- readTVar ctvar
   writeTVar ctvar $! f a
+
+-- | Like 'modifyTVar'' but the function is a simple state transition that can
+-- return a side value which is passed on as the result of the STM.
+--
+-- @since unreleased
+stateTVar :: MonadSTM stm => TVar stm s -> (s -> (a, s)) -> stm a
+stateTVar var f = do
+   s <- readTVar var
+   let (a, s') = f s -- since we destructure this, we are strict in f
+   writeTVar var s'
+   pure a
 
 -- | Swap the contents of a 'TVar', returning the old value.
 --

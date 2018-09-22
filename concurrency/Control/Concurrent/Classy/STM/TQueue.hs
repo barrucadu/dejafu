@@ -29,6 +29,7 @@ module Control.Concurrent.Classy.STM.TQueue
   , newTQueue
   , readTQueue
   , tryReadTQueue
+  , flushTQueue
   , peekTQueue
   , tryPeekTQueue
   , writeTQueue
@@ -36,6 +37,7 @@ module Control.Concurrent.Classy.STM.TQueue
   , isEmptyTQueue
   ) where
 
+import           Control.Monad           (unless)
 import           Control.Monad.STM.Class
 
 -- | 'TQueue' is an abstract type representing an unbounded FIFO channel.
@@ -75,12 +77,12 @@ readTQueue (TQueue readT writeT) = do
       ys <- readTVar writeT
       case ys of
         [] -> retry
-        _  -> case reverse ys of
-               [] -> error "readTQueue"
-               (z:zs) -> do
-                 writeTVar writeT []
-                 writeTVar readT zs
-                 pure z
+        _  -> do
+          let (z:zs) = reverse ys -- NB. lazy: we want the transaction to be
+                                  -- short, otherwise it will conflict
+          writeTVar writeT []
+          writeTVar readT zs
+          pure z
 
 -- | A version of 'readTQueue' which does not retry. Instead it
 -- returns @Nothing@ if no value is available.
@@ -88,6 +90,18 @@ readTQueue (TQueue readT writeT) = do
 -- @since 1.0.0.0
 tryReadTQueue :: MonadSTM stm => TQueue stm a -> stm (Maybe a)
 tryReadTQueue c = (Just <$> readTQueue c) `orElse` pure Nothing
+
+-- | Efficiently read the entire contents of a 'TQueue' into a list. This
+-- function never retries.
+--
+-- @since unreleased
+flushTQueue :: MonadSTM stm => TQueue stm a -> stm [a]
+flushTQueue (TQueue r w) = do
+  xs <- readTVar r
+  ys <- readTVar w
+  unless (null xs) $ writeTVar r []
+  unless (null ys) $ writeTVar w []
+  pure (xs ++ reverse ys)
 
 -- | Get the next value from the @TQueue@ without removing it,
 -- retrying if the channel is empty.

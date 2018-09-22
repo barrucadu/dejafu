@@ -13,7 +13,22 @@ unreleased
 Added
 ~~~~~
 
+* (:issue:`286`) Copy across additions from the :hackage:`stm` package:
+
+    * ``Control.Concurrent.Classy.STM.TQueue.flushTQueue``
+    * ``Control.Concurrent.Classy.STM.TBQueue.flushTBQueue``
+    * ``Control.Concurrent.Classy.STM.TBQueue.lengthTBQueue``
+    * ``Control.Concurrent.Classy.STM.TVar.stateTVar``
+
 * (:issue:`287`) The ``Control.Concurrent.Classy.STM.TSem`` module.
+
+Changed
+~~~~~~~
+
+* (:issue:`286`) Copy across changes from the :hackage:`stm` package:
+
+    * Make definition of ``readTQueue`` consistent with
+      ``readTBQueue``
 
 Miscellaneous
 ~~~~~~~~~~~~~
