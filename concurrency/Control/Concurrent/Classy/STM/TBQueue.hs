@@ -25,10 +25,12 @@ module Control.Concurrent.Classy.STM.TBQueue
   , newTBQueue
   , readTBQueue
   , tryReadTBQueue
+  , flushTBQueue
   , peekTBQueue
   , tryPeekTBQueue
   , writeTBQueue
   , unGetTBQueue
+  , lengthTBQueue
   , isEmptyTBQueue
   , isFullTBQueue
   ) where
@@ -44,6 +46,7 @@ data TBQueue stm a
              (TVar stm [a])
              (TVar stm Int)
              (TVar stm [a])
+             {-# UNPACK #-} !Int
 
 -- | Build and returns a new instance of 'TBQueue'
 --
@@ -56,22 +59,22 @@ newTBQueue size = do
   writeT <- newTVar []
   rsize <- newTVar 0
   wsize <- newTVar size
-  pure (TBQueue rsize readT wsize writeT)
+  pure (TBQueue rsize readT wsize writeT size)
 
 -- | Write a value to a 'TBQueue'; retries if the queue is full.
 --
 -- @since 1.0.0.0
 writeTBQueue :: MonadSTM stm => TBQueue stm a -> a -> stm ()
-writeTBQueue (TBQueue rsize _ wsize writeT) a = do
+writeTBQueue (TBQueue rsize _ wsize writeT _) a = do
   w <- readTVar wsize
   if w /= 0
-  then writeTVar wsize (w - 1)
+  then writeTVar wsize $! w - 1
   else do
     r <- readTVar rsize
     if r /= 0
     then do
       writeTVar rsize 0
-      writeTVar wsize (r - 1)
+      writeTVar wsize $! r - 1
     else retry
   listend <- readTVar writeT
   writeTVar writeT (a:listend)
@@ -80,10 +83,10 @@ writeTBQueue (TBQueue rsize _ wsize writeT) a = do
 --
 -- @since 1.0.0.0
 readTBQueue :: MonadSTM stm => TBQueue stm a -> stm a
-readTBQueue (TBQueue rsize readT _ writeT) = do
+readTBQueue (TBQueue rsize readT _ writeT _) = do
   xs <- readTVar readT
   r  <- readTVar rsize
-  writeTVar rsize (r + 1)
+  writeTVar rsize $! r + 1
   case xs of
     (x:xs') -> do
       writeTVar readT xs'
@@ -104,6 +107,23 @@ readTBQueue (TBQueue rsize readT _ writeT) = do
 -- @since 1.0.0.0
 tryReadTBQueue :: MonadSTM stm => TBQueue stm a -> stm (Maybe a)
 tryReadTBQueue c = (Just <$> readTBQueue c) `orElse` pure Nothing
+
+-- | Efficiently read the entire contents of a 'TBQueue' into a list. This
+-- function never retries.
+--
+-- @since 1.6.1.0
+flushTBQueue :: MonadSTM stm => TBQueue stm a -> stm [a]
+flushTBQueue (TBQueue rsize r wsize w size) = do
+  xs <- readTVar r
+  ys <- readTVar w
+  if null xs && null ys
+    then pure []
+    else do
+      writeTVar r []
+      writeTVar w []
+      writeTVar rsize 0
+      writeTVar wsize size
+      pure (xs ++ reverse ys)
 
 -- | Get the next value from the @TBQueue@ without removing it,
 -- retrying if the channel is empty.
@@ -133,23 +153,32 @@ tryPeekTBQueue c = do
 --
 -- @since 1.0.0.0
 unGetTBQueue :: MonadSTM stm => TBQueue stm a -> a -> stm ()
-unGetTBQueue (TBQueue rsize readT wsize _) a = do
+unGetTBQueue (TBQueue rsize readT wsize _ _) a = do
   r <- readTVar rsize
   if r > 0
-  then writeTVar rsize (r - 1)
+  then writeTVar rsize $! r - 1
   else do
     w <- readTVar wsize
     if w > 0
-    then writeTVar wsize (w - 1)
+    then writeTVar wsize $! w - 1
     else retry
   xs <- readTVar readT
   writeTVar readT (a:xs)
+
+-- |Return the length of a 'TBQueue'.
+--
+-- @since 1.6.1.0
+lengthTBQueue :: MonadSTM stm => TBQueue stm a -> stm Int
+lengthTBQueue (TBQueue rsize _ wsize _ size) = do
+  r <- readTVar rsize
+  w <- readTVar wsize
+  pure $! size - r - w
 
 -- | Returns 'True' if the supplied 'TBQueue' is empty.
 --
 -- @since 1.0.0.0
 isEmptyTBQueue :: MonadSTM stm => TBQueue stm a -> stm Bool
-isEmptyTBQueue (TBQueue _ readT _ writeT) = do
+isEmptyTBQueue (TBQueue _ readT _ writeT _) = do
   xs <- readTVar readT
   case xs of
     (_:_) -> pure False
@@ -159,7 +188,7 @@ isEmptyTBQueue (TBQueue _ readT _ writeT) = do
 --
 -- @since 1.0.0.0
 isFullTBQueue :: MonadSTM stm => TBQueue stm a -> stm Bool
-isFullTBQueue (TBQueue rsize _ wsize _) = do
+isFullTBQueue (TBQueue rsize _ wsize _ _) = do
   w <- readTVar wsize
   if w > 0
   then pure False

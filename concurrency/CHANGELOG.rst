@@ -7,6 +7,38 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.6.1.0 (2018-09-23)
+--------------------
+
+* Git: :tag:`concurrency-1.6.1.0`
+* Hackage: :hackage:`concurrency-1.6.1.0`
+
+Added
+~~~~~
+
+* (:issue:`286`) Copy across additions from the :hackage:`stm` package:
+
+    * ``Control.Concurrent.Classy.STM.TQueue.flushTQueue``
+    * ``Control.Concurrent.Classy.STM.TBQueue.flushTBQueue``
+    * ``Control.Concurrent.Classy.STM.TBQueue.lengthTBQueue``
+    * ``Control.Concurrent.Classy.STM.TVar.stateTVar``
+
+* (:issue:`287`) The ``Control.Concurrent.Classy.STM.TSem`` module.
+
+Changed
+~~~~~~~
+
+* (:issue:`286`) Copy across changes from the :hackage:`stm` package:
+
+    * Make definition of ``readTQueue`` consistent with
+      ``readTBQueue``
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`stm` is <2.6.
+
+
 1.6.0.0 - IORefs (2018-07-01)
 -----------------------------
 

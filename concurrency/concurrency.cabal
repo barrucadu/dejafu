@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                concurrency
-version:             1.6.0.0
+version:             1.6.1.0
 synopsis:            Typeclasses, functions, and data types for concurrency and STM.
 
 description:
@@ -32,7 +32,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      concurrency-1.6.0.0
+  tag:      concurrency-1.6.1.0
 
 library
   exposed-modules:     Control.Monad.Conc.Class
@@ -53,6 +53,7 @@ library
                      , Control.Concurrent.Classy.STM.TQueue
                      , Control.Concurrent.Classy.STM.TBQueue
                      , Control.Concurrent.Classy.STM.TArray
+                     , Control.Concurrent.Classy.STM.TSem
 
   -- other-modules:       
   -- other-extensions:    
@@ -62,7 +63,7 @@ library
                      , exceptions        >=0.7  && <0.11
                      , monad-control     >=1.0  && <1.1
                      , mtl               >=2.2  && <2.3
-                     , stm               >=2.4  && <2.5
+                     , stm               >=2.4  && <2.6
                      , transformers      >=0.5  && <0.6
   -- hs-source-dirs:      
   default-language:    Haskell2010
