@@ -51,7 +51,7 @@ modifyTVar' ctvar f = do
 -- | Like 'modifyTVar'' but the function is a simple state transition that can
 -- return a side value which is passed on as the result of the STM.
 --
--- @since unreleased
+-- @since 1.6.1.0
 stateTVar :: MonadSTM stm => TVar stm s -> (s -> (a, s)) -> stm a
 stateTVar var f = do
    s <- readTVar var

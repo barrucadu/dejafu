@@ -111,7 +111,7 @@ tryReadTBQueue c = (Just <$> readTBQueue c) `orElse` pure Nothing
 -- | Efficiently read the entire contents of a 'TBQueue' into a list. This
 -- function never retries.
 --
--- @since unreleased
+-- @since 1.6.1.0
 flushTBQueue :: MonadSTM stm => TBQueue stm a -> stm [a]
 flushTBQueue (TBQueue rsize r wsize w size) = do
   xs <- readTVar r
@@ -167,7 +167,7 @@ unGetTBQueue (TBQueue rsize readT wsize _ _) a = do
 
 -- |Return the length of a 'TBQueue'.
 --
--- @since unreleased
+-- @since 1.6.1.0
 lengthTBQueue :: MonadSTM stm => TBQueue stm a -> stm Int
 lengthTBQueue (TBQueue rsize _ wsize _ size) = do
   r <- readTVar rsize

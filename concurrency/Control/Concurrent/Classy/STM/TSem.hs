@@ -34,7 +34,7 @@ import           Numeric.Natural         (Natural)
 -- resource.  However, like other STM abstractions, 'TSem' is
 -- composable.
 --
--- @since unreleased
+-- @since 1.6.1.0
 newtype TSem stm = TSem (TVar stm Integer)
 
 -- | Construct new 'TSem' with an initial counter value.
@@ -46,7 +46,7 @@ newtype TSem stm = TSem (TVar stm Integer)
 -- \"debt\" that requires a respective amount of 'signalTSem'
 -- operations to counter-balance.
 --
--- @since unreleased
+-- @since 1.6.1.0
 newTSem :: MonadSTM stm => Integer -> stm (TSem stm)
 newTSem i = fmap TSem (newTVar $! i)
 
@@ -68,7 +68,7 @@ waitTSem (TSem t) = do
 -- This operation adds\/releases a unit back to the semaphore
 -- (i.e. increments the internal counter).
 --
--- @since unreleased
+-- @since 1.6.1.0
 signalTSem :: MonadSTM stm => TSem stm -> stm ()
 signalTSem (TSem t) = do
   i <- readTVar t
@@ -81,7 +81,7 @@ signalTSem (TSem t) = do
 --
 -- > signalTSem == signalTSemN 1
 --
--- @since unreleased
+-- @since 1.6.1.0
 signalTSemN :: MonadSTM stm => Natural -> TSem stm -> stm ()
 signalTSemN 0 _ = pure ()
 signalTSemN 1 s = signalTSem s

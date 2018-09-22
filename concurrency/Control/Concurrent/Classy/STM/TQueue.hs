@@ -94,7 +94,7 @@ tryReadTQueue c = (Just <$> readTQueue c) `orElse` pure Nothing
 -- | Efficiently read the entire contents of a 'TQueue' into a list. This
 -- function never retries.
 --
--- @since unreleased
+-- @since 1.6.1.0
 flushTQueue :: MonadSTM stm => TQueue stm a -> stm [a]
 flushTQueue (TQueue r w) = do
   xs <- readTVar r
