@@ -7,6 +7,15 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`stm` is <2.6.
+
+
 1.6.0.0 - IORefs (2018-07-01)
 -----------------------------
 
