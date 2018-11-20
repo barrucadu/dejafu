@@ -24,19 +24,25 @@
 module Control.Concurrent.Classy
   ( module Control.Monad.Conc.Class
   , module Control.Concurrent.Classy.Chan
+  , module Control.Concurrent.Classy.BoundedChan
   , module Control.Concurrent.Classy.CRef
   , module Control.Concurrent.Classy.IORef
   , module Control.Concurrent.Classy.MVar
   , module Control.Concurrent.Classy.STM
   , module Control.Concurrent.Classy.QSem
   , module Control.Concurrent.Classy.QSemN
+  , module Control.Concurrent.Classy.Lock
+  , module Control.Concurrent.Classy.RWLock
   ) where
 
 import           Control.Concurrent.Classy.Chan
+import           Control.Concurrent.Classy.BoundedChan
 import           Control.Concurrent.Classy.CRef
 import           Control.Concurrent.Classy.IORef
 import           Control.Concurrent.Classy.MVar
 import           Control.Concurrent.Classy.QSem
 import           Control.Concurrent.Classy.QSemN
+import           Control.Concurrent.Classy.Lock
+import           Control.Concurrent.Classy.RWLock
 import           Control.Concurrent.Classy.STM
 import           Control.Monad.Conc.Class
