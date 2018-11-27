@@ -35,14 +35,14 @@ module Control.Concurrent.Classy
   , module Control.Concurrent.Classy.RWLock
   ) where
 
-import           Control.Concurrent.Classy.Chan
 import           Control.Concurrent.Classy.BoundedChan
+import           Control.Concurrent.Classy.Chan
 import           Control.Concurrent.Classy.CRef
 import           Control.Concurrent.Classy.IORef
+import           Control.Concurrent.Classy.Lock
 import           Control.Concurrent.Classy.MVar
 import           Control.Concurrent.Classy.QSem
 import           Control.Concurrent.Classy.QSemN
-import           Control.Concurrent.Classy.Lock
 import           Control.Concurrent.Classy.RWLock
 import           Control.Concurrent.Classy.STM
 import           Control.Monad.Conc.Class

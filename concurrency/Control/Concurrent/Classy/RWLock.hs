@@ -36,11 +36,11 @@
 
 -------------------------------------------------------------------------------
 
-{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DeriveDataTypeable   #-}
-{-# LANGUAGE NamedFieldPuns       #-}
-{-# LANGUAGE NoImplicitPrelude    #-}
 
 -------------------------------------------------------------------------------
 
@@ -95,25 +95,25 @@ module Control.Concurrent.Classy.RWLock
 
 -------------------------------------------------------------------------------
 
-import Control.Applicative (pure, (<*>))
-import Control.Monad       (Monad, (>>))
-import Data.Bool           (Bool (False, True))
-import Data.Eq             (Eq, (==))
-import Data.Ord            (Ord)
-import Data.Function       (($), on)
-import Data.Functor        ((<$>))
-import Data.Int            (Int)
-import Data.Maybe          (Maybe (Nothing, Just))
-import Data.List           ((++))
-import Data.Typeable       (Typeable)
-import Prelude             (String, succ, pred, error)
-import Text.Show           (Show)
-import Text.Read           (Read)
+import           Control.Applicative            (pure, (<*>))
+import           Control.Monad                  (Monad, (>>))
+import           Data.Bool                      (Bool(False, True))
+import           Data.Eq                        (Eq, (==))
+import           Data.Function                  (on, ($))
+import           Data.Functor                   ((<$>))
+import           Data.Int                       (Int)
+import           Data.List                      ((++))
+import           Data.Maybe                     (Maybe(Just, Nothing))
+import           Data.Ord                       (Ord)
+import           Data.Typeable                  (Typeable)
+import           Prelude                        (String, error, pred, succ)
+import           Text.Read                      (Read)
+import           Text.Show                      (Show)
 
-import Control.Monad.Catch                      (bracket_, mask, mask_,
-                                                 onException)
-import           Control.Monad.Conc.Class       (MonadConc (MVar))
 import qualified Control.Concurrent.Classy.MVar as MVar
+import           Control.Monad.Catch            (bracket_, mask, mask_,
+                                                 onException)
+import           Control.Monad.Conc.Class       (MonadConc(MVar))
 
 import           Control.Concurrent.Classy.Lock (Lock)
 import qualified Control.Concurrent.Classy.Lock as Lock
@@ -162,8 +162,7 @@ newRWLock :: (MonadConc m) => m (RWLock m)
 newRWLock = do
   state <- MVar.newMVar Free
   rlock <- Lock.newLock
-  wlock <- Lock.newLock
-  pure (RWLock state rlock wlock)
+  RWLock state rlock <$> Lock.newLock
 
 -- |
 -- Create a new 'RWLock' in the \"read\" state; only read can be acquired
@@ -172,8 +171,7 @@ newAcquiredRead :: (MonadConc m) => m (RWLock m)
 newAcquiredRead = do
   state <- MVar.newMVar (Read 1)
   rlock <- Lock.newAcquired
-  wlock <- Lock.newLock
-  pure (RWLock state rlock wlock)
+  RWLock state rlock <$> Lock.newLock
 
 -- |
 -- Create a new 'RWLock' in the \"write\" state; either acquiring read or
@@ -182,8 +180,7 @@ newAcquiredWrite :: (MonadConc m) => m (RWLock m)
 newAcquiredWrite = do
   state <- MVar.newMVar Write
   rlock <- Lock.newLock
-  wlock <- Lock.newAcquired
-  pure (RWLock state rlock wlock)
+  RWLock state rlock <$> Lock.newAcquired
 
 -------------------------------------------------------------------------------
 
@@ -197,14 +194,14 @@ newAcquiredWrite = do
 -- Implementation note: throws an exception when more than @'maxBound' :: 'Int'@
 -- simultaneous threads acquire the read lock. But that is unlikely.
 acquireRead :: (MonadConc m) => RWLock m -> m ()
-acquireRead (RWLock { _state, _readLock, _writeLock }) = mask_ go
+acquireRead RWLock { _state, _readLock, _writeLock } = mask_ go
   where
     go = do
       st <- MVar.takeMVar _state
       case st of
         Free     -> do Lock.acquire _readLock
                        MVar.putMVar _state $ Read 1
-        (Read n) -> do MVar.putMVar _state $ Read (succ n)
+        (Read n) ->    MVar.putMVar _state $ Read (succ n)
         Write    -> do MVar.putMVar _state st
                        Lock.wait _writeLock
                        go
@@ -215,7 +212,7 @@ acquireRead (RWLock { _state, _readLock, _writeLock }) = mask_ go
 -- Like 'acquireRead', but doesn't block. Returns 'True' if the resulting
 -- state is \"read\", 'False' otherwise.
 tryAcquireRead :: (MonadConc m) => RWLock m -> m Bool
-tryAcquireRead (RWLock { _state, _readLock }) = mask_ $ do
+tryAcquireRead RWLock { _state, _readLock } = mask_ $ do
   st <- MVar.takeMVar _state
   case st of
     Free   -> do Lock.acquire _readLock
@@ -235,12 +232,12 @@ tryAcquireRead (RWLock { _state, _readLock }) = mask_ $ do
 -- It is an error to release read access to an 'RWLock' which is not in
 -- the \"read\" state.
 releaseRead :: (MonadConc m) => RWLock m -> m ()
-releaseRead (RWLock { _state, _readLock }) = mask_ $ do
+releaseRead RWLock { _state, _readLock } = mask_ $ do
   st <- MVar.takeMVar _state
   case st of
     Read 1 -> do Lock.release _readLock
                  MVar.putMVar _state Free
-    Read n -> do MVar.putMVar _state $ Read (pred n)
+    Read n ->    MVar.putMVar _state $ Read (pred n)
     _      -> do MVar.putMVar _state st
                  throw "releaseRead" "already released"
 
@@ -288,19 +285,19 @@ waitRead l = mask_ (acquireRead l >> releaseRead l)
 -- If @acquireWrite@ terminates without throwing an exception the state of
 -- the 'RWLock' will be \"write\".
 acquireWrite :: (MonadConc m) => RWLock m -> m ()
-acquireWrite (RWLock { _state, _readLock, _writeLock }) = mask_ go
+acquireWrite RWLock { _state, _readLock, _writeLock } = mask_ go'
   where
-    go = do
+    go' = do
       st <- MVar.takeMVar _state
       case st of
         Free   -> do Lock.acquire _writeLock
                      MVar.putMVar _state Write
         Read _ -> do MVar.putMVar _state st
                      Lock.wait _readLock
-                     go
+                     go'
         Write  -> do MVar.putMVar _state st
                      Lock.wait _writeLock
-                     go
+                     go'
 
 -- |
 -- Try to acquire the write lock; non blocking.
@@ -308,7 +305,7 @@ acquireWrite (RWLock { _state, _readLock, _writeLock }) = mask_ go
 -- Like 'acquireWrite', but doesn't block.
 -- Returns 'True' if the resulting state is \"write\", 'False' otherwise.
 tryAcquireWrite :: (MonadConc m) => RWLock m -> m Bool
-tryAcquireWrite (RWLock { _state, _writeLock }) = mask_ $ do
+tryAcquireWrite RWLock { _state, _writeLock } = mask_ $ do
   st <- MVar.takeMVar _state
   case st of
     Free -> do Lock.acquire _writeLock
@@ -326,7 +323,7 @@ tryAcquireWrite (RWLock { _state, _writeLock }) = mask_ $ do
 -- It is an error to release write access to an 'RWLock' which is not
 -- in the \"write\" state.
 releaseWrite :: (MonadConc m) => RWLock m -> m ()
-releaseWrite (RWLock { _state, _writeLock }) = mask_ $ do
+releaseWrite RWLock { _state, _writeLock } = mask_ $ do
   st <- MVar.takeMVar _state
   case st of
     Write -> do Lock.release _writeLock

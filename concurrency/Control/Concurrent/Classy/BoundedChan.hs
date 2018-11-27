@@ -75,11 +75,11 @@ module Control.Concurrent.Classy.BoundedChan
 --------------------------------------------------------------------------------
 
 import           Control.Monad                  (replicateM)
-import           Data.Array                     (Array, (!), listArray)
+import           Data.Array                     (Array, listArray, (!))
 
-import           Control.Monad.Catch            (mask_, onException)
-import           Control.Monad.Conc.Class       (MonadConc (MVar))
 import qualified Control.Concurrent.Classy.MVar as MVar
+import           Control.Monad.Catch            (mask_, onException)
+import           Control.Monad.Conc.Class       (MonadConc(MVar))
 
 --------------------------------------------------------------------------------
 
@@ -102,25 +102,25 @@ data BoundedChan m a
 -- The lack of 'restore' may make these perform better than the normal version.
 -- Moving strictness here makes using them more pleasant.
 
-{-# INLINE modifyMVar_mask #-}
-modifyMVar_mask :: (MonadConc m) => MVar m a -> (a -> m (a, b)) -> m b
-modifyMVar_mask m callback = mask_ $ do
+{-# INLINE modifyMVarMask #-}
+modifyMVarMask :: (MonadConc m) => MVar m a -> (a -> m (a, b)) -> m b
+modifyMVarMask m callback = mask_ $ do
   a <- MVar.takeMVar m
   (a', b) <- callback a `onException` MVar.putMVar m a
   MVar.putMVar m $! a'
   pure b
 
-{-# INLINE modifyMVar_mask_ #-}
-modifyMVar_mask_ :: (MonadConc m) => MVar m a -> (a -> m a) -> m ()
-modifyMVar_mask_ m callback = do
+{-# INLINE modifyMVarMask_ #-}
+modifyMVarMask_ :: (MonadConc m) => MVar m a -> (a -> m a) -> m ()
+modifyMVarMask_ m callback =
   mask_ $ do
     a <- MVar.takeMVar m
     a' <- callback a `onException` MVar.putMVar m a
     MVar.putMVar m $! a'
 
-{-# INLINE withMVar_mask #-}
-withMVar_mask :: (MonadConc m) => MVar m a -> (a -> m b) -> m b
-withMVar_mask m callback = do
+{-# INLINE withMVarMask #-}
+withMVarMask :: (MonadConc m) => MVar m a -> (a -> m b) -> m b
+withMVarMask m callback =
   mask_ $ do
     a <- MVar.takeMVar m
     b <- callback a `onException` MVar.putMVar m a
@@ -138,24 +138,24 @@ newBoundedChan x = do
   wpos  <- MVar.newMVar 0
   rpos  <- MVar.newMVar 0
   let entries = listArray (0, x - 1) entls
-  return (BoundedChan x entries wpos rpos)
+  pure (BoundedChan x entries wpos rpos)
 
 -- |
 -- Write an element to the channel. If the channel is full, this routine will
 -- block until it is able to write. Blockers wait in a fair FIFO queue.
 writeBoundedChan :: (MonadConc m) => BoundedChan m a -> a -> m ()
-writeBoundedChan (BoundedChan size contents wposMV _) x = do
-  modifyMVar_mask_ wposMV $ \wpos -> do
+writeBoundedChan (BoundedChan size contents wposMV _) x =
+  modifyMVarMask_ wposMV $ \wpos -> do
     MVar.putMVar (contents ! wpos) x
-    pure ((succ wpos) `mod` size) -- only advance when putMVar succeeds
+    pure (succ wpos `mod` size) -- only advance when putMVar succeeds
 
 -- |
 -- A variant of 'writeBoundedChan' which, instead of blocking when the channel is
 -- full, simply aborts and does not write the element. Note that this routine
 -- can still block while waiting for write access to the channel.
 trywriteBoundedChan :: (MonadConc m) => BoundedChan m a -> a -> m Bool
-trywriteBoundedChan (BoundedChan size contents wposMV _) x = do
-  modifyMVar_mask wposMV $ \wpos -> do
+trywriteBoundedChan (BoundedChan size contents wposMV _) x =
+  modifyMVarMask wposMV $ \wpos -> do
     success <- MVar.tryPutMVar (contents ! wpos) x
     -- only advance when putMVar succeeds
     let wpos' = if success then succ wpos `mod` size else wpos
@@ -165,8 +165,8 @@ trywriteBoundedChan (BoundedChan size contents wposMV _) x = do
 -- Read an element from the channel. If the channel is empty, this routine
 -- will block until it is able to read. Blockers wait in a fair FIFO queue.
 readBoundedChan :: (MonadConc m) => BoundedChan m a -> m a
-readBoundedChan (BoundedChan size contents _ rposMV) = do
-  modifyMVar_mask rposMV $ \rpos -> do
+readBoundedChan (BoundedChan size contents _ rposMV) =
+  modifyMVarMask rposMV $ \rpos -> do
     a <- MVar.takeMVar (contents ! rpos)
     pure (succ rpos `mod` size, a) -- only advance when takeMVar succeeds
 
@@ -176,8 +176,8 @@ readBoundedChan (BoundedChan size contents _ rposMV) = do
 -- @'Just' a@ where @a@ is the element read from the channel. Note that this
 -- routine can still block while waiting for read access to the channel.
 tryreadBoundedChan :: (MonadConc m) => BoundedChan m a -> m (Maybe a)
-tryreadBoundedChan (BoundedChan size contents _ rposMV) = do
-  modifyMVar_mask rposMV $ \rpos -> do
+tryreadBoundedChan (BoundedChan size contents _ rposMV) =
+  modifyMVarMask rposMV $ \rpos -> do
     ma <- MVar.tryTakeMVar (contents ! rpos)
     -- only advance when takeMVar succeeds
     let rpos' = case ma of
@@ -193,8 +193,8 @@ tryreadBoundedChan (BoundedChan size contents _ rposMV) = do
 {-# DEPRECATED isEmptyBoundedChan
                "This isEmptyBoundedChan can block, no non-blocking substitute yet" #-}
 isEmptyBoundedChan :: (MonadConc m) => BoundedChan m a -> m Bool
-isEmptyBoundedChan (BoundedChan _ contents _ rposMV) = do
-  withMVar_mask rposMV $ \rpos -> do
+isEmptyBoundedChan (BoundedChan _ contents _ rposMV) =
+  withMVarMask rposMV $ \rpos ->
     MVar.isEmptyMVar (contents ! rpos)
 
 -- |

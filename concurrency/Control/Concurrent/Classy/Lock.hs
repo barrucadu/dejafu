@@ -36,8 +36,9 @@
 
 --------------------------------------------------------------------------------
 
-{-# LANGUAGE DeriveDataTypeable   #-}
-{-# LANGUAGE NoImplicitPrelude    #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 --------------------------------------------------------------------------------
@@ -86,19 +87,19 @@ module Control.Concurrent.Classy.Lock
 
 --------------------------------------------------------------------------------
 
-import Control.Applicative     (pure, (<*>))
-import Control.Monad           (when)
-import Data.Bool               (Bool, not)
-import Data.Eq                 (Eq ((==)))
-import Data.Function           (($), (.))
-import Data.Functor            (fmap, (<$>))
-import Data.Maybe              (Maybe (Nothing, Just), isJust)
-import Data.Typeable           (Typeable)
-import Prelude                 (error)
+import           Control.Applicative            (pure, (<*>))
+import           Control.Monad                  (when)
+import           Data.Bool                      (Bool, not)
+import           Data.Eq                        (Eq((==)))
+import           Data.Function                  (($), (.))
+import           Data.Functor                   (fmap, (<$>))
+import           Data.Maybe                     (Maybe(Just, Nothing), isJust)
+import           Data.Typeable                  (Typeable)
+import           Prelude                        (error)
 
-import           Control.Monad.Catch            (bracket_, mask, onException)
-import           Control.Monad.Conc.Class       (MonadConc (MVar))
 import qualified Control.Concurrent.Classy.MVar as MVar
+import           Control.Monad.Catch            (bracket_, mask, onException)
+import           Control.Monad.Conc.Class       (MonadConc(MVar))
 
 --------------------------------------------------------------------------------
 
@@ -110,7 +111,7 @@ newtype Lock m
   deriving (Typeable)
 
 instance (Eq (MVar m ())) => Eq (Lock m) where
-  (==) (Lock a) (Lock b) = (a == b)
+  (==) (Lock a) (Lock b) = a == b
 
 --------------------------------------------------------------------------------
 
@@ -170,7 +171,7 @@ tryAcquire = fmap isJust . MVar.tryTakeMVar . _fromLock
 release :: (MonadConc m) => Lock m -> m ()
 release (Lock mv) = do
   b <- MVar.tryPutMVar mv ()
-  when (not b) $ do
+  when (not b) $
     error "Control.Concurrent.Classy.Lock.release: cannot release an unlocked Lock!"
 
 --------------------------------------------------------------------------------
