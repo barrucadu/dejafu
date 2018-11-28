@@ -27,6 +27,8 @@ env:
 script: ./.travis/$MODE
 
 jobs:
+  allow_failures:
+  - env: MODE=test RESOLVER=nightly
   include:
   - stage: check
     env: MODE=doctest
