@@ -130,6 +130,8 @@ import qualified Control.Concurrent.Classy.Lock as Lock
 --
 -- * \"Write\": A single thread has acquired write access.
 --   Blocks other threads from acquiring both read and write access.
+--
+-- @since 1.6.2.0
 data RWLock m
   = RWLock
     { _state     :: MVar m State
@@ -158,6 +160,8 @@ data State
 -- |
 -- Create a new 'RWLock' in the \"free\" state; either read or write access
 -- can be acquired without blocking.
+--
+-- @since 1.6.2.0
 newRWLock :: (MonadConc m) => m (RWLock m)
 newRWLock = do
   state <- MVar.newMVar Free
@@ -167,6 +171,8 @@ newRWLock = do
 -- |
 -- Create a new 'RWLock' in the \"read\" state; only read can be acquired
 -- without blocking.
+--
+-- @since 1.6.2.0
 newAcquiredRead :: (MonadConc m) => m (RWLock m)
 newAcquiredRead = do
   state <- MVar.newMVar (Read 1)
@@ -176,6 +182,8 @@ newAcquiredRead = do
 -- |
 -- Create a new 'RWLock' in the \"write\" state; either acquiring read or
 -- write will block.
+--
+-- @since 1.6.2.0
 newAcquiredWrite :: (MonadConc m) => m (RWLock m)
 newAcquiredWrite = do
   state <- MVar.newMVar Write
@@ -193,6 +201,8 @@ newAcquiredWrite = do
 --
 -- Implementation note: throws an exception when more than @'maxBound' :: 'Int'@
 -- simultaneous threads acquire the read lock. But that is unlikely.
+--
+-- @since 1.6.2.0
 acquireRead :: (MonadConc m) => RWLock m -> m ()
 acquireRead RWLock { _state, _readLock, _writeLock } = mask_ go
   where
@@ -211,6 +221,8 @@ acquireRead RWLock { _state, _readLock, _writeLock } = mask_ go
 --
 -- Like 'acquireRead', but doesn't block. Returns 'True' if the resulting
 -- state is \"read\", 'False' otherwise.
+--
+-- @since 1.6.2.0
 tryAcquireRead :: (MonadConc m) => RWLock m -> m Bool
 tryAcquireRead RWLock { _state, _readLock } = mask_ $ do
   st <- MVar.takeMVar _state
@@ -231,6 +243,8 @@ tryAcquireRead RWLock { _state, _readLock } = mask_ $ do
 --
 -- It is an error to release read access to an 'RWLock' which is not in
 -- the \"read\" state.
+--
+-- @since 1.6.2.0
 releaseRead :: (MonadConc m) => RWLock m -> m ()
 releaseRead RWLock { _state, _readLock } = mask_ $ do
   st <- MVar.takeMVar _state
@@ -245,6 +259,8 @@ releaseRead RWLock { _state, _readLock } = mask_ $ do
 -- A convenience function wich first acquires read access and then performs the
 -- computation. When the computation terminates, whether normally or by raising
 -- an exception, the read lock is released.
+--
+-- @since 1.6.2.0
 withRead :: (MonadConc m) => RWLock m -> m a -> m a
 withRead = bracket_ <$> acquireRead <*> releaseRead
 
@@ -253,6 +269,8 @@ withRead = bracket_ <$> acquireRead <*> releaseRead
 -- 'Nothing' is returned. If it succeeds, the computation is performed.
 -- When the computation terminates, whether normally or by raising an exception,
 -- the lock is released and 'Just' the result of the computation is returned.
+--
+-- @since 1.6.2.0
 tryWithRead :: (MonadConc m) => RWLock m -> m a -> m (Maybe a)
 tryWithRead l a = mask $ \restore -> do
   acquired <- tryAcquireRead l
@@ -273,6 +291,8 @@ tryWithRead l a = mask $ \restore -> do
 -- Note that @waitRead@ is just a convenience function defined as:
 --
 -- @waitRead l = 'mask_' '$' 'acquireRead' l '>>' 'releaseRead' l@
+--
+-- @since 1.6.2.0
 waitRead :: (MonadConc m) => RWLock m -> m ()
 waitRead l = mask_ (acquireRead l >> releaseRead l)
 
@@ -284,6 +304,8 @@ waitRead l = mask_ (acquireRead l >> releaseRead l)
 -- Blocks if another thread has acquired either read or write access.
 -- If @acquireWrite@ terminates without throwing an exception the state of
 -- the 'RWLock' will be \"write\".
+--
+-- @since 1.6.2.0
 acquireWrite :: (MonadConc m) => RWLock m -> m ()
 acquireWrite RWLock { _state, _readLock, _writeLock } = mask_ go'
   where
@@ -304,6 +326,8 @@ acquireWrite RWLock { _state, _readLock, _writeLock } = mask_ go'
 --
 -- Like 'acquireWrite', but doesn't block.
 -- Returns 'True' if the resulting state is \"write\", 'False' otherwise.
+--
+-- @since 1.6.2.0
 tryAcquireWrite :: (MonadConc m) => RWLock m -> m Bool
 tryAcquireWrite RWLock { _state, _writeLock } = mask_ $ do
   st <- MVar.takeMVar _state
@@ -322,6 +346,8 @@ tryAcquireWrite RWLock { _state, _writeLock } = mask_ $ do
 --
 -- It is an error to release write access to an 'RWLock' which is not
 -- in the \"write\" state.
+--
+-- @since 1.6.2.0
 releaseWrite :: (MonadConc m) => RWLock m -> m ()
 releaseWrite RWLock { _state, _writeLock } = mask_ $ do
   st <- MVar.takeMVar _state
@@ -335,6 +361,8 @@ releaseWrite RWLock { _state, _writeLock } = mask_ $ do
 -- A convenience function wich first acquires write access and then performs
 -- the computation. When the computation terminates, whether normally or by
 -- raising an exception, the write lock is released.
+--
+-- @since 1.6.2.0
 withWrite :: (MonadConc m) => RWLock m -> m a -> m a
 withWrite = bracket_ <$> acquireWrite <*> releaseWrite
 
@@ -343,6 +371,8 @@ withWrite = bracket_ <$> acquireWrite <*> releaseWrite
 -- 'Nothing' is returned. If it succeeds, the computation is performed.
 -- When the computation terminates, whether normally or by raising an exception,
 -- the lock is released and 'Just' the result of the computation is returned.
+--
+-- @since 1.6.2.0
 tryWithWrite :: (MonadConc m) => RWLock m -> m a -> m (Maybe a)
 tryWithWrite l a = mask $ \restore -> do
   acquired <- tryAcquireWrite l
@@ -364,6 +394,8 @@ tryWithWrite l a = mask $ \restore -> do
 -- Note that @waitWrite@ is just a convenience function defined as:
 --
 -- @waitWrite l = 'mask_' '$' 'acquireWrite' l '>>' 'releaseWrite' l@
+--
+-- @since 1.6.2.0
 waitWrite :: (MonadConc m) => RWLock m -> m ()
 waitWrite l = mask_ (acquireWrite l >> releaseWrite l)
 
