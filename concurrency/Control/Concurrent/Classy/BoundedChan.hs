@@ -84,6 +84,8 @@ import           Control.Monad.Conc.Class       (MonadConc(MVar))
 --------------------------------------------------------------------------------
 
 -- | A 'BoundedChan' is an abstract data type representing a bounded channel.
+--
+-- @since 1.6.2.0
 data BoundedChan m a
   = BoundedChan
     { _size     :: Int
@@ -132,6 +134,8 @@ withMVarMask m callback =
 -- |
 -- @newBoundedChan n@ returns a channel than can contain no more than @n@
 -- elements.
+--
+-- @since 1.6.2.0
 newBoundedChan :: (MonadConc m) => Int -> m (BoundedChan m a)
 newBoundedChan x = do
   entls <- replicateM x MVar.newEmptyMVar
@@ -143,6 +147,8 @@ newBoundedChan x = do
 -- |
 -- Write an element to the channel. If the channel is full, this routine will
 -- block until it is able to write. Blockers wait in a fair FIFO queue.
+--
+-- @since 1.6.2.0
 writeBoundedChan :: (MonadConc m) => BoundedChan m a -> a -> m ()
 writeBoundedChan (BoundedChan size contents wposMV _) x =
   modifyMVarMask_ wposMV $ \wpos -> do
@@ -153,6 +159,8 @@ writeBoundedChan (BoundedChan size contents wposMV _) x =
 -- A variant of 'writeBoundedChan' which, instead of blocking when the channel is
 -- full, simply aborts and does not write the element. Note that this routine
 -- can still block while waiting for write access to the channel.
+--
+-- @since 1.6.2.0
 trywriteBoundedChan :: (MonadConc m) => BoundedChan m a -> a -> m Bool
 trywriteBoundedChan (BoundedChan size contents wposMV _) x =
   modifyMVarMask wposMV $ \wpos -> do
@@ -164,6 +172,8 @@ trywriteBoundedChan (BoundedChan size contents wposMV _) x =
 -- |
 -- Read an element from the channel. If the channel is empty, this routine
 -- will block until it is able to read. Blockers wait in a fair FIFO queue.
+--
+-- @since 1.6.2.0
 readBoundedChan :: (MonadConc m) => BoundedChan m a -> m a
 readBoundedChan (BoundedChan size contents _ rposMV) =
   modifyMVarMask rposMV $ \rpos -> do
@@ -175,6 +185,8 @@ readBoundedChan (BoundedChan size contents _ rposMV) =
 -- empty, immediately returns 'Nothing'. Otherwise, 'tryreadBoundedChan' returns
 -- @'Just' a@ where @a@ is the element read from the channel. Note that this
 -- routine can still block while waiting for read access to the channel.
+--
+-- @since 1.6.2.0
 tryreadBoundedChan :: (MonadConc m) => BoundedChan m a -> m (Maybe a)
 tryreadBoundedChan (BoundedChan size contents _ rposMV) =
   modifyMVarMask rposMV $ \rpos -> do
@@ -190,6 +202,8 @@ tryreadBoundedChan (BoundedChan size contents _ rposMV) =
 --
 -- NOTE: This may block on an empty channel if there is a blocked reader.
 -- NOTE: This function is deprecated.
+--
+-- @since 1.6.2.0
 {-# DEPRECATED isEmptyBoundedChan
                "This isEmptyBoundedChan can block, no non-blocking substitute yet" #-}
 isEmptyBoundedChan :: (MonadConc m) => BoundedChan m a -> m Bool
@@ -201,6 +215,8 @@ isEmptyBoundedChan (BoundedChan _ contents _ rposMV) =
 -- Write a list of elements to the channel.
 -- If the channel becomes full, this routine will block until it can write.
 -- Competing writers may interleave with this one.
+--
+-- @since 1.6.2.0
 writeList2BoundedChan :: (MonadConc m) => BoundedChan m a -> [a] -> m ()
 writeList2BoundedChan = mapM_ . writeBoundedChan
 

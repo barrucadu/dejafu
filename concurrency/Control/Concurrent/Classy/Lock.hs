@@ -104,6 +104,8 @@ import           Control.Monad.Conc.Class       (MonadConc(MVar))
 --------------------------------------------------------------------------------
 
 -- | A lock is in one of two states: \"locked\" or \"unlocked\".
+--
+-- @since 1.6.2.0
 newtype Lock m
   = Lock
     { _fromLock :: MVar m ()
@@ -116,10 +118,14 @@ instance (Eq (MVar m ())) => Eq (Lock m) where
 --------------------------------------------------------------------------------
 
 -- | Create a lock in the \"unlocked\" state.
+--
+-- @since 1.6.2.0
 newLock :: (MonadConc m) => m (Lock m)
 newLock = Lock <$> MVar.newMVar ()
 
 -- | Create a lock in the \"locked\" state.
+--
+-- @since 1.6.2.0
 newAcquired :: (MonadConc m) => m (Lock m)
 newAcquired = Lock <$> MVar.newEmptyMVar
 
@@ -147,6 +153,8 @@ newAcquired = Lock <$> MVar.newEmptyMVar
 --   order. This is useful for providing fairness properties of abstractions
 --   built using locks. Note that this differs from the Python implementation
 --   where the wake-up order is undefined.
+--
+-- @since 1.6.2.0
 acquire :: (MonadConc m) => Lock m -> m ()
 acquire = MVar.takeMVar . _fromLock
 
@@ -158,6 +166,8 @@ acquire = MVar.takeMVar . _fromLock
 --
 -- * When the state is \"locked\" @tryAcquire@ leaves the state unchanged and
 --   returns 'False'.
+--
+-- @since 1.6.2.0
 tryAcquire :: (MonadConc m) => Lock m -> m Bool
 tryAcquire = fmap isJust . MVar.tryTakeMVar . _fromLock
 
@@ -168,6 +178,8 @@ tryAcquire = fmap isJust . MVar.tryTakeMVar . _fromLock
 --
 -- If there are any threads blocked on 'acquire' the thread that first called
 -- @acquire@ will be woken up.
+--
+-- @since 1.6.2.0
 release :: (MonadConc m) => Lock m -> m ()
 release (Lock mv) = do
   b <- MVar.tryPutMVar mv ()
@@ -182,6 +194,8 @@ release (Lock mv) = do
 -- exception, the lock is released.
 --
 -- Note that: @with = 'bracket_' '<$>' 'acquire' '<*>' 'release'@.
+--
+-- @since 1.6.2.0
 with :: (MonadConc m) => Lock m -> m a -> m a
 with = bracket_ <$> acquire <*> release
 
@@ -191,6 +205,8 @@ with = bracket_ <$> acquire <*> release
 -- the computation is performed. When the computation terminates, whether
 -- normally or by raising an exception, the lock is released and 'Just' the
 -- result of the computation is returned.
+--
+-- @since 1.6.2.0
 tryWith :: (MonadConc m) => Lock m -> m a -> m (Maybe a)
 tryWith l a = mask $ \restore -> do
   acquired <- tryAcquire l
@@ -210,6 +226,8 @@ tryWith l a = mask $ \restore -> do
 -- * When the state is \"unlocked\" @wait@ returns immediately.
 --
 -- @wait@ does not alter the state of the lock.
+--
+-- @since 1.6.2.0
 wait :: (MonadConc m) => Lock m -> m ()
 wait (Lock mv) = MVar.readMVar mv
 
@@ -220,6 +238,8 @@ wait (Lock mv) = MVar.readMVar mv
 --
 -- Note that this is only a snapshot of the state. By the time a program reacts
 -- on its result it may already be out of date.
+--
+-- @since 1.6.2.0
 locked :: (MonadConc m) => Lock m -> m Bool
 locked = MVar.isEmptyMVar . _fromLock
 

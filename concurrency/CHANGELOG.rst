@@ -7,6 +7,22 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.6.2.0 (2018-11-28)
+--------------------
+
+* Git: :tag:`concurrency-1.6.2.0`
+* Hackage: :hackage:`concurrency-1.6.2.0`
+
+**Contributors:** :u:`gip` (:pull:`289`).
+
+Added
+~~~~~
+
+* (:pull:`289`) The ``Control.Concurrent.Classy.BoundedChan`` module.
+* (:pull:`289`) The ``Control.Concurrent.Classy.Lock`` module.
+* (:pull:`289`) The ``Control.Concurrent.Classy.RWLock`` module.
+
+
 1.6.1.0 (2018-09-23)
 --------------------
 
