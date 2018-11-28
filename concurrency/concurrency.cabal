@@ -41,11 +41,14 @@ library
                      , Control.Concurrent.Classy
                      , Control.Concurrent.Classy.Async
                      , Control.Concurrent.Classy.Chan
+                     , Control.Concurrent.Classy.BoundedChan
                      , Control.Concurrent.Classy.CRef
                      , Control.Concurrent.Classy.IORef
                      , Control.Concurrent.Classy.MVar
                      , Control.Concurrent.Classy.QSem
                      , Control.Concurrent.Classy.QSemN
+                     , Control.Concurrent.Classy.Lock
+                     , Control.Concurrent.Classy.RWLock
                      , Control.Concurrent.Classy.STM
                      , Control.Concurrent.Classy.STM.TVar
                      , Control.Concurrent.Classy.STM.TMVar
