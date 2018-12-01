@@ -268,31 +268,34 @@ runParIO userComp = do
      ------------------------------------------------------------
      Nothing -> do
        allscheds <- makeScheds main_cpu
-       [Session _ topSessFlag] <- readHotVar$ sessions$ head allscheds
+       sessions <- readHotVar$ sessions$ head allscheds
+       case sessions of
+         [Session _ topSessFlag] -> do
+            mfin <- newEmptyMVar
+            forM_ (zip [0..] allscheds) $ \(cpu,sched) -> do
+                  workerDone <- newEmptyMVar
+                  ----------------------------------------
+                  let wname = "(worker "++show cpu++" of originator "++show tidorig++")"
+      --            forkOn cpu $ do
+                  _ <- forkWithExceptions (forkOn cpu) wname $ do
+                  ------------------------------------------------------------STRT WORKER THREAD
+                    tid2 <- myThreadId
+                    registerWorker tid2 sched
+                    if cpu /= main_cpu
+                      then do runReaderWith sched $ rescheduleR 0 (trivialCont (wname++show tid2))
+                              putMVar workerDone cpu
+                      else do x <- runNewSessionAndWait "top-lvl main worker" sched userComp
+                              -- When the main worker finishes we can tell the anonymous "system" workers:
+                              writeIORef topSessFlag True
+                              putMVar mfin x
 
-       mfin <- newEmptyMVar
-       forM_ (zip [0..] allscheds) $ \(cpu,sched) -> do
-            workerDone <- newEmptyMVar
-            ----------------------------------------
-            let wname = "(worker "++show cpu++" of originator "++show tidorig++")"
---            forkOn cpu $ do
-            _ <- forkWithExceptions (forkOn cpu) wname $ do
-            ------------------------------------------------------------STRT WORKER THREAD
-              tid2 <- myThreadId
-              registerWorker tid2 sched
-              if cpu /= main_cpu
-                 then do runReaderWith sched $ rescheduleR 0 (trivialCont (wname++show tid2))
-                         putMVar workerDone cpu
-                 else do x <- runNewSessionAndWait "top-lvl main worker" sched userComp
-                         -- When the main worker finishes we can tell the anonymous "system" workers:
-                         writeIORef topSessFlag True
-                         putMVar mfin x
+                    unregisterWorker tid
+                  ------------------------------------------------------------END WORKER THREAD
+                  pure (if cpu == main_cpu then Nothing else Just workerDone)
 
-              unregisterWorker tid
-            ------------------------------------------------------------END WORKER THREAD
-            pure (if cpu == main_cpu then Nothing else Just workerDone)
+            takeMVar mfin -- Final value.
 
-       takeMVar mfin -- Final value.
+         _ -> error "sessions"
 
        ----------------------------------------
 
@@ -445,14 +448,17 @@ rescheduleR cnt kont = do
   mtask  <- lift $ popWork mysched
   case mtask of
     Nothing -> do
-                  Session _ finRef:_ <- lift $ readIORef $ sessions mysched
-                  fin <- lift $ readIORef finRef
-                  if fin
-                   then kont (error "Direct.hs: The result value from rescheduleR should not be used.")
-                   else do
-                     lift $ steal mysched
-                     lift   yield
-                     rescheduleR (cnt+1) kont
+                  sessions <- lift $ readIORef $ sessions mysched
+                  case sessions of
+                    Session _ finRef:_ -> do
+                      fin <- lift $ readIORef finRef
+                      if fin
+                      then kont (error "Direct.hs: The result value from rescheduleR should not be used.")
+                      else do
+                        lift $ steal mysched
+                        lift   yield
+                        rescheduleR (cnt+1) kont
+                    _ -> error "sessions"
     Just task -> do
        let C.ContT fn = unPar task
        -- Run the stolen task with a continuation that returns to the scheduler if the task exits normally:
