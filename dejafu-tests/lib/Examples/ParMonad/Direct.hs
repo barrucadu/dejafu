@@ -295,7 +295,7 @@ runParIO userComp = do
 
             takeMVar mfin -- Final value.
 
-         other -> error "sessions"
+         _ -> error "sessions"
 
        ----------------------------------------
 
@@ -458,7 +458,7 @@ rescheduleR cnt kont = do
                         lift $ steal mysched
                         lift   yield
                         rescheduleR (cnt+1) kont
-                    sessions -> error "sessions"
+                    _ -> error "sessions"
     Just task -> do
        let C.ContT fn = unPar task
        -- Run the stolen task with a continuation that returns to the scheduler if the task exits normally:
