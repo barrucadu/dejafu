@@ -7,6 +7,18 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.11.0.5 (2019-01-17)
+---------------------
+
+* Git: :tag:`dejafu-1.11.0.5`
+* Hackage: :hackage:`dejafu-1.11.0.5`
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`leancheck` is <0.10.
+
+
 1.11.0.4 (2018-12-02)
 ---------------------
 
