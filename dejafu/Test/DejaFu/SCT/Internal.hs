@@ -98,8 +98,9 @@ sct' :: (MonadConc n, HasCallStack)
   -> n [(Either Condition a, Trace)]
 sct' settings s0 sfun srun run nTId nCRId = go Nothing [] s0 where
   go (Just res) _ _ | earlyExit res = pure []
-  go _ seen !s = case sfun s of
+  go res0 seen !s = case sfun s of
     Just t -> srun s t >>= \case
+      (s', Just (Left Abort, _)) | hideAborts -> go res0 seen s'
       (s', Just (res, trace)) -> case discard res of
         Just DiscardResultAndTrace -> go (Just res) seen s'
         Just DiscardTrace -> result res [] seen s'
@@ -132,6 +133,7 @@ sct' settings s0 sfun srun run nTId nCRId = go Nothing [] s0 where
 
   earlyExit = fromMaybe (const False) (_earlyExit settings)
   discard = fromMaybe (const Nothing) (_discard settings)
+  hideAborts = not (_showAborts settings)
 
 -- | Given a result and a trace, produce a more minimal trace.
 --

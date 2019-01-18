@@ -46,6 +46,7 @@ data Settings n a = Settings
   , _equality :: Maybe (a -> a -> Bool)
   , _simplify  :: Bool
   , _safeIO :: Bool
+  , _showAborts :: Bool
   }
 
 -- | How to explore the possible executions of a concurrent program.

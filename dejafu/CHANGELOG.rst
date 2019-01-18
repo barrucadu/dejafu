@@ -21,11 +21,17 @@ Added
 * Deprecated ``Test.DejaFu.Types.Failure`` type synonym for
   ``Condition``.
 
+* The ``Test.DejaFu.Settings.lshowAborts`` option, to make SCT
+  functions show ``Abort`` conditions.
+
 Changed
 ~~~~~~~
 
 * Renamed ``Test.DejaFu.Types.Failure`` to
   ``Test.DejaFu.Types.Condition``.
+
+* The SCT functions drop ``Left Abort`` results by default, restore
+  the old behaviour with ``Test.DejaFu.Settings.lshowAborts``.
 
 Removed
 ~~~~~~~

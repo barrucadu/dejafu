@@ -203,6 +203,16 @@ module Test.DejaFu.Settings
 
   , lsafeIO
 
+  -- ** Abort conditions
+
+  -- | Occasionally in an execution dejafu will discover that no
+  -- available scheduling decisions are within the specified bounds,
+  -- and aborts the execution to move onto the next.  This is
+  -- signalled by an 'Abort' condition.  By default, abort conditions
+  -- are /not/ returned from the SCT functions.
+
+  , lshowAborts
+
   -- ** Debug output
 
   -- | You can opt to receive debugging messages by setting debugging
@@ -257,6 +267,7 @@ fromWayAndMemType way memtype = Settings
   , _equality = Nothing
   , _simplify = False
   , _safeIO = False
+  , _showAborts = False
   }
 
 -------------------------------------------------------------------------------
@@ -433,6 +444,15 @@ lsimplify afb s = (\b -> s {_simplify = b}) <$> afb (_simplify s)
 -- @since 1.10.1.0
 lsafeIO :: Lens' (Settings n a) Bool
 lsafeIO afb s = (\b -> s {_safeIO = b}) <$> afb (_safeIO s)
+
+-------------------------------------------------------------------------------
+-- Abort conditions
+
+-- | A lens into the show-aborts flag.
+--
+-- @since unreleased
+lshowAborts :: Lens' (Settings n a) Bool
+lshowAborts afb s = (\b -> s {_showAborts = b}) <$> afb (_showAborts s)
 
 -------------------------------------------------------------------------------
 -- Debug output
