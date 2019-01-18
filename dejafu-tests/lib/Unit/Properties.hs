@@ -336,11 +336,9 @@ genId = D.Id <$> HGen.maybe genString <*> genSmallInt
 
 genFailure :: H.Gen D.Failure
 genFailure = HGen.element $
-  [ D.InternalError
-  , D.Abort
+  [ D.Abort
   , D.Deadlock
   , D.STMDeadlock
-  , D.IllegalSubconcurrency
   ] ++ map D.UncaughtException -- have a few different exception types
   [ E.toException E.Overflow
   , E.toException E.ThreadKilled

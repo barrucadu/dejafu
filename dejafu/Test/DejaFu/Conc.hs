@@ -229,9 +229,8 @@ runConcurrent sched memtype s ma = do
 -- This can only be called in the main thread, when no other threads
 -- exist. Calls to 'subconcurrency' cannot be nested, or placed inside
 -- a call to 'dontCheck'. Violating either of these conditions will
--- result in the computation failing with @IllegalSubconcurrency@.
--- The overall test-case can still succeed if the predicate allows for
--- a failing computation.
+-- result in the computation throwing a @NestedSubconcurrency@ or
+-- @MultithreadedSubconcurrency@ error.
 --
 -- @since 0.6.0.0
 subconcurrency :: ConcT n a -> ConcT n (Either Failure a)
@@ -261,9 +260,8 @@ subconcurrency ma = toConc (ASub (unC ma))
 -- action continue to exist in the main computation.
 --
 -- This must be the first thing done in the main thread.  Violating
--- this condition will result in the computation failing with
--- @IllegalDontCheck@.  The overall test-case can still succeed if the
--- predicate allows for a failing computation.
+-- this condition will result in the computation throwing a
+-- @LateDontCheck@ exception.
 --
 -- If the action fails (deadlock, length bound exceeded, etc), the
 -- whole computation fails.

@@ -7,6 +7,25 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Added
+~~~~~
+
+* ``Test.DejaFu.Types.Error`` for internal errors and misuses, with
+  predicates:
+    * ``Test.DejaFu.Types.isSchedulerError``
+    * ``Test.DejaFu.Types.isIncorrectUsage``
+
+Removed
+~~~~~~~
+
+* ``Test.DejaFu.Types.isInternalError``
+* ``Test.DejaFu.Types.isIllegalDontCheck``
+* ``Test.DejaFu.Types.isIllegalSubconcurrency``
+
+
 1.11.0.5 (2019-01-17)
 ---------------------
 

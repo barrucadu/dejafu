@@ -56,28 +56,6 @@ has /failed/.  dejafu can detect a few different types of failure:
 
  * 'UncaughtException', if the main thread is killed by an exception.
 
-There are two types of failure which dejafu itself may raise:
-
- * 'Abort', used in systematic testing (the default) if there are no
-   allowed decisions remaining.  For example, by default any test case
-   which takes more than 250 scheduling points to finish will be
-   aborted.  You can use the 'systematically' function to supply (or
-   disable) your own bounds.
-
- * 'InternalError', used if something goes wrong.  If you get this and
-   aren't using a scheduler you wrote yourself, please [file a
-   bug](https://github.com/barrucadu/dejafu/issues).
-
-Finally, there are two failures which can arise through improper use of
-dejafu:
-
- * 'IllegalDontCheck', the "Test.DejaFu.Conc.dontCheck" function is
-   used as anything other than the fist action in the main thread.
-
- * 'IllegalSubconcurrency', the "Test.DejaFu.Conc.subconcurrency"
-   function is used when multiple threads exist, or is used inside
-   another @subconcurrency@ call.
-
 __Beware of 'liftIO':__ dejafu works by running your test case lots of
 times with different schedules.  If you use 'liftIO' at all, make sure
 that any @IO@ you perform is deterministic when executed in the same
@@ -191,12 +169,9 @@ Helper functions to identify failures.
 
 -}
 
-  , isInternalError
   , isAbort
   , isDeadlock
   , isUncaughtException
-  , isIllegalSubconcurrency
-  , isIllegalDontCheck
 
   -- * Property testing
 

@@ -7,6 +7,7 @@ import           Control.Monad.IO.Class    (liftIO)
 import           System.Random             (mkStdGen)
 import           Test.DejaFu               (Failure(..), gives, gives',
                                             isUncaughtException)
+import           Test.DejaFu.Types         (Error(..))
 
 import           Control.Concurrent.Classy
 import qualified Data.IORef                as IORef
@@ -302,7 +303,7 @@ hacksTests = toTestList
           _ <- fork $ takeMVar var >>= putMVar out
           takeMVar out
 
-    , djfuTS "It is illegal to start subconcurrency after forking" (gives [Left IllegalSubconcurrency]) $ do
+    , djfuE "It is illegal to start subconcurrency after forking" MultithreadedSubconcurrency $ do
         var <- newEmptyMVar
         _ <- fork $ readMVar var
         _ <- subconcurrency $ pure ()

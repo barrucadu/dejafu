@@ -19,6 +19,7 @@ module Test.DejaFu.Conc.Internal where
 import           Control.Exception                   (Exception,
                                                       MaskingState(..),
                                                       toException)
+import qualified Control.Monad.Catch                 as E
 import qualified Control.Monad.Conc.Class            as C
 import           Data.Foldable                       (foldrM, toList)
 import           Data.Functor                        (void)
@@ -180,7 +181,7 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
       in case choice of
            Just chosen -> case M.lookup chosen threadsc of
              Just thread
-               | isBlocked thread -> die InternalError restore sofar prior ctx'
+               | isBlocked thread -> E.throwM ScheduledBlockedThread
                | otherwise ->
                  let decision
                        | Just chosen == (fst <$> prior) = Continue
@@ -188,7 +189,7 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
                        | otherwise = SwitchTo chosen
                      alternatives = filter (\(t, _) -> t /= chosen) runnable'
                  in step decision alternatives chosen thread restore sofar prior ctx'
-             Nothing -> die InternalError restore sofar prior ctx'
+             Nothing -> E.throwM ScheduledMissingThread
            Nothing -> die Abort restore sofar prior ctx'
     where
       (choice, g')  = scheduleThread sched prior (efromList runnable') (cSchedState ctx)
@@ -630,8 +631,8 @@ stepThread _ _ _ _ tid (AStop na) = \ctx@Context{..} -> do
 
 -- run a subconcurrent computation.
 stepThread forSnapshot _ sched memtype tid (ASub ma c) = \ctx ->
-  if | forSnapshot -> pure (Failed IllegalSubconcurrency, Single Subconcurrency, const (pure ()))
-     | M.size (cThreads ctx) > 1 -> pure (Failed IllegalSubconcurrency, Single Subconcurrency, const (pure ()))
+  if | forSnapshot -> E.throwM NestedSubconcurrency
+     | M.size (cThreads ctx) > 1 -> E.throwM MultithreadedSubconcurrency
      | otherwise -> do
          res <- runConcurrency False sched memtype (cSchedState ctx) (cIdSource ctx) (cCaps ctx) ma
          out <- efromJust <$> C.readIORef (finalRef res)
@@ -677,11 +678,7 @@ stepThread forSnapshot isFirst _ _ tid (ADontCheck lb ma c) = \ctx ->
              , Single (DontCheck (toList (finalTrace res)))
              , const (pure ())
              )
-     | otherwise -> pure
-       ( Failed IllegalDontCheck
-       , Single (DontCheck [])
-       , const (pure ())
-       )
+     | otherwise -> E.throwM LateDontCheck
 
 -- | Handle an exception being thrown from an @AAtom@, @AThrow@, or
 -- @AThrowTo@.

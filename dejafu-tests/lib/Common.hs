@@ -7,7 +7,7 @@ module Common (module Common, module Test.Tasty.DejaFu, T.TestTree, T.expectFail
 import           Control.Arrow              (second)
 import           Control.Exception          (ArithException, ArrayException,
                                              SomeException, displayException)
-import           Control.Monad              (void)
+import           Control.Monad              (unless, void)
 import qualified Control.Monad.Catch        as C
 import           Control.Monad.Conc.Class
 import           Control.Monad.IO.Class     (liftIO)
@@ -22,6 +22,7 @@ import           Test.DejaFu                (Failure, Predicate,
                                              ProPredicate(..), Result(..), Way,
                                              alwaysTrue, somewhereTrue)
 import           Test.DejaFu.Conc           (ConcIO, randomSched, runConcurrent)
+import qualified Test.DejaFu.SCT            as SCT
 import           Test.DejaFu.SCT.Internal
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
@@ -29,6 +30,7 @@ import qualified Test.Tasty                 as T
 import           Test.Tasty.DejaFu          hiding (testProperty)
 import qualified Test.Tasty.ExpectedFailure as T
 import qualified Test.Tasty.Hedgehog        as H
+import qualified Test.Tasty.HUnit           as TH
 
 -------------------------------------------------------------------------------
 -- Tests
@@ -90,6 +92,14 @@ djfuT name p c = toTestList $ T name c p
 
 djfuTS :: (Eq a, Show a) => String -> Predicate a -> ConcIO a -> [T.TestTree]
 djfuTS name p c = toTestList $ TEST name c p (map (second toSettings) defaultWays) False
+
+djfuE :: String -> Error -> ConcIO a -> [T.TestTree]
+djfuE name e0 c = toTestList . TH.testCase name $ C.catch
+    (SCT.runSCT defaultWay defaultMemType c >> TH.assertFailure msg)
+    (\e -> unless (e == e0) $ TH.assertFailure (err e))
+  where
+    msg = "expected " ++ displayException e0
+    err e = msg ++ " got " ++ displayException e
 
 alwaysFailsWith :: (Failure -> Bool) -> Predicate a
 alwaysFailsWith p = alwaysTrue (either p (const False))

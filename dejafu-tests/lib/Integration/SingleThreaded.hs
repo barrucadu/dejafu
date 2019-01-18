@@ -5,9 +5,9 @@ module Integration.SingleThreaded where
 import           Control.Exception         (ArithException(..),
                                             ArrayException(..))
 import           Test.DejaFu               (Failure(..), gives, gives', isAbort,
-                                            isDeadlock, isIllegalDontCheck,
-                                            isUncaughtException)
+                                            isDeadlock, isUncaughtException)
 import           Test.DejaFu.Settings      (defaultLengthBound)
+import           Test.DejaFu.Types         (Error(..))
 
 import           Control.Concurrent.Classy
 import           Control.Monad             (replicateM_)
@@ -275,7 +275,7 @@ hacksTests = toTestList
     , djfu "Failures abort the whole computation" (alwaysFailsWith isDeadlock) $
         dontCheck Nothing $ takeMVar =<< newEmptyMVarInt
 
-    , djfu "Must be the very first thing" (alwaysFailsWith isIllegalDontCheck) $ do
+    , djfuE "Must be the very first thing" LateDontCheck $ do
         v <- newEmptyMVarInt
         dontCheck Nothing $ putMVar v 5
 

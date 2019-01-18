@@ -443,13 +443,9 @@ instance NFData Decision
 -- The @Eq@, @Ord@, and @NFData@ instances compare/evaluate the
 -- exception with @show@ in the @UncaughtException@ case.
 --
--- @since 1.1.0.0
+-- @since unreleased
 data Failure
-  = InternalError
-  -- ^ Will be raised if the scheduler does something bad. This should
-  -- never arise unless you write your own, faulty, scheduler! If it
-  -- does, please file a bug report.
-  | Abort
+  = Abort
   -- ^ The scheduler chose to abort execution. This will be produced
   -- if, for example, all possible decisions exceed the specified
   -- bounds (there have been too many pre-emptions, the computation
@@ -462,34 +458,22 @@ data Failure
   -- STM transaction.
   | UncaughtException SomeException
   -- ^ An uncaught exception bubbled to the top of the computation.
-  | IllegalSubconcurrency
-  -- ^ Calls to @subconcurrency@ were nested, or attempted when
-  -- multiple threads existed.
-  | IllegalDontCheck
-  -- ^ A call to @dontCheck@ was attempted after the first action of
-  -- the initial thread.
   deriving Show
 
 instance Eq Failure where
-  InternalError          == InternalError          = True
   Abort                  == Abort                  = True
   Deadlock               == Deadlock               = True
   STMDeadlock            == STMDeadlock            = True
   (UncaughtException e1) == (UncaughtException e2) = show e1 == show e2
-  IllegalSubconcurrency  == IllegalSubconcurrency  = True
-  IllegalDontCheck       == IllegalDontCheck       = True
   _ == _ = False
 
 instance Ord Failure where
   compare = compare `on` transform where
     transform :: Failure -> (Int, Maybe String)
-    transform InternalError = (0, Nothing)
     transform Abort = (1, Nothing)
     transform Deadlock = (2, Nothing)
     transform STMDeadlock = (3, Nothing)
     transform (UncaughtException e) = (4, Just (show e))
-    transform IllegalSubconcurrency = (5, Nothing)
-    transform IllegalDontCheck = (6, Nothing)
 
 instance NFData Failure where
   rnf (UncaughtException e) = rnf (show e)
@@ -497,13 +481,6 @@ instance NFData Failure where
 
 -- | @since 1.3.1.0
 deriving instance Generic Failure
-
--- | Check if a failure is an @InternalError@.
---
--- @since 0.9.0.0
-isInternalError :: Failure -> Bool
-isInternalError InternalError = True
-isInternalError _ = False
 
 -- | Check if a failure is an @Abort@.
 --
@@ -527,19 +504,48 @@ isUncaughtException :: Failure -> Bool
 isUncaughtException (UncaughtException _) = True
 isUncaughtException _ = False
 
--- | Check if a failure is an @IllegalSubconcurrency@
---
--- @since 0.9.0.0
-isIllegalSubconcurrency :: Failure -> Bool
-isIllegalSubconcurrency IllegalSubconcurrency = True
-isIllegalSubconcurrency _ = False
+-------------------------------------------------------------------------------
+-- * Errors
 
--- | Check if a failure is an @IllegalDontCheck@
+-- | An indication that there is a bug in dejafu or you are using it
+-- incorrectly.
 --
--- @since 1.1.0.0
-isIllegalDontCheck :: Failure -> Bool
-isIllegalDontCheck IllegalDontCheck = True
-isIllegalDontCheck _ = False
+-- @since unreleased
+data Error
+  = ScheduledBlockedThread
+  -- ^ Raised as an exception if the scheduler attempts to schedule a
+  -- blocked thread.
+  | ScheduledMissingThread
+  -- ^ Raised as an exception if the scheduler attempts to schedule a
+  -- nonexistent thread.
+  | NestedSubconcurrency
+  -- ^ Raised as an exception if a @subconcurrency@ is nested inside
+  -- another @subconcurrency@ or a @dontCheck@.
+  | MultithreadedSubconcurrency
+  -- ^ Raised as an exception if @subconcurrency@ is called after
+  -- forking threads.
+  | LateDontCheck
+  -- ^ Raised as an exception if @dontCheck@ is called after the first action.
+  deriving (Show, Eq, Ord, Bounded, Enum, Generic)
+
+instance Exception Error
+
+-- | Check if an error is a scheduler error.
+--
+-- @since unreleased
+isSchedulerError :: Error -> Bool
+isSchedulerError ScheduledBlockedThread = True
+isSchedulerError ScheduledMissingThread = True
+isSchedulerError _ = False
+
+-- | Check if an error is an incorrect usage of dejafu.
+--
+-- @since unreleased
+isIncorrectUsage :: Error -> Bool
+isIncorrectUsage NestedSubconcurrency = True
+isIncorrectUsage MultithreadedSubconcurrency = True
+isIncorrectUsage LateDontCheck = True
+isIncorrectUsage _ = False
 
 -------------------------------------------------------------------------------
 -- * Schedule bounding
