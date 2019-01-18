@@ -18,6 +18,9 @@ Added
     * ``Test.DejaFu.Types.isSchedulerError``
     * ``Test.DejaFu.Types.isIncorrectUsage``
 
+* Deprecated ``Test.DejaFu.Types.Failure`` type synonym for
+  ``Condition``.
+
 Changed
 ~~~~~~~
 

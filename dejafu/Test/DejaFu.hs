@@ -238,6 +238,7 @@ interference we have provided: the left term never empties a full
   , module Test.DejaFu.Refinement
 
   -- * Deprecated
+  , Failure
   , dejafuDiscard
   ) where
 

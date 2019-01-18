@@ -438,6 +438,12 @@ instance NFData Decision
 -------------------------------------------------------------------------------
 -- * Conditions
 
+-- | A type synonym for 'Condition', use that instead.
+--
+-- @since unreleased
+{-# DEPRECATED Failure "The 'Failure' type has been split up into 'Condition' and 'Error', with different semantics." #-}
+type Failure = Condition
+
 -- | An indication of how a concurrent computation terminated, if it
 -- didn't produce a value.
 --
