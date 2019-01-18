@@ -46,8 +46,8 @@ and, for each, a summarised execution trace leading to that result:
 
  * Each \"-\" represents one \"step\" of the computation.
 
-__Failures:__ If a program doesn't terminate successfully, we say it
-has /failed/.  dejafu can detect a few different types of failure:
+__Conditions:__ A program may fail to terminate in a way which
+produces a value. dejafu can detect a few such cases:
 
  * 'Deadlock', if every thread is blocked.
 
@@ -107,7 +107,7 @@ If you need more information, use these functions.
 -}
 
   , Result(..)
-  , Failure(..)
+  , Condition(..)
   , runTest
   , runTestWay
 
@@ -161,11 +161,11 @@ usage.
   , gives
   , gives'
 
-  -- *** Failures
+  -- *** Conditions
 
   {- |
 
-Helper functions to identify failures.
+Helper functions to identify conditions.
 
 -}
 
@@ -475,7 +475,7 @@ dejafuWithSettings settings name test =
 --
 -- @since 1.0.0.0
 dejafuDiscard :: (MonadConc n, MonadIO n, Show b)
-  => (Either Failure a -> Maybe Discard)
+  => (Either Condition a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
   -- ^ How to run the concurrent program.
@@ -593,7 +593,7 @@ dejafusWithSettings settings tests conc = do
 data Result a = Result
   { _pass :: Bool
   -- ^ Whether the test passed or not.
-  , _failures :: [(Either Failure a, Trace)]
+  , _failures :: [(Either Condition a, Trace)]
   -- ^ The failing cases, if any.
   , _failureMsg :: String
   -- ^ A message to display on failure, if nonempty
@@ -606,7 +606,7 @@ instance NFData a => NFData (Result a) where
               )
 
 -- | A failed result, taking the given list of failures.
-defaultFail :: [(Either Failure a, Trace)] -> Result a
+defaultFail :: [(Either Condition a, Trace)] -> Result a
 defaultFail failures = Result False failures ""
 
 -- | A passed result.
@@ -692,9 +692,9 @@ type Predicate a = ProPredicate a a
 --
 -- @since 1.0.0.0
 data ProPredicate a b = ProPredicate
-  { pdiscard :: Either Failure a -> Maybe Discard
+  { pdiscard :: Either Condition a -> Maybe Discard
   -- ^ Selectively discard results before computing the result.
-  , peval :: [(Either Failure a, Trace)] -> Result b
+  , peval :: [(Either Condition a, Trace)] -> Result b
   -- ^ Compute the result with the un-discarded results.
   }
 
@@ -730,7 +730,7 @@ successful = alwaysTrue (either (const False) (const True))
 
 -- | Check that a computation never aborts.
 --
--- Any result other than an abort, including other 'Failure's, is
+-- Any result other than an abort, including other 'Condition's, is
 -- allowed.
 --
 -- @since 1.0.0.0
@@ -745,7 +745,7 @@ abortsAlways = alwaysTrue $ either (==Abort) (const False)
 
 -- | Check that a computation aborts at least once.
 --
--- Any result other than an abort, including other 'Failure's, is
+-- Any result other than an abort, including other 'Condition's, is
 -- allowed.
 --
 -- @since 1.0.0.0
@@ -754,7 +754,7 @@ abortsSometimes = somewhereTrue $ either (==Abort) (const False)
 
 -- | Check that a computation never deadlocks.
 --
--- Any result other than a deadlock, including other 'Failure's, is
+-- Any result other than a deadlock, including other 'Condition's, is
 -- allowed.
 --
 -- @since 1.0.0.0
@@ -769,7 +769,7 @@ deadlocksAlways = alwaysTrue $ either isDeadlock (const False)
 
 -- | Check that a computation deadlocks at least once.
 --
--- Any result other than a deadlock, including other 'Failure's, is
+-- Any result other than a deadlock, including other 'Condition's, is
 -- allowed.
 --
 -- @since 1.0.0.0
@@ -779,7 +779,7 @@ deadlocksSometimes = somewhereTrue $ either isDeadlock (const False)
 -- | Check that a computation never fails with an uncaught exception.
 --
 -- Any result other than an uncaught exception, including other
--- 'Failure's, is allowed.
+-- 'Condition's, is allowed.
 --
 -- @since 1.0.0.0
 exceptionsNever :: Predicate a
@@ -794,7 +794,7 @@ exceptionsAlways = alwaysTrue $ either isUncaughtException (const False)
 -- | Check that a computation fails with an uncaught exception at least once.
 --
 -- Any result other than an uncaught exception, including other
--- 'Failure's, is allowed.
+-- 'Condition's, is allowed.
 --
 -- @since 1.0.0.0
 exceptionsSometimes :: Predicate a
@@ -886,7 +886,7 @@ notAlwaysSameBy f = ProPredicate
 -- | Check that a @Maybe@-producing function always returns 'Nothing'.
 --
 -- @since 1.0.0.0
-alwaysNothing :: (Either Failure a -> Maybe (Either Failure b)) -> ProPredicate a b
+alwaysNothing :: (Either Condition a -> Maybe (Either Condition b)) -> ProPredicate a b
 alwaysNothing f = ProPredicate
   { pdiscard = maybe (Just DiscardResultAndTrace) (const Nothing) . f
   , peval = \xs ->
@@ -898,14 +898,14 @@ alwaysNothing f = ProPredicate
 -- true.
 --
 -- @since 1.0.0.0
-alwaysTrue :: (Either Failure a -> Bool) -> Predicate a
+alwaysTrue :: (Either Condition a -> Bool) -> Predicate a
 alwaysTrue p = alwaysNothing (\efa -> if p efa then Nothing else Just efa)
 
 -- | Check that a @Maybe@-producing function returns 'Nothing' at
 -- least once.
 --
 -- @since 1.0.0.0
-somewhereNothing :: (Either Failure a -> Maybe (Either Failure b)) -> ProPredicate a b
+somewhereNothing :: (Either Condition a -> Maybe (Either Condition b)) -> ProPredicate a b
 somewhereNothing f = ProPredicate
   { pdiscard = maybe (Just DiscardTrace) (const Nothing) . f
   , peval = \xs ->
@@ -917,14 +917,14 @@ somewhereNothing f = ProPredicate
 -- least once.
 --
 -- @since 1.0.0.0
-somewhereTrue :: (Either Failure a -> Bool) -> Predicate a
+somewhereTrue :: (Either Condition a -> Bool) -> Predicate a
 somewhereTrue p = somewhereNothing (\efa -> if p efa then Nothing else Just efa)
 
 -- | Predicate for when there is a known set of results where every
 -- result must be exhibited at least once.
 --
 -- @since 1.0.0.0
-gives :: (Eq a, Show a) => [Either Failure a] -> Predicate a
+gives :: (Eq a, Show a) => [Either Condition a] -> Predicate a
 gives expected = ProPredicate
     { pdiscard = \efa -> if efa `elem` expected then Just DiscardTrace else Nothing
     , peval = \xs -> go expected [] xs $ defaultFail (failures xs)
@@ -944,7 +944,7 @@ gives expected = ProPredicate
 
     failures = filter (\(r, _) -> r `notElem` expected)
 
--- | Variant of 'gives' that doesn't allow for expected failures.
+-- | Variant of 'gives' that doesn't allow for non-success conditions.
 --
 -- @since 1.0.0.0
 gives' :: (Eq a, Show a) => [a] -> Predicate a
@@ -968,7 +968,7 @@ doTest name result = do
         putStrLn $ _failureMsg result
 
       let failures = _failures result
-      let output = map (\(r, t) -> putStrLn . indent $ either showFail show r ++ " " ++ showTrace t) $ take 5 failures
+      let output = map (\(r, t) -> putStrLn . indent $ either showCondition show r ++ " " ++ showTrace t) $ take 5 failures
       sequence_ $ intersperse (putStrLn "") output
       when (moreThan 5 failures) $
         putStrLn (indent "...")

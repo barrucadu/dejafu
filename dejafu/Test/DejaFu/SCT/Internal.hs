@@ -42,10 +42,10 @@ sct :: (MonadConc n, HasCallStack)
   -- ^ Initial state
   -> (s -> Maybe t)
   -- ^ State predicate
-  -> ((Scheduler g -> g -> n (Either Failure a, g, Trace)) -> s -> t -> n (s, Maybe (Either Failure a, Trace)))
+  -> ((Scheduler g -> g -> n (Either Condition a, g, Trace)) -> s -> t -> n (s, Maybe (Either Condition a, Trace)))
   -- ^ Run the computation and update the state
   -> ConcT n a
-  -> n [(Either Failure a, Trace)]
+  -> n [(Either Condition a, Trace)]
 sct settings s0 sfun srun conc
     | canDCSnapshot conc = runForDCSnapshot conc >>= \case
         Just (Right snap, _) -> sct'Snap snap
@@ -87,15 +87,15 @@ sct' :: (MonadConc n, HasCallStack)
   -- ^ Initial state
   -> (s -> Maybe t)
   -- ^ State predicate
-  -> (s -> t -> n (s, Maybe (Either Failure a, Trace)))
+  -> (s -> t -> n (s, Maybe (Either Condition a, Trace)))
   -- ^ Run the computation and update the state
-  -> (forall x. Scheduler x -> x -> n (Either Failure a, x, Trace))
+  -> (forall x. Scheduler x -> x -> n (Either Condition a, x, Trace))
   -- ^ Just run the computation
   -> ThreadId
   -- ^ The first available @ThreadId@
   -> IORefId
   -- ^ The first available @IORefId@
-  -> n [(Either Failure a, Trace)]
+  -> n [(Either Condition a, Trace)]
 sct' settings s0 sfun srun run nTId nCRId = go Nothing [] s0 where
   go (Just res) _ _ | earlyExit res = pure []
   go _ seen !s = case sfun s of
@@ -150,16 +150,16 @@ sct' settings s0 sfun srun run nTId nCRId = go Nothing [] s0 where
 simplifyExecution :: (MonadConc n, HasCallStack)
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
-  -> (forall x. Scheduler x -> x -> n (Either Failure a, x, Trace))
+  -> (forall x. Scheduler x -> x -> n (Either Condition a, x, Trace))
   -- ^ Just run the computation
   -> ThreadId
   -- ^ The first available @ThreadId@
   -> IORefId
   -- ^ The first available @IORefId@
-  -> Either Failure a
+  -> Either Condition a
   -- ^ The expected result
   -> Trace
-  -> n (Either Failure a, Trace)
+  -> n (Either Condition a, Trace)
 simplifyExecution settings run nTId nCRId res trace
     | tidTrace == simplifiedTrace = do
         debugPrint ("Simplifying new result '" ++ p res ++ "': no simplification possible!")
@@ -186,11 +186,11 @@ simplifyExecution settings run nTId nCRId res trace
 
 -- | Replay an execution.
 replay :: MonadConc n
-  => (forall x. Scheduler x -> x -> n (Either Failure a, x, Trace))
+  => (forall x. Scheduler x -> x -> n (Either Condition a, x, Trace))
   -- ^ Run the computation
   -> [(ThreadId, ThreadAction)]
   -- ^ The reduced sequence of scheduling decisions
-  -> n (Either Failure a, [(ThreadId, ThreadAction)], Trace)
+  -> n (Either Condition a, [(ThreadId, ThreadAction)], Trace)
 replay run = run (Scheduler (const sched)) where
     sched runnable ((t, Stop):ts) = case findThread t runnable of
       Just t' -> (Just t', ts)

@@ -114,7 +114,7 @@ import           Data.Set                 (Set)
 import qualified Data.Set                 as S
 import           Test.LeanCheck           (Listable(..), concatMapT, mapT)
 
-import           Test.DejaFu.Conc         (ConcIO, Failure, subconcurrency)
+import           Test.DejaFu.Conc         (ConcIO, Condition, subconcurrency)
 import           Test.DejaFu.SCT          (runSCT)
 import           Test.DejaFu.Settings     (defaultMemType, defaultWay)
 
@@ -266,9 +266,9 @@ data FailedProperty o x
     -- ^ The seed for this set of executions.
     , failingArgs  :: [String]
     -- ^ The values of free variables, as strings.
-    , leftResults  :: Set (Maybe Failure, o)
+    , leftResults  :: Set (Maybe Condition, o)
     -- ^ The set of results of the left signature.
-    , rightResults :: Set (Maybe Failure, o)
+    , rightResults :: Set (Maybe Condition, o)
     -- ^ The set of results of the right signature.
     }
   | NoExpectedFailure
@@ -409,7 +409,7 @@ checkWithSeeds seeds (Neg rp) = do
 evalSigWithSeed :: Ord o
   => Sig s o x
   -> x
-  -> IO (Set (Maybe Failure, o))
+  -> IO (Set (Maybe Condition, o))
 evalSigWithSeed sig x = do
   results <- runSCT defaultWay defaultMemType $ do
     s <- initialise sig x

@@ -18,7 +18,7 @@ import qualified Hedgehog                   as H
 import qualified Hedgehog.Gen               as HGen
 import qualified Hedgehog.Range             as HRange
 import           System.Random              (mkStdGen)
-import           Test.DejaFu                (Failure, Predicate,
+import           Test.DejaFu                (Condition, Predicate,
                                              ProPredicate(..), Result(..), Way,
                                              alwaysTrue, somewhereTrue)
 import           Test.DejaFu.Conc           (ConcIO, randomSched, runConcurrent)
@@ -101,10 +101,10 @@ djfuE name e0 c = toTestList . TH.testCase name $ C.catch
     msg = "expected " ++ displayException e0
     err e = msg ++ " got " ++ displayException e
 
-alwaysFailsWith :: (Failure -> Bool) -> Predicate a
+alwaysFailsWith :: (Condition -> Bool) -> Predicate a
 alwaysFailsWith p = alwaysTrue (either p (const False))
 
-sometimesFailsWith :: (Failure -> Bool) -> Predicate a
+sometimesFailsWith :: (Condition -> Bool) -> Predicate a
 sometimesFailsWith p = somewhereTrue (either p (const False))
 
 testProperty :: String -> H.PropertyT IO () -> T.TestTree

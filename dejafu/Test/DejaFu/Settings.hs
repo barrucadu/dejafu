@@ -118,7 +118,7 @@ module Test.DejaFu.Settings
   -- opportunity to get rid of them early is possibly a great saving
   -- of memory.
   --
-  -- A discard function, which has type @Either Failure a -> Maybe
+  -- A discard function, which has type @Either Condition a -> Maybe
   -- Discard@, can selectively discard results or execution traces
   -- before the schedule exploration finishes, allowing them to be
   -- garbage collected sooner.
@@ -134,8 +134,9 @@ module Test.DejaFu.Settings
 
   -- | Sometimes we don't want to wait for all executions to be
   -- explored, we just want to stop as soon as a particular result is
-  -- found.  An early-exit predicate, which has type @Either Failure a
-  -- -> Bool@, can opt to halt execution when such a result is found.
+  -- found.  An early-exit predicate, which has type @Either Condition
+  -- a -> Bool@, can opt to halt execution when such a result is
+  -- found.
   --
   -- All results found up to, and including, the one which terminates
   -- the exploration are reported.
@@ -394,7 +395,7 @@ lmemtype afb s = (\b -> s {_memtype = b}) <$> afb (_memtype s)
 -- | A lens into the discard function.
 --
 -- @since 1.2.0.0
-ldiscard :: Lens' (Settings n a) (Maybe (Either Failure a -> Maybe Discard))
+ldiscard :: Lens' (Settings n a) (Maybe (Either Condition a -> Maybe Discard))
 ldiscard afb s = (\b -> s {_discard = b}) <$> afb (_discard s)
 
 -------------------------------------------------------------------------------
@@ -403,7 +404,7 @@ ldiscard afb s = (\b -> s {_discard = b}) <$> afb (_discard s)
 -- | A lens into the early-exit predicate.
 --
 -- @since 1.2.0.0
-learlyExit :: Lens' (Settings n a) (Maybe (Either Failure a -> Bool))
+learlyExit :: Lens' (Settings n a) (Maybe (Either Condition a -> Bool))
 learlyExit afb s = (\b -> s {_earlyExit = b}) <$> afb (_earlyExit s)
 
 -------------------------------------------------------------------------------

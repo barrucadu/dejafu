@@ -123,7 +123,7 @@ data Action n =
   | ACommit ThreadId IORefId
   | AStop (n ())
 
-  | forall a. ASub (ModelConc n a) (Either Failure a -> Action n)
+  | forall a. ASub (ModelConc n a) (Either Condition a -> Action n)
   | AStopSub (Action n)
   | forall a. ADontCheck (Maybe Int) (ModelConc n a) (a -> Action n)
 

@@ -4,8 +4,9 @@ module Integration.SingleThreaded where
 
 import           Control.Exception         (ArithException(..),
                                             ArrayException(..))
-import           Test.DejaFu               (Failure(..), gives, gives', isAbort,
-                                            isDeadlock, isUncaughtException)
+import           Test.DejaFu               (Condition(..), gives, gives',
+                                            isAbort, isDeadlock,
+                                            isUncaughtException)
 import           Test.DejaFu.Settings      (defaultLengthBound)
 import           Test.DejaFu.Types         (Error(..))
 

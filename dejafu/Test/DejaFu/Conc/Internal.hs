@@ -50,7 +50,7 @@ type SeqTrace
 -- | The result of running a concurrent program.
 data CResult n g a = CResult
   { finalContext :: Context n g
-  , finalRef :: C.IORef n (Maybe (Either Failure a))
+  , finalRef :: C.IORef n (Maybe (Either Condition a))
   , finalRestore :: Maybe (Threads n -> n ())
   -- ^ Meaningless if this result doesn't come from a snapshotting
   -- execution.
@@ -68,12 +68,12 @@ data DCSnapshot n a = DCSnapshot
   -- restoring.
   , dcsRestore :: Threads n -> n ()
   -- ^ Action to restore IORef, MVar, and TVar values.
-  , dcsRef :: C.IORef n (Maybe (Either Failure a))
+  , dcsRef :: C.IORef n (Maybe (Either Condition a))
   -- ^ Reference where the result will be written.
   }
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
--- state, returning a failure reason on error. Also returned is the
+-- state, returning a Condition reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
 runConcurrency :: (C.MonadConc n, HasCallStack)
   => Bool
@@ -119,7 +119,7 @@ runConcurrencyWithSnapshot :: (C.MonadConc n, HasCallStack)
   -> MemType
   -> Context n g
   -> (Threads n -> n ())
-  -> C.IORef n (Maybe (Either Failure a))
+  -> C.IORef n (Maybe (Either Condition a))
   -> n (CResult n g a)
 runConcurrencyWithSnapshot sched memtype ctx restore ref = do
   let boundThreads = M.filter (isJust . _bound) (cThreads ctx)
@@ -152,7 +152,7 @@ runThreads :: (C.MonadConc n, HasCallStack)
   => Bool
   -> Scheduler g
   -> MemType
-  -> C.IORef n (Maybe (Either Failure a))
+  -> C.IORef n (Maybe (Either Condition a))
   -> Context n g
   -> n (CResult n g a)
 runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty Nothing where
@@ -273,7 +273,7 @@ data Act
 data What n g
   = Succeeded (Context n g)
   -- ^ Action succeeded: continue execution.
-  | Failed Failure
+  | Failed Condition
   -- ^ Action caused computation to fail: stop.
   | Snap (Context n g)
   -- ^ Action was a snapshot point and we're in snapshot mode: stop.

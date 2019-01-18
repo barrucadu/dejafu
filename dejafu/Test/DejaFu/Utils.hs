@@ -76,16 +76,16 @@ simplestsBy f = map choose . collect where
   insert' _ _ ([]:_) = undefined
 
 -------------------------------------------------------------------------------
--- * Failures
+-- * Conditions
 
--- | Pretty-print a failure
+-- | Pretty-print a condition
 --
--- @since 0.4.0.0
-showFail :: Failure -> String
-showFail Abort = "[abort]"
-showFail Deadlock = "[deadlock]"
-showFail STMDeadlock = "[stm-deadlock]"
-showFail (UncaughtException exc) = "[" ++ displayException exc ++ "]"
+-- @since unreleased
+showCondition :: Condition -> String
+showCondition Abort = "[abort]"
+showCondition Deadlock = "[deadlock]"
+showCondition STMDeadlock = "[stm-deadlock]"
+showCondition (UncaughtException exc) = "[" ++ displayException exc ++ "]"
 
 -------------------------------------------------------------------------------
 -- * Scheduling

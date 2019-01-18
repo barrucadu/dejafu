@@ -5,7 +5,7 @@ import           Control.Exception         (ArithException(..))
 import           Control.Monad             (replicateM, void)
 import           Control.Monad.IO.Class    (liftIO)
 import           System.Random             (mkStdGen)
-import           Test.DejaFu               (Failure(..), gives, gives',
+import           Test.DejaFu               (Condition(..), gives, gives',
                                             isUncaughtException)
 import           Test.DejaFu.Types         (Error(..))
 

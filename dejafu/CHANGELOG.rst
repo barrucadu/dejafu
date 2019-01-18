@@ -18,6 +18,12 @@ Added
     * ``Test.DejaFu.Types.isSchedulerError``
     * ``Test.DejaFu.Types.isIncorrectUsage``
 
+Changed
+~~~~~~~
+
+* Renamed ``Test.DejaFu.Types.Failure`` to
+  ``Test.DejaFu.Types.Condition``.
+
 Removed
 ~~~~~~~
 

@@ -38,11 +38,11 @@ import           Test.DejaFu.Types
 data Settings n a = Settings
   { _way :: Way
   , _memtype :: MemType
-  , _discard :: Maybe (Either Failure a -> Maybe Discard)
+  , _discard :: Maybe (Either Condition a -> Maybe Discard)
   , _debugShow :: Maybe (a -> String)
   , _debugPrint :: Maybe (String -> n ())
   , _debugFatal :: Bool
-  , _earlyExit :: Maybe (Either Failure a -> Bool)
+  , _earlyExit :: Maybe (Either Condition a -> Bool)
   , _equality :: Maybe (a -> a -> Bool)
   , _simplify  :: Bool
   , _safeIO :: Bool

@@ -436,15 +436,16 @@ deriving instance Generic Decision
 instance NFData Decision
 
 -------------------------------------------------------------------------------
--- * Failures
+-- * Conditions
 
--- | An indication of how a concurrent computation failed.
+-- | An indication of how a concurrent computation terminated, if it
+-- didn't produce a value.
 --
 -- The @Eq@, @Ord@, and @NFData@ instances compare/evaluate the
 -- exception with @show@ in the @UncaughtException@ case.
 --
 -- @since unreleased
-data Failure
+data Condition
   = Abort
   -- ^ The scheduler chose to abort execution. This will be produced
   -- if, for example, all possible decisions exceed the specified
@@ -458,49 +459,46 @@ data Failure
   -- STM transaction.
   | UncaughtException SomeException
   -- ^ An uncaught exception bubbled to the top of the computation.
-  deriving Show
+  deriving (Show, Generic)
 
-instance Eq Failure where
+instance Eq Condition where
   Abort                  == Abort                  = True
   Deadlock               == Deadlock               = True
   STMDeadlock            == STMDeadlock            = True
   (UncaughtException e1) == (UncaughtException e2) = show e1 == show e2
   _ == _ = False
 
-instance Ord Failure where
+instance Ord Condition where
   compare = compare `on` transform where
-    transform :: Failure -> (Int, Maybe String)
+    transform :: Condition -> (Int, Maybe String)
     transform Abort = (1, Nothing)
     transform Deadlock = (2, Nothing)
     transform STMDeadlock = (3, Nothing)
     transform (UncaughtException e) = (4, Just (show e))
 
-instance NFData Failure where
+instance NFData Condition where
   rnf (UncaughtException e) = rnf (show e)
   rnf f = f `seq` ()
 
--- | @since 1.3.1.0
-deriving instance Generic Failure
-
--- | Check if a failure is an @Abort@.
+-- | Check if a condition is an @Abort@.
 --
 -- @since 0.9.0.0
-isAbort :: Failure -> Bool
+isAbort :: Condition -> Bool
 isAbort Abort = True
 isAbort _ = False
 
--- | Check if a failure is a @Deadlock@ or an @STMDeadlock@.
+-- | Check if a condition is a @Deadlock@ or an @STMDeadlock@.
 --
 -- @since 0.9.0.0
-isDeadlock :: Failure -> Bool
+isDeadlock :: Condition -> Bool
 isDeadlock Deadlock = True
 isDeadlock STMDeadlock = True
 isDeadlock _ = False
 
--- | Check if a failure is an @UncaughtException@
+-- | Check if a condition is an @UncaughtException@
 --
 -- @since 0.9.0.0
-isUncaughtException :: Failure -> Bool
+isUncaughtException :: Condition -> Bool
 isUncaughtException (UncaughtException _) = True
 isUncaughtException _ = False
 
@@ -611,7 +609,7 @@ instance NFData LengthBound
 -------------------------------------------------------------------------------
 -- * Discarding results and traces
 
--- | An @Either Failure a -> Maybe Discard@ value can be used to
+-- | An @Either Condition a -> Maybe Discard@ value can be used to
 -- selectively discard results.
 --
 -- @since 0.7.1.0
@@ -638,7 +636,7 @@ instance NFData Discard
 --
 -- @since 1.5.1.0
 newtype Weaken a = Weaken
-  { getWeakDiscarder :: Either Failure a -> Maybe Discard }
+  { getWeakDiscarder :: Either Condition a -> Maybe Discard }
 
 instance Semigroup (Weaken a) where
   (<>) = divide (\efa -> (efa, efa))
@@ -663,9 +661,9 @@ instance Divisible Weaken where
 --
 -- @since 1.0.0.0
 weakenDiscard ::
-     (Either Failure a -> Maybe Discard)
-  -> (Either Failure a -> Maybe Discard)
-  -> Either Failure a -> Maybe Discard
+     (Either Condition a -> Maybe Discard)
+  -> (Either Condition a -> Maybe Discard)
+  -> Either Condition a -> Maybe Discard
 weakenDiscard d1 d2 =
   getWeakDiscarder (Weaken d1 <> Weaken d2)
 
@@ -678,7 +676,7 @@ weakenDiscard d1 d2 =
 --
 -- @since 1.5.1.0
 newtype Strengthen a = Strengthen
-  { getStrongDiscarder :: Either Failure a -> Maybe Discard }
+  { getStrongDiscarder :: Either Condition a -> Maybe Discard }
 
 instance Semigroup (Strengthen a) where
   (<>) = divide (\efa -> (efa, efa))
@@ -703,9 +701,9 @@ instance Divisible Strengthen where
 --
 -- @since 1.0.0.0
 strengthenDiscard ::
-     (Either Failure a -> Maybe Discard)
-  -> (Either Failure a -> Maybe Discard)
-  -> Either Failure a -> Maybe Discard
+     (Either Condition a -> Maybe Discard)
+  -> (Either Condition a -> Maybe Discard)
+  -> Either Condition a -> Maybe Discard
 strengthenDiscard d1 d2 =
   getStrongDiscarder (Strengthen d1 <> Strengthen d2)
 

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
@@ -74,6 +75,14 @@ import qualified Test.DejaFu.Types      as D
 import           Test.HUnit             (Assertable(..), Test(..), Testable(..),
                                          assertFailure, assertString)
 import           Test.HUnit.Lang        (HUnitFailure(..))
+
+showCondition :: Condition -> String
+#if MIN_VERSION_dejafu(1,12,0)
+showCondition = Conc.showCondition
+#else
+type Condition = Failure
+showCondition = Conc.showFail
+#endif
 
 --------------------------------------------------------------------------------
 -- HUnit-style unit testing
@@ -186,7 +195,7 @@ testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name
 --
 -- @since 1.0.0.0
 testDejafuDiscard :: Show b
-  => (Either Failure a -> Maybe Discard)
+  => (Either Condition a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
   -- ^ How to execute the concurrent program.
@@ -250,7 +259,7 @@ testDejafusWithSettings = testconc
 --
 -- @since 1.0.1.0
 testDejafusDiscard :: Show b
-  => (Either Failure a -> Maybe Discard)
+  => (Either Condition a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
   -- ^ How to execute the concurrent program.
@@ -349,7 +358,7 @@ showErr res
 
   failures = intersperse "" . map (indent . showres) . take 5 $ _failures res
 
-  showres (r, t) = either Conc.showFail show r ++ " " ++ Conc.showTrace t
+  showres (r, t) = either showCondition show r ++ " " ++ Conc.showTrace t
 
   rest = if moreThan (_failures res) 5 then "\n\t..." else ""
 
