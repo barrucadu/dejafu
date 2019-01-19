@@ -440,7 +440,7 @@ instance NFData Decision
 
 -- | A type synonym for 'Condition', use that instead.
 --
--- @since unreleased
+-- @since 1.12.0.0
 {-# DEPRECATED Failure "The 'Failure' type has been split up into 'Condition' and 'Error', with different semantics." #-}
 type Failure = Condition
 
@@ -450,7 +450,7 @@ type Failure = Condition
 -- The @Eq@, @Ord@, and @NFData@ instances compare/evaluate the
 -- exception with @show@ in the @UncaughtException@ case.
 --
--- @since unreleased
+-- @since 1.12.0.0
 data Condition
   = Abort
   -- ^ The scheduler chose to abort execution. This will be produced
@@ -514,7 +514,7 @@ isUncaughtException _ = False
 -- | An indication that there is a bug in dejafu or you are using it
 -- incorrectly.
 --
--- @since unreleased
+-- @since 1.12.0.0
 data Error
   = ScheduledBlockedThread
   -- ^ Raised as an exception if the scheduler attempts to schedule a
@@ -536,7 +536,7 @@ instance Exception Error
 
 -- | Check if an error is a scheduler error.
 --
--- @since unreleased
+-- @since 1.12.0.0
 isSchedulerError :: Error -> Bool
 isSchedulerError ScheduledBlockedThread = True
 isSchedulerError ScheduledMissingThread = True
@@ -544,7 +544,7 @@ isSchedulerError _ = False
 
 -- | Check if an error is an incorrect usage of dejafu.
 --
--- @since unreleased
+-- @since 1.12.0.0
 isIncorrectUsage :: Error -> Bool
 isIncorrectUsage NestedSubconcurrency = True
 isIncorrectUsage MultithreadedSubconcurrency = True

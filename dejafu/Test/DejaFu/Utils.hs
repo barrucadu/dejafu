@@ -80,7 +80,7 @@ simplestsBy f = map choose . collect where
 
 -- | Pretty-print a condition
 --
--- @since unreleased
+-- @since 1.12.0.0
 showCondition :: Condition -> String
 showCondition Abort = "[abort]"
 showCondition Deadlock = "[deadlock]"

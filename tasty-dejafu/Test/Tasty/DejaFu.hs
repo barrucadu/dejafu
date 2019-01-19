@@ -89,7 +89,7 @@ showCondition = Conc.showCondition
 #else
 -- | An alias for 'Failure'.
 --
--- @since unreleased
+-- @since 1.2.1.0
 type Condition = Failure
 showCondition = Conc.showFail
 #endif

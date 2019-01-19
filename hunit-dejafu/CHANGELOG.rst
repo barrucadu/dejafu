@@ -7,6 +7,24 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.2.1.0 (2019-01-20)
+--------------------
+
+* Git: :tag:`hunit-dejafu-1.2.1.0`
+* Hackage: :hackage:`hunit-dejafu-1.2.1.0`
+
+Added
+~~~~~
+
+* Re-export of the ``Condition`` type from :hackage:`dejafu`.  If
+  using dejafu < 1.12, this is an alias for ``Failure``.
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`dejafu` is <1.13
+
+
 1.2.0.6 (2018-07-01)
 --------------------
 

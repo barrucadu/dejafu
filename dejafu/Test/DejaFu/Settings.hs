@@ -450,7 +450,7 @@ lsafeIO afb s = (\b -> s {_safeIO = b}) <$> afb (_safeIO s)
 
 -- | A lens into the show-aborts flag.
 --
--- @since unreleased
+-- @since 1.12.0.0
 lshowAborts :: Lens' (Settings n a) Bool
 lshowAborts afb s = (\b -> s {_showAborts = b}) <$> afb (_showAborts s)
 

@@ -7,8 +7,11 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-unreleased
-----------
+1.12.0.0 (2019-01-20)
+---------------------
+
+* Git: :tag:`dejafu-1.12.0.0`
+* Hackage: :hackage:`dejafu-1.12.0.0`
 
 Added
 ~~~~~
@@ -23,6 +26,8 @@ Added
 
 * The ``Test.DejaFu.Settings.lshowAborts`` option, to make SCT
   functions show ``Abort`` conditions.
+
+* ``Test.DejaFu.Utils.showCondition``
 
 Changed
 ~~~~~~~
@@ -39,6 +44,7 @@ Removed
 * ``Test.DejaFu.Types.isInternalError``
 * ``Test.DejaFu.Types.isIllegalDontCheck``
 * ``Test.DejaFu.Types.isIllegalSubconcurrency``
+* ``Test.DejaFu.Utils.showFail``
 
 
 1.11.0.5 (2019-01-17)
