@@ -40,6 +40,7 @@ module Test.Tasty.DejaFu
   , testDejafusWithSettings
 
   -- ** Re-exports
+  , Condition
   , Predicate
   , ProPredicate(..)
   , module Test.DejaFu.Settings
@@ -86,6 +87,9 @@ showCondition :: Condition -> String
 #if MIN_VERSION_dejafu(1,12,0)
 showCondition = Conc.showCondition
 #else
+-- | An alias for 'Failure'.
+--
+-- @since unreleased
 type Condition = Failure
 showCondition = Conc.showFail
 #endif
