@@ -58,10 +58,6 @@ module Test.Tasty.DejaFu
   , R.refines, (R.=>=)
   , R.strictlyRefines, (R.->-)
   , R.equivalentTo, (R.===)
-
-    -- * Deprecated
-  , testDejafuDiscard
-  , testDejafusDiscard
 ) where
 
 import           Data.Char              (toUpper)
@@ -82,17 +78,6 @@ import           Test.Tasty.Options     (IsOption(..), OptionDescription(..),
                                          lookupOption)
 import           Test.Tasty.Providers   (IsTest(..), singleTest, testFailed,
                                          testPassed)
-
-showCondition :: Condition -> String
-#if MIN_VERSION_dejafu(1,12,0)
-showCondition = Conc.showCondition
-#else
--- | An alias for 'Failure'.
---
--- @since 1.2.1.0
-type Condition = Failure
-showCondition = Conc.showFail
-#endif
 
 --------------------------------------------------------------------------------
 -- Tasty-style unit testing
@@ -228,27 +213,6 @@ testDejafuWithSettings :: Show b
   -> TestTree
 testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name, p)]
 
--- | Variant of 'testDejafuWay' which can selectively discard results.
---
--- @since 1.0.0.0
-testDejafuDiscard :: Show b
-  => (Either Condition a -> Maybe Discard)
-  -- ^ Selectively discard results.
-  -> Way
-  -- ^ How to execute the concurrent program.
-  -> MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> String
-  -- ^ The name of the test.
-  -> ProPredicate a b
-  -- ^ The predicate to check.
-  -> Conc.ConcIO a
-  -- ^ The computation to test.
-  -> TestTree
-testDejafuDiscard discard way =
-  testDejafuWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
-{-# DEPRECATED testDejafuDiscard "Use testDejafuWithSettings instead" #-}
-
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test. This will share work between the predicates, rather than
 -- running the concurrent computation many times for each predicate.
@@ -290,26 +254,6 @@ testDejafusWithSettings :: Show b
   -- ^ The computation to test.
   -> TestTree
 testDejafusWithSettings = testconc
-
--- | Variant of 'testDejafusWay' which can selectively discard
--- results, beyond what each predicate already discards.
---
--- @since 1.0.1.0
-testDejafusDiscard :: Show b
-  => (Either Condition a -> Maybe Discard)
-  -- ^ Selectively discard results.
-  -> Way
-  -- ^ How to execute the concurrent program.
-  -> MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> [(TestName, ProPredicate a b)]
-  -- ^ The list of predicates (with names) to check.
-  -> Conc.ConcIO a
-  -- ^ The computation to test.
-  -> TestTree
-testDejafusDiscard discard way =
-  testDejafusWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
-{-# DEPRECATED testDejafusDiscard "Use testDejafusWithSettings instead" #-}
 
 
 -------------------------------------------------------------------------------
@@ -410,7 +354,7 @@ showErr res
 
   msg = if null (_failureMsg res) then "" else _failureMsg res ++ "\n"
 
-  failures = intersperse "" . map (\(r, t) -> indent $ either showCondition show r ++ " " ++ Conc.showTrace t) . take 5 $ _failures res
+  failures = intersperse "" . map (\(r, t) -> indent $ either Conc.showCondition show r ++ " " ++ Conc.showTrace t) . take 5 $ _failures res
 
   rest = if moreThan (_failures res) 5 then "\n\t..." else ""
 

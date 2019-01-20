@@ -6,6 +6,27 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+unreleased
+----------
+
+Removed
+~~~~~~~
+
+* The deprecated functions:
+  * ``Test.DejaFu.dejafuDiscard``
+  * ``Test.DejaFu.SCT.runSCTDiscard``
+  * ``Test.DejaFu.SCT.runSCTDiscard'``
+  * ``Test.DejaFu.SCT.resultsSetDiscard``
+  * ``Test.DejaFu.SCT.resultsSetDiscard'``
+  * ``Test.DejaFu.SCT.sctBound``
+  * ``Test.DejaFu.SCT.sctBoundDiscard``
+  * ``Test.DejaFu.SCT.sctUniformRandom``
+  * ``Test.DejaFu.SCT.sctUniformRandomDiscard``
+  * ``Test.DejaFu.SCT.sctWeightedRandom``
+  * ``Test.DejaFu.SCT.sctWeightedRandomDiscard``
+
+* The deprecated type ``Test.DejaFu.Types.Failure``
+
 
 1.12.0.0 (2019-01-20)
 ---------------------

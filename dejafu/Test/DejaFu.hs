@@ -236,10 +236,6 @@ interference we have provided: the left term never empties a full
 -}
 
   , module Test.DejaFu.Refinement
-
-  -- * Deprecated
-  , Failure
-  , dejafuDiscard
   ) where
 
 import           Control.Arrow            (first)
@@ -464,34 +460,6 @@ dejafuWithSettings :: (MonadConc n, MonadIO n, Show b)
   -> n Bool
 dejafuWithSettings settings name test =
   dejafusWithSettings settings [(name, test)]
-
--- | Variant of 'dejafuWay' which can selectively discard results.
---
--- >>> dejafuDiscard (\_ -> Just DiscardTrace) defaultWay defaultMemType "Discarding" alwaysSame example
--- [fail] Discarding
---     "hello" <trace discarded>
--- <BLANKLINE>
---     "world" <trace discarded>
--- False
---
--- @since 1.0.0.0
-dejafuDiscard :: (MonadConc n, MonadIO n, Show b)
-  => (Either Condition a -> Maybe Discard)
-  -- ^ Selectively discard results.
-  -> Way
-  -- ^ How to run the concurrent program.
-  -> MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> String
-  -- ^ The name of the test.
-  -> ProPredicate a b
-  -- ^ The predicate to check.
-  -> ConcT n a
-  -- ^ The computation to test.
-  -> n Bool
-dejafuDiscard discard way =
-  dejafuWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
-{-# DEPRECATED dejafuDiscard "Use dejafuWithSettings instead" #-}
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.

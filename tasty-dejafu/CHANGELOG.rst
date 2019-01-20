@@ -7,6 +7,17 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Removed
+~~~~~~~
+
+* The deprecated functions:
+  * ``Test.Tasty.DejaFu.testDejafuDiscard``
+  * ``Test.Tasty.DejaFu.testDejafusDiscard``
+
+
 1.2.1.0 (2019-01-20)
 --------------------
 

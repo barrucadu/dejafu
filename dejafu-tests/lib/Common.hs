@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -Wno-deprecations -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 {-# LANGUAGE GADTs #-}
 

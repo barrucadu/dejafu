@@ -53,9 +53,6 @@ module Test.DejaFu.Conc
 
   -- * Scheduling
   , module Test.DejaFu.Schedule
-
-  -- * Deprecated
-  , Failure
   ) where
 
 import           Control.Exception                   (MaskingState(..))
