@@ -72,7 +72,7 @@ runSCT :: MonadConc n
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> ConcT n a
   -- ^ The computation to run many times.
-  -> n [(Either Failure a, Trace)]
+  -> n [(Either Condition a, Trace)]
 runSCT way = runSCTWithSettings . fromWayAndMemType way
 
 -- | Return the set of results of a concurrent program.
@@ -85,7 +85,7 @@ resultsSet :: (MonadConc n, Ord a)
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> ConcT n a
   -- ^ The computation to run many times.
-  -> n (Set (Either Failure a))
+  -> n (Set (Either Condition a))
 resultsSet way = resultsSetWithSettings . fromWayAndMemType way
 
 -- | A variant of 'runSCT' which can selectively discard results.
@@ -95,7 +95,7 @@ resultsSet way = resultsSetWithSettings . fromWayAndMemType way
 --
 -- @since 1.0.0.0
 runSCTDiscard :: MonadConc n
-  => (Either Failure a -> Maybe Discard)
+  => (Either Condition a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
   -- ^ How to run the concurrent program.
@@ -103,7 +103,7 @@ runSCTDiscard :: MonadConc n
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> ConcT n a
   -- ^ The computation to run many times.
-  -> n [(Either Failure a, Trace)]
+  -> n [(Either Condition a, Trace)]
 runSCTDiscard discard way = runSCTWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
 {-# DEPRECATED runSCTDiscard "Use runSCTWithSettings instead" #-}
 
@@ -111,7 +111,7 @@ runSCTDiscard discard way = runSCTWithSettings . set ldiscard (Just discard) . f
 --
 -- @since 1.0.0.0
 resultsSetDiscard :: (MonadConc n, Ord a)
-  => (Either Failure a -> Maybe Discard)
+  => (Either Condition a -> Maybe Discard)
   -- ^ Selectively discard results.  Traces are always discarded.
   -> Way
   -- ^ How to run the concurrent program.
@@ -119,7 +119,7 @@ resultsSetDiscard :: (MonadConc n, Ord a)
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> ConcT n a
   -- ^ The computation to run many times.
-  -> n (Set (Either Failure a))
+  -> n (Set (Either Condition a))
 resultsSetDiscard discard way memtype conc =
   let discard' efa = discard efa <|> Just DiscardTrace
   in S.fromList . map fst <$> runSCTDiscard discard' way memtype conc
@@ -135,7 +135,7 @@ resultsSetDiscard discard way memtype conc =
 --
 -- @since 1.0.0.0
 runSCT' :: (MonadConc n, NFData a)
-  => Way -> MemType -> ConcT n a -> n [(Either Failure a, Trace)]
+  => Way -> MemType -> ConcT n a -> n [(Either Condition a, Trace)]
 runSCT' way = runSCTWithSettings' . fromWayAndMemType way
 
 -- | A strict variant of 'resultsSet'.
@@ -145,7 +145,7 @@ runSCT' way = runSCTWithSettings' . fromWayAndMemType way
 --
 -- @since 1.0.0.0
 resultsSet' :: (MonadConc n, Ord a, NFData a)
-  => Way -> MemType -> ConcT n a -> n (Set (Either Failure a))
+  => Way -> MemType -> ConcT n a -> n (Set (Either Condition a))
 resultsSet' way = resultsSetWithSettings' . fromWayAndMemType way
 
 -- | A strict variant of 'runSCTDiscard'.
@@ -158,7 +158,7 @@ resultsSet' way = resultsSetWithSettings' . fromWayAndMemType way
 --
 -- @since 1.0.0.0
 runSCTDiscard' :: (MonadConc n, NFData a)
-  => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcT n a -> n [(Either Failure a, Trace)]
+  => (Either Condition a -> Maybe Discard) -> Way -> MemType -> ConcT n a -> n [(Either Condition a, Trace)]
 runSCTDiscard' discard way memtype conc = do
   res <- runSCTDiscard discard way memtype conc
   rnf res `seq` pure res
@@ -171,7 +171,7 @@ runSCTDiscard' discard way memtype conc = do
 --
 -- @since 1.0.0.0
 resultsSetDiscard' :: (MonadConc n, Ord a, NFData a)
-  => (Either Failure a -> Maybe Discard) -> Way -> MemType -> ConcT n a -> n (Set (Either Failure a))
+  => (Either Condition a -> Maybe Discard) -> Way -> MemType -> ConcT n a -> n (Set (Either Condition a))
 resultsSetDiscard' discard way memtype conc = do
   res <- resultsSetDiscard discard way memtype conc
   rnf res `seq` pure res
@@ -191,7 +191,7 @@ runSCTWithSettings :: MonadConc n
   -- ^ The SCT settings.
   -> ConcT n a
   -- ^ The computation to run many times.
-  -> n [(Either Failure a, Trace)]
+  -> n [(Either Condition a, Trace)]
 runSCTWithSettings settings conc = case _way settings of
   Systematic cb0 ->
     let initial = initialState
@@ -232,7 +232,7 @@ resultsSetWithSettings :: (MonadConc n, Ord a)
   -- ^ The SCT settings.
   -> ConcT n a
   -- ^ The computation to run many times.
-  -> n (Set (Either Failure a))
+  -> n (Set (Either Condition a))
 resultsSetWithSettings settings conc =
   let settings' = settings { _discard = Just $ \efa -> fromMaybe (const Nothing) (_discard settings) efa <|> Just DiscardTrace }
   in S.fromList . map fst <$> runSCTWithSettings settings' conc
@@ -249,7 +249,7 @@ resultsSetWithSettings settings conc =
 runSCTWithSettings' :: (MonadConc n, NFData a)
   => Settings n a
   -> ConcT n a
-  -> n [(Either Failure a, Trace)]
+  -> n [(Either Condition a, Trace)]
 runSCTWithSettings' settings conc = do
   res <- runSCTWithSettings settings conc
   rnf res `seq` pure res
@@ -263,7 +263,7 @@ runSCTWithSettings' settings conc = do
 resultsSetWithSettings' :: (MonadConc n, Ord a, NFData a)
   => Settings n a
   -> ConcT n a
-  -> n (Set (Either Failure a))
+  -> n (Set (Either Condition a))
 resultsSetWithSettings' settings conc = do
   res <- resultsSetWithSettings settings conc
   rnf res `seq` pure res
@@ -378,7 +378,7 @@ sctBound :: MonadConc n
   -- ^ The combined bounds.
   -> ConcT n a
   -- ^ The computation to run many times
-  -> n [(Either Failure a, Trace)]
+  -> n [(Either Condition a, Trace)]
 sctBound = sctBoundDiscard (const Nothing)
 {-# DEPRECATED sctBound "Use runSCT instead" #-}
 
@@ -389,7 +389,7 @@ sctBound = sctBoundDiscard (const Nothing)
 --
 -- @since 1.0.0.0
 sctBoundDiscard :: MonadConc n
-  => (Either Failure a -> Maybe Discard)
+  => (Either Condition a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
@@ -397,7 +397,7 @@ sctBoundDiscard :: MonadConc n
   -- ^ The combined bounds.
   -> ConcT n a
   -- ^ The computation to run many times
-  -> n [(Either Failure a, Trace)]
+  -> n [(Either Condition a, Trace)]
 sctBoundDiscard discard memtype cb = runSCTWithSettings $
   set ldiscard (Just discard) (fromWayAndMemType (systematically cb) memtype)
 {-# DEPRECATED sctBoundDiscard "Use runSCTWithSettings instead" #-}
@@ -419,7 +419,7 @@ sctUniformRandom :: (MonadConc n, RandomGen g)
   -- ^ The number of executions to perform.
   -> ConcT n a
   -- ^ The computation to run many times.
-  -> n [(Either Failure a, Trace)]
+  -> n [(Either Condition a, Trace)]
 sctUniformRandom = sctUniformRandomDiscard (const Nothing)
 {-# DEPRECATED sctUniformRandom "Use runSCT instead" #-}
 
@@ -430,7 +430,7 @@ sctUniformRandom = sctUniformRandomDiscard (const Nothing)
 --
 -- @since 1.0.0.0
 sctUniformRandomDiscard :: (MonadConc n, RandomGen g)
-  => (Either Failure a -> Maybe Discard)
+  => (Either Condition a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
@@ -440,7 +440,7 @@ sctUniformRandomDiscard :: (MonadConc n, RandomGen g)
   -- ^ The number of executions to perform.
   -> ConcT n a
   -- ^ The computation to run many times.
-  -> n [(Either Failure a, Trace)]
+  -> n [(Either Condition a, Trace)]
 sctUniformRandomDiscard discard memtype g lim = runSCTWithSettings $
   set ldiscard (Just discard) (fromWayAndMemType (uniformly g lim) memtype)
 {-# DEPRECATED sctUniformRandomDiscard "Use runSCTWithSettings instead" #-}
@@ -462,7 +462,7 @@ sctWeightedRandom :: (MonadConc n, RandomGen g)
   -- ^ The number of executions to perform.
   -> ConcT n a
   -- ^ The computation to run many times.
-  -> n [(Either Failure a, Trace)]
+  -> n [(Either Condition a, Trace)]
 sctWeightedRandom = sctWeightedRandomDiscard (const Nothing)
 {-# DEPRECATED sctWeightedRandom "Use runSCT instead" #-}
 
@@ -473,7 +473,7 @@ sctWeightedRandom = sctWeightedRandomDiscard (const Nothing)
 --
 -- @since 1.7.0.0
 sctWeightedRandomDiscard :: (MonadConc n, RandomGen g)
-  => (Either Failure a -> Maybe Discard)
+  => (Either Condition a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
@@ -483,7 +483,7 @@ sctWeightedRandomDiscard :: (MonadConc n, RandomGen g)
   -- ^ The number of executions to perform.
   -> ConcT n a
   -- ^ The computation to run many times.
-  -> n [(Either Failure a, Trace)]
+  -> n [(Either Condition a, Trace)]
 sctWeightedRandomDiscard discard memtype g lim = runSCTWithSettings $
   set ldiscard (Just discard) (fromWayAndMemType (randomly g lim) memtype)
 {-# DEPRECATED sctWeightedRandomDiscard "Use runSCTWithSettings instead" #-}

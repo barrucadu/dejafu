@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -39,6 +40,7 @@ module Test.Tasty.DejaFu
   , testDejafusWithSettings
 
   -- ** Re-exports
+  , Condition
   , Predicate
   , ProPredicate(..)
   , module Test.DejaFu.Settings
@@ -80,6 +82,17 @@ import           Test.Tasty.Options     (IsOption(..), OptionDescription(..),
                                          lookupOption)
 import           Test.Tasty.Providers   (IsTest(..), singleTest, testFailed,
                                          testPassed)
+
+showCondition :: Condition -> String
+#if MIN_VERSION_dejafu(1,12,0)
+showCondition = Conc.showCondition
+#else
+-- | An alias for 'Failure'.
+--
+-- @since 1.2.1.0
+type Condition = Failure
+showCondition = Conc.showFail
+#endif
 
 --------------------------------------------------------------------------------
 -- Tasty-style unit testing
@@ -219,7 +232,7 @@ testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name
 --
 -- @since 1.0.0.0
 testDejafuDiscard :: Show b
-  => (Either Failure a -> Maybe Discard)
+  => (Either Condition a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
   -- ^ How to execute the concurrent program.
@@ -283,7 +296,7 @@ testDejafusWithSettings = testconc
 --
 -- @since 1.0.1.0
 testDejafusDiscard :: Show b
-  => (Either Failure a -> Maybe Discard)
+  => (Either Condition a -> Maybe Discard)
   -- ^ Selectively discard results.
   -> Way
   -- ^ How to execute the concurrent program.
@@ -337,7 +350,7 @@ testPropertyFor = testprop
 -- Tasty integration
 
 data ConcTest where
-  ConcTest :: Show b => IO [(Either Failure a, Conc.Trace)] -> ([(Either Failure a, Conc.Trace)] -> Result b) -> ConcTest
+  ConcTest :: Show b => IO [(Either Condition a, Conc.Trace)] -> ([(Either Condition a, Conc.Trace)] -> Result b) -> ConcTest
   deriving Typeable
 
 data PropTest where
@@ -397,7 +410,7 @@ showErr res
 
   msg = if null (_failureMsg res) then "" else _failureMsg res ++ "\n"
 
-  failures = intersperse "" . map (\(r, t) -> indent $ either Conc.showFail show r ++ " " ++ Conc.showTrace t) . take 5 $ _failures res
+  failures = intersperse "" . map (\(r, t) -> indent $ either showCondition show r ++ " " ++ Conc.showTrace t) . take 5 $ _failures res
 
   rest = if moreThan (_failures res) 5 then "\n\t..." else ""
 

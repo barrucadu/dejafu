@@ -19,6 +19,7 @@ module Test.DejaFu.Conc.Internal where
 import           Control.Exception                   (Exception,
                                                       MaskingState(..),
                                                       toException)
+import qualified Control.Monad.Catch                 as E
 import qualified Control.Monad.Conc.Class            as C
 import           Data.Foldable                       (foldrM, toList)
 import           Data.Functor                        (void)
@@ -49,7 +50,7 @@ type SeqTrace
 -- | The result of running a concurrent program.
 data CResult n g a = CResult
   { finalContext :: Context n g
-  , finalRef :: C.IORef n (Maybe (Either Failure a))
+  , finalRef :: C.IORef n (Maybe (Either Condition a))
   , finalRestore :: Maybe (Threads n -> n ())
   -- ^ Meaningless if this result doesn't come from a snapshotting
   -- execution.
@@ -67,12 +68,12 @@ data DCSnapshot n a = DCSnapshot
   -- restoring.
   , dcsRestore :: Threads n -> n ()
   -- ^ Action to restore IORef, MVar, and TVar values.
-  , dcsRef :: C.IORef n (Maybe (Either Failure a))
+  , dcsRef :: C.IORef n (Maybe (Either Condition a))
   -- ^ Reference where the result will be written.
   }
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
--- state, returning a failure reason on error. Also returned is the
+-- state, returning a Condition reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
 runConcurrency :: (C.MonadConc n, HasCallStack)
   => Bool
@@ -118,7 +119,7 @@ runConcurrencyWithSnapshot :: (C.MonadConc n, HasCallStack)
   -> MemType
   -> Context n g
   -> (Threads n -> n ())
-  -> C.IORef n (Maybe (Either Failure a))
+  -> C.IORef n (Maybe (Either Condition a))
   -> n (CResult n g a)
 runConcurrencyWithSnapshot sched memtype ctx restore ref = do
   let boundThreads = M.filter (isJust . _bound) (cThreads ctx)
@@ -151,7 +152,7 @@ runThreads :: (C.MonadConc n, HasCallStack)
   => Bool
   -> Scheduler g
   -> MemType
-  -> C.IORef n (Maybe (Either Failure a))
+  -> C.IORef n (Maybe (Either Condition a))
   -> Context n g
   -> n (CResult n g a)
 runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty Nothing where
@@ -180,7 +181,7 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
       in case choice of
            Just chosen -> case M.lookup chosen threadsc of
              Just thread
-               | isBlocked thread -> die InternalError restore sofar prior ctx'
+               | isBlocked thread -> E.throwM ScheduledBlockedThread
                | otherwise ->
                  let decision
                        | Just chosen == (fst <$> prior) = Continue
@@ -188,7 +189,7 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
                        | otherwise = SwitchTo chosen
                      alternatives = filter (\(t, _) -> t /= chosen) runnable'
                  in step decision alternatives chosen thread restore sofar prior ctx'
-             Nothing -> die InternalError restore sofar prior ctx'
+             Nothing -> E.throwM ScheduledMissingThread
            Nothing -> die Abort restore sofar prior ctx'
     where
       (choice, g')  = scheduleThread sched prior (efromList runnable') (cSchedState ctx)
@@ -272,7 +273,7 @@ data Act
 data What n g
   = Succeeded (Context n g)
   -- ^ Action succeeded: continue execution.
-  | Failed Failure
+  | Failed Condition
   -- ^ Action caused computation to fail: stop.
   | Snap (Context n g)
   -- ^ Action was a snapshot point and we're in snapshot mode: stop.
@@ -630,8 +631,8 @@ stepThread _ _ _ _ tid (AStop na) = \ctx@Context{..} -> do
 
 -- run a subconcurrent computation.
 stepThread forSnapshot _ sched memtype tid (ASub ma c) = \ctx ->
-  if | forSnapshot -> pure (Failed IllegalSubconcurrency, Single Subconcurrency, const (pure ()))
-     | M.size (cThreads ctx) > 1 -> pure (Failed IllegalSubconcurrency, Single Subconcurrency, const (pure ()))
+  if | forSnapshot -> E.throwM NestedSubconcurrency
+     | M.size (cThreads ctx) > 1 -> E.throwM MultithreadedSubconcurrency
      | otherwise -> do
          res <- runConcurrency False sched memtype (cSchedState ctx) (cIdSource ctx) (cCaps ctx) ma
          out <- efromJust <$> C.readIORef (finalRef res)
@@ -677,11 +678,7 @@ stepThread forSnapshot isFirst _ _ tid (ADontCheck lb ma c) = \ctx ->
              , Single (DontCheck (toList (finalTrace res)))
              , const (pure ())
              )
-     | otherwise -> pure
-       ( Failed IllegalDontCheck
-       , Single (DontCheck [])
-       , const (pure ())
-       )
+     | otherwise -> E.throwM LateDontCheck
 
 -- | Handle an exception being thrown from an @AAtom@, @AThrow@, or
 -- @AThrowTo@.

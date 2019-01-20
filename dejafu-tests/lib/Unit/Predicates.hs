@@ -20,9 +20,9 @@ alwaysSameBy :: [TestTree]
 alwaysSameBy = toTestList
   [ passes "Equal successes"   (D.alwaysSameBy (==)) [Right 1, Right 1, Right 1]
   , fails  "Unequal successes" (D.alwaysSameBy (==)) [Right 1, Right 2, Right 3]
-  , fails  "Equal failures"    (D.alwaysSameBy (==)) [Left D.Deadlock, Left D.Deadlock, Left D.Deadlock]
-  , fails  "Unequal failures"  (D.alwaysSameBy (==)) [Left D.Deadlock, Left D.STMDeadlock, Left D.Abort]
-  , fails  "Mixed failures and successes" (D.alwaysSameBy (==)) [Left D.Deadlock, Right 1, Right 1]
+  , fails  "Equal conditions"   (D.alwaysSameBy (==)) [Left D.Deadlock, Left D.Deadlock, Left D.Deadlock]
+  , fails  "Unequal conditions" (D.alwaysSameBy (==)) [Left D.Deadlock, Left D.STMDeadlock, Left D.Abort]
+  , fails  "Mixed conditions and successes" (D.alwaysSameBy (==)) [Left D.Deadlock, Right 1, Right 1]
   ]
 
 -------------------------------------------------------------------------------
@@ -31,9 +31,9 @@ notAlwaysSameBy :: [TestTree]
 notAlwaysSameBy = toTestList
   [ fails  "Equal successes"   (D.notAlwaysSameBy (==)) [Right 1, Right 1, Right 1]
   , passes "Unequal successes" (D.notAlwaysSameBy (==)) [Right 1, Right 2, Right 3]
-  , fails  "Equal failures"    (D.notAlwaysSameBy (==)) [Left D.Deadlock, Left D.Deadlock, Left D.Deadlock]
-  , fails  "Unequal failures"  (D.notAlwaysSameBy (==)) [Left D.Deadlock, Left D.STMDeadlock, Left D.Abort]
-  , fails  "Mixed failures and successes" (D.notAlwaysSameBy (==)) [Left D.Deadlock, Right 1, Right 1]
+  , fails  "Equal conditions"   (D.notAlwaysSameBy (==)) [Left D.Deadlock, Left D.Deadlock, Left D.Deadlock]
+  , fails  "Unequal conditions" (D.notAlwaysSameBy (==)) [Left D.Deadlock, Left D.STMDeadlock, Left D.Abort]
+  , fails  "Mixed conditions and successes" (D.notAlwaysSameBy (==)) [Left D.Deadlock, Right 1, Right 1]
   ]
 
 -------------------------------------------------------------------------------
@@ -66,13 +66,13 @@ gives = toTestList
 -------------------------------------------------------------------------------
 
 -- | Check a predicate passes
-passes :: String -> D.Predicate Int -> [Either D.Failure Int] -> TestTree
+passes :: String -> D.Predicate Int -> [Either D.Condition Int] -> TestTree
 passes = checkPredicate D._pass
 
 -- | Check a predicate fails
-fails :: String -> D.Predicate Int -> [Either D.Failure Int] -> TestTree
+fails :: String -> D.Predicate Int -> [Either D.Condition Int] -> TestTree
 fails = checkPredicate (not . D._pass)
 
 -- | Check a predicate
-checkPredicate :: (D.Result Int -> Bool) -> String -> D.Predicate Int -> [Either D.Failure Int] -> TestTree
+checkPredicate :: (D.Result Int -> Bool) -> String -> D.Predicate Int -> [Either D.Condition Int] -> TestTree
 checkPredicate f msg p = testCase msg . assertBool "" . f . D.peval p . map (\efa -> (efa, []))

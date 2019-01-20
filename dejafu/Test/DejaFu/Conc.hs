@@ -23,7 +23,7 @@ module Test.DejaFu.Conc
   , ConcIO
 
   -- * Executing computations
-  , Failure(..)
+  , Condition(..)
   , MemType(..)
   , runConcurrent
   , subconcurrency
@@ -49,10 +49,13 @@ module Test.DejaFu.Conc
   , IORefId
   , MaskingState(..)
   , showTrace
-  , showFail
+  , showCondition
 
   -- * Scheduling
   , module Test.DejaFu.Schedule
+
+  -- * Deprecated
+  , Failure
   ) where
 
 import           Control.Exception                   (MaskingState(..))
@@ -187,8 +190,9 @@ instance Monad n => C.MonadConc (ConcT n) where
   atomically = toConc . AAtom
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
--- state, returning a failure reason on error. Also returned is the
--- final state of the scheduler, and an execution trace.
+-- state, returning either the final result or the condition which
+-- prevented that. Also returned is the final state of the scheduler,
+-- and an execution trace.
 --
 -- If the RTS supports bound threads (ghc -threaded when linking) then
 -- the main thread of the concurrent computation will be bound, and
@@ -215,7 +219,7 @@ runConcurrent :: C.MonadConc n
   -> MemType
   -> s
   -> ConcT n a
-  -> n (Either Failure a, s, Trace)
+  -> n (Either Condition a, s, Trace)
 runConcurrent sched memtype s ma = do
   res <- runConcurrency False sched memtype s initialIdSource 2 (unC ma)
   out <- efromJust <$> C.readIORef (finalRef res)
@@ -229,12 +233,11 @@ runConcurrent sched memtype s ma = do
 -- This can only be called in the main thread, when no other threads
 -- exist. Calls to 'subconcurrency' cannot be nested, or placed inside
 -- a call to 'dontCheck'. Violating either of these conditions will
--- result in the computation failing with @IllegalSubconcurrency@.
--- The overall test-case can still succeed if the predicate allows for
--- a failing computation.
+-- result in the computation throwing a @NestedSubconcurrency@ or
+-- @MultithreadedSubconcurrency@ error.
 --
 -- @since 0.6.0.0
-subconcurrency :: ConcT n a -> ConcT n (Either Failure a)
+subconcurrency :: ConcT n a -> ConcT n (Either Condition a)
 subconcurrency ma = toConc (ASub (unC ma))
 
 -- | Run an arbitrary action which gets some special treatment:
@@ -261,12 +264,11 @@ subconcurrency ma = toConc (ASub (unC ma))
 -- action continue to exist in the main computation.
 --
 -- This must be the first thing done in the main thread.  Violating
--- this condition will result in the computation failing with
--- @IllegalDontCheck@.  The overall test-case can still succeed if the
--- predicate allows for a failing computation.
+-- this condition will result in the computation throwing a
+-- @LateDontCheck@ exception.
 --
--- If the action fails (deadlock, length bound exceeded, etc), the
--- whole computation fails.
+-- If the action does not successfully produce a value (deadlock,
+-- length bound exceeded, etc), the whole computation is terminated.
 --
 -- @since 1.1.0.0
 dontCheck
@@ -346,7 +348,7 @@ dontCheck lb ma = toConc (ADontCheck lb (unC ma))
 -- @since 1.1.0.0
 runForDCSnapshot :: C.MonadConc n
   => ConcT n a
-  -> n (Maybe (Either Failure (DCSnapshot n a), Trace))
+  -> n (Maybe (Either Condition (DCSnapshot n a), Trace))
 runForDCSnapshot ma = do
   res <- runConcurrency True roundRobinSchedNP SequentialConsistency () initialIdSource 2 (unC ma)
   out <- C.readIORef (finalRef res)
@@ -368,7 +370,7 @@ runWithDCSnapshot :: C.MonadConc n
   -> MemType
   -> s
   -> DCSnapshot n a
-  -> n (Either Failure a, s, Trace)
+  -> n (Either Condition a, s, Trace)
 runWithDCSnapshot sched memtype s snapshot = do
   let context = (dcsContext snapshot) { cSchedState = s }
   let restore = dcsRestore snapshot

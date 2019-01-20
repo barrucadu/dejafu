@@ -34,9 +34,9 @@ tests =
 
 classLawProps :: [TestTree]
 classLawProps = toTestList
-    [ testGroup "Id"      (eqord genId)
-    , testGroup "Failure" (eqord genFailure)
-    , testGroup "Weaken"  (discardf min D.getWeakDiscarder)
+    [ testGroup "Id"         (eqord genId)
+    , testGroup "Condition"  (eqord genCondition)
+    , testGroup "Weaken"     (discardf min D.getWeakDiscarder)
     , testGroup "Strengthen" (discardf max D.getStrongDiscarder)
     ]
   where
@@ -334,13 +334,11 @@ genTVarId = D.TVarId <$> genId
 genId :: H.Gen D.Id
 genId = D.Id <$> HGen.maybe genString <*> genSmallInt
 
-genFailure :: H.Gen D.Failure
-genFailure = HGen.element $
-  [ D.InternalError
-  , D.Abort
+genCondition :: H.Gen D.Condition
+genCondition = HGen.element $
+  [ D.Abort
   , D.Deadlock
   , D.STMDeadlock
-  , D.IllegalSubconcurrency
   ] ++ map D.UncaughtException -- have a few different exception types
   [ E.toException E.Overflow
   , E.toException E.ThreadKilled
@@ -446,11 +444,11 @@ genDepState = SCT.DepState
   <*> genSmallSet genMVarId
   <*> genSmallMap genThreadId genMaskingState
 
-genDiscarder :: H.Gen (Function (Either D.Failure Int) (Maybe D.Discard))
+genDiscarder :: H.Gen (Function (Either D.Condition Int) (Maybe D.Discard))
 genDiscarder = genFunction genEfa (HGen.maybe genDiscard)
 
-genEfa :: H.Gen (Either D.Failure Int)
-genEfa = genEither genFailure genSmallInt
+genEfa :: H.Gen (Either D.Condition Int)
+genEfa = genEither genCondition genSmallInt
 
 genDiscard :: H.Gen D.Discard
 genDiscard = HGen.element

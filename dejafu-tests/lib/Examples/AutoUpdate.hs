@@ -44,7 +44,7 @@ import           Control.Monad.Conc.Class
 
 -- test imports
 import           Common
-import           Test.DejaFu              (Failure(..), gives)
+import           Test.DejaFu              (Condition(..), gives)
 
 tests :: [TestTree]
 tests = toTestList

@@ -11,7 +11,7 @@ import qualified Data.Set                  as S
 import           System.Random             (mkStdGen)
 import           Test.DejaFu               (gives')
 import           Test.DejaFu.SCT
-import           Test.DejaFu.Types         (Failure(..))
+import           Test.DejaFu.Types         (Condition(..))
 import           Test.Tasty.HUnit
 
 import           Common

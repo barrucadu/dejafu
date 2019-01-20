@@ -436,20 +436,23 @@ deriving instance Generic Decision
 instance NFData Decision
 
 -------------------------------------------------------------------------------
--- * Failures
+-- * Conditions
 
--- | An indication of how a concurrent computation failed.
+-- | A type synonym for 'Condition', use that instead.
+--
+-- @since 1.12.0.0
+{-# DEPRECATED Failure "The 'Failure' type has been split up into 'Condition' and 'Error', with different semantics." #-}
+type Failure = Condition
+
+-- | An indication of how a concurrent computation terminated, if it
+-- didn't produce a value.
 --
 -- The @Eq@, @Ord@, and @NFData@ instances compare/evaluate the
 -- exception with @show@ in the @UncaughtException@ case.
 --
--- @since 1.1.0.0
-data Failure
-  = InternalError
-  -- ^ Will be raised if the scheduler does something bad. This should
-  -- never arise unless you write your own, faulty, scheduler! If it
-  -- does, please file a bug report.
-  | Abort
+-- @since 1.12.0.0
+data Condition
+  = Abort
   -- ^ The scheduler chose to abort execution. This will be produced
   -- if, for example, all possible decisions exceed the specified
   -- bounds (there have been too many pre-emptions, the computation
@@ -462,84 +465,91 @@ data Failure
   -- STM transaction.
   | UncaughtException SomeException
   -- ^ An uncaught exception bubbled to the top of the computation.
-  | IllegalSubconcurrency
-  -- ^ Calls to @subconcurrency@ were nested, or attempted when
-  -- multiple threads existed.
-  | IllegalDontCheck
-  -- ^ A call to @dontCheck@ was attempted after the first action of
-  -- the initial thread.
-  deriving Show
+  deriving (Show, Generic)
 
-instance Eq Failure where
-  InternalError          == InternalError          = True
+instance Eq Condition where
   Abort                  == Abort                  = True
   Deadlock               == Deadlock               = True
   STMDeadlock            == STMDeadlock            = True
   (UncaughtException e1) == (UncaughtException e2) = show e1 == show e2
-  IllegalSubconcurrency  == IllegalSubconcurrency  = True
-  IllegalDontCheck       == IllegalDontCheck       = True
   _ == _ = False
 
-instance Ord Failure where
+instance Ord Condition where
   compare = compare `on` transform where
-    transform :: Failure -> (Int, Maybe String)
-    transform InternalError = (0, Nothing)
+    transform :: Condition -> (Int, Maybe String)
     transform Abort = (1, Nothing)
     transform Deadlock = (2, Nothing)
     transform STMDeadlock = (3, Nothing)
     transform (UncaughtException e) = (4, Just (show e))
-    transform IllegalSubconcurrency = (5, Nothing)
-    transform IllegalDontCheck = (6, Nothing)
 
-instance NFData Failure where
+instance NFData Condition where
   rnf (UncaughtException e) = rnf (show e)
   rnf f = f `seq` ()
 
--- | @since 1.3.1.0
-deriving instance Generic Failure
-
--- | Check if a failure is an @InternalError@.
+-- | Check if a condition is an @Abort@.
 --
 -- @since 0.9.0.0
-isInternalError :: Failure -> Bool
-isInternalError InternalError = True
-isInternalError _ = False
-
--- | Check if a failure is an @Abort@.
---
--- @since 0.9.0.0
-isAbort :: Failure -> Bool
+isAbort :: Condition -> Bool
 isAbort Abort = True
 isAbort _ = False
 
--- | Check if a failure is a @Deadlock@ or an @STMDeadlock@.
+-- | Check if a condition is a @Deadlock@ or an @STMDeadlock@.
 --
 -- @since 0.9.0.0
-isDeadlock :: Failure -> Bool
+isDeadlock :: Condition -> Bool
 isDeadlock Deadlock = True
 isDeadlock STMDeadlock = True
 isDeadlock _ = False
 
--- | Check if a failure is an @UncaughtException@
+-- | Check if a condition is an @UncaughtException@
 --
 -- @since 0.9.0.0
-isUncaughtException :: Failure -> Bool
+isUncaughtException :: Condition -> Bool
 isUncaughtException (UncaughtException _) = True
 isUncaughtException _ = False
 
--- | Check if a failure is an @IllegalSubconcurrency@
---
--- @since 0.9.0.0
-isIllegalSubconcurrency :: Failure -> Bool
-isIllegalSubconcurrency IllegalSubconcurrency = True
-isIllegalSubconcurrency _ = False
+-------------------------------------------------------------------------------
+-- * Errors
 
--- | Check if a failure is an @IllegalDontCheck@
+-- | An indication that there is a bug in dejafu or you are using it
+-- incorrectly.
 --
--- @since 1.1.0.0
-isIllegalDontCheck :: Failure -> Bool
-isIllegalDontCheck IllegalDontCheck = True
-isIllegalDontCheck _ = False
+-- @since 1.12.0.0
+data Error
+  = ScheduledBlockedThread
+  -- ^ Raised as an exception if the scheduler attempts to schedule a
+  -- blocked thread.
+  | ScheduledMissingThread
+  -- ^ Raised as an exception if the scheduler attempts to schedule a
+  -- nonexistent thread.
+  | NestedSubconcurrency
+  -- ^ Raised as an exception if a @subconcurrency@ is nested inside
+  -- another @subconcurrency@ or a @dontCheck@.
+  | MultithreadedSubconcurrency
+  -- ^ Raised as an exception if @subconcurrency@ is called after
+  -- forking threads.
+  | LateDontCheck
+  -- ^ Raised as an exception if @dontCheck@ is called after the first action.
+  deriving (Show, Eq, Ord, Bounded, Enum, Generic)
+
+instance Exception Error
+
+-- | Check if an error is a scheduler error.
+--
+-- @since 1.12.0.0
+isSchedulerError :: Error -> Bool
+isSchedulerError ScheduledBlockedThread = True
+isSchedulerError ScheduledMissingThread = True
+isSchedulerError _ = False
+
+-- | Check if an error is an incorrect usage of dejafu.
+--
+-- @since 1.12.0.0
+isIncorrectUsage :: Error -> Bool
+isIncorrectUsage NestedSubconcurrency = True
+isIncorrectUsage MultithreadedSubconcurrency = True
+isIncorrectUsage LateDontCheck = True
+isIncorrectUsage _ = False
 
 -------------------------------------------------------------------------------
 -- * Schedule bounding
@@ -605,7 +615,7 @@ instance NFData LengthBound
 -------------------------------------------------------------------------------
 -- * Discarding results and traces
 
--- | An @Either Failure a -> Maybe Discard@ value can be used to
+-- | An @Either Condition a -> Maybe Discard@ value can be used to
 -- selectively discard results.
 --
 -- @since 0.7.1.0
@@ -632,7 +642,7 @@ instance NFData Discard
 --
 -- @since 1.5.1.0
 newtype Weaken a = Weaken
-  { getWeakDiscarder :: Either Failure a -> Maybe Discard }
+  { getWeakDiscarder :: Either Condition a -> Maybe Discard }
 
 instance Semigroup (Weaken a) where
   (<>) = divide (\efa -> (efa, efa))
@@ -657,9 +667,9 @@ instance Divisible Weaken where
 --
 -- @since 1.0.0.0
 weakenDiscard ::
-     (Either Failure a -> Maybe Discard)
-  -> (Either Failure a -> Maybe Discard)
-  -> Either Failure a -> Maybe Discard
+     (Either Condition a -> Maybe Discard)
+  -> (Either Condition a -> Maybe Discard)
+  -> Either Condition a -> Maybe Discard
 weakenDiscard d1 d2 =
   getWeakDiscarder (Weaken d1 <> Weaken d2)
 
@@ -672,7 +682,7 @@ weakenDiscard d1 d2 =
 --
 -- @since 1.5.1.0
 newtype Strengthen a = Strengthen
-  { getStrongDiscarder :: Either Failure a -> Maybe Discard }
+  { getStrongDiscarder :: Either Condition a -> Maybe Discard }
 
 instance Semigroup (Strengthen a) where
   (<>) = divide (\efa -> (efa, efa))
@@ -697,9 +707,9 @@ instance Divisible Strengthen where
 --
 -- @since 1.0.0.0
 strengthenDiscard ::
-     (Either Failure a -> Maybe Discard)
-  -> (Either Failure a -> Maybe Discard)
-  -> Either Failure a -> Maybe Discard
+     (Either Condition a -> Maybe Discard)
+  -> (Either Condition a -> Maybe Discard)
+  -> Either Condition a -> Maybe Discard
 strengthenDiscard d1 d2 =
   getStrongDiscarder (Strengthen d1 <> Strengthen d2)
 

@@ -118,7 +118,7 @@ module Test.DejaFu.Settings
   -- opportunity to get rid of them early is possibly a great saving
   -- of memory.
   --
-  -- A discard function, which has type @Either Failure a -> Maybe
+  -- A discard function, which has type @Either Condition a -> Maybe
   -- Discard@, can selectively discard results or execution traces
   -- before the schedule exploration finishes, allowing them to be
   -- garbage collected sooner.
@@ -134,8 +134,9 @@ module Test.DejaFu.Settings
 
   -- | Sometimes we don't want to wait for all executions to be
   -- explored, we just want to stop as soon as a particular result is
-  -- found.  An early-exit predicate, which has type @Either Failure a
-  -- -> Bool@, can opt to halt execution when such a result is found.
+  -- found.  An early-exit predicate, which has type @Either Condition
+  -- a -> Bool@, can opt to halt execution when such a result is
+  -- found.
   --
   -- All results found up to, and including, the one which terminates
   -- the exploration are reported.
@@ -202,6 +203,16 @@ module Test.DejaFu.Settings
 
   , lsafeIO
 
+  -- ** Abort conditions
+
+  -- | Occasionally in an execution dejafu will discover that no
+  -- available scheduling decisions are within the specified bounds,
+  -- and aborts the execution to move onto the next.  This is
+  -- signalled by an 'Abort' condition.  By default, abort conditions
+  -- are /not/ returned from the SCT functions.
+
+  , lshowAborts
+
   -- ** Debug output
 
   -- | You can opt to receive debugging messages by setting debugging
@@ -256,6 +267,7 @@ fromWayAndMemType way memtype = Settings
   , _equality = Nothing
   , _simplify = False
   , _safeIO = False
+  , _showAborts = False
   }
 
 -------------------------------------------------------------------------------
@@ -394,7 +406,7 @@ lmemtype afb s = (\b -> s {_memtype = b}) <$> afb (_memtype s)
 -- | A lens into the discard function.
 --
 -- @since 1.2.0.0
-ldiscard :: Lens' (Settings n a) (Maybe (Either Failure a -> Maybe Discard))
+ldiscard :: Lens' (Settings n a) (Maybe (Either Condition a -> Maybe Discard))
 ldiscard afb s = (\b -> s {_discard = b}) <$> afb (_discard s)
 
 -------------------------------------------------------------------------------
@@ -403,7 +415,7 @@ ldiscard afb s = (\b -> s {_discard = b}) <$> afb (_discard s)
 -- | A lens into the early-exit predicate.
 --
 -- @since 1.2.0.0
-learlyExit :: Lens' (Settings n a) (Maybe (Either Failure a -> Bool))
+learlyExit :: Lens' (Settings n a) (Maybe (Either Condition a -> Bool))
 learlyExit afb s = (\b -> s {_earlyExit = b}) <$> afb (_earlyExit s)
 
 -------------------------------------------------------------------------------
@@ -432,6 +444,15 @@ lsimplify afb s = (\b -> s {_simplify = b}) <$> afb (_simplify s)
 -- @since 1.10.1.0
 lsafeIO :: Lens' (Settings n a) Bool
 lsafeIO afb s = (\b -> s {_safeIO = b}) <$> afb (_safeIO s)
+
+-------------------------------------------------------------------------------
+-- Abort conditions
+
+-- | A lens into the show-aborts flag.
+--
+-- @since 1.12.0.0
+lshowAborts :: Lens' (Settings n a) Bool
+lshowAborts afb s = (\b -> s {_showAborts = b}) <$> afb (_showAborts s)
 
 -------------------------------------------------------------------------------
 -- Debug output
