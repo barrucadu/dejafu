@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-
 module Integration.SingleThreaded where
 
 import           Control.Exception         (ArithException(..),
