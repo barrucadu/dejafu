@@ -4,7 +4,7 @@
 
 -- |
 -- Module      : Test.HUnit.DejaFu
--- Copyright   : (c) 2015--2018 Michael Walker
+-- Copyright   : (c) 2015--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
@@ -41,7 +41,17 @@ module Test.HUnit.DejaFu
   , Condition
   , Predicate
   , ProPredicate(..)
+  -- *** Settings
   , module Test.DejaFu.Settings
+  -- *** Expressing concurrent programs
+  , Program
+  , ConcT
+  , basic
+  , WithSetup
+  , WithSetupAndTeardown
+  , withSetup
+  , withTeardown
+  , withSetupAndTeardown
 
   -- * Refinement property testing
   , testProperty
@@ -96,9 +106,9 @@ assertableP = alwaysTrue $ \case
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
 --
--- @since 1.0.0.0
-testAuto :: (Eq a, Show a)
-  => Conc.ConcIO a
+-- @since unreleased
+testAuto :: (Program p, Eq a, Show a)
+  => p IO a
   -- ^ The computation to test.
   -> Test
 testAuto = testAutoWithSettings defaultSettings
@@ -106,24 +116,24 @@ testAuto = testAutoWithSettings defaultSettings
 -- | Variant of 'testAuto' which tests a computation under a given
 -- execution way and memory model.
 --
--- @since 1.0.0.0
-testAutoWay :: (Eq a, Show a)
+-- @since unreleased
+testAutoWay :: (Program p, Eq a, Show a)
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> Conc.ConcIO a
+  -> p IO a
   -- ^ The computation to test.
   -> Test
 testAutoWay way = testAutoWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testAuto' which takes a settings record.
 --
--- @since 1.1.0.0
-testAutoWithSettings :: (Eq a, Show a)
+-- @since unreleased
+testAutoWithSettings :: (Program p, Eq a, Show a)
   => Settings IO a
   -- ^ The SCT settings.
-  -> Conc.ConcIO a
+  -> p IO a
   -- ^ The computation to test.
   -> Test
 testAutoWithSettings settings = testDejafusWithSettings settings
@@ -134,13 +144,13 @@ testAutoWithSettings settings = testDejafusWithSettings settings
 
 -- | Check that a predicate holds.
 --
--- @since 1.0.0.0
-testDejafu :: Show b
+-- @since unreleased
+testDejafu :: (Program p, Show b)
   => String
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> Conc.ConcIO a
+  -> p IO a
   -- ^ The computation to test.
   -> Test
 testDejafu = testDejafuWithSettings defaultSettings
@@ -148,8 +158,8 @@ testDejafu = testDejafuWithSettings defaultSettings
 -- | Variant of 'testDejafu' which takes a way to execute the program
 -- and a memory model.
 --
--- @since 1.0.0.0
-testDejafuWay :: Show b
+-- @since unreleased
+testDejafuWay :: (Program p, Show b)
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
@@ -158,22 +168,22 @@ testDejafuWay :: Show b
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> Conc.ConcIO a
+  -> p IO a
   -- ^ The computation to test.
   -> Test
 testDejafuWay way = testDejafuWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testDejafu' which takes a settings record.
 --
--- @since 1.1.0.0
-testDejafuWithSettings :: Show b
+-- @since unreleased
+testDejafuWithSettings :: (Program p, Show b)
   => Settings IO a
   -- ^ The SCT settings.
   -> String
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> Conc.ConcIO a
+  -> p IO a
   -- ^ The computation to test.
   -> Test
 testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name, p)]
@@ -182,11 +192,11 @@ testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name
 -- test. This will share work between the predicates, rather than
 -- running the concurrent computation many times for each predicate.
 --
--- @since 1.0.0.0
-testDejafus :: Show b
+-- @since unreleased
+testDejafus :: (Program p, Show b)
   => [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> Conc.ConcIO a
+  -> p IO a
   -- ^ The computation to test.
   -> Test
 testDejafus = testDejafusWithSettings defaultSettings
@@ -194,28 +204,28 @@ testDejafus = testDejafusWithSettings defaultSettings
 -- | Variant of 'testDejafus' which takes a way to execute the program
 -- and a memory model.
 --
--- @since 1.0.0.0
-testDejafusWay :: Show b
+-- @since unreleased
+testDejafusWay :: (Program p, Show b)
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> Conc.ConcIO a
+  -> p IO a
   -- ^ The computation to test.
   -> Test
 testDejafusWay way = testDejafusWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testDejafus' which takes a settings record.
 --
--- @since 1.1.0.0
-testDejafusWithSettings :: Show b
+-- @since unreleased
+testDejafusWithSettings :: (Program p, Show b)
   => Settings IO a
   -- ^ The SCT settings.
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> Conc.ConcIO a
+  -> p IO a
   -- ^ The computation to test.
   -> Test
 testDejafusWithSettings = testconc
@@ -259,10 +269,10 @@ testPropertyFor = testprop
 -- HUnit integration
 
 -- | Produce a HUnit 'Test' from a Deja Fu unit test.
-testconc :: Show b
+testconc :: (Program p, Show b)
   => Settings IO a
   -> [(String, ProPredicate a b)]
-  -> Conc.ConcIO a
+  -> p IO a
   -> Test
 testconc settings tests concio = case map toTest tests of
   [t] -> t

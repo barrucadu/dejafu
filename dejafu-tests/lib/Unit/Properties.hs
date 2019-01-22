@@ -386,8 +386,6 @@ genThreadAction = HGen.choice
   , pure D.LiftIO
   , pure D.Return
   , pure D.Stop
-  , pure D.Subconcurrency
-  , pure D.StopSubconcurrency
   ]
 
 genTAction :: H.Gen D.TAction

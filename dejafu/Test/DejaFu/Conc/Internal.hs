@@ -21,14 +21,13 @@ import           Control.Exception                   (Exception,
                                                       toException)
 import qualified Control.Monad.Catch                 as E
 import qualified Control.Monad.Conc.Class            as C
-import           Data.Foldable                       (foldrM, toList)
+import           Data.Foldable                       (foldrM)
 import           Data.Functor                        (void)
 import           Data.List                           (sortOn)
 import qualified Data.Map.Strict                     as M
-import           Data.Maybe                          (fromMaybe, isJust,
-                                                      isNothing)
+import           Data.Maybe                          (isJust, isNothing)
 import           Data.Monoid                         ((<>))
-import           Data.Sequence                       (Seq, (<|))
+import           Data.Sequence                       (Seq)
 import qualified Data.Sequence                       as Seq
 import           GHC.Stack                           (HasCallStack)
 
@@ -51,25 +50,11 @@ type SeqTrace
 data CResult n g a = CResult
   { finalContext :: Context n g
   , finalRef :: C.IORef n (Maybe (Either Condition a))
-  , finalRestore :: Maybe (Threads n -> n ())
+  , finalRestore :: Threads n -> n ()
   -- ^ Meaningless if this result doesn't come from a snapshotting
   -- execution.
   , finalTrace :: SeqTrace
   , finalDecision :: Maybe (ThreadId, ThreadAction)
-  }
-
--- | A snapshot of the concurrency state immediately after 'dontCheck'
--- finishes.
---
--- @since 1.4.0.0
-data DCSnapshot n a = DCSnapshot
-  { dcsContext :: Context n ()
-  -- ^ The execution context.  The scheduler state is ignored when
-  -- restoring.
-  , dcsRestore :: Threads n -> n ()
-  -- ^ Action to restore IORef, MVar, and TVar values.
-  , dcsRef :: C.IORef n (Maybe (Either Condition a))
-  -- ^ Reference where the result will be written.
   }
 
 -- | Run a concurrent computation with a given 'Scheduler' and initial
@@ -91,27 +76,12 @@ runConcurrency forSnapshot sched memtype g idsrc caps ma = do
                     , cWriteBuf   = emptyBuffer
                     , cCaps       = caps
                     }
-  res <- runConcurrency' forSnapshot sched memtype ctx ma
-  killAllThreads (finalContext res)
-  pure res
-
--- | Run a concurrent program using the given context, and without
--- killing threads which remain at the end.  The context must have no
--- main thread.
---
--- Only a separate function because @ADontCheck@ needs it.
-runConcurrency' :: (C.MonadConc n, HasCallStack)
-  => Bool
-  -> Scheduler g
-  -> MemType
-  -> Context n g
-  -> ModelConc n a
-  -> n (CResult n g a)
-runConcurrency' forSnapshot sched memtype ctx ma = do
   (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
   let threads0 = launch' Unmasked initialThread (const c) (cThreads ctx)
   threads <- (if C.rtsSupportsBoundThreads then makeBound initialThread else pure) threads0
-  runThreads forSnapshot sched memtype ref ctx { cThreads = threads }
+  res <- runThreads forSnapshot sched memtype ref ctx { cThreads = threads }
+  killAllThreads (finalContext res)
+  pure res
 
 -- | Like 'runConcurrency' but starts from a snapshot.
 runConcurrencyWithSnapshot :: (C.MonadConc n, HasCallStack)
@@ -119,13 +89,17 @@ runConcurrencyWithSnapshot :: (C.MonadConc n, HasCallStack)
   -> MemType
   -> Context n g
   -> (Threads n -> n ())
-  -> C.IORef n (Maybe (Either Condition a))
+  -> ModelConc n a
   -> n (CResult n g a)
-runConcurrencyWithSnapshot sched memtype ctx restore ref = do
-  let boundThreads = M.filter (isJust . _bound) (cThreads ctx)
-  threads <- foldrM makeBound (cThreads ctx) (M.keys boundThreads)
-  restore threads
-  res <- runThreads False sched memtype ref ctx { cThreads = threads }
+runConcurrencyWithSnapshot sched memtype ctx restore ma = do
+  (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
+  let threads0 = M.delete initialThread (cThreads ctx)
+  let threads1 = launch' Unmasked initialThread (const c) threads0
+  let boundThreads = M.filter (isJust . _bound) threads1
+  threads2 <- (if C.rtsSupportsBoundThreads then makeBound initialThread else pure) threads1
+  threads3 <- foldrM makeBound threads2 (M.keys boundThreads)
+  restore threads3
+  res <- runThreads False sched memtype ref ctx { cThreads = threads3 }
   killAllThreads (finalContext res)
   pure res
 
@@ -166,7 +140,7 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
   stop finalR finalT finalD finalC = pure CResult
     { finalContext  = finalC
     , finalRef      = ref
-    , finalRestore  = if forSnapshot then Just finalR else Nothing
+    , finalRestore  = finalR
     , finalTrace    = finalT
     , finalDecision = finalD
     }
@@ -232,11 +206,9 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
         Snap _ ->
           stop actionSnap sofar' prior' ctx'
     where
-      getTrc (Single a) = Seq.singleton (decision, alternatives, a)
-      getTrc (SubC as _) = (decision, alternatives, Subconcurrency) <| as
+      getTrc a = Seq.singleton (decision, alternatives, a)
 
-      getPrior (Single a) = Just (chosen, a)
-      getPrior (SubC _ finalD) = finalD
+      getPrior a = Just (chosen, a)
 
 -- | Apply the context update from stepping an action.
 fixContext :: ThreadId -> What n g -> Context n g -> Context n g
@@ -260,14 +232,6 @@ unblockWaitingOn tid = fmap $ \thread -> case _blocking thread of
 
 --------------------------------------------------------------------------------
 -- * Single-step execution
-
--- | What a thread did, for trace purposes.
-data Act
-  = Single ThreadAction
-  -- ^ Just one action.
-  | SubC SeqTrace (Maybe (ThreadId, ThreadAction))
-  -- ^ @subconcurrency@, with the given trace and final action.
-  deriving (Eq, Show)
 
 -- | What a thread did, for execution purposes.
 data What n g
@@ -302,13 +266,13 @@ stepThread :: (C.MonadConc n, HasCallStack)
   -- ^ Action to step
   -> Context n g
   -- ^ The execution context.
-  -> n (What n g, Act, Threads n -> n ())
+  -> n (What n g, ThreadAction, Threads n -> n ())
 -- start a new thread, assigning it the next 'ThreadId'
 stepThread _ _ _ _ tid (AFork n a b) = \ctx@Context{..} -> pure $
   let (idSource', newtid) = nextTId n cIdSource
       threads' = launch tid newtid a cThreads
   in ( Succeeded ctx { cThreads = goto (b newtid) tid threads', cIdSource = idSource' }
-     , Single (Fork newtid)
+     , Fork newtid
      , const (pure ())
      )
 
@@ -318,7 +282,7 @@ stepThread _ _ _ _ tid (AForkOS n a b) = \ctx@Context{..} -> do
   let threads' = launch tid newtid a cThreads
   threads'' <- makeBound newtid threads'
   pure ( Succeeded ctx { cThreads = goto (b newtid) tid threads'', cIdSource = idSource' }
-       , Single (ForkOS newtid)
+       , ForkOS newtid
        , const (pure ())
        )
 
@@ -326,42 +290,42 @@ stepThread _ _ _ _ tid (AForkOS n a b) = \ctx@Context{..} -> do
 stepThread _ _ _ _ tid (AIsBound c) = \ctx@Context{..} -> do
   let isBound = isJust . _bound $ elookup tid cThreads
   pure ( Succeeded ctx { cThreads = goto (c isBound) tid cThreads }
-       , Single (IsCurrentThreadBound isBound)
+       , IsCurrentThreadBound isBound
        , const (pure ())
        )
 
 -- get the 'ThreadId' of the current thread
 stepThread _ _ _ _ tid (AMyTId c) = \ctx@Context{..} ->
   pure ( Succeeded ctx { cThreads = goto (c tid) tid cThreads }
-       , Single MyThreadId
+       , MyThreadId
        , const (pure ())
        )
 
 -- get the number of capabilities
 stepThread _ _ _ _ tid (AGetNumCapabilities c) = \ctx@Context{..} ->
   pure ( Succeeded ctx { cThreads = goto (c cCaps) tid cThreads }
-       , Single (GetNumCapabilities cCaps)
+       , GetNumCapabilities cCaps
        , const (pure ())
        )
 
 -- set the number of capabilities
 stepThread _ _ _ _ tid (ASetNumCapabilities i c) = \ctx@Context{..} ->
   pure ( Succeeded ctx { cThreads = goto c tid cThreads, cCaps = i }
-       , Single (SetNumCapabilities i)
+       , SetNumCapabilities i
        , const (pure ())
        )
 
 -- yield the current thread
 stepThread _ _ _ _ tid (AYield c) = \ctx@Context{..} ->
   pure ( Succeeded ctx { cThreads = goto c tid cThreads }
-       , Single Yield
+       , Yield
        , const (pure ())
        )
 
 -- yield the current thread (delay is ignored)
 stepThread _ _ _ _ tid (ADelay n c) = \ctx@Context{..} ->
   pure ( Succeeded ctx { cThreads = goto c tid cThreads }
-       , Single (ThreadDelay n)
+       , ThreadDelay n
        , const (pure ())
        )
 
@@ -371,7 +335,7 @@ stepThread _ _ _ _ tid (ANewMVar n c) = \ctx@Context{..} -> do
   ref <- C.newIORef Nothing
   let mvar = ModelMVar newmvid ref
   pure ( Succeeded ctx { cThreads = goto (c mvar) tid cThreads, cIdSource = idSource' }
-       , Single (NewMVar newmvid)
+       , NewMVar newmvid
        , const (C.writeIORef ref Nothing)
        )
 
@@ -379,7 +343,7 @@ stepThread _ _ _ _ tid (ANewMVar n c) = \ctx@Context{..} -> do
 stepThread _ _ _ _ tid (APutMVar mvar@ModelMVar{..} a c) = synchronised $ \ctx@Context{..} -> do
   (success, threads', woken, effect) <- putIntoMVar mvar a c tid cThreads
   pure ( Succeeded ctx { cThreads = threads' }
-       , Single (if success then PutMVar mvarId woken else BlockedPutMVar mvarId)
+       , if success then PutMVar mvarId woken else BlockedPutMVar mvarId
        , const effect
        )
 
@@ -387,7 +351,7 @@ stepThread _ _ _ _ tid (APutMVar mvar@ModelMVar{..} a c) = synchronised $ \ctx@C
 stepThread _ _ _ _ tid (ATryPutMVar mvar@ModelMVar{..} a c) = synchronised $ \ctx@Context{..} -> do
   (success, threads', woken, effect) <- tryPutIntoMVar mvar a c tid cThreads
   pure ( Succeeded ctx { cThreads = threads' }
-       , Single (TryPutMVar mvarId success woken)
+       , TryPutMVar mvarId success woken
        , const effect
        )
 
@@ -396,7 +360,7 @@ stepThread _ _ _ _ tid (ATryPutMVar mvar@ModelMVar{..} a c) = synchronised $ \ct
 stepThread _ _ _ _ tid (AReadMVar mvar@ModelMVar{..} c) = synchronised $ \ctx@Context{..} -> do
   (success, threads', _, _) <- readFromMVar mvar c tid cThreads
   pure ( Succeeded ctx { cThreads = threads' }
-       , Single (if success then ReadMVar mvarId else BlockedReadMVar mvarId)
+       , if success then ReadMVar mvarId else BlockedReadMVar mvarId
        , const (pure ())
        )
 
@@ -405,7 +369,7 @@ stepThread _ _ _ _ tid (AReadMVar mvar@ModelMVar{..} c) = synchronised $ \ctx@Co
 stepThread _ _ _ _ tid (ATryReadMVar mvar@ModelMVar{..} c) = synchronised $ \ctx@Context{..} -> do
   (success, threads', _, _) <- tryReadFromMVar mvar c tid cThreads
   pure ( Succeeded ctx { cThreads = threads' }
-       , Single (TryReadMVar mvarId success)
+       , TryReadMVar mvarId success
        , const (pure ())
        )
 
@@ -413,7 +377,7 @@ stepThread _ _ _ _ tid (ATryReadMVar mvar@ModelMVar{..} c) = synchronised $ \ctx
 stepThread _ _ _ _ tid (ATakeMVar mvar@ModelMVar{..} c) = synchronised $ \ctx@Context{..} -> do
   (success, threads', woken, effect) <- takeFromMVar mvar c tid cThreads
   pure ( Succeeded ctx { cThreads = threads' }
-       , Single (if success then TakeMVar mvarId woken else BlockedTakeMVar mvarId)
+       , if success then TakeMVar mvarId woken else BlockedTakeMVar mvarId
        , const effect
        )
 
@@ -421,7 +385,7 @@ stepThread _ _ _ _ tid (ATakeMVar mvar@ModelMVar{..} c) = synchronised $ \ctx@Co
 stepThread _ _ _ _ tid (ATryTakeMVar mvar@ModelMVar{..} c) = synchronised $ \ctx@Context{..} -> do
   (success, threads', woken, effect) <- tryTakeFromMVar mvar c tid cThreads
   pure ( Succeeded ctx { cThreads = threads' }
-       , Single (TryTakeMVar mvarId success woken)
+       , TryTakeMVar mvarId success woken
        , const effect
        )
 
@@ -432,7 +396,7 @@ stepThread _ _ _ _  tid (ANewIORef n a c) = \ctx@Context{..} -> do
   ioref <- C.newIORef val
   let ref = ModelIORef newiorid ioref
   pure ( Succeeded ctx { cThreads = goto (c ref) tid cThreads, cIdSource = idSource' }
-       , Single (NewIORef newiorid)
+       , NewIORef newiorid
        , const (C.writeIORef ioref val)
        )
 
@@ -440,7 +404,7 @@ stepThread _ _ _ _  tid (ANewIORef n a c) = \ctx@Context{..} -> do
 stepThread _ _ _ _  tid (AReadIORef ref@ModelIORef{..} c) = \ctx@Context{..} -> do
   val <- readIORef ref tid
   pure ( Succeeded ctx { cThreads = goto (c val) tid cThreads }
-       , Single (ReadIORef iorefId)
+       , ReadIORef iorefId
        , const (pure ())
        )
 
@@ -448,7 +412,7 @@ stepThread _ _ _ _  tid (AReadIORef ref@ModelIORef{..} c) = \ctx@Context{..} -> 
 stepThread _ _ _ _ tid (AReadIORefCas ref@ModelIORef{..} c) = \ctx@Context{..} -> do
   tick <- readForTicket ref tid
   pure ( Succeeded ctx { cThreads = goto (c tick) tid cThreads }
-       , Single (ReadIORefCas iorefId)
+       , ReadIORefCas iorefId
        , const (pure ())
        )
 
@@ -457,7 +421,7 @@ stepThread _ _ _ _ tid (AModIORef ref@ModelIORef{..} f c) = synchronised $ \ctx@
   (new, val) <- f <$> readIORef ref tid
   effect <- writeImmediate ref new
   pure ( Succeeded ctx { cThreads = goto (c val) tid cThreads }
-       , Single (ModIORef iorefId)
+       , ModIORef iorefId
        , const effect
        )
 
@@ -467,7 +431,7 @@ stepThread _ _ _ _ tid (AModIORefCas ref@ModelIORef{..} f c) = synchronised $ \c
   let (new, val) = f old
   (_, _, effect) <- casIORef ref tid tick new
   pure ( Succeeded ctx { cThreads = goto (c val) tid cThreads }
-       , Single (ModIORefCas iorefId)
+       , ModIORefCas iorefId
        , const effect
        )
 
@@ -477,21 +441,21 @@ stepThread _ _ _ memtype tid (AWriteIORef ref@ModelIORef{..} a c) = \ctx@Context
   SequentialConsistency -> do
     effect <- writeImmediate ref a
     pure ( Succeeded ctx { cThreads = goto c tid cThreads }
-         , Single (WriteIORef iorefId)
+         , WriteIORef iorefId
          , const effect
          )
   -- add to buffer using thread id.
   TotalStoreOrder -> do
     wb' <- bufferWrite cWriteBuf (tid, Nothing) ref a
     pure ( Succeeded ctx { cThreads = goto c tid cThreads, cWriteBuf = wb' }
-         , Single (WriteIORef iorefId)
+         , WriteIORef iorefId
          , const (pure ())
          )
   -- add to buffer using both thread id and IORef id
   PartialStoreOrder -> do
     wb' <- bufferWrite cWriteBuf (tid, Just iorefId) ref a
     pure ( Succeeded ctx { cThreads = goto c tid cThreads, cWriteBuf = wb' }
-         , Single (WriteIORef iorefId)
+         , WriteIORef iorefId
          , const (pure ())
          )
 
@@ -499,7 +463,7 @@ stepThread _ _ _ memtype tid (AWriteIORef ref@ModelIORef{..} a c) = \ctx@Context
 stepThread _ _ _ _ tid (ACasIORef ref@ModelIORef{..} tick a c) = synchronised $ \ctx@Context{..} -> do
   (suc, tick', effect) <- casIORef ref tid tick a
   pure ( Succeeded ctx { cThreads = goto (c (suc, tick')) tid cThreads }
-       , Single (CasIORef iorefId suc)
+       , CasIORef iorefId suc
        , const effect
        )
 
@@ -516,7 +480,7 @@ stepThread _ _ _ memtype _ (ACommit t c) = \ctx@Context{..} -> do
     PartialStoreOrder ->
       commitWrite cWriteBuf (t, Just c)
   pure ( Succeeded ctx { cWriteBuf = wb' }
-       , Single (CommitIORef t c)
+       , CommitIORef t c
        , const (pure ())
        )
 
@@ -529,21 +493,21 @@ stepThread _ _ _ _ tid (AAtom stm c) = synchronised $ \ctx@Context{..} -> do
     Success _ written val -> do
       let (threads', woken) = wake (OnTVar written) cThreads
       pure ( Succeeded ctx { cThreads = goto (c val) tid threads', cIdSource = idSource' }
-           , Single (STM trace woken)
+           , STM trace woken
            , effect
            )
     Retry touched -> do
       let threads' = block (OnTVar touched) tid cThreads
       pure ( Succeeded ctx { cThreads = threads', cIdSource = idSource'}
-           , Single (BlockedSTM trace)
+           , BlockedSTM trace
            , effect
            )
     Exception e -> do
       let act = STM trace []
       res' <- stepThrow (const act) tid e ctx
       pure $ case res' of
-        (Succeeded ctx', _, effect') -> (Succeeded ctx' { cIdSource = idSource' }, Single act, effect')
-        (Failed err, _, effect') -> (Failed err, Single act, effect')
+        (Succeeded ctx', _, effect') -> (Succeeded ctx' { cIdSource = idSource' }, act, effect')
+        (Failed err, _, effect') -> (Failed err, act, effect')
         (Snap _, _, _) -> fatal "stepThread.AAtom" "Unexpected snapshot while propagating STM exception"
 
 -- lift an action from the underlying monad into the @Conc@
@@ -552,7 +516,7 @@ stepThread _ _ _ _ tid (ALift na) = \ctx@Context{..} -> do
   let effect threads = runLiftedAct tid threads na
   a <- effect cThreads
   pure (Succeeded ctx { cThreads = goto a tid cThreads }
-       , Single LiftIO
+       , LiftIO
        , void <$> effect
        )
 
@@ -569,12 +533,12 @@ stepThread _ _ _ _ tid (AThrowTo t e c) = synchronised $ \ctx@Context{..} ->
          | interruptible thread -> stepThrow (ThrowTo t) t e ctx { cThreads = threads' }
          | otherwise -> pure
            ( Succeeded ctx { cThreads = blocked }
-           , Single (BlockedThrowTo t)
+           , BlockedThrowTo t
            , const (pure ())
            )
        Nothing -> pure
          (Succeeded ctx { cThreads = threads' }
-         , Single (ThrowTo t False)
+         , ThrowTo t False
          , const (pure ())
          )
 
@@ -583,14 +547,14 @@ stepThread _ _ _ _ tid (ACatching h ma c) = \ctx@Context{..} -> pure $
   let a     = runModelConc ma (APopCatching . c)
       e exc = runModelConc (h exc) c
   in ( Succeeded ctx { cThreads = goto a tid (catching e tid cThreads) }
-     , Single Catching
+     , Catching
      , const (pure ())
      )
 
 -- pop the top exception handler from the thread's stack.
 stepThread _ _ _ _ tid (APopCatching a) = \ctx@Context{..} ->
   pure ( Succeeded ctx { cThreads = goto a tid (uncatching tid cThreads) }
-       , Single PopCatching
+       , PopCatching
        , const (pure ())
        )
 
@@ -602,21 +566,21 @@ stepThread _ _ _ _ tid (AMasking m ma c) = \ctx@Context{..} -> pure $
       m' = _masking $ elookup tid cThreads
       a  = runModelConc (ma umask) (AResetMask False False m' . c)
   in ( Succeeded ctx { cThreads = goto a tid (mask m tid cThreads) }
-     , Single (SetMasking False m)
+     , SetMasking False m
      , const (pure ())
      )
 
 -- reset the masking thread of the state.
 stepThread _ _ _ _ tid (AResetMask b1 b2 m c) = \ctx@Context{..} ->
   pure ( Succeeded ctx { cThreads = goto c tid (mask m tid cThreads) }
-       , Single ((if b1 then SetMasking else ResetMasking) b2 m)
+       , (if b1 then SetMasking else ResetMasking) b2 m
        , const (pure ())
        )
 
 -- execute a 'return' or 'pure'.
 stepThread _ _ _ _ tid (AReturn c) = \ctx@Context{..} ->
   pure ( Succeeded ctx { cThreads = goto c tid cThreads }
-       , Single Return
+       , Return
        , const (pure ())
        )
 
@@ -625,60 +589,9 @@ stepThread _ _ _ _ tid (AStop na) = \ctx@Context{..} -> do
   na
   threads' <- kill tid cThreads
   pure ( Succeeded ctx { cThreads = threads' }
-       , Single Stop
+       , Stop
        , const (pure ())
        )
-
--- run a subconcurrent computation.
-stepThread forSnapshot _ sched memtype tid (ASub ma c) = \ctx ->
-  if | forSnapshot -> E.throwM NestedSubconcurrency
-     | M.size (cThreads ctx) > 1 -> E.throwM MultithreadedSubconcurrency
-     | otherwise -> do
-         res <- runConcurrency False sched memtype (cSchedState ctx) (cIdSource ctx) (cCaps ctx) ma
-         out <- efromJust <$> C.readIORef (finalRef res)
-         pure ( Succeeded ctx
-                { cThreads    = goto (AStopSub (c out)) tid (cThreads ctx)
-                , cIdSource   = cIdSource (finalContext res)
-                , cSchedState = cSchedState (finalContext res)
-                }
-              , SubC (finalTrace res) (finalDecision res)
-              , const (pure ())
-              )
-
--- after the end of a subconcurrent computation. does nothing, only
--- exists so that: there is an entry in the trace for returning to
--- normal computation; and every item in the trace corresponds to a
--- scheduling point.
-stepThread _ _ _ _ tid (AStopSub c) = \ctx@Context{..} ->
-  pure ( Succeeded ctx { cThreads = goto c tid cThreads }
-       , Single StopSubconcurrency
-       , const (pure ())
-       )
-
--- run an action atomically, with a non-preemptive length bounded
--- round robin scheduler, under sequential consistency.
-stepThread forSnapshot isFirst _ _ tid (ADontCheck lb ma c) = \ctx ->
-  if | isFirst -> do
-         -- create a restricted context
-         threads' <- kill tid (cThreads ctx)
-         let dcCtx = ctx { cThreads = threads', cSchedState = lb }
-         res <- runConcurrency' forSnapshot dcSched SequentialConsistency dcCtx ma
-         out <- efromJust <$> C.readIORef (finalRef res)
-         case out of
-           Right a -> do
-             let threads'' = launch' Unmasked tid (const (c a)) (cThreads (finalContext res))
-             threads''' <- (if C.rtsSupportsBoundThreads then makeBound tid else pure) threads''
-             pure ( (if forSnapshot then Snap else Succeeded) (finalContext res)
-                    { cThreads = threads''', cSchedState = cSchedState ctx }
-                  , Single (DontCheck (toList (finalTrace res)))
-                  , fromMaybe (const (pure ())) (finalRestore res)
-                  )
-           Left f -> pure
-             ( Failed f
-             , Single (DontCheck (toList (finalTrace res)))
-             , const (pure ())
-             )
-     | otherwise -> E.throwM LateDontCheck
 
 -- | Handle an exception being thrown from an @AAtom@, @AThrow@, or
 -- @AThrowTo@.
@@ -691,23 +604,23 @@ stepThrow :: (C.MonadConc n, Exception e)
   -- ^ Exception to raise.
   -> Context n g
   -- ^ The execution context.
-  -> n (What n g, Act, Threads n -> n ())
+  -> n (What n g, ThreadAction, Threads n -> n ())
 stepThrow act tid e ctx@Context{..} = case propagate some tid cThreads of
     Just ts' -> pure
       ( Succeeded ctx { cThreads = ts' }
-      , Single (act False)
+      , act False
       , const (pure ())
       )
     Nothing
       | tid == initialThread -> pure
         ( Failed (UncaughtException some)
-        , Single (act True)
+        , act True
         , const (pure ())
         )
       | otherwise -> do
           ts' <- kill tid cThreads
           pure ( Succeeded ctx { cThreads = ts' }
-               , Single (act True)
+               , act True
                , const (pure ())
                )
   where
@@ -715,19 +628,11 @@ stepThrow act tid e ctx@Context{..} = case propagate some tid cThreads of
 
 -- | Helper for actions impose a write barrier.
 synchronised :: C.MonadConc n
-  => (Context n g -> n (What n g, Act, Threads n -> n ()))
+  => (Context n g -> n x)
   -- ^ Action to run after the write barrier.
   -> Context n g
   -- ^ The original execution context.
-  -> n (What n g, Act, Threads n -> n ())
+  -> n x
 synchronised ma ctx@Context{..} = do
   writeBarrier cWriteBuf
   ma ctx { cWriteBuf = emptyBuffer }
-
--- | scheduler for @ADontCheck@
-dcSched :: Scheduler (Maybe Int)
-dcSched = Scheduler go where
-  go _ _ (Just 0) = (Nothing, Just 0)
-  go prior threads s =
-    let (t, _) = scheduleThread roundRobinSchedNP prior threads ()
-    in (t, fmap (\lb -> lb - 1) s)

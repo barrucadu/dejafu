@@ -5,7 +5,7 @@ module Integration.Litmus where
 import           Control.Monad            (replicateM, void)
 import           Data.List                (nub, sort)
 import           Test.DejaFu              (MemType(..), defaultWay, gives')
-import           Test.DejaFu.Conc         (ConcIO)
+import           Test.DejaFu.Conc         (ConcIO, basic)
 import           Test.DejaFu.SCT          (runSCT)
 import qualified Test.Tasty.Hedgehog      as H
 
@@ -68,7 +68,7 @@ compareTest act = do
 
   where
     results memtype = show . nub . sort . map (\(Right a,_) -> a) <$>
-      runSCT defaultWay memtype act
+      runSCT defaultWay memtype (basic act)
 
     ioResults = show . nub . sort <$> replicateM 99999 act
 

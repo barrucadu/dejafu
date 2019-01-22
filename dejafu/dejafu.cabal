@@ -48,6 +48,7 @@ library
                      , Test.DejaFu.Conc.Internal
                      , Test.DejaFu.Conc.Internal.Common
                      , Test.DejaFu.Conc.Internal.Memory
+                     , Test.DejaFu.Conc.Internal.Program
                      , Test.DejaFu.Conc.Internal.STM
                      , Test.DejaFu.Conc.Internal.Threading
                      , Test.DejaFu.Internal

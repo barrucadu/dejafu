@@ -197,9 +197,6 @@ rewind (ResetMasking b m) = WillResetMasking b m
 rewind LiftIO = WillLiftIO
 rewind Return = WillReturn
 rewind Stop = WillStop
-rewind Subconcurrency = WillSubconcurrency
-rewind StopSubconcurrency = WillStopSubconcurrency
-rewind (DontCheck _) = WillDontCheck
 
 -- | Check if an operation could enable another thread.
 willRelease :: Lookahead -> Bool
@@ -217,7 +214,6 @@ willRelease WillThrow = True
 willRelease (WillSetMasking _ _) = True
 willRelease (WillResetMasking _ _) = True
 willRelease WillStop = True
-willRelease WillDontCheck = True
 willRelease _ = False
 
 -------------------------------------------------------------------------------

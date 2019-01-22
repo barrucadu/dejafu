@@ -106,7 +106,7 @@ initialThread = ThreadId (Id (Just "main") 0)
 
 -- | All the actions that a thread can perform.
 --
--- @since 1.11.0.0
+-- @since unreleased
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -194,12 +194,6 @@ data ThreadAction =
   -- ^ A 'return' or 'pure' action was executed.
   | Stop
   -- ^ Cease execution and terminate.
-  | Subconcurrency
-  -- ^ Start executing an action with @subconcurrency@.
-  | StopSubconcurrency
-  -- ^ Stop executing an action with @subconcurrency@.
-  | DontCheck Trace
-  -- ^ Execute an action with @dontCheck@.
   deriving (Eq, Generic, Show)
 
 -- this makes me sad
@@ -242,13 +236,10 @@ instance NFData ThreadAction where
   rnf LiftIO = ()
   rnf Return = ()
   rnf Stop = ()
-  rnf Subconcurrency = ()
-  rnf StopSubconcurrency = ()
-  rnf (DontCheck as) = rnf as
 
 -- | A one-step look-ahead at what a thread will do next.
 --
--- @since 1.11.0.0
+-- @since unreleased
 data Lookahead =
     WillFork
   -- ^ Will start a new thread.
@@ -325,12 +316,6 @@ data Lookahead =
   -- ^ Will execute a 'return' or 'pure' action.
   | WillStop
   -- ^ Will cease execution and terminate.
-  | WillSubconcurrency
-  -- ^ Will execute an action with @subconcurrency@.
-  | WillStopSubconcurrency
-  -- ^ Will stop executing an extion with @subconcurrency@.
-  | WillDontCheck
-  -- ^ Will execute an action with @dontCheck@.
   deriving (Eq, Generic, Show)
 
 -- this also makes me sad
@@ -368,9 +353,6 @@ instance NFData Lookahead where
   rnf WillLiftIO = ()
   rnf WillReturn = ()
   rnf WillStop = ()
-  rnf WillSubconcurrency = ()
-  rnf WillStopSubconcurrency = ()
-  rnf WillDontCheck = ()
 
 -- | All the actions that an STM transaction can perform.
 --
@@ -508,7 +490,7 @@ isUncaughtException _ = False
 -- | An indication that there is a bug in dejafu or you are using it
 -- incorrectly.
 --
--- @since 1.12.0.0
+-- @since unreleased
 data Error
   = ScheduledBlockedThread
   -- ^ Raised as an exception if the scheduler attempts to schedule a
@@ -516,14 +498,6 @@ data Error
   | ScheduledMissingThread
   -- ^ Raised as an exception if the scheduler attempts to schedule a
   -- nonexistent thread.
-  | NestedSubconcurrency
-  -- ^ Raised as an exception if a @subconcurrency@ is nested inside
-  -- another @subconcurrency@ or a @dontCheck@.
-  | MultithreadedSubconcurrency
-  -- ^ Raised as an exception if @subconcurrency@ is called after
-  -- forking threads.
-  | LateDontCheck
-  -- ^ Raised as an exception if @dontCheck@ is called after the first action.
   deriving (Show, Eq, Ord, Bounded, Enum, Generic)
 
 instance Exception Error
@@ -532,18 +506,7 @@ instance Exception Error
 --
 -- @since 1.12.0.0
 isSchedulerError :: Error -> Bool
-isSchedulerError ScheduledBlockedThread = True
-isSchedulerError ScheduledMissingThread = True
-isSchedulerError _ = False
-
--- | Check if an error is an incorrect usage of dejafu.
---
--- @since 1.12.0.0
-isIncorrectUsage :: Error -> Bool
-isIncorrectUsage NestedSubconcurrency = True
-isIncorrectUsage MultithreadedSubconcurrency = True
-isIncorrectUsage LateDontCheck = True
-isIncorrectUsage _ = False
+isSchedulerError _ = True
 
 -------------------------------------------------------------------------------
 -- * Schedule bounding

@@ -123,10 +123,6 @@ data Action n =
   | ACommit ThreadId IORefId
   | AStop (n ())
 
-  | forall a. ASub (ModelConc n a) (Either Condition a -> Action n)
-  | AStopSub (Action n)
-  | forall a. ADontCheck (Maybe Int) (ModelConc n a) (a -> Action n)
-
 --------------------------------------------------------------------------------
 -- * Scheduling & Traces
 
@@ -165,6 +161,3 @@ lookahead (AYield _) = WillYield
 lookahead (ADelay n _) = WillThreadDelay n
 lookahead (AReturn _) = WillReturn
 lookahead (AStop _) = WillStop
-lookahead (ASub _ _) = WillSubconcurrency
-lookahead (AStopSub _) = WillStopSubconcurrency
-lookahead (ADontCheck _ _ _) = WillDontCheck

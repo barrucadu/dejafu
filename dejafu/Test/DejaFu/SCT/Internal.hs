@@ -15,18 +15,19 @@
 -- considered to form part of the public interface of this library.
 module Test.DejaFu.SCT.Internal where
 
-import           Control.Monad.Conc.Class         (MonadConc)
-import           Data.Coerce                      (Coercible, coerce)
-import qualified Data.IntMap.Strict               as I
-import           Data.List                        (find, mapAccumL)
-import           Data.Maybe                       (fromMaybe)
-import           GHC.Stack                        (HasCallStack)
+import           Control.Monad.Conc.Class          (MonadConc)
+import           Data.Coerce                       (Coercible, coerce)
+import qualified Data.IntMap.Strict                as I
+import           Data.List                         (find, mapAccumL)
+import           Data.Maybe                        (fromMaybe)
+import           GHC.Stack                         (HasCallStack)
 
 import           Test.DejaFu.Conc
-import           Test.DejaFu.Conc.Internal        (Context(..), DCSnapshot(..))
-import           Test.DejaFu.Conc.Internal.Memory (commitThreadId)
+import           Test.DejaFu.Conc.Internal         (Context(..))
+import           Test.DejaFu.Conc.Internal.Memory  (commitThreadId)
+import           Test.DejaFu.Conc.Internal.Program
 import           Test.DejaFu.Internal
-import           Test.DejaFu.Schedule             (Scheduler(..))
+import           Test.DejaFu.Schedule              (Scheduler(..))
 import           Test.DejaFu.SCT.Internal.DPOR
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
@@ -35,7 +36,7 @@ import           Test.DejaFu.Utils
 -- * Exploration
 
 -- | General-purpose SCT function.
-sct :: (MonadConc n, HasCallStack)
+sct :: (Program p, MonadConc n, HasCallStack)
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
   -> ([ThreadId] -> s)
@@ -44,16 +45,12 @@ sct :: (MonadConc n, HasCallStack)
   -- ^ State predicate
   -> ((Scheduler g -> g -> n (Either Condition a, g, Trace)) -> s -> t -> n (s, Maybe (Either Condition a, Trace)))
   -- ^ Run the computation and update the state
-  -> ConcT n a
+  -> p n a
   -> n [(Either Condition a, Trace)]
-sct settings s0 sfun srun conc
-    | canDCSnapshot conc = runForDCSnapshot conc >>= \case
-        Just (Right snap, _) -> sct'Snap snap
-        Just (Left f, trace) -> pure [(Left f, trace)]
-        _ -> do
-          debugFatal "Failed to construct snapshot, continuing without."
-          sct'Full
-    | otherwise = sct'Full
+sct settings s0 sfun srun conc = recordSnapshot conc >>= \case
+    Just (Right snap, _) -> sct'Snap snap
+    Just (Left f, trace) -> pure [(Left f, trace)]
+    Nothing -> sct'Full
   where
     sct'Full = sct'
       settings
@@ -64,9 +61,9 @@ sct settings s0 sfun srun conc
       (toId 1)
       (toId 1)
 
-    sct'Snap snap = let idsrc = cIdSource (dcsContext snap) in sct'
+    sct'Snap snap = let idsrc = cIdSource (contextFromSnapshot snap) in sct'
       settings
-      (s0 (fst (threadsFromDCSnapshot snap)))
+      (s0 (fst (threadsFromSnapshot snap)))
       sfun
       (srun (runSnap snap))
       (runSnap snap)
@@ -74,10 +71,7 @@ sct settings s0 sfun srun conc
       (toId $ 1 + fst (_iorids idsrc))
 
     runFull sched s = runConcurrent sched (_memtype settings) s conc
-    runSnap snap sched s = runWithDCSnapshot sched (_memtype settings) s snap
-
-    debugFatal = if _debugFatal settings then fatal else debugPrint
-    debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
+    runSnap snap sched s = runSnapshot sched (_memtype settings) s snap
 
 -- | Like 'sct' but given a function to run the computation.
 sct' :: (MonadConc n, HasCallStack)

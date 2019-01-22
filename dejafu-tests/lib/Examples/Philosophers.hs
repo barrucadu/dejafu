@@ -10,11 +10,13 @@ import           Common
 
 tests :: [TestTree]
 tests =
-  [ testDejafuWay way defaultMemType "deadlocks" deadlocksSometimes (philosophers 3)
-  , let settings = set lshowAborts True (fromWayAndMemType way defaultMemType)
-    in testDejafuWithSettings settings "loops (with aborts present)" abortsSometimes (philosophers 3)
-  , expectFail $ testDejafuWay way defaultMemType "loops (with aborts hidden)" abortsSometimes (philosophers 3)
-  ]
+    [ testDejafuWay way defaultMemType "deadlocks" deadlocksSometimes test
+    , let settings = set lshowAborts True (fromWayAndMemType way defaultMemType)
+      in testDejafuWithSettings settings "loops (with aborts present)" abortsSometimes test
+    , expectFail $ testDejafuWay way defaultMemType "loops (with aborts hidden)" abortsSometimes test
+    ]
+  where
+    test = basic (philosophers 3)
 
 -- | Shorter execution length bound
 way :: Way

@@ -275,23 +275,15 @@ findBacktrackSteps safeIO memtype backtrack boundKill = go initialDepState S.emp
                  , u /= v
                  , i <- maybeToList (findIndex u n v tagged)]
 
-        findIndex u n v = go' True where
+        findIndex u n v = go' where
           {-# INLINE go' #-}
-          go' final ((i,b):rest)
-            -- Don't cross subconcurrency boundaries
-            | isSubC final b = Nothing
+          go' ((i,b):rest)
             -- If this is the final action in the trace and the
             -- execution was killed due to nothing being within bounds
             -- (@killsEarly == True@) assume worst-case dependency.
             | bcktThreadid b == v && (killsEarly || isDependent b) = Just i
-            | otherwise = go' False rest
-          go' _ [] = Nothing
-
-          {-# INLINE isSubC #-}
-          isSubC final b = case bcktAction b of
-            Stop -> not final && bcktThreadid b == initialThread
-            Subconcurrency -> bcktThreadid b == initialThread
-            _ -> False
+            | otherwise = go' rest
+          go' [] = Nothing
 
           {-# INLINE isDependent #-}
           isDependent b
@@ -550,9 +542,6 @@ dporSched safeIO memtype boundf = Scheduler $ \prior threads s ->
 --
 -- This implements a stronger check that @not (dependent ...)@, as it
 -- handles some cases which 'dependent' doesn't need to care about.
---
--- This should not be used to re-order traces which contain
--- subconcurrency.
 independent :: Bool -> DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
 independent safeIO ds t1 a1 t2 a2
     | t1 == t2 = False
@@ -560,8 +549,6 @@ independent safeIO ds t1 a1 t2 a2
     | check t2 a2 t1 a1 = False
     | otherwise = not (dependent safeIO ds t1 a1 t2 a2)
   where
-    -- @dontCheck@ must be the first thing in the computation.
-    check _ (DontCheck _) _ _ = True
     -- can't re-order any action of a thread with the fork which
     -- created it.
     check _ (Fork t) tid _ | t == tid = True

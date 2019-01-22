@@ -21,7 +21,7 @@ import           System.Random              (mkStdGen)
 import           Test.DejaFu                (Condition, Predicate,
                                              ProPredicate(..), Result(..), Way,
                                              alwaysTrue, somewhereTrue)
-import           Test.DejaFu.Conc           (ConcIO, randomSched, runConcurrent)
+import           Test.DejaFu.Conc           (randomSched, runConcurrent)
 import qualified Test.DejaFu.SCT            as SCT
 import           Test.DejaFu.SCT.Internal
 import           Test.DejaFu.Types
@@ -54,11 +54,11 @@ instance IsTest t => IsTest [t] where
   toTestList = concatMap toTestList
 
 data T where
-  T :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> T
-  W :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> (String, Way) -> T
-  B :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> Bounds -> T
-  TEST :: (Eq a, Show a) => String -> ConcIO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
-  TEST' :: (Eq a, Show a) => Bool -> String -> ConcIO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
+  T :: (Program p, Eq a, Show a) => String -> p IO a -> Predicate a -> T
+  W :: (Program p, Eq a, Show a) => String -> p IO a -> Predicate a -> (String, Way) -> T
+  B :: (Program p, Eq a, Show a) => String -> p IO a -> Predicate a -> Bounds -> T
+  TEST :: (Program p, Eq a, Show a) => String -> p IO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
+  TEST' :: (Program p, Eq a, Show a) => Bool -> String -> p IO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
 
 toSettings :: (Applicative f, Eq a, Show a) => Way -> Settings f a
 toSettings w
@@ -81,19 +81,19 @@ defaultWaysFor b =
 testGroup :: IsTest t => String -> t -> T.TestTree
 testGroup name = T.testGroup name . toTestList
 
-djfu :: (Eq a, Show a) => String -> Predicate a -> ConcIO a -> [T.TestTree]
+djfu :: (Program p, Eq a, Show a) => String -> Predicate a -> p IO a -> [T.TestTree]
 djfu name p c = toTestList $ W name c p ("systematically", systematically defaultBounds)
 
-djfuS :: (Eq a, Show a) => String -> Predicate a -> ConcIO a -> [T.TestTree]
+djfuS :: (Program p, Eq a, Show a) => String -> Predicate a -> p IO a -> [T.TestTree]
 djfuS name p c = toTestList $ TEST name c p [("systematically", toSettings (systematically defaultBounds))] False
 
-djfuT :: (Eq a, Show a) => String -> Predicate a -> ConcIO a -> [T.TestTree]
+djfuT :: (Program p, Eq a, Show a) => String -> Predicate a -> p IO a -> [T.TestTree]
 djfuT name p c = toTestList $ T name c p
 
-djfuTS :: (Eq a, Show a) => String -> Predicate a -> ConcIO a -> [T.TestTree]
+djfuTS :: (Program p, Eq a, Show a) => String -> Predicate a -> p IO a -> [T.TestTree]
 djfuTS name p c = toTestList $ TEST name c p (map (second toSettings) defaultWays) False
 
-djfuE :: String -> Error -> ConcIO a -> [T.TestTree]
+djfuE :: Program p => String -> Error -> p IO a -> [T.TestTree]
 djfuE name e0 c = toTestList . TH.testCase name $ C.catch
     (SCT.runSCT defaultWay defaultMemType c >> TH.assertFailure msg)
     (\e -> unless (e == e0) $ TH.assertFailure (err e))
@@ -117,12 +117,13 @@ testProperty name = H.testProperty name . H.property
 
 -- | Check that the independence function correctly decides
 -- commutativity for this program.
-prop_dep_fun :: (Eq a, Show a) => Bool -> ConcIO a -> H.Property
+prop_dep_fun :: (Program p, Eq a, Show a) => Bool -> p IO a -> H.Property
 prop_dep_fun safeIO conc = H.property $ do
     mem <- H.forAll HGen.enumBounded
     seed <- H.forAll genInt
     fs <- H.forAll $ genList HGen.bool
 
+    -- todo: 1 1 is not right if a snapshot is restored
     (efa1, tids1, efa2, tids2) <- liftIO $ runNorm
       seed
       (renumber mem 1 1 . permuteBy safeIO mem (map (\f _ _ -> f) fs))
