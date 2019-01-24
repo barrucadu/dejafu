@@ -149,7 +149,6 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
   schedule restore sofar prior ctx
     | isTerminated  = stop restore sofar prior ctx
     | isDeadlocked  = die Deadlock restore sofar prior ctx
-    | isSTMLocked   = die STMDeadlock restore sofar prior ctx
     | otherwise =
       let ctx' = ctx { cSchedState = g' }
       in case choice of
@@ -173,12 +172,7 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
       threads       = cThreads ctx
       isBlocked     = isJust . _blocking
       isTerminated  = initialThread `notElem` M.keys threads
-      isDeadlocked  = M.null (M.filter (not . isBlocked) threads) &&
-        (((~=  OnMVarFull  undefined) <$> M.lookup initialThread threads) == Just True ||
-         ((~=  OnMVarEmpty undefined) <$> M.lookup initialThread threads) == Just True ||
-         ((~=  OnMask      undefined) <$> M.lookup initialThread threads) == Just True)
-      isSTMLocked = M.null (M.filter (not . isBlocked) threads) &&
-        ((~=  OnTVar []) <$> M.lookup initialThread threads) == Just True
+      isDeadlocked  = M.null (M.filter (not . isBlocked) threads)
 
   -- run the chosen thread for one step and then pass control back to
   -- 'schedule'

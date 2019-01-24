@@ -338,7 +338,6 @@ genCondition :: H.Gen D.Condition
 genCondition = HGen.element $
   [ D.Abort
   , D.Deadlock
-  , D.STMDeadlock
   ] ++ map D.UncaughtException -- have a few different exception types
   [ E.toException E.Overflow
   , E.toException E.ThreadKilled

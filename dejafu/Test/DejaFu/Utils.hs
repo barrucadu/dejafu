@@ -84,7 +84,6 @@ simplestsBy f = map choose . collect where
 showCondition :: Condition -> String
 showCondition Abort = "[abort]"
 showCondition Deadlock = "[deadlock]"
-showCondition STMDeadlock = "[stm-deadlock]"
 showCondition (UncaughtException exc) = "[" ++ displayException exc ++ "]"
 
 -------------------------------------------------------------------------------

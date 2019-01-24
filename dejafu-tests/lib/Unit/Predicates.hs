@@ -21,7 +21,7 @@ alwaysSameBy = toTestList
   [ passes "Equal successes"   (D.alwaysSameBy (==)) [Right 1, Right 1, Right 1]
   , fails  "Unequal successes" (D.alwaysSameBy (==)) [Right 1, Right 2, Right 3]
   , fails  "Equal conditions"   (D.alwaysSameBy (==)) [Left D.Deadlock, Left D.Deadlock, Left D.Deadlock]
-  , fails  "Unequal conditions" (D.alwaysSameBy (==)) [Left D.Deadlock, Left D.STMDeadlock, Left D.Abort]
+  , fails  "Unequal conditions" (D.alwaysSameBy (==)) [Left D.Deadlock, Left D.Abort, Left D.Abort]
   , fails  "Mixed conditions and successes" (D.alwaysSameBy (==)) [Left D.Deadlock, Right 1, Right 1]
   ]
 
@@ -32,7 +32,7 @@ notAlwaysSameBy = toTestList
   [ fails  "Equal successes"   (D.notAlwaysSameBy (==)) [Right 1, Right 1, Right 1]
   , passes "Unequal successes" (D.notAlwaysSameBy (==)) [Right 1, Right 2, Right 3]
   , fails  "Equal conditions"   (D.notAlwaysSameBy (==)) [Left D.Deadlock, Left D.Deadlock, Left D.Deadlock]
-  , fails  "Unequal conditions" (D.notAlwaysSameBy (==)) [Left D.Deadlock, Left D.STMDeadlock, Left D.Abort]
+  , fails  "Unequal conditions" (D.notAlwaysSameBy (==)) [Left D.Deadlock, Left D.Abort, Left D.Abort]
   , fails  "Mixed conditions and successes" (D.notAlwaysSameBy (==)) [Left D.Deadlock, Right 1, Right 1]
   ]
 

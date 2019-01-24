@@ -137,7 +137,7 @@ stmTests = toTestList
       ctv <- atomically $ newTVarInt 5
       (5==) <$> readTVarConc ctv
 
-  , djfu "Aborting a transaction blocks the thread" (gives [Left STMDeadlock]) $ basic
+  , djfu "Aborting a transaction blocks the thread" (gives [Left Deadlock]) $ basic
       (atomically retry :: MonadConc m => m ()) -- avoid an ambiguous type
 
   , djfu "Aborting a transaction can be caught and recovered from" (gives' [True]) $ basic $ do

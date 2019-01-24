@@ -426,7 +426,7 @@ instance NFData Decision
 -- The @Eq@, @Ord@, and @NFData@ instances compare/evaluate the
 -- exception with @show@ in the @UncaughtException@ case.
 --
--- @since 1.12.0.0
+-- @since unreleased
 data Condition
   = Abort
   -- ^ The scheduler chose to abort execution. This will be produced
@@ -434,11 +434,7 @@ data Condition
   -- bounds (there have been too many pre-emptions, the computation
   -- has executed for too long, or there have been too many yields).
   | Deadlock
-  -- ^ Every thread is blocked, and the main thread is /not/ blocked
-  -- in an STM transaction.
-  | STMDeadlock
-  -- ^ Every thread is blocked, and the main thread is blocked in an
-  -- STM transaction.
+  -- ^ Every thread is blocked
   | UncaughtException SomeException
   -- ^ An uncaught exception bubbled to the top of the computation.
   deriving (Show, Generic)
@@ -446,7 +442,6 @@ data Condition
 instance Eq Condition where
   Abort                  == Abort                  = True
   Deadlock               == Deadlock               = True
-  STMDeadlock            == STMDeadlock            = True
   (UncaughtException e1) == (UncaughtException e2) = show e1 == show e2
   _ == _ = False
 
@@ -455,7 +450,6 @@ instance Ord Condition where
     transform :: Condition -> (Int, Maybe String)
     transform Abort = (1, Nothing)
     transform Deadlock = (2, Nothing)
-    transform STMDeadlock = (3, Nothing)
     transform (UncaughtException e) = (4, Just (show e))
 
 instance NFData Condition where
@@ -469,12 +463,11 @@ isAbort :: Condition -> Bool
 isAbort Abort = True
 isAbort _ = False
 
--- | Check if a condition is a @Deadlock@ or an @STMDeadlock@.
+-- | Check if a condition is a @Deadlock@.
 --
 -- @since 0.9.0.0
 isDeadlock :: Condition -> Bool
 isDeadlock Deadlock = True
-isDeadlock STMDeadlock = True
 isDeadlock _ = False
 
 -- | Check if a condition is an @UncaughtException@

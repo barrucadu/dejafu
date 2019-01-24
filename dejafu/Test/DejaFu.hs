@@ -47,12 +47,9 @@ and, for each, a summarised execution trace leading to that result:
  * Each \"-\" represents one \"step\" of the computation.
 
 __Conditions:__ A program may fail to terminate in a way which
-produces a value. dejafu can detect a few such cases:
+produces a value. dejafu can detect two such cases:
 
  * 'Deadlock', if every thread is blocked.
-
- * 'STMDeadlock', if every thread is blocked /and/ the main thread is
-   blocked in an STM transaction.
 
  * 'UncaughtException', if the main thread is killed by an exception.
 
