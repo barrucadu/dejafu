@@ -511,17 +511,12 @@ isSchedulerError _ = True
 -------------------------------------------------------------------------------
 -- * Schedule bounding
 
--- | @since 0.2.0.0
+-- | @since unreleased
 data Bounds = Bounds
   { boundPreemp :: Maybe PreemptionBound
   , boundFair   :: Maybe FairBound
-  , boundLength :: Maybe LengthBound
-  } deriving (Eq, Ord, Read, Show)
+  } deriving (Eq, Ord, Read, Show, Generic)
 
--- | @since 1.3.1.0
-deriving instance Generic Bounds
-
--- | @since 0.5.1.0
 instance NFData Bounds
 
 -- | Restrict the number of pre-emptive context switches allowed in an

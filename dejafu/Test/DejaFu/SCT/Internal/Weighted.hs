@@ -3,11 +3,11 @@
 
 -- |
 -- Module      : Test.DejaFu.SCT.Internal.Weighted
--- Copyright   : (c) 2015--2018 Michael Walker
+-- Copyright   : (c) 2015--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : portable
+-- Portability : DeriveAnyClass, DeriveGeneric
 --
 -- Internal types and functions for SCT via weighted random
 -- scheduling.  This module is NOT considered to form part of the
@@ -31,12 +31,14 @@ import           Test.DejaFu.Types
 data RandSchedState g = RandSchedState
   { schedWeights :: Map ThreadId Int
   -- ^ The thread weights: used in determining which to run.
-  , schedGen     :: g
+  , schedLengthBound :: Maybe LengthBound
+  -- ^ The optional length bound.
+  , schedGen :: g
   -- ^ The random number generator.
   } deriving (Eq, Show, Generic, NFData)
 
 -- | Initial weighted random scheduler state.
-initialRandSchedState :: g -> RandSchedState g
+initialRandSchedState :: Maybe LengthBound -> g -> RandSchedState g
 initialRandSchedState = RandSchedState M.empty
 
 -- | Weighted random scheduler: assigns to each new thread a weight,
@@ -61,4 +63,7 @@ randSched weightf = Scheduler $ \_ threads s ->
 
     -- The runnable threads.
     tids = map fst (toList threads)
-  in (pick choice enabled, RandSchedState weights' g'')
+  in case schedLengthBound s of
+    Just 0 -> (Nothing, s)
+    Just n -> (pick choice enabled, RandSchedState weights' (Just (n - 1)) g'')
+    Nothing -> (pick choice enabled, RandSchedState weights' Nothing g'')

@@ -133,7 +133,7 @@ runSCTWithSettings settings conc = case _way settings of
 
         step run dp (prefix, conservative, sleep) = do
           (res, s, trace) <- run
-            (dporSched (_safeIO settings) (_memtype settings) (cBound cb0))
+            (dporSched (_safeIO settings) (_memtype settings) (cBound (_lengthBound settings) cb0))
             (initialDPORSchedState sleep prefix)
 
           let bpoints = findBacktrackSteps (_safeIO settings) (_memtype settings) (cBacktrack cb0) (schedBoundKill s) (schedBPoints s) trace
@@ -153,7 +153,7 @@ runSCTWithSettings settings conc = case _way settings of
         step run _ (g, n) = do
           (res, s, trace) <- run
             (randSched gen)
-            (initialRandSchedState g)
+            (initialRandSchedState (_lengthBound settings) g)
           pure ((schedGen s, n-1), Just (res, trace))
     in sct settings initial check step conc
 
@@ -209,23 +209,39 @@ resultsSetWithSettings' settings conc = do
 -- Combined Bounds
 
 -- | Combination bound function
-cBound :: Bounds -> IncrementalBoundFunc ((Int, Maybe ThreadId), M.Map ThreadId Int, Int)
-cBound (Bounds pb fb lb) (Just (k1, k2, k3)) prior lh =
+cBound :: Maybe LengthBound -> Bounds -> IncrementalBoundFunc ((Int, Maybe ThreadId), M.Map ThreadId Int, Int)
+cBound lb (Bounds pb fb) (Just (k1, k2, k3)) prior lh =
   let k1' = maybe (\k _ _ -> k) pBound pb (Just k1) prior lh
       k2' = maybe (\k _ _ -> k) fBound fb (Just k2) prior lh
       k3' = maybe (\k _ _ -> k) lBound lb (Just k3) prior lh
   in (,,) <$> k1' <*> k2' <*> k3'
-cBound _ Nothing _ _ = Just ((0, Nothing), M.empty, 1)
+cBound _ _ Nothing _ _ = Just ((0, Nothing), M.empty, 1)
 
--- | Combination backtracking function. Add all backtracking points
--- corresponding to enabled bound functions.
+-- | Backtracks to the given point.
 --
--- If no bounds are enabled, just backtrack to the given point.
+-- If pre-emption bounding is enabled, also conservatively adds a
+-- backtracking point prior to the most recent transition before that
+-- point.  This may result in the same state being reached multiple
+-- times, but is needed because of the artificial dependency imposed
+-- by the bound.
 cBacktrack :: Bounds -> BacktrackFunc
-cBacktrack (Bounds (Just _) _ _) = pBacktrack
-cBacktrack (Bounds _ (Just _) _) = fBacktrack
-cBacktrack (Bounds _ _ (Just _)) = lBacktrack
-cBacktrack _ = backtrackAt (\_ _ -> False)
+cBacktrack (Bounds (Just _) _) bs =
+    backtrackAt (\_ _ -> False) bs . concatMap addConservative
+  where
+    addConservative o@(i, _, tid) = o : case conservative i of
+      Just j  -> [(j, True, tid)]
+      Nothing -> []
+
+    -- index of conservative point
+    conservative i = go (reverse (take (i-1) bs)) (i-1) where
+      go _ (-1) = Nothing
+      go (b1:rest@(b2:_)) j
+        | bcktThreadid b1 /= bcktThreadid b2
+          && not (isCommitRef $ bcktAction b1)
+          && not (isCommitRef $ bcktAction b2) = Just j
+        | otherwise = go rest (j-1)
+      go _ _ = Nothing
+cBacktrack _ bs = backtrackAt (\_ _ -> False) bs
 
 -------------------------------------------------------------------------------
 -- Pre-emption bounding
@@ -236,26 +252,6 @@ pBound :: PreemptionBound -> IncrementalBoundFunc (Int, Maybe ThreadId)
 pBound (PreemptionBound pb) k prior lhead =
   let k'@(pcount, _) = preEmpCountInc (fromMaybe (0, Nothing) k) prior lhead
   in if pcount <= pb then Just k' else Nothing
-
--- | Add a backtrack point, and also conservatively add one prior to
--- the most recent transition before that point. This may result in
--- the same state being reached multiple times, but is needed because
--- of the artificial dependency imposed by the bound.
-pBacktrack :: BacktrackFunc
-pBacktrack bs = backtrackAt (\_ _ -> False) bs . concatMap addConservative where
-  addConservative o@(i, _, tid) = o : case conservative i of
-    Just j  -> [(j, True, tid)]
-    Nothing -> []
-
-  -- index of conservative point
-  conservative i = go (reverse (take (i-1) bs)) (i-1) where
-    go _ (-1) = Nothing
-    go (b1:rest@(b2:_)) j
-      | bcktThreadid b1 /= bcktThreadid b2
-        && not (isCommitRef $ bcktAction b1)
-        && not (isCommitRef $ bcktAction b2) = Just j
-      | otherwise = go rest (j-1)
-    go _ _ = Nothing
 
 -------------------------------------------------------------------------------
 -- Fair bounding
@@ -268,13 +264,6 @@ fBound (FairBound fb) k prior lhead =
      then Just k'
      else Nothing
 
--- | Add a backtrack point. If the thread doesn't exist or is blocked,
--- or performs a release operation, add all unblocked threads.
-fBacktrack :: BacktrackFunc
-fBacktrack = backtrackAt check where
-  -- True if a release operation is performed.
-  check t b = Just True == (willRelease <$> M.lookup t (bcktRunnable b))
-
 -------------------------------------------------------------------------------
 -- Length bounding
 
@@ -283,11 +272,6 @@ lBound :: LengthBound -> IncrementalBoundFunc Int
 lBound (LengthBound lb) len _ _ =
   let len' = maybe 1 (+1) len
   in if len' < lb then Just len' else Nothing
-
--- | Add a backtrack point. If the thread doesn't exist or is blocked,
--- add all unblocked threads.
-lBacktrack :: BacktrackFunc
-lBacktrack = backtrackAt (\_ _ -> False)
 
 -------------------------------------------------------------------------------
 -- Utilities

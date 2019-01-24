@@ -37,6 +37,7 @@ import           Test.DejaFu.Types
 -- @since 1.2.0.0
 data Settings n a = Settings
   { _way :: Way
+  , _lengthBound :: Maybe LengthBound
   , _memtype :: MemType
   , _discard :: Maybe (Either Condition a -> Maybe Discard)
   , _debugShow :: Maybe (a -> String)
