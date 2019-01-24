@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 -- |
 -- Module      : Test.HUnit.DejaFu
@@ -9,7 +8,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
--- Portability : FlexibleContexts, FlexibleInstances, LambdaCase, TypeSynonymInstances
+-- Portability : FlexibleContexts, FlexibleInstances, LambdaCase
 --
 -- This module allows using Deja Fu predicates with HUnit to test the
 -- behaviour of concurrent systems.

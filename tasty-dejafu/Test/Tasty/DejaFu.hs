@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 -- |
 -- Module      : Test.Tasty.DejaFu
@@ -10,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
--- Portability : FlexibleContexts, FlexibleInstances, GADTs, LambdaCase, TypeSynonymInstances
+-- Portability : FlexibleContexts, FlexibleInstances, GADTs, LambdaCase
 --
 -- This module allows using Deja Fu predicates with Tasty to test the
 -- behaviour of concurrent systems.
