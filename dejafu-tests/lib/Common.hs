@@ -54,11 +54,11 @@ instance IsTest t => IsTest [t] where
   toTestList = concatMap toTestList
 
 data T where
-  T :: (Program p, Eq a, Show a) => String -> p IO a -> Predicate a -> T
-  W :: (Program p, Eq a, Show a) => String -> p IO a -> Predicate a -> (String, Way) -> T
-  B :: (Program p, Eq a, Show a) => String -> p IO a -> Predicate a -> Bounds -> T
-  TEST :: (Program p, Eq a, Show a) => String -> p IO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
-  TEST' :: (Program p, Eq a, Show a) => Bool -> String -> p IO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
+  T :: (Eq a, Show a) => String -> Program pty IO a -> Predicate a -> T
+  W :: (Eq a, Show a) => String -> Program pty IO a -> Predicate a -> (String, Way) -> T
+  B :: (Eq a, Show a) => String -> Program pty IO a -> Predicate a -> Bounds -> T
+  TEST :: (Eq a, Show a) => String -> Program pty IO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
+  TEST' :: (Eq a, Show a) => Bool -> String -> Program pty IO a -> Predicate a -> [(String, Settings IO a)] -> Bool -> T
 
 toSettings :: (Applicative f, Eq a, Show a) => Way -> Settings f a
 toSettings w
@@ -81,19 +81,19 @@ defaultWaysFor b =
 testGroup :: IsTest t => String -> t -> T.TestTree
 testGroup name = T.testGroup name . toTestList
 
-djfu :: (Program p, Eq a, Show a) => String -> Predicate a -> p IO a -> [T.TestTree]
+djfu :: (Eq a, Show a) => String -> Predicate a -> Program pty IO a -> [T.TestTree]
 djfu name p c = toTestList $ W name c p ("systematically", systematically defaultBounds)
 
-djfuS :: (Program p, Eq a, Show a) => String -> Predicate a -> p IO a -> [T.TestTree]
+djfuS :: (Eq a, Show a) => String -> Predicate a -> Program pty IO a -> [T.TestTree]
 djfuS name p c = toTestList $ TEST name c p [("systematically", toSettings (systematically defaultBounds))] False
 
-djfuT :: (Program p, Eq a, Show a) => String -> Predicate a -> p IO a -> [T.TestTree]
+djfuT :: (Eq a, Show a) => String -> Predicate a -> Program pty IO a -> [T.TestTree]
 djfuT name p c = toTestList $ T name c p
 
-djfuTS :: (Program p, Eq a, Show a) => String -> Predicate a -> p IO a -> [T.TestTree]
+djfuTS :: (Eq a, Show a) => String -> Predicate a -> Program pty IO a -> [T.TestTree]
 djfuTS name p c = toTestList $ TEST name c p (map (second toSettings) defaultWays) False
 
-djfuE :: Program p => String -> Error -> p IO a -> [T.TestTree]
+djfuE :: String -> Error -> Program pty IO a -> [T.TestTree]
 djfuE name e0 c = toTestList . TH.testCase name $ C.catch
     (SCT.runSCT defaultWay defaultMemType c >> TH.assertFailure msg)
     (\e -> unless (e == e0) $ TH.assertFailure (err e))
@@ -117,7 +117,7 @@ testProperty name = H.testProperty name . H.property
 
 -- | Check that the independence function correctly decides
 -- commutativity for this program.
-prop_dep_fun :: (Program p, Eq a, Show a) => Bool -> p IO a -> H.Property
+prop_dep_fun :: (Eq a, Show a) => Bool -> Program pty IO a -> H.Property
 prop_dep_fun safeIO conc = H.property $ do
     mem <- H.forAll HGen.enumBounded
     seed <- H.forAll genInt

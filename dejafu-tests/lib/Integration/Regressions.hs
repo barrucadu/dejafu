@@ -7,25 +7,24 @@ import           Test.DejaFu               (exceptionsAlways, gives')
 import           Control.Concurrent.Classy
 import           Control.Exception         (AsyncException(..))
 import qualified Control.Monad.Catch       as E
-import           Test.DejaFu.Conc          (basic)
 
 import           Common
 
 tests :: [TestTree]
 tests = toTestList
-  [ djfu "https://github.com/barrucadu/dejafu/issues/40" (gives' [0,1]) $ basic $ do
+  [ djfu "https://github.com/barrucadu/dejafu/issues/40" (gives' [0,1]) $ do
       x <- newIORefInt 0
       _ <- fork $ myThreadId >> writeIORef x 1
       readIORef x
 
-  , djfu "https://github.com/barrucadu/dejafu/issues/55" (gives' [True]) $ basic $ do
+  , djfu "https://github.com/barrucadu/dejafu/issues/55" (gives' [True]) $ do
       a <- atomically newTQueue
       b <- atomically newTQueue
       _ <- fork . atomically $ writeTQueue b True
       let both x y = readTQueue x `orElse` readTQueue y `orElse` retry
       atomically $ both a b
 
-  , djfu "https://github.com/barrucadu/dejafu/issues/111" (gives' [1]) $ basic $ do
+  , djfu "https://github.com/barrucadu/dejafu/issues/111" (gives' [1]) $ do
       v <- atomically $ newTVarInt 1
       _ <- fork . atomically $ do
         writeTVar v 2
@@ -33,18 +32,18 @@ tests = toTestList
         retry
       readTVarConc v
 
-  , djfu "https://github.com/barrucadu/dejafu/issues/118" exceptionsAlways $ basic $
+  , djfu "https://github.com/barrucadu/dejafu/issues/118" exceptionsAlways $
       catchSomeException
         (uninterruptibleMask_ (throw ThreadKilled))
         (\_ -> myThreadId >>= killThread)
 
-  , djfu "https://github.com/barrucadu/dejafu/issues/139" (gives' [()]) $ basic $
+  , djfu "https://github.com/barrucadu/dejafu/issues/139" (gives' [()]) $
       catchSomeException
         (catchSomeException (throw ThreadKilled) (\_ -> pure ())
          >> throw ThreadKilled)
         (\_ -> pure ())
 
-  , djfu "https://github.com/barrucadu/dejafu/issues/161" (gives' [Just (), Nothing]) $ basic $ do
+  , djfu "https://github.com/barrucadu/dejafu/issues/161" (gives' [Just (), Nothing]) $ do
       let try a = (a >> pure ()) `E.catch` (\(_ :: E.SomeException) -> pure ())
       let act s = uninterruptibleMask_ (putMVar s ())
       s <- newEmptyMVar
@@ -52,7 +51,7 @@ tests = toTestList
       killThread t
       tryReadMVar s
 
-  , djfu "https://github.com/barrucadu/dejafu/issues/243" (gives' [1,2,3]) $ basic $ do
+  , djfu "https://github.com/barrucadu/dejafu/issues/243" (gives' [1,2,3]) $ do
       setNumCapabilities 1
       _ <- fork (setNumCapabilities 2)
       _ <- fork (setNumCapabilities 3)

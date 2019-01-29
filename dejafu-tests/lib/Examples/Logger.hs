@@ -10,9 +10,9 @@ import           Common
 
 tests :: [TestTree]
 tests = toTestList
-  [ T "allowed"        (basic raceyLogger) validResult
-  , T "correct occurs" (basic raceyLogger) isGood
-  , T "bug exists"     (basic raceyLogger) isBad
+  [ T "allowed"        raceyLogger validResult
+  , T "correct occurs" raceyLogger isGood
+  , T "bug exists"     raceyLogger isBad
   ]
 
 --------------------------------------------------------------------------------

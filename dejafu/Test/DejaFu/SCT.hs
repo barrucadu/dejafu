@@ -52,12 +52,12 @@ import           Test.DejaFu.Utils
 -- found, is unspecified and may change between releases.
 --
 -- @since unreleased
-runSCT :: (Program p, MonadConc n)
+runSCT :: MonadConc n
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> p n a
+  -> Program pty n a
   -- ^ The computation to run many times.
   -> n [(Either Condition a, Trace)]
 runSCT way = runSCTWithSettings . fromWayAndMemType way
@@ -65,12 +65,12 @@ runSCT way = runSCTWithSettings . fromWayAndMemType way
 -- | Return the set of results of a concurrent program.
 --
 -- @since unreleased
-resultsSet :: (Program p, MonadConc n, Ord a)
+resultsSet :: (MonadConc n, Ord a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> p n a
+  -> Program pty n a
   -- ^ The computation to run many times.
   -> n (Set (Either Condition a))
 resultsSet way = resultsSetWithSettings . fromWayAndMemType way
@@ -84,12 +84,12 @@ resultsSet way = resultsSetWithSettings . fromWayAndMemType way
 -- found, is unspecified and may change between releases.
 --
 -- @since unreleased
-runSCT' :: (Program p, MonadConc n, NFData a)
+runSCT' :: (MonadConc n, NFData a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> p n a
+  -> Program pty n a
   -- ^ The computation to run many times.
   -> n [(Either Condition a, Trace)]
 runSCT' way = runSCTWithSettings' . fromWayAndMemType way
@@ -100,12 +100,12 @@ runSCT' way = runSCTWithSettings' . fromWayAndMemType way
 -- may be more efficient in some situations.
 --
 -- @since unreleased
-resultsSet' :: (Program p, MonadConc n, Ord a, NFData a)
+resultsSet' :: (MonadConc n, Ord a, NFData a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> p n a
+  -> Program pty n a
   -- ^ The computation to run many times.
   -> n (Set (Either Condition a))
 resultsSet' way = resultsSetWithSettings' . fromWayAndMemType way
@@ -119,10 +119,10 @@ resultsSet' way = resultsSetWithSettings' . fromWayAndMemType way
 -- found, is unspecified and may change between releases.
 --
 -- @since unreleased
-runSCTWithSettings :: (Program p, MonadConc n)
+runSCTWithSettings :: MonadConc n
   => Settings n a
   -- ^ The SCT settings.
-  -> p n a
+  -> Program pty n a
   -- ^ The computation to run many times.
   -> n [(Either Condition a, Trace)]
 runSCTWithSettings settings conc = case _way settings of
@@ -160,10 +160,10 @@ runSCTWithSettings settings conc = case _way settings of
 -- | A variant of 'resultsSet' which takes a 'Settings' record.
 --
 -- @since unreleased
-resultsSetWithSettings :: (Program p, MonadConc n, Ord a)
+resultsSetWithSettings :: (MonadConc n, Ord a)
   => Settings n a
   -- ^ The SCT settings.
-  -> p n a
+  -> Program pty n a
   -- ^ The computation to run many times.
   -> n (Set (Either Condition a))
 resultsSetWithSettings settings conc =
@@ -179,10 +179,10 @@ resultsSetWithSettings settings conc =
 -- found, is unspecified and may change between releases.
 --
 -- @since unreleased
-runSCTWithSettings' :: (Program p, MonadConc n, NFData a)
+runSCTWithSettings' :: (MonadConc n, NFData a)
   => Settings n a
   -- ^ The SCT settings.
-  -> p n a
+  -> Program pty n a
   -- ^ The computation to run many times.
   -> n [(Either Condition a, Trace)]
 runSCTWithSettings' settings conc = do
@@ -195,10 +195,10 @@ runSCTWithSettings' settings conc = do
 -- may be more efficient in some situations.
 --
 -- @since unreleased
-resultsSetWithSettings' :: (Program p, MonadConc n, Ord a, NFData a)
+resultsSetWithSettings' :: (MonadConc n, Ord a, NFData a)
   => Settings n a
   -- ^ The SCT settings.
-  -> p n a
+  -> Program pty n a
   -- ^ The computation to run many times.
   -> n (Set (Either Condition a))
 resultsSetWithSettings' settings conc = do

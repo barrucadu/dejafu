@@ -33,7 +33,7 @@ import           Examples.SearchParty.Impredicative
 
 tests :: [TestTree]
 tests =
-  [ testDejafu "concurrent filter" (failing checkResultLists) (basic concFilter)
+  [ testDejafu "concurrent filter" (failing checkResultLists) concFilter
   ]
 
 -- | Filter a list concurrently.

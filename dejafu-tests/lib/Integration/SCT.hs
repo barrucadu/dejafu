@@ -8,7 +8,6 @@ import qualified Data.IORef                as IORef
 import qualified Data.Set                  as S
 import           System.Random             (mkStdGen)
 import           Test.DejaFu               (gives')
-import           Test.DejaFu.Conc          (basic)
 import           Test.DejaFu.SCT
 import           Test.DejaFu.Types         (Condition(..))
 import           Test.Tasty.HUnit
@@ -36,7 +35,7 @@ discardTests = toTestList
     ]
   where
     check name xs f = testDejafuWithSettings (set ldiscard (Just f) defaultSettings) name (gives' xs) testAction
-    testAction = basic $ do
+    testAction = do
       mvar <- newEmptyMVarInt
       _ <- fork $ putMVar mvar 1
       _ <- fork $ putMVar mvar 2
@@ -68,7 +67,7 @@ earlyExitTests = toTestList
     eeTest name expected d = testCase name $ do
       -- abuse IO to get a different result form every execution
       r <- liftIO (IORef.newIORef (0::Int))
-      actual <- resultsSetWithSettings (eeSettings d) $ basic $ do
+      actual <- resultsSetWithSettings (eeSettings d) $ do
         liftIO (IORef.modifyIORef r (+1))
         liftIO (IORef.readIORef r)
       S.fromList (map Right expected) @=? actual
@@ -91,7 +90,7 @@ resultsSetTests = toTestList
     ]
   where
     results = S.fromList $ map Right [1, 2] ++ [Left Deadlock]
-    testAction = basic $ do
+    testAction = do
       mvar <- newEmptyMVarInt
       _ <- fork $ putMVar mvar 1
       _ <- fork $ putMVar mvar 2

@@ -36,7 +36,7 @@ import           Test.DejaFu.Utils
 -- * Exploration
 
 -- | General-purpose SCT function.
-sct :: (Program p, MonadConc n, HasCallStack)
+sct :: (MonadConc n, HasCallStack)
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
   -> ([ThreadId] -> s)
@@ -45,7 +45,7 @@ sct :: (Program p, MonadConc n, HasCallStack)
   -- ^ State predicate
   -> ((Scheduler g -> g -> n (Either Condition a, g, Trace)) -> s -> t -> n (s, Maybe (Either Condition a, Trace)))
   -- ^ Run the computation and update the state
-  -> p n a
+  -> Program pty n a
   -> n [(Either Condition a, Trace)]
 sct settings s0 sfun srun conc = recordSnapshot conc >>= \case
     Just (Right snap, _) -> sct'Snap snap

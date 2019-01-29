@@ -1,13 +1,14 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.Common
--- Copyright   : (c) 2016--2018 Michael Walker
+-- Copyright   : (c) 2016--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : ExistentialQuantification, RankNTypes
+-- Portability : ExistentialQuantification, GADTs, RankNTypes
 --
 -- Common types and utility functions for deterministic execution of
 -- 'MonadConc' implementations. This module is NOT considered to form
@@ -22,7 +23,7 @@ import           Test.DejaFu.Conc.Internal.STM (ModelSTM)
 import           Test.DejaFu.Types
 
 --------------------------------------------------------------------------------
--- * The @ModelConc@ Monad
+-- * Types for Modelling Concurrency
 
 -- | The underlying monad is based on continuations over 'Action's.
 --
@@ -32,25 +33,72 @@ import           Test.DejaFu.Types
 -- current expression of threads and exception handlers very difficult
 -- (perhaps even not possible without significant reworking), so I
 -- abandoned the attempt.
-newtype ModelConc n a = ModelConc { runModelConc :: (a -> Action n) -> Action n }
+type ModelConc = Program Basic
 
-instance Functor (ModelConc n) where
-    fmap f m = ModelConc $ \c -> runModelConc m (c . f)
+-- | A representation of a concurrent program for testing.
+--
+-- To construct these, use the 'C.MonadConc' instance, or see
+-- 'Test.DejaFu.Conc.withSetup', 'Test.DejaFu.Conc.withTeardown', and
+-- 'Test.DejaFu.Conc.withSetupAndTeardown'.
+--
+-- @since unreleased
+data Program pty n a where
+  ModelConc ::
+    { runModelConc :: (a -> Action n) -> Action n
+    } -> Program Basic n a
+  WithSetup ::
+    { wsSetup   :: ModelConc n x
+    , wsProgram :: x -> ModelConc n a
+    } -> Program (WithSetup x) n a
+  WithSetupAndTeardown ::
+    { wstSetup    :: ModelConc n x
+    , wstProgram  :: x -> ModelConc n y
+    , wstTeardown :: x -> Either Condition y -> ModelConc n a
+    } -> Program (WithSetupAndTeardown x y) n a
 
-instance Applicative (ModelConc n) where
-    -- without the @AReturn@, a thread could lock up testing by
-    -- entering an infinite loop (eg: @forever (return ())@)
-    pure x  = ModelConc $ \c -> AReturn $ c x
-    f <*> v = ModelConc $ \c -> runModelConc f (\g -> runModelConc v (c . g))
+-- | A type used to constrain 'Program': a @Program Basic@ is a
+-- \"basic\" program with no set-up or teardown.
+--
+-- Construct with the 'MonadConc' instance or with 'basic'.
+--
+-- @since unreleased
+data Basic
 
-instance Monad (ModelConc n) where
-    return  = pure
-    m >>= k = ModelConc $ \c -> runModelConc m (\x -> runModelConc (k x) c)
+-- | A type used to constrain 'Program': a @Program (WithSetup x)@ is
+-- a program with some set-up action producing a value of type @x@.
+--
+-- Construct with 'Test.DejaFu.Conc.withSetup'.
+--
+-- @since unreleased
+data WithSetup x
 
-    fail = Fail.fail
+-- | A type used to constrain 'Program': a @Program
+-- (WithSetupAndTeardown x y)@ is a program producing a value of type
+-- @y@ with some set-up action producing a value of type @x@ and a
+-- teardown action producing the final result.
+--
+-- Construct with 'Test.DejaFu.Conc.withTeardown' or
+-- 'Test.DejaFu.Conc.withSetupAndTeardown'.
+--
+-- @since unreleased
+data WithSetupAndTeardown x y
 
-instance Fail.MonadFail (ModelConc n) where
-    fail e = ModelConc $ \_ -> AThrow (MonadFailException e)
+instance (pty ~ Basic) => Functor (Program pty n) where
+  fmap f m = ModelConc $ \c -> runModelConc m (c . f)
+
+instance (pty ~ Basic) => Applicative (Program pty n) where
+  -- without the @AReturn@, a thread could lock up testing by entering
+  -- an infinite loop (eg: @forever (return ())@)
+  pure x  = ModelConc $ \c -> AReturn $ c x
+  f <*> v = ModelConc $ \c -> runModelConc f (\g -> runModelConc v (c . g))
+
+instance (pty ~ Basic) => Monad (Program pty n) where
+  return  = pure
+  fail    = Fail.fail
+  m >>= k = ModelConc $ \c -> runModelConc m (\x -> runModelConc (k x) c)
+
+instance (pty ~ Basic) => Fail.MonadFail (Program pty n) where
+  fail e = ModelConc $ \_ -> AThrow (MonadFailException e)
 
 -- | An @MVar@ is modelled as a unique ID and a reference holding a
 -- @Maybe@ value.

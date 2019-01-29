@@ -45,8 +45,9 @@ module Test.HUnit.DejaFu
   , module Test.DejaFu.Settings
   -- *** Expressing concurrent programs
   , Program
+  , Basic
   , ConcT
-  , basic
+  , ConcIO
   , WithSetup
   , WithSetupAndTeardown
   , withSetup
@@ -107,8 +108,8 @@ assertableP = alwaysTrue $ \case
 -- deadlocks, uncaught exceptions, and multiple return values.
 --
 -- @since unreleased
-testAuto :: (Program p, Eq a, Show a)
-  => p IO a
+testAuto :: (Eq a, Show a)
+  => Program pty IO a
   -- ^ The computation to test.
   -> Test
 testAuto = testAutoWithSettings defaultSettings
@@ -117,12 +118,12 @@ testAuto = testAutoWithSettings defaultSettings
 -- execution way and memory model.
 --
 -- @since unreleased
-testAutoWay :: (Program p, Eq a, Show a)
+testAutoWay :: (Eq a, Show a)
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> p IO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testAutoWay way = testAutoWithSettings . fromWayAndMemType way
@@ -130,10 +131,10 @@ testAutoWay way = testAutoWithSettings . fromWayAndMemType way
 -- | Variant of 'testAuto' which takes a settings record.
 --
 -- @since unreleased
-testAutoWithSettings :: (Program p, Eq a, Show a)
+testAutoWithSettings :: (Eq a, Show a)
   => Settings IO a
   -- ^ The SCT settings.
-  -> p IO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testAutoWithSettings settings = testDejafusWithSettings settings
@@ -145,12 +146,12 @@ testAutoWithSettings settings = testDejafusWithSettings settings
 -- | Check that a predicate holds.
 --
 -- @since unreleased
-testDejafu :: (Program p, Show b)
+testDejafu :: Show b
   => String
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> p IO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testDejafu = testDejafuWithSettings defaultSettings
@@ -159,7 +160,7 @@ testDejafu = testDejafuWithSettings defaultSettings
 -- and a memory model.
 --
 -- @since unreleased
-testDejafuWay :: (Program p, Show b)
+testDejafuWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
@@ -168,7 +169,7 @@ testDejafuWay :: (Program p, Show b)
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> p IO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testDejafuWay way = testDejafuWithSettings . fromWayAndMemType way
@@ -176,14 +177,14 @@ testDejafuWay way = testDejafuWithSettings . fromWayAndMemType way
 -- | Variant of 'testDejafu' which takes a settings record.
 --
 -- @since unreleased
-testDejafuWithSettings :: (Program p, Show b)
+testDejafuWithSettings :: Show b
   => Settings IO a
   -- ^ The SCT settings.
   -> String
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> p IO a
+  -> Program p IO a
   -- ^ The computation to test.
   -> Test
 testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name, p)]
@@ -193,10 +194,10 @@ testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name
 -- running the concurrent computation many times for each predicate.
 --
 -- @since unreleased
-testDejafus :: (Program p, Show b)
+testDejafus :: Show b
   => [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> p IO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testDejafus = testDejafusWithSettings defaultSettings
@@ -205,14 +206,14 @@ testDejafus = testDejafusWithSettings defaultSettings
 -- and a memory model.
 --
 -- @since unreleased
-testDejafusWay :: (Program p, Show b)
+testDejafusWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> p IO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testDejafusWay way = testDejafusWithSettings . fromWayAndMemType way
@@ -220,12 +221,12 @@ testDejafusWay way = testDejafusWithSettings . fromWayAndMemType way
 -- | Variant of 'testDejafus' which takes a settings record.
 --
 -- @since unreleased
-testDejafusWithSettings :: (Program p, Show b)
+testDejafusWithSettings :: Show b
   => Settings IO a
   -- ^ The SCT settings.
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> p IO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testDejafusWithSettings = testconc
@@ -269,10 +270,10 @@ testPropertyFor = testprop
 -- HUnit integration
 
 -- | Produce a HUnit 'Test' from a Deja Fu unit test.
-testconc :: (Program p, Show b)
+testconc :: Show b
   => Settings IO a
   -> [(String, ProPredicate a b)]
-  -> p IO a
+  -> Program pty IO a
   -> Test
 testconc settings tests concio = case map toTest tests of
   [t] -> t

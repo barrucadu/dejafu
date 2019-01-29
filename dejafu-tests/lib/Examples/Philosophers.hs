@@ -20,7 +20,7 @@ tests =
     , expectFail $ testDejafuWithSettings settings "loops (with aborts hidden)" abortsSometimes test
     ]
   where
-    test = basic (philosophers 3)
+    test = philosophers 3
 
 -- | Shorter execution length bound
 settings :: Settings IO a
