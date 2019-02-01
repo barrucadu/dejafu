@@ -114,6 +114,12 @@ readIORefPrim ModelIORef{..} tid = do
   (vals, count, def) <- C.readIORef iorefRef
   pure (M.findWithDefault def tid vals, count)
 
+-- | Read the global state of a @IORef@.
+readIORefGlobal :: C.MonadConc n => ModelIORef n a -> n a
+readIORefGlobal ModelIORef{..} = do
+  (_, _, def) <- C.readIORef iorefRef
+  pure def
+
 -- | Write and commit to a @IORef@ immediately, clearing the update map
 -- and incrementing the write count.
 writeImmediate :: C.MonadConc n => ModelIORef n a -> a -> n (n ())

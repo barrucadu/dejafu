@@ -2,7 +2,7 @@ module Integration.MultiThreaded where
 
 import qualified Control.Concurrent        as C
 import           Control.Exception         (ArithException(..))
-import           Control.Monad             (replicateM, void)
+import           Control.Monad             (replicateM, void, when)
 import           Control.Monad.IO.Class    (liftIO)
 import           System.Random             (mkStdGen)
 import           Test.DejaFu               (Condition(..), gives, gives',
@@ -11,6 +11,7 @@ import           Test.DejaFu               (Condition(..), gives, gives',
 
 import           Control.Concurrent.Classy hiding (newQSemN, signalQSemN,
                                             waitQSemN)
+import           Control.Monad.Catch       (throwM, toException)
 import qualified Data.IORef                as IORef
 
 import           Common
@@ -364,6 +365,18 @@ programTests = toTestList
              let interfere_ = waitQSemN s 0 >> signalQSemN s 0
              in signalQSemN s 0 ||| waitQSemN s 0 ||| interfere_)
     ]
+
+    , testGroup "registerInvariant"
+      [ djfuT "Invariant failure is nondeterministic if there are races" (gives [Left (InvariantFailure (toException Overflow)), Right (Just 0), Right Nothing]) $
+          withSetup
+            (do v <- newEmptyMVarInt
+                registerInvariant (inspectMVar v >>= \x -> when (x == Just 1) (throwM Overflow))
+                pure v)
+            (\v -> do
+                _ <- fork $ putMVar v 0
+                _ <- fork $ putMVar v 1
+                tryReadMVar v)
+      ]
   ]
 
 -------------------------------------------------------------------------------

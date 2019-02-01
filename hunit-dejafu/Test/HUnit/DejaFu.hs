@@ -53,6 +53,12 @@ module Test.HUnit.DejaFu
   , withSetup
   , withTeardown
   , withSetupAndTeardown
+  -- *** Invariants
+  , Invariant
+  , registerInvariant
+  , inspectIORef
+  , inspectMVar
+  , inspectTVar
 
   -- * Refinement property testing
   , testProperty

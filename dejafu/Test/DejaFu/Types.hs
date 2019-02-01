@@ -194,6 +194,8 @@ data ThreadAction =
   -- ^ A 'return' or 'pure' action was executed.
   | Stop
   -- ^ Cease execution and terminate.
+  | RegisterInvariant
+  -- ^ Register an invariant.
   deriving (Eq, Generic, Show)
 
 -- this makes me sad
@@ -236,6 +238,7 @@ instance NFData ThreadAction where
   rnf LiftIO = ()
   rnf Return = ()
   rnf Stop = ()
+  rnf RegisterInvariant = ()
 
 -- | A one-step look-ahead at what a thread will do next.
 --
@@ -316,6 +319,8 @@ data Lookahead =
   -- ^ Will execute a 'return' or 'pure' action.
   | WillStop
   -- ^ Will cease execution and terminate.
+  | WillRegisterInvariant
+  -- ^ Will register an invariant
   deriving (Eq, Generic, Show)
 
 -- this also makes me sad
@@ -353,6 +358,7 @@ instance NFData Lookahead where
   rnf WillLiftIO = ()
   rnf WillReturn = ()
   rnf WillStop = ()
+  rnf WillRegisterInvariant = ()
 
 -- | All the actions that an STM transaction can perform.
 --
@@ -424,7 +430,8 @@ instance NFData Decision
 -- didn't produce a value.
 --
 -- The @Eq@, @Ord@, and @NFData@ instances compare/evaluate the
--- exception with @show@ in the @UncaughtException@ case.
+-- exception with @show@ in the @UncaughtException@ and
+-- @InvariantFailure@ cases.
 --
 -- @since unreleased
 data Condition
@@ -437,12 +444,15 @@ data Condition
   -- ^ Every thread is blocked
   | UncaughtException SomeException
   -- ^ An uncaught exception bubbled to the top of the computation.
+  | InvariantFailure SomeException
+  -- ^ An uncaught exception caused an invariant to fail.
   deriving (Show, Generic)
 
 instance Eq Condition where
   Abort                  == Abort                  = True
   Deadlock               == Deadlock               = True
   (UncaughtException e1) == (UncaughtException e2) = show e1 == show e2
+  (InvariantFailure  e1) == (InvariantFailure  e2) = show e1 == show e2
   _ == _ = False
 
 instance Ord Condition where
@@ -450,10 +460,12 @@ instance Ord Condition where
     transform :: Condition -> (Int, Maybe String)
     transform Abort = (1, Nothing)
     transform Deadlock = (2, Nothing)
-    transform (UncaughtException e) = (4, Just (show e))
+    transform (UncaughtException e) = (3, Just (show e))
+    transform (InvariantFailure  e) = (4, Just (show e))
 
 instance NFData Condition where
   rnf (UncaughtException e) = rnf (show e)
+  rnf (InvariantFailure  e) = rnf (show e)
   rnf f = f `seq` ()
 
 -- | Check if a condition is an @Abort@.
@@ -476,6 +488,13 @@ isDeadlock _ = False
 isUncaughtException :: Condition -> Bool
 isUncaughtException (UncaughtException _) = True
 isUncaughtException _ = False
+
+-- | Check if a condition is an @InvariantFailure@
+--
+-- @since unreleased
+isInvariantFailure :: Condition -> Bool
+isInvariantFailure (InvariantFailure _) = True
+isInvariantFailure _ = False
 
 -------------------------------------------------------------------------------
 -- * Errors

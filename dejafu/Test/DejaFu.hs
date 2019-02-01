@@ -47,11 +47,14 @@ and, for each, a summarised execution trace leading to that result:
  * Each \"-\" represents one \"step\" of the computation.
 
 __Conditions:__ A program may fail to terminate in a way which
-produces a value. dejafu can detect two such cases:
+produces a value. There are three such cases:
 
  * 'Deadlock', if every thread is blocked.
 
  * 'UncaughtException', if the main thread is killed by an exception.
+
+ * 'InvariantFailure', if an invariant (created with
+   'registerInvariant') failed.
 
 __Beware of 'liftIO':__ dejafu works by running your test case lots of
 times with different schedules.  If you use 'liftIO' at all, make sure
@@ -75,6 +78,13 @@ module Test.DejaFu
   , withSetup
   , withTeardown
   , withSetupAndTeardown
+
+  -- ** Invariants
+  , Invariant
+  , registerInvariant
+  , inspectIORef
+  , inspectMVar
+  , inspectTVar
 
     -- * Unit testing
 
@@ -182,6 +192,7 @@ Helper functions to identify conditions.
   , isAbort
   , isDeadlock
   , isUncaughtException
+  , isInvariantFailure
 
   -- * Property testing
 

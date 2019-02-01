@@ -180,7 +180,7 @@ runConcurrent :: C.MonadConc n
   -> Program pty n a
   -> n (Either Condition a, s, Trace)
 runConcurrent sched memtype s ma@(ModelConc _) = do
-  res <- runConcurrency False sched memtype s initialIdSource 2 ma
+  res <- runConcurrency [] False sched memtype s initialIdSource 2 ma
   out <- efromJust <$> C.readIORef (finalRef res)
   pure ( out
        , cSchedState (finalContext res)
@@ -276,7 +276,7 @@ runSnapshot
   -> Snapshot pty n a
   -> n (Either Condition a, s, Trace)
 runSnapshot sched memtype s (WS SimpleSnapshot{..}) = do
-  let context = snapContext { cSchedState = s }
+  let context = fromSnapContext s snapContext
   CResult{..} <- runConcurrencyWithSnapshot sched memtype context snapRestore snapNext
   out <- efromJust <$> C.readIORef finalRef
   pure ( out
@@ -284,7 +284,7 @@ runSnapshot sched memtype s (WS SimpleSnapshot{..}) = do
        , F.toList finalTrace
        )
 runSnapshot sched memtype s (WSAT SimpleSnapshot{..} teardown) = do
-  let context = snapContext { cSchedState = s }
+  let context = fromSnapContext s snapContext
   intermediateResult <- runConcurrencyWithSnapshot sched memtype context snapRestore snapNext
   let idsrc = cIdSource (finalContext intermediateResult)
   out1 <- efromJust <$> C.readIORef (finalRef intermediateResult)
@@ -357,7 +357,18 @@ simpleRunConcurrency ::(C.MonadConc n, HasCallStack)
   -> ModelConc n a
   -> n (CResult n () a)
 simpleRunConcurrency forSnapshot idsrc =
-  runConcurrency forSnapshot roundRobinSchedNP SequentialConsistency () idsrc 2
+  runConcurrency [] forSnapshot roundRobinSchedNP SequentialConsistency () idsrc 2
+
+-- | Make a new context from a snapshot context.
+fromSnapContext :: g -> Context n s -> Context n g
+fromSnapContext g ctx@Context{..} = ctx
+  { cSchedState = g
+  , cInvariants = InvariantContext
+    { icActive  = cNewInvariants
+    , icBlocked = []
+    }
+  , cNewInvariants = []
+  }
 
 wrap :: (((a -> Action n) -> Action n) -> ((a -> Action n) -> Action n)) -> ModelConc n a -> ModelConc n a
 wrap f = ModelConc . f . runModelConc

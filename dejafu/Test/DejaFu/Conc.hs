@@ -25,6 +25,13 @@ module Test.DejaFu.Conc
   , withTeardown
   , withSetupAndTeardown
 
+  -- ** Invariants
+  , Invariant
+  , registerInvariant
+  , inspectIORef
+  , inspectMVar
+  , inspectTVar
+
   -- * Executing concurrent programs
   , Snapshot
   , MemType(..)
@@ -53,6 +60,7 @@ import           Control.Exception                 (MaskingState(..))
 
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.Conc.Internal.Program
+import           Test.DejaFu.Conc.Internal.STM     (ModelTVar)
 import           Test.DejaFu.Schedule
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
@@ -142,3 +150,44 @@ withSetupAndTeardown
   -> Program (WithSetupAndTeardown x y) n a
 withSetupAndTeardown setup teardown =
   withTeardown teardown . withSetup setup
+
+-------------------------------------------------------------------------------
+-- Invariants
+
+-- | Call this in the setup phase to register new invariant which will
+-- be checked after every scheduling point in the main phase.
+-- Invariants are atomic actions which can inspect the shared state of
+-- your computation.
+--
+-- If the invariant throws an exception, the execution will be aborted
+-- with n @InvariantFailure@.  Any teardown action will still be run.
+--
+-- @since unreleased
+registerInvariant :: Invariant n a -> Program Basic n ()
+registerInvariant inv = ModelConc (\c -> ANewInvariant (() <$ inv) (c ()))
+
+-- | Read the content of an @IORef@.
+--
+-- This returns the globally visible value, which may not be the same
+-- as the value visible to any particular thread when using a memory
+-- model other than 'SequentialConsistency'.
+--
+-- @since unreleased
+inspectIORef :: ModelIORef n a -> Invariant n a
+inspectIORef = Invariant . IInspectIORef
+
+-- | Read the content of an @MVar@.
+--
+-- This is essentially @tryReadMVar@.
+--
+-- @since unreleased
+inspectMVar :: ModelMVar n a -> Invariant n (Maybe a)
+inspectMVar = Invariant . IInspectMVar
+
+-- | Read the content of a @TVar@.
+--
+-- This is essentially @readTVar@.
+--
+-- @since unreleased
+inspectTVar :: ModelTVar n a -> Invariant n a
+inspectTVar = Invariant . IInspectTVar

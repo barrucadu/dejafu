@@ -198,6 +198,7 @@ rewind (ResetMasking b m) = WillResetMasking b m
 rewind LiftIO = WillLiftIO
 rewind Return = WillReturn
 rewind Stop = WillStop
+rewind RegisterInvariant = WillRegisterInvariant
 
 -- | Check if an operation could enable another thread.
 willRelease :: Lookahead -> Bool

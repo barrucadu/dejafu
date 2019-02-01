@@ -3,13 +3,18 @@ module Integration.SingleThreaded where
 import           Control.Exception         (ArithException(..),
                                             ArrayException(..))
 import           Test.DejaFu               (Condition(..), gives, gives',
-                                            isDeadlock, isUncaughtException,
-                                            withSetup)
+                                            inspectIORef, inspectMVar,
+                                            inspectTVar, isDeadlock,
+                                            isInvariantFailure,
+                                            isUncaughtException,
+                                            registerInvariant, withSetup)
 
 import           Control.Concurrent.Classy
-import           Control.Monad             (replicateM_)
+import           Control.Monad             (replicateM_, when)
+import           Control.Monad.Catch       (throwM)
 import           Control.Monad.IO.Class    (liftIO)
 import qualified Data.IORef                as IORef
+import           Data.Maybe                (isNothing)
 import           System.Random             (mkStdGen)
 
 import           Common
@@ -310,6 +315,52 @@ programTests = toTestList
           (newMVarInt 3)
           (\_ x -> pure (either (const False) (==3) x))
           takeMVar
+    ]
+
+  , testGroup "registerInvariant"
+    [ djfuS "An uncaught exception fails an invariant" (alwaysFailsWith isInvariantFailure) $
+        withSetup (registerInvariant (throwM Overflow)) $
+          \() -> pure True
+    , djfuS "An invariant which never throws always passes" (gives' [True]) $
+        withSetup (registerInvariant (pure ())) $
+          \() -> pure True
+    , djfuS "An invariant can catch exceptions" (gives' [True]) $
+        withSetup (registerInvariant (throwM Overflow `catchArithException` \_ -> pure ())) $
+          \() -> pure True
+    , djfuS "Invariants can read MVars" (alwaysFailsWith isInvariantFailure) $
+        withSetup
+          (do v <- newMVarInt 10
+              registerInvariant (inspectMVar v >>= \x -> when (isNothing x) (throwM Overflow))
+              pure v)
+          takeMVar
+    , djfuS "Invariants can read TVars" (alwaysFailsWith isInvariantFailure) $
+        withSetup
+          (do v <- atomically (newTVar (10::Int))
+              registerInvariant (inspectTVar v >>= \x -> when (x < 5) (throwM Overflow))
+              pure v)
+          (\v -> atomically (writeTVar v 1))
+    , djfuS "Invariants aren't checked in the setup" (gives' [True]) $
+        withSetup
+          (do v <- newIORefInt 10
+              registerInvariant (inspectIORef v >>= \x -> when (x < 5) (throwM Overflow))
+              writeIORef v 1
+              writeIORef v 10)
+          (\_ -> pure True)
+    , djfuS "Invariants aren't checked in the teardown" (gives' [True]) $
+        withSetupAndTeardown
+          (do v <- newIORefInt 10
+              registerInvariant (inspectIORef v >>= \x -> when (x < 5) (throwM Overflow))
+              pure v)
+          (\v _ -> do
+              writeIORef v 1
+              writeIORef v 10
+              pure True)
+          (\_ -> pure ())
+    , djfuS "Invariants aren't checked if added in the main phase" (gives' [True]) $ do
+        v <- newIORefInt 10
+        registerInvariant (inspectIORef v >>= \x -> when (x < 5) (throwM Overflow))
+        writeIORef v 1
+        pure True
     ]
   ]
 

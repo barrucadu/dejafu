@@ -16,10 +16,12 @@
 module Test.DejaFu.Conc.Internal.Common where
 
 import           Control.Exception             (Exception, MaskingState(..))
+import           Control.Monad.Catch           (MonadCatch(..), MonadThrow(..))
 import qualified Control.Monad.Conc.Class      as C
 import qualified Control.Monad.Fail            as Fail
 import           Data.Map.Strict               (Map)
-import           Test.DejaFu.Conc.Internal.STM (ModelSTM)
+
+import           Test.DejaFu.Conc.Internal.STM (ModelSTM, ModelTVar)
 import           Test.DejaFu.Types
 
 --------------------------------------------------------------------------------
@@ -125,7 +127,7 @@ data ModelTicket a = ModelTicket
   }
 
 --------------------------------------------------------------------------------
--- * Primitive Actions
+-- ** Primitive Actions
 
 -- | Scheduling is done in terms of a trace of 'Action's. Blocking can
 -- only occur as a result of an action, and they cover (most of) the
@@ -171,8 +173,10 @@ data Action n =
   | ACommit ThreadId IORefId
   | AStop (n ())
 
+  | ANewInvariant (Invariant n ()) (Action n)
+
 --------------------------------------------------------------------------------
--- * Scheduling & Traces
+-- ** Scheduling & Traces
 
 -- | Look as far ahead in the given continuation as possible.
 lookahead :: Action n -> Lookahead
@@ -209,3 +213,51 @@ lookahead (AYield _) = WillYield
 lookahead (ADelay n _) = WillThreadDelay n
 lookahead (AReturn _) = WillReturn
 lookahead (AStop _) = WillStop
+lookahead (ANewInvariant _ _) = WillRegisterInvariant
+
+-------------------------------------------------------------------------------
+-- * Invariants
+
+-- | Invariants are atomic actions which can inspect the shared state
+-- of your computation, and terminate it on failure.  Invariants have
+-- no visible effects, and are checked after each scheduling point.
+--
+-- To be checked, an invariant must be created during the setup phase
+-- of your 'Program', using 'Test.DejaFu.Conc.registerInvariant'.  The
+-- invariant will then be checked in the main phase (but not in the
+-- setup or teardown phase).  As a consequence of this, any shared
+-- state you want your invariant to check must also be created in the
+-- setup phase, and passed into the main phase as a parameter.
+--
+-- @since unreleased
+newtype Invariant n a = Invariant { runInvariant :: (a -> IAction n) -> IAction n }
+
+instance Functor (Invariant n) where
+  fmap f m = Invariant $ \c -> runInvariant m (c . f)
+
+instance Applicative (Invariant n) where
+  pure x  = Invariant $ \c -> c x
+  f <*> v = Invariant $ \c -> runInvariant f (\g -> runInvariant v (c . g))
+
+instance Monad (Invariant n) where
+  return  = pure
+  fail    = Fail.fail
+  m >>= k = Invariant $ \c -> runInvariant m (\x -> runInvariant (k x) c)
+
+instance Fail.MonadFail (Invariant n) where
+  fail e = Invariant $ \_ -> IThrow (MonadFailException e)
+
+instance MonadThrow (Invariant n) where
+  throwM e = Invariant $ \_ -> IThrow e
+
+instance MonadCatch (Invariant n) where
+  catch stm handler = Invariant $ ICatch handler stm
+
+-- | Invariants are represented as a sequence of primitive actions.
+data IAction n
+  = forall a. IInspectIORef (ModelIORef n a) (a -> IAction n)
+  | forall a. IInspectMVar  (ModelMVar  n a) (Maybe a -> IAction n)
+  | forall a. IInspectTVar  (ModelTVar  n a) (a -> IAction n)
+  | forall a e. Exception e => ICatch (e -> Invariant n a) (Invariant n a) (a -> IAction n)
+  | forall e. Exception e => IThrow e
+  | IStop (n ())

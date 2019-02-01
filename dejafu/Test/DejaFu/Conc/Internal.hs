@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -9,7 +10,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : FlexibleContexts, MultiWayIf, RankNTypes, RecordWildCards
+-- Portability : FlexibleContexts, LambdaCase, MultiWayIf, RankNTypes, RecordWildCards
 --
 -- Concurrent monads with a fixed scheduler: internal types and
 -- functions. This module is NOT considered to form part of the public
@@ -23,7 +24,7 @@ import qualified Control.Monad.Catch                 as E
 import qualified Control.Monad.Conc.Class            as C
 import           Data.Foldable                       (foldrM)
 import           Data.Functor                        (void)
-import           Data.List                           (sortOn)
+import           Data.List                           (nub, partition, sortOn)
 import qualified Data.Map.Strict                     as M
 import           Data.Maybe                          (isJust, isNothing)
 import           Data.Monoid                         ((<>))
@@ -61,7 +62,8 @@ data CResult n g a = CResult
 -- state, returning a Condition reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
 runConcurrency :: (C.MonadConc n, HasCallStack)
-  => Bool
+  => [Invariant n ()]
+  -> Bool
   -> Scheduler g
   -> MemType
   -> g
@@ -69,12 +71,14 @@ runConcurrency :: (C.MonadConc n, HasCallStack)
   -> Int
   -> ModelConc n a
   -> n (CResult n g a)
-runConcurrency forSnapshot sched memtype g idsrc caps ma = do
-  let ctx = Context { cSchedState = g
-                    , cIdSource   = idsrc
-                    , cThreads    = M.empty
-                    , cWriteBuf   = emptyBuffer
-                    , cCaps       = caps
+runConcurrency invariants forSnapshot sched memtype g idsrc caps ma = do
+  let ctx = Context { cSchedState    = g
+                    , cIdSource      = idsrc
+                    , cThreads       = M.empty
+                    , cWriteBuf      = emptyBuffer
+                    , cCaps          = caps
+                    , cInvariants    = InvariantContext { icActive = invariants, icBlocked = [] }
+                    , cNewInvariants = []
                     }
   (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
   let threads0 = launch' Unmasked initialThread (const c) (cThreads ctx)
@@ -114,11 +118,13 @@ killAllThreads ctx =
 
 -- | The context a collection of threads are running in.
 data Context n g = Context
-  { cSchedState :: g
-  , cIdSource   :: IdSource
-  , cThreads    :: Threads n
-  , cWriteBuf   :: WriteBuffer n
-  , cCaps       :: Int
+  { cSchedState    :: g
+  , cIdSource      :: IdSource
+  , cThreads       :: Threads n
+  , cWriteBuf      :: WriteBuffer n
+  , cCaps          :: Int
+  , cInvariants    :: InvariantContext n
+  , cNewInvariants :: [Invariant n ()]
   }
 
 -- | Run a collection of threads, until there are no threads left.
@@ -191,10 +197,13 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
             if forSnapshot
             then restore threads' >> actionSnap threads'
             else restore threads'
-      let ctx' = fixContext chosen res ctx
+      let ctx' = fixContext chosen actOrTrc res ctx
       case res of
-        Succeeded _ ->
-          schedule restore' sofar' prior' ctx'
+        Succeeded _ -> checkInvariants (cInvariants ctx') >>= \case
+          Right ic ->
+            schedule restore' sofar' prior' ctx' { cInvariants = ic }
+          Left exc ->
+            die (InvariantFailure exc) restore' sofar' prior' ctx'
         Failed failure ->
           die failure restore' sofar' prior' ctx'
         Snap _ ->
@@ -205,17 +214,22 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
       getPrior a = Just (chosen, a)
 
 -- | Apply the context update from stepping an action.
-fixContext :: ThreadId -> What n g -> Context n g -> Context n g
-fixContext chosen (Succeeded ctx@Context{..}) _ =
+fixContext :: ThreadId -> ThreadAction -> What n g -> Context n g -> Context n g
+fixContext chosen act (Succeeded ctx@Context{..}) _ =
   ctx { cThreads = delCommitThreads $
         if (interruptible <$> M.lookup chosen cThreads) /= Just False
         then unblockWaitingOn chosen cThreads
         else cThreads
+      , cInvariants = unblockInvariants act cInvariants
       }
-fixContext _ (Failed _) ctx@Context{..} =
-  ctx { cThreads = delCommitThreads cThreads }
-fixContext _ (Snap ctx@Context{..}) _ =
-  ctx { cThreads = delCommitThreads cThreads }
+fixContext _ act (Failed _) ctx@Context{..} =
+  ctx { cThreads = delCommitThreads cThreads
+      , cInvariants = unblockInvariants act cInvariants
+      }
+fixContext _ act (Snap ctx@Context{..}) _ =
+  ctx { cThreads = delCommitThreads cThreads
+      , cInvariants = unblockInvariants act cInvariants
+      }
 
 -- | @unblockWaitingOn tid@ unblocks every thread blocked in a
 -- @throwTo tid@.
@@ -587,6 +601,16 @@ stepThread _ _ _ _ tid (AStop na) = \ctx@Context{..} -> do
        , const (pure ())
        )
 
+-- register an invariant to be checked in the next execution
+stepThread _ _ _ _ tid (ANewInvariant inv c) = \ctx@Context{..} ->
+  pure ( Succeeded ctx
+         { cThreads = goto c tid cThreads
+         , cNewInvariants = inv : cNewInvariants
+         }
+       , RegisterInvariant
+       , const (pure ())
+       )
+
 -- | Handle an exception being thrown from an @AAtom@, @AThrow@, or
 -- @AThrowTo@.
 stepThrow :: (C.MonadConc n, Exception e)
@@ -630,3 +654,99 @@ synchronised :: C.MonadConc n
 synchronised ma ctx@Context{..} = do
   writeBarrier cWriteBuf
   ma ctx { cWriteBuf = emptyBuffer }
+
+--------------------------------------------------------------------------------
+-- * Invariants
+
+-- | The state of the invariants
+data InvariantContext n = InvariantContext
+  { icActive  :: [Invariant n ()]
+  , icBlocked :: [(Invariant n (), ([IORefId], [MVarId], [TVarId]))]
+  }
+
+-- | @unblockInvariants act@ unblocks every invariant which could have
+-- its result changed by @act@.
+unblockInvariants ::  ThreadAction -> InvariantContext n -> InvariantContext n
+unblockInvariants act ic = InvariantContext active blocked where
+  active = map fst unblocked ++ icActive ic
+
+  (unblocked, blocked) = (`partition` icBlocked ic) $
+    \(_, (ioridsB, mvidsB, tvidsB)) ->
+      maybe False (`elem` ioridsB) (iorefOf (simplifyAction act)) ||
+      maybe False (`elem` mvidsB)  (mvarOf (simplifyAction act))  ||
+      any (`elem` tvidsB) (tvarsOf act)
+
+-- | Check all active invariants, returning an arbitrary failure if
+-- multiple ones fail.
+checkInvariants :: C.MonadConc n
+  => InvariantContext n
+  -> n (Either E.SomeException (InvariantContext n))
+checkInvariants ic = go (icActive ic) >>= \case
+    Right blocked -> pure (Right (InvariantContext [] (blocked ++ icBlocked ic)))
+    Left exc -> pure (Left exc)
+  where
+    go (inv:is) = checkInvariant inv >>= \case
+      Right o -> fmap ((inv,o):) <$> go is
+      Left exc -> pure (Left exc)
+    go [] = pure (Right [])
+
+-- | Check an invariant.
+checkInvariant :: C.MonadConc n
+  => Invariant n a
+  -> n (Either E.SomeException ([IORefId], [MVarId], [TVarId]))
+checkInvariant inv = doInvariant inv >>= \case
+  (Right _, iorefs, mvars, tvars) -> pure (Right (iorefs, mvars, tvars))
+  (Left exc, _, _, _) -> pure (Left exc)
+
+-- | Run an invariant (more primitive)
+doInvariant :: C.MonadConc n
+  => Invariant n a
+  -> n (Either E.SomeException a, [IORefId], [MVarId], [TVarId])
+doInvariant inv = do
+    (c, ref) <- runRefCont IStop (Just . Right) (runInvariant inv)
+    (iorefs, mvars, tvars) <- go ref c [] [] []
+    val <- C.readIORef ref
+    pure (efromJust val, nub iorefs, nub mvars, nub tvars)
+  where
+    go ref act iorefs mvars tvars = do
+      (res, iorefs', mvars', tvars') <- stepInvariant act
+      let newIORefs = iorefs' ++ iorefs
+      let newMVars  = mvars'  ++ mvars
+      let newTVars  = tvars'  ++ tvars
+      case res of
+        Right (Just act') ->
+          go ref act' newIORefs newMVars newTVars
+        Right Nothing ->
+          pure (newIORefs, newMVars, newTVars)
+        Left exc -> do
+          C.writeIORef ref (Just (Left exc))
+          pure (newIORefs, newMVars, newTVars)
+
+-- | Run an invariant for one step
+stepInvariant :: C.MonadConc n
+  => IAction n
+  -> n (Either E.SomeException (Maybe (IAction n)), [IORefId], [MVarId], [TVarId])
+stepInvariant (IInspectIORef ioref@ModelIORef{..} k) = do
+  a <- readIORefGlobal ioref
+  pure (Right (Just (k a)), [iorefId], [], [])
+stepInvariant (IInspectMVar ModelMVar{..} k) = do
+  a <- C.readIORef mvarRef
+  pure (Right (Just (k a)), [], [mvarId], [])
+stepInvariant (IInspectTVar ModelTVar{..} k) = do
+  a <- C.readIORef tvarRef
+  pure (Right (Just (k a)), [], [], [tvarId])
+stepInvariant (ICatch h nx k) = doInvariant nx >>= \case
+  (Right a, iorefs, mvars, tvars) ->
+    pure (Right (Just (k a)), iorefs, mvars, tvars)
+  (Left exc, iorefs, mvars, tvars) -> case E.fromException exc of
+    Just exc' -> doInvariant (h exc') >>= \case
+      (Right a, iorefs', mvars', tvars') ->
+        pure (Right (Just (k a)), iorefs' ++ iorefs, mvars' ++ mvars, tvars' ++ tvars)
+      (Left exc'', iorefs', mvars', tvars') ->
+        pure (Left exc'', iorefs' ++ iorefs, mvars' ++ mvars, tvars' ++ tvars)
+    Nothing -> pure (Left exc, iorefs, mvars, tvars)
+stepInvariant (IThrow exc) =
+  pure (Left (toException exc), [], [], [])
+stepInvariant (IStop finalise) = do
+  finalise
+  pure (Right Nothing, [], [], [])

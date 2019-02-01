@@ -85,6 +85,7 @@ showCondition :: Condition -> String
 showCondition Abort = "[abort]"
 showCondition Deadlock = "[deadlock]"
 showCondition (UncaughtException exc) = "[" ++ displayException exc ++ "]"
+showCondition (InvariantFailure _) = "[invariant failure]"
 
 -------------------------------------------------------------------------------
 -- * Scheduling
