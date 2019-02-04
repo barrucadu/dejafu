@@ -61,7 +61,7 @@ data Program pty n a where
 -- | A type used to constrain 'Program': a @Program Basic@ is a
 -- \"basic\" program with no set-up or teardown.
 --
--- Construct with the 'MonadConc' instance or with 'basic'.
+-- Construct with the 'MonadConc' instance.
 --
 -- @since unreleased
 data Basic
