@@ -7,15 +7,58 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-unreleased
-----------
+2.0.0.0 (2019-02-XX)
+--------------------
+
+* Git: :tag:`hunit-dejafu-2.0.0.0`
+* Hackage: :hackage:`hunit-dejafu-2.0.0.0`
+
+Added
+~~~~~
+
+* Re-exports for the ``Program`` types and their constructors:
+    * ``Test.HUnit.DejaFu.Program``
+    * ``Test.HUnit.DejaFu.Basic``
+    * ``Test.HUnit.DejaFu.ConcT``
+    * ``Test.HUnit.DejaFu.ConcIO``
+    * ``Test.HUnit.DejaFu.WithSetup``
+    * ``Test.HUnit.DejaFu.WithSetupAndTeardown``
+    * ``Test.HUnit.DejaFu.withSetup``
+    * ``Test.HUnit.DejaFu.withTeardown``
+    * ``Test.HUnit.DejaFu.withSetupAndTeardown``
+
+* Re-exports for the ``Invariant`` type and its functions:
+    * ``Test.HUnit.DejaFu.Invariant``
+    * ``Test.HUnit.DejaFu.registerInvariant``
+    * ``Test.HUnit.DejaFu.inspectIORef``
+    * ``Test.HUnit.DejaFu.inspectMVar``
+    * ``Test.HUnit.DejaFu.inspectTVar``
+
+Changes
+~~~~~~~
+
+* Functions which took a ``ConcIO`` now take a ``Program pty IO``:
+    * ``Test.HUnit.DejaFu.testAuto``
+    * ``Test.HUnit.DejaFu.testAutoWay``
+    * ``Test.HUnit.DejaFu.testAutoWithSettings``
+    * ``Test.HUnit.DejaFu.testDejafu``
+    * ``Test.HUnit.DejaFu.testDejafuWay``
+    * ``Test.HUnit.DejaFu.testDejafuWithSettings``
+    * ``Test.HUnit.DejaFu.testDejafus``
+    * ``Test.HUnit.DejaFu.testDejafusWay``
+    * ``Test.HUnit.DejaFu.testDejafusWithSettings``
 
 Removed
 ~~~~~~~
 
 * The deprecated functions:
-  * ``Test.HUnit.DejaFu.testDejafuDiscard``
-  * ``Test.HUnit.DejaFu.testDejafusDiscard``
+    * ``Test.HUnit.DejaFu.testDejafuDiscard``
+    * ``Test.HUnit.DejaFu.testDejafusDiscard``
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The lower bound on :hackage:`dejafu` is >=2.0.
 
 
 1.2.1.0 (2019-01-20)

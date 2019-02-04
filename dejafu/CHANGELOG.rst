@@ -6,26 +6,126 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
-unreleased
-----------
+
+2.0.0.0 (2019-02-XX)
+--------------------
+
+* Git: :tag:`dejafu-2.0.0.0`
+* Hackage: :hackage:`dejafu-2.0.0.0`
+
+Added
+~~~~~
+
+* The ``Program`` types and their constructors (re-exported from
+  ``Test.DejaFu``):
+    * ``Test.DejaFu.Conc.Program``
+    * ``Test.DejaFu.Conc.Basic``
+    * ``Test.DejaFu.Conc.WithSetup``
+    * ``Test.DejaFu.Conc.WithSetupAndTeardown``
+    * ``Test.DejaFu.Conc.withSetup``
+    * ``Test.DejaFu.Conc.withTeardown``
+    * ``Test.DejaFu.Conc.withSetupAndTeardown``
+
+* The ``Invariant`` type and associated functions (re-exported from
+  ``Test.DejaFu``):
+    * ``Test.DejaFu.Conc.Invariant``
+    * ``Test.DejaFu.Conc.registerInvariant``
+    * ``Test.DejaFu.Conc.inspectIORef``
+    * ``Test.DejaFu.Conc.inspectMVar``
+    * ``Test.DejaFu.Conc.inspectTVar``
+
+* New snapshotting functions:
+    * ``Test.DejaFu.Conc.Snapshot``
+    * ``Test.DejaFu.Conc.recordSnapshot``
+    * ``Test.DejaFu.Conc.runSnapshot``
+
+* ``Test.DejaFu.Settings.llengthBound``, which now applies to all ways
+  of testing.
+
+* ``Test.DejaFu.Types.isInvariantFailure`` (re-exported from
+  ``Test.DejaFu``).
+
+Changed
+~~~~~~~
+
+* Functions which took a ``ConcT`` now take a ``Program pty``:
+    * ``Test.DejaFu.autocheck``
+    * ``Test.DejaFu.autocheckWay``
+    * ``Test.DejaFu.autocheckWithSettings``
+    * ``Test.DejaFu.dejafu``
+    * ``Test.DejaFu.dejafuWay``
+    * ``Test.DejaFu.dejafuWithSettings``
+    * ``Test.DejaFu.dejafus``
+    * ``Test.DejaFu.dejafusWay``
+    * ``Test.DejaFu.dejafusWithSettings``
+    * ``Test.DejaFu.runTest``
+    * ``Test.DejaFu.runTestWay``
+    * ``Test.DejaFu.runTestWithSettings``
+    * ``Test.DejaFu.Conc.runConcurrent``
+    * ``Test.DejaFu.SCT.runSCT``
+    * ``Test.DejaFu.SCT.resultsSet``
+    * ``Test.DejaFu.SCT.runSCT'``
+    * ``Test.DejaFu.SCT.resultsSet'``
+    * ``Test.DejaFu.SCT.runSCTWithSettings``
+    * ``Test.DejaFu.SCT.resultsSetWithSettings``
+    * ``Test.DejaFu.SCT.runSCTWithSettings'``
+    * ``Test.DejaFu.SCT.resultsSetWithSettings'``
+
+* ``Test.DejaFu.Conc.ConcT`` is an alias for ``Program Basic``.
+
+* ``Test.DejaFu.Types.Bounds``:
+    * Removed ``boundLength`` field.
+
+* ``Test.DejaFu.Types.Condition``:
+    * Added ``InvariantFailure`` constructor
+    * Removed ``STMDeadlock`` constructor
+
+* ``Test.DejaFu.Types.Error``:
+    * Removed ``NestedSubconcurrency``, ``MultithreadedSubconcurrency``,
+      and ``LateDontCheck`` constructors.
+
+* ``Test.DejaFu.Types.Lookahead``:
+    * Added ``WillRegisterInvariant`` constructor
+    * Removed ``WillSubconcurrency``, ``WillStopSubconcurrency``, and
+      ``WillDontCheck`` constructors
+
+* ``Test.DejaFu.Types.ThreadAction``:
+    * Added ``RegisterInvariant`` constructor
+    * Removed ``Subconcurrency``, ``StopSubconcurrency``, and
+      ``DontCheck`` constructors
 
 Removed
 ~~~~~~~
 
 * The deprecated functions:
-  * ``Test.DejaFu.dejafuDiscard``
-  * ``Test.DejaFu.SCT.runSCTDiscard``
-  * ``Test.DejaFu.SCT.runSCTDiscard'``
-  * ``Test.DejaFu.SCT.resultsSetDiscard``
-  * ``Test.DejaFu.SCT.resultsSetDiscard'``
-  * ``Test.DejaFu.SCT.sctBound``
-  * ``Test.DejaFu.SCT.sctBoundDiscard``
-  * ``Test.DejaFu.SCT.sctUniformRandom``
-  * ``Test.DejaFu.SCT.sctUniformRandomDiscard``
-  * ``Test.DejaFu.SCT.sctWeightedRandom``
-  * ``Test.DejaFu.SCT.sctWeightedRandomDiscard``
+    * ``Test.DejaFu.dejafuDiscard``
+    * ``Test.DejaFu.SCT.runSCTDiscard``
+    * ``Test.DejaFu.SCT.runSCTDiscard'``
+    * ``Test.DejaFu.SCT.resultsSetDiscard``
+    * ``Test.DejaFu.SCT.resultsSetDiscard'``
+    * ``Test.DejaFu.SCT.sctBound``
+    * ``Test.DejaFu.SCT.sctBoundDiscard``
+    * ``Test.DejaFu.SCT.sctUniformRandom``
+    * ``Test.DejaFu.SCT.sctUniformRandomDiscard``
+    * ``Test.DejaFu.SCT.sctWeightedRandom``
+    * ``Test.DejaFu.SCT.sctWeightedRandomDiscard``
 
 * The deprecated type ``Test.DejaFu.Types.Failure``
+
+* Old snapshotting functions:
+    * ``Test.DejaFu.Conc.DCSnapshot``
+    * ``Test.DejaFu.Conc.runForDCSnapshot``
+    * ``Test.DejaFu.Conc.runWithDCSnapshot``
+    * ``Test.DejaFu.Conc.canDCSnapshot``
+    * ``Test.DejaFu.Conc.threadsFromDCSnapshot``
+
+* ``Test.DejaFu.Conc.dontCheck``
+
+* ``Test.DejaFu.Conc.subconcurrency``
+
+* ``Test.DejaFu.Settings.defaultLengthBound``
+
+* ``Test.DejaFu.Types.isIncorrectUsage``
 
 
 1.12.0.0 (2019-01-20)

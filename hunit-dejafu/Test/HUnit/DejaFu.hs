@@ -113,7 +113,7 @@ assertableP = alwaysTrue $ \case
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
 --
--- @since unreleased
+-- @since 2.0.0.0
 testAuto :: (Eq a, Show a)
   => Program pty IO a
   -- ^ The computation to test.
@@ -123,7 +123,7 @@ testAuto = testAutoWithSettings defaultSettings
 -- | Variant of 'testAuto' which tests a computation under a given
 -- execution way and memory model.
 --
--- @since unreleased
+-- @since 2.0.0.0
 testAutoWay :: (Eq a, Show a)
   => Way
   -- ^ How to execute the concurrent program.
@@ -136,7 +136,7 @@ testAutoWay way = testAutoWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testAuto' which takes a settings record.
 --
--- @since unreleased
+-- @since 2.0.0.0
 testAutoWithSettings :: (Eq a, Show a)
   => Settings IO a
   -- ^ The SCT settings.
@@ -151,7 +151,7 @@ testAutoWithSettings settings = testDejafusWithSettings settings
 
 -- | Check that a predicate holds.
 --
--- @since unreleased
+-- @since 2.0.0.0
 testDejafu :: Show b
   => String
   -- ^ The name of the test.
@@ -165,7 +165,7 @@ testDejafu = testDejafuWithSettings defaultSettings
 -- | Variant of 'testDejafu' which takes a way to execute the program
 -- and a memory model.
 --
--- @since unreleased
+-- @since 2.0.0.0
 testDejafuWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
@@ -182,7 +182,7 @@ testDejafuWay way = testDejafuWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testDejafu' which takes a settings record.
 --
--- @since unreleased
+-- @since 2.0.0.0
 testDejafuWithSettings :: Show b
   => Settings IO a
   -- ^ The SCT settings.
@@ -199,7 +199,7 @@ testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name
 -- test. This will share work between the predicates, rather than
 -- running the concurrent computation many times for each predicate.
 --
--- @since unreleased
+-- @since 2.0.0.0
 testDejafus :: Show b
   => [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
@@ -211,7 +211,7 @@ testDejafus = testDejafusWithSettings defaultSettings
 -- | Variant of 'testDejafus' which takes a way to execute the program
 -- and a memory model.
 --
--- @since unreleased
+-- @since 2.0.0.0
 testDejafusWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
@@ -226,7 +226,7 @@ testDejafusWay way = testDejafusWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testDejafus' which takes a settings record.
 --
--- @since unreleased
+-- @since 2.0.0.0
 testDejafusWithSettings :: Show b
   => Settings IO a
   -- ^ The SCT settings.

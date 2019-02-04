@@ -88,7 +88,7 @@ type ConcIO = ConcT IO
 -- setup action will only be run the first time, and its effects
 -- remembered for subsequent executions.
 --
--- @since unreleased
+-- @since 2.0.0.0
 withSetup
   :: Program Basic n x
   -- ^ Setup action
@@ -119,7 +119,7 @@ withSetup setup p = WithSetup
 --   * The teardown action will be executed even if the main action
 --     fails to produce a value.
 --
--- @since unreleased
+-- @since 2.0.0.0
 withTeardown
   :: (x -> Either Condition y -> Program Basic n a)
   -- ^ Teardown action
@@ -139,7 +139,7 @@ withTeardown teardown ws = WithSetupAndTeardown
 --   withTeardown teardown . withSetup setup
 -- @
 --
--- @since unreleased
+-- @since 2.0.0.0
 withSetupAndTeardown
   :: Program Basic n x
   -- ^ Setup action
@@ -162,7 +162,7 @@ withSetupAndTeardown setup teardown =
 -- If the invariant throws an exception, the execution will be aborted
 -- with n @InvariantFailure@.  Any teardown action will still be run.
 --
--- @since unreleased
+-- @since 2.0.0.0
 registerInvariant :: Invariant n a -> Program Basic n ()
 registerInvariant inv = ModelConc (\c -> ANewInvariant (() <$ inv) (c ()))
 
@@ -172,7 +172,7 @@ registerInvariant inv = ModelConc (\c -> ANewInvariant (() <$ inv) (c ()))
 -- as the value visible to any particular thread when using a memory
 -- model other than 'SequentialConsistency'.
 --
--- @since unreleased
+-- @since 2.0.0.0
 inspectIORef :: ModelIORef n a -> Invariant n a
 inspectIORef = Invariant . IInspectIORef
 
@@ -180,7 +180,7 @@ inspectIORef = Invariant . IInspectIORef
 --
 -- This is essentially @tryReadMVar@.
 --
--- @since unreleased
+-- @since 2.0.0.0
 inspectMVar :: ModelMVar n a -> Invariant n (Maybe a)
 inspectMVar = Invariant . IInspectMVar
 
@@ -188,6 +188,6 @@ inspectMVar = Invariant . IInspectMVar
 --
 -- This is essentially @readTVar@.
 --
--- @since unreleased
+-- @since 2.0.0.0
 inspectTVar :: ModelTVar n a -> Invariant n a
 inspectTVar = Invariant . IInspectTVar

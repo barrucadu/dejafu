@@ -43,7 +43,7 @@ type ModelConc = Program Basic
 -- 'Test.DejaFu.Conc.withSetup', 'Test.DejaFu.Conc.withTeardown', and
 -- 'Test.DejaFu.Conc.withSetupAndTeardown'.
 --
--- @since unreleased
+-- @since 2.0.0.0
 data Program pty n a where
   ModelConc ::
     { runModelConc :: (a -> Action n) -> Action n
@@ -63,7 +63,7 @@ data Program pty n a where
 --
 -- Construct with the 'MonadConc' instance.
 --
--- @since unreleased
+-- @since 2.0.0.0
 data Basic
 
 -- | A type used to constrain 'Program': a @Program (WithSetup x)@ is
@@ -71,7 +71,7 @@ data Basic
 --
 -- Construct with 'Test.DejaFu.Conc.withSetup'.
 --
--- @since unreleased
+-- @since 2.0.0.0
 data WithSetup x
 
 -- | A type used to constrain 'Program': a @Program
@@ -82,7 +82,7 @@ data WithSetup x
 -- Construct with 'Test.DejaFu.Conc.withTeardown' or
 -- 'Test.DejaFu.Conc.withSetupAndTeardown'.
 --
--- @since unreleased
+-- @since 2.0.0.0
 data WithSetupAndTeardown x y
 
 instance (pty ~ Basic) => Functor (Program pty n) where
@@ -229,7 +229,7 @@ lookahead (ANewInvariant _ _) = WillRegisterInvariant
 -- state you want your invariant to check must also be created in the
 -- setup phase, and passed into the main phase as a parameter.
 --
--- @since unreleased
+-- @since 2.0.0.0
 newtype Invariant n a = Invariant { runInvariant :: (a -> IAction n) -> IAction n }
 
 instance Functor (Invariant n) where

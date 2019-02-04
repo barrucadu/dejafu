@@ -391,7 +391,7 @@ noBounds = Bounds
 
 -- | A lens into the length bound.
 --
--- @since unreleased
+-- @since 2.0.0.0
 llengthBound :: Lens' (Settings n a) (Maybe LengthBound)
 llengthBound afb s = (\b -> s {_lengthBound = b}) <$> afb (_lengthBound s)
 

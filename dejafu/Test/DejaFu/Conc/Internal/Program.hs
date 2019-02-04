@@ -172,7 +172,7 @@ instance (pty ~ Basic, Monad n) => C.MonadConc (Program pty n) where
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 --
--- @since unreleased
+-- @since 2.0.0.0
 runConcurrent :: C.MonadConc n
   => Scheduler s
   -> MemType
@@ -252,7 +252,7 @@ runConcurrent sched memtype s ma = recordSnapshot ma >>= \case
 --   (liftIO . readIORef)
 -- @
 --
--- @since unreleased
+-- @since 2.0.0.0
 recordSnapshot
   :: C.MonadConc n
   => Program pty n a
@@ -267,7 +267,7 @@ recordSnapshot WithSetupAndTeardown{..} =
 
 -- | Runs a program with snapshotted setup to completion.
 --
--- @since unreleased
+-- @since 2.0.0.0
 runSnapshot
   :: C.MonadConc n
   => Scheduler s
@@ -301,7 +301,7 @@ runSnapshot sched memtype s (WSAT SimpleSnapshot{..} teardown) = do
 -- | A record of the state of a concurrent program immediately after
 -- completing the setup action.
 --
--- @since unreleased
+-- @since 2.0.0.0
 data Snapshot pty n a where
   WS   :: SimpleSnapshot n a -> Snapshot (WithSetup x) n a
   WSAT :: SimpleSnapshot n a -> (Either Condition a -> ModelConc n y) -> Snapshot (WithSetupAndTeardown x a) n y

@@ -106,7 +106,7 @@ initialThread = ThreadId (Id (Just "main") 0)
 
 -- | All the actions that a thread can perform.
 --
--- @since unreleased
+-- @since 2.0.0.0
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -242,7 +242,7 @@ instance NFData ThreadAction where
 
 -- | A one-step look-ahead at what a thread will do next.
 --
--- @since unreleased
+-- @since 2.0.0.0
 data Lookahead =
     WillFork
   -- ^ Will start a new thread.
@@ -433,7 +433,7 @@ instance NFData Decision
 -- exception with @show@ in the @UncaughtException@ and
 -- @InvariantFailure@ cases.
 --
--- @since unreleased
+-- @since 2.0.0.0
 data Condition
   = Abort
   -- ^ The scheduler chose to abort execution. This will be produced
@@ -491,7 +491,7 @@ isUncaughtException _ = False
 
 -- | Check if a condition is an @InvariantFailure@
 --
--- @since unreleased
+-- @since 2.0.0.0
 isInvariantFailure :: Condition -> Bool
 isInvariantFailure (InvariantFailure _) = True
 isInvariantFailure _ = False
@@ -502,7 +502,7 @@ isInvariantFailure _ = False
 -- | An indication that there is a bug in dejafu or you are using it
 -- incorrectly.
 --
--- @since unreleased
+-- @since 2.0.0.0
 data Error
   = ScheduledBlockedThread
   -- ^ Raised as an exception if the scheduler attempts to schedule a
@@ -523,7 +523,7 @@ isSchedulerError _ = True
 -------------------------------------------------------------------------------
 -- * Schedule bounding
 
--- | @since unreleased
+-- | @since 2.0.0.0
 data Bounds = Bounds
   { boundPreemp :: Maybe PreemptionBound
   , boundFair   :: Maybe FairBound
