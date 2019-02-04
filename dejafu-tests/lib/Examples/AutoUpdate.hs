@@ -48,8 +48,8 @@ import           Test.DejaFu              (Condition(..), gives)
 
 tests :: [TestTree]
 tests = toTestList
---  [ T "deadlocks"        deadlocks        (gives [Left Deadlock, Right ()])
-  [ T "nondeterministic" nondeterministic (gives [Left Deadlock, Right 0, Right 1])
+  [ T "deadlocks"        deadlocks        (gives [Left Deadlock, Right ()])
+  , T "nondeterministic" nondeterministic (gives [Left Deadlock, Right 0, Right 1])
   ]
 
 -- This exhibits a deadlock with no preemptions.
