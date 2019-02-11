@@ -82,6 +82,70 @@ important to be aware of what exactly your test is testing, to avoid
 drawing the wrong conclusions from a passing (or failing) test.
 
 
+Setup and Teardown
+------------------
+
+Because dejafu drives the execution of the program under test, there
+are some tricks available to you which are not possible using normal
+concurrent Haskell.
+
+If your test does some set-up work which is required for your test to
+work, but which is not the actual thing you are testing, you can
+define that as a **setup action**:
+
+.. code-block:: haskell
+
+  withSetup
+    :: Program Basic n x
+    -- ^ Setup action
+    -> (x -> Program Basic n a)
+    -- ^ Main program
+    -> Program (WithSetup x) n a
+
+dejafu will save the state at the end of the setup action, and
+efficiently restore that state in subsequent runs of the same test
+with a different schedule.  This can be much more efficient than
+dejafu running the setup action normally every single time.
+
+If you want to examine some state you created in your setup action
+even if your actual test case deadlocks or something, you can define a
+**teardown action**:
+
+.. code-block:: haskell
+
+  withSetupAndTeardown
+    :: Program Basic n x
+    -- ^ Setup action
+    -> (x -> Either Condition y -> Program Basic n a)
+    -- ^ Teardown action
+    -> (x -> Program Basic n y)
+    -- ^ Main program
+    -> Program (WithSetupAndTeardown x y) n a
+
+The teardown action is always executed.
+
+Finally, if you want to ensure that some invariant holds over some
+shared state, you can define invariants in the setup action, which are
+checked atomically during the main action:
+
+.. code-block:: haskell
+
+  -- slightly contrived example
+  let setup = do
+        var <- newEmptyMVar
+        registerInvariant $ do
+          value <- inspectMVar var
+          when (x == Just 1) (throwM Overflow)
+        pure var
+  in withSetup setup $ \var -> do
+       fork $ putMVar var 0
+       fork $ putMVar var 1
+       tryReadMVar var
+
+If the main action violates the invariant, it is terminated with an
+``InvariantFailure`` condition, and any teardown action is run.
+
+
 Predicates
 ----------
 
