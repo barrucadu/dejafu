@@ -7,7 +7,7 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-2.0.0.0 (2019-02-XX)
+2.0.0.0 (2019-02-12)
 --------------------
 
 * Git: :tag:`dejafu-2.0.0.0`

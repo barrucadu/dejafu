@@ -30,7 +30,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      tasty-dejafu-1.2.1.0
+  tag:      tasty-dejafu-2.0.0.0
 
 library
   exposed-modules:     Test.Tasty.DejaFu
