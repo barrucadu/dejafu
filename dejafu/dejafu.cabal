@@ -9,11 +9,11 @@ description:
   /[Déjà Fu is] A martial art in which the user's limbs move in time as well as space, […] It is best described as "the feeling that you have been kicked in the head this way before"/ -- Terry Pratchett, Thief of Time
   .
   This package builds on the
-  [concurrency](https://hackage.haskell.org/package/concurrency)
+  <https://hackage.haskell.org/package/concurrency concurrency>
   package by enabling you to deterministically test your concurrent
   programs.
   .
-  See the [website](https://dejafu.readthedocs.io) or README for more.
+  See the <https://dejafu.readthedocs.io website> or README for more.
 
 homepage:            https://github.com/barrucadu/dejafu
 license:             MIT

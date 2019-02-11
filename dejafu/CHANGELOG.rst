@@ -45,6 +45,8 @@ Added
 * ``Test.DejaFu.Types.isInvariantFailure`` (re-exported from
   ``Test.DejaFu``).
 
+* ``Test.DejaFu.runTestWithSettings`` function.
+
 Changed
 ~~~~~~~
 

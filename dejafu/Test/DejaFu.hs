@@ -2,15 +2,19 @@
 
 {- |
 Module      : Test.DejaFu
-Copyright   : (c) 2015--2018 Michael Walker
+Copyright   : (c) 2015--2019 Michael Walker
 License     : MIT
 Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 Stability   : experimental
 Portability : TupleSections
 
-dejafu is a library for unit-testing concurrent Haskell programs,
-written using the [concurrency](https://hackage.haskell.org/package/concurrency)
-package's 'MonadConc' typeclass.
+dejafu is a library for unit-testing concurrent Haskell programs which
+are written using the <https://hackage.haskell.org/package/concurrency
+concurrency> package's 'MonadConc' typeclass.
+
+For more in-depth documentation, including migration guides from
+earlier versions of dejafu, see the <https://dejafu.readthedocs.io
+website>.
 
 __A first test:__ This is a simple concurrent program which forks two
 threads and each races to write to the same @MVar@:
@@ -46,15 +50,65 @@ and, for each, a summarised execution trace leading to that result:
 
  * Each \"-\" represents one \"step\" of the computation.
 
-__Conditions:__ A program may fail to terminate in a way which
-produces a value. There are three such cases:
+__Memory models:__ dejafu supports three different memory models,
+which affect how one thread's 'IORef' updates become visible to other
+threads.
 
- * 'Deadlock', if every thread is blocked.
+ * Sequential consistency: a program behaves as a simple interleaving
+   of the actions in different threads. When an 'IORef' is written to,
+   that write is immediately visible to all threads.
 
- * 'UncaughtException', if the main thread is killed by an exception.
+  * Total store order (TSO): each thread has a write buffer.  A thread
+    sees its writes immediately, but other threads will only see
+    writes when they are committed, which may happen later.  Writes
+    are committed in the same order that they are created.
 
- * 'InvariantFailure', if an invariant (created with
-   'registerInvariant') failed.
+  * Partial store order (PSO): each 'IORef' has a write buffer.  A
+    thread sees its writes immediately, but other threads will only
+    see writes when they are committed, which may happen later.
+    Writes to different 'IORef's are not necessarily committed in the
+    same order that they are created.
+
+This small example shows the difference between sequential consistency
+and TSO:
+
+>>> :{
+let relaxed = do
+      r1 <- newIORef False
+      r2 <- newIORef False
+      x <- spawn $ writeIORef r1 True >> readIORef r2
+      y <- spawn $ writeIORef r2 True >> readIORef r1
+      (,) <$> readMVar x <*> readMVar y
+:}
+
+The 'autocheckWay' function will let us specify the memory model:
+
+>>> autocheckWay defaultWay SequentialConsistency relaxed
+[pass] Successful
+[fail] Deterministic
+    (False,True) S0---------S1----S0--S2----S0--
+<BLANKLINE>
+    (True,True) S0---------S1-P2----S1---S0---
+<BLANKLINE>
+    (True,False) S0---------S2----S1----S0---
+False
+
+>>> autocheckWay defaultWay TotalStoreOrder relaxed
+[pass] Successful
+[fail] Deterministic
+    (False,True) S0---------S1----S0--S2----S0--
+<BLANKLINE>
+    (False,False) S0---------S1--P2----S1--S0---
+<BLANKLINE>
+    (True,False) S0---------S2----S1----S0---
+<BLANKLINE>
+    (True,True) S0---------S1-C-S2----S1---S0---
+False
+
+The result @(False,False)@ is possible using TSO and PSO, but not
+sequential consistency.  The \"C\" in the trace shows where a /commit/
+action occurred, which makes a write to an 'IORef' visible to all
+threads.
 
 __Beware of 'liftIO':__ dejafu works by running your test case lots of
 times with different schedules.  If you use 'liftIO' at all, make sure
@@ -66,29 +120,9 @@ If you need to test things with /nondeterministc/ @IO@, see the
 'randomly' and 'uniformly' testing modes can cope with nondeterminism.
 -}
 module Test.DejaFu
-  ( -- * Expressing concurrent programs
-    Program
-  , Basic
-  , ConcT
-  , ConcIO
+  ( -- * Unit testing
 
-  -- ** Setup and teardown
-  , WithSetup
-  , WithSetupAndTeardown
-  , withSetup
-  , withTeardown
-  , withSetupAndTeardown
-
-  -- ** Invariants
-  , Invariant
-  , registerInvariant
-  , inspectIORef
-  , inspectMVar
-  , inspectTVar
-
-    -- * Unit testing
-
-  , autocheck
+    autocheck
   , dejafu
   , dejafus
 
@@ -127,9 +161,9 @@ If you need more information, use these functions.
 -}
 
   , Result(..)
-  , Condition(..)
   , runTest
   , runTestWay
+  , runTestWithSettings
 
   -- ** Predicates
 
@@ -189,24 +223,24 @@ Helper functions to identify conditions.
 
 -}
 
+  , Condition(..)
   , isAbort
   , isDeadlock
   , isUncaughtException
   , isInvariantFailure
 
-  -- * Property testing
+  -- * Property-based testing
 
   {- |
 
-dejafu can also use a property-testing style to test stateful
+dejafu can also use a property-based testing style to test stateful
 operations for a variety of inputs.  Inputs are generated using the
-[leancheck](https://hackage.haskell.org/package/leancheck) library for
+<https://hackage.haskell.org/package/leancheck leancheck> library for
 enumerative testing.
 
-__Testing @MVar@ operations with multiple producers__:
-
-These are a little different to the property tests you may be familiar
-with from libraries like QuickCheck (and leancheck).  As we're testing
+__Testing @MVar@ operations with multiple producers__: These are a
+little different to the property tests you may be familiar with from
+libraries like QuickCheck (and leancheck).  As we're testing
 properties of /stateful/ and /concurrent/ things, we need to provide
 some extra information.
 
@@ -257,7 +291,27 @@ interference we have provided: the left term never empties a full
 -}
 
   , module Test.DejaFu.Refinement
-  ) where
+
+  -- * Expressing concurrent programs
+  , Program
+  , Basic
+  , ConcT
+  , ConcIO
+
+  -- ** Setup and teardown
+  , WithSetup
+  , WithSetupAndTeardown
+  , withSetup
+  , withTeardown
+  , withSetupAndTeardown
+
+  -- ** Invariants
+  , Invariant
+  , registerInvariant
+  , inspectIORef
+  , inspectMVar
+  , inspectTVar
+) where
 
 import           Control.Arrow            (first)
 import           Control.DeepSeq          (NFData(..))
@@ -712,7 +766,7 @@ representative p = p
       in result { _failures = simplestsBy (==) (_failures result) }
   }
 
--- | Check that a computation never fails.
+-- | Check that a computation never produces a @Left@ value.
 --
 -- @since 1.9.1.0
 successful :: Predicate a
@@ -790,8 +844,7 @@ exceptionsAlways = alwaysTrue $ either isUncaughtException (const False)
 exceptionsSometimes :: Predicate a
 exceptionsSometimes = somewhereTrue $ either isUncaughtException (const False)
 
--- | Check that a computation always gives the same, successful,
--- result.
+-- | Check that a computation always gives the same, @Right@, result.
 --
 -- > alwaysSame = alwaysSameBy (==)
 --
@@ -800,7 +853,7 @@ alwaysSame :: Eq a => Predicate a
 alwaysSame = alwaysSameBy (==)
 
 -- | Check that a computation always gives the same (according to the
--- provided function), successful, result.
+-- provided function), @Right@, result.
 --
 -- > alwaysSameOn = alwaysSameBy ((==) `on` f)
 --
@@ -825,7 +878,7 @@ alwaysSameBy f = ProPredicate
   }
 
 -- | Check that a computation never fails, and gives multiple distinct
--- successful results.
+-- @Right@ results.
 --
 -- > notAlwaysSame = notAlwaysSameBy (==)
 --
@@ -834,7 +887,7 @@ notAlwaysSame :: Eq a => Predicate a
 notAlwaysSame = notAlwaysSameBy (==)
 
 -- | Check that a computation never fails, and gives multiple distinct
--- (according to the provided function) successful results.
+-- (according to the provided function) @Right@ results.
 --
 -- > notAlwaysSameOn = notAlwaysSameBy ((==) `on` f)
 --
@@ -843,7 +896,7 @@ notAlwaysSameOn :: Eq b => (a -> b) -> Predicate a
 notAlwaysSameOn f = notAlwaysSameBy ((==) `on` f)
 
 -- | Check that a computation never fails, and gives multiple distinct
--- successful results, by applying a transformation on results.
+-- @Right@ results, by applying a transformation on results.
 --
 -- This inverts the condition, so (eg) @notAlwaysSameBy (==)@ will
 -- pass if there are unequal results.
@@ -934,7 +987,9 @@ gives expected = ProPredicate
 
     failures = filter (\(r, _) -> r `notElem` expected)
 
--- | Variant of 'gives' that doesn't allow for non-success conditions.
+-- | Variant of 'gives' that doesn't allow for @Left@ results.
+--
+-- > gives' = gives . map Right
 --
 -- @since 1.0.0.0
 gives' :: (Eq a, Show a) => [a] -> Predicate a
