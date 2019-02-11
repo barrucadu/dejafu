@@ -110,3 +110,6 @@ able to derive it.  For example:
   deriving instance MonadCatch m => MonadCatch (MyMonad m)
 
   deriving instance MonadSTM m => MonadSTM (MyMonad m)
+
+Don't be put off by the use of ``UndecidableInstances``, it's safe
+here.

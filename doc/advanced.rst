@@ -23,6 +23,9 @@ The available settings are:
 
 * **"Way"**, how to explore the behaviours of the program under test.
 
+* **Length bound**, a cut-off point to terminate an execution even if
+  it's not done yet.
+
 * **Memory model**, which affects how non-synchronised operations,
   such as ``readIORef`` and ``writeIORef`` behave.
 

@@ -70,6 +70,18 @@ Fu will be bound, and further bound threads can be forked with the
 will raise an error.
 
 
+Conditions
+----------
+
+When a concurrent program of type ``MonadConc m => m a`` is executed,
+it may produce a value of type ``a``, or it may experience a
+**condition** such as deadlock.
+
+A condition does not necessarily cause your test to fail.  It's
+important to be aware of what exactly your test is testing, to avoid
+drawing the wrong conclusions from a passing (or failing) test.
+
+
 Predicates
 ----------
 
@@ -85,7 +97,8 @@ own.
 
 An **abort** is where the scheduler chooses to terminate execution
 early.  If you see it, it probably means that a test didn't terminate
-before it hit the execution length limit.
+before it hit the execution length limit.  Aborts are hidden unless
+you use explicitly enable them, see :ref:`settings`.
 
 .. csv-table::
   :widths: 25, 75
@@ -112,7 +125,7 @@ to it from a different thread).
 .. csv-table::
   :widths: 25, 75
 
-  ``alwaysSame``,"checks that the computation is deterministic"
+  ``alwaysSame``,"checks that the computation is deterministic and always produces a value"
   ``alwaysSameOn f``,"is like ``alwaysSame``, but transforms the results with ``f`` first"
   ``alwaysSameBy f``,"is like ``alwaysSame``, but uses ``f`` instead of ``(==)`` to compare"
   ``notAlwaysSame``,"checks that the computation is nondeterministic"
@@ -134,8 +147,8 @@ want all your results to be less than five.
 .. csv-table::
   :widths: 25, 75
 
-  ``gives xs``,"checks that the set of results is exactly ``xs`` (which may include failures)"
-  ``gives' xs``,"checks that the set of results is exactly ``xs`` (which may not include failures)"
+  ``gives xs``,"checks that the set of results is exactly ``xs`` (which may include conditions)"
+  ``gives' xs``,"checks that the set of results is exactly ``xs`` (which may not include conditions)"
 
 These let you say exactly what you want the results to be.  Your test
 will fail if it has any extra results, or misses a result.

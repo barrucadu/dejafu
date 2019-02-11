@@ -29,8 +29,8 @@ the ``~`` instance trick, so this shouldn't be a breaking change:
   instance (pty ~ Basic)            => MonadCatch (Program pty n)
   instance (pty ~ Basic)            => MonadThrow (Program pty n)
   instance (pty ~ Basic)            => MonadMask  (Program pty n)
-  instance (Monad n,   pty ~ Basic, Monad   n) => MonadConc (Program pty n)
-  instance (MonadIO n, pty ~ Basic, MonadIO n) => MonadIO   (Program pty n)
+  instance (pty ~ Basic, Monad   n) => MonadConc  (Program pty n)
+  instance (pty ~ Basic, MonadIO n) => MonadIO    (Program pty n)
 
 The ``dontCheck`` function has been removed in favour of
 ``withSetup``:
@@ -57,8 +57,8 @@ The ``subconcurrency`` function has been removed in favour of
 
   withSetupAndTeardown setup teardown action
 
-The ``dontCheck`` and ``subconcurrency`` functions throw runtime
-errors if nested.  This is not possible with ``withSetup`` and
+The ``dontCheck`` and ``subconcurrency`` functions used to throw
+runtime errors if nested.  This is not possible with ``withSetup`` and
 ``withSetupAndTeardown`` due to their types:
 
 .. code-block:: haskell
