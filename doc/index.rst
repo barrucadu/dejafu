@@ -28,7 +28,6 @@ This is Déjà Fu
    :maxdepth: 2
    :caption: Developer Documentation
 
-   adding_a_new_primitive
    contributing
    ghc
    release_process
