@@ -208,8 +208,6 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
             die (InvariantFailure exc) restore' sofar' prior' ctx'
         Failed failure ->
           die failure restore' sofar' prior' ctx'
-        Snap _ ->
-          stop actionSnap sofar' prior' ctx'
     where
       getTrc a = Seq.singleton (decision, alternatives, a)
 
@@ -248,8 +246,6 @@ data What n g
   -- ^ Action succeeded: continue execution.
   | Failed Condition
   -- ^ Action caused computation to fail: stop.
-  | Snap (Context n g)
-  -- ^ Action was a snapshot point and we're in snapshot mode: stop.
 
 -- | Run a single thread one step, by dispatching on the type of
 -- 'Action'.
@@ -517,7 +513,6 @@ stepThread _ _ _ _ tid (AAtom stm c) = synchronised $ \ctx@Context{..} -> do
       pure $ case res' of
         (Succeeded ctx', _, effect') -> (Succeeded ctx' { cIdSource = idSource' }, act, effect')
         (Failed err, _, effect') -> (Failed err, act, effect')
-        (Snap _, _, _) -> fatal "stepThread.AAtom" "Unexpected snapshot while propagating STM exception"
 
 -- lift an action from the underlying monad into the @Conc@
 -- computation.
