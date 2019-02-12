@@ -30,12 +30,10 @@ jobs:
   allow_failures:
   - env: MODE=test RESOLVER=nightly
   include:
-  - stage: check
+  - stage: test
     env: MODE=doctest
   - env: MODE=lint
-
-  - stage: test
-    env: MODE=test RESOLVER=lts-9.0  # GHC 8.0
+  - env: MODE=test RESOLVER=lts-9.0  # GHC 8.0
   - env: MODE=test RESOLVER=lts-10.0 # GHC 8.2
   - env: MODE=test RESOLVER=lts-12.0 # GHC 8.4
   - env: MODE=test RESOLVER=lts-13.3 # GHC 8.6 - .3 because hedgehog and stylish-haskell aren't in .0
