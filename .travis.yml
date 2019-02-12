@@ -30,14 +30,28 @@ jobs:
   allow_failures:
   - env: MODE=test RESOLVER=nightly
   include:
+  # don't build the tests for both the commit and the PR
   - stage: test
+    if: type != pull_request
     env: MODE=doctest
-  - env: MODE=lint
-  - env: MODE=test RESOLVER=lts-9.0  # GHC 8.0
-  - env: MODE=test RESOLVER=lts-10.0 # GHC 8.2
-  - env: MODE=test RESOLVER=lts-12.0 # GHC 8.4
-  - env: MODE=test RESOLVER=lts-13.3 # GHC 8.6 - .3 because hedgehog and stylish-haskell aren't in .0
-  - env: MODE=test RESOLVER=nightly
+  - stage: test
+    if: type != pull_request
+    env: MODE=lint
+  - stage: test
+    if: type != pull_request
+    env: MODE=test RESOLVER=lts-9.0  # GHC 8.0
+  - stage: test
+    if: type != pull_request
+    env: MODE=test RESOLVER=lts-10.0 # GHC 8.2
+  - stage: test
+    if: type != pull_request
+    env: MODE=test RESOLVER=lts-12.0 # GHC 8.4
+  - stage: test
+    if: type != pull_request
+    env: MODE=test RESOLVER=lts-13.3 # GHC 8.6 - .3 because hedgehog and stylish-haskell aren't in .0
+  - stage: test
+    if: type != pull_request
+    env: MODE=test RESOLVER=nightly
 
   - stage: predeploy
     if: branch=master
