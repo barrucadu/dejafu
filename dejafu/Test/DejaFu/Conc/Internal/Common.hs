@@ -1,13 +1,14 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.Common
--- Copyright   : (c) 2016--2018 Michael Walker
+-- Copyright   : (c) 2016--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : ExistentialQuantification, RankNTypes
+-- Portability : ExistentialQuantification, GADTs, RankNTypes
 --
 -- Common types and utility functions for deterministic execution of
 -- 'MonadConc' implementations. This module is NOT considered to form
@@ -15,14 +16,16 @@
 module Test.DejaFu.Conc.Internal.Common where
 
 import           Control.Exception             (Exception, MaskingState(..))
+import           Control.Monad.Catch           (MonadCatch(..), MonadThrow(..))
 import qualified Control.Monad.Conc.Class      as C
 import qualified Control.Monad.Fail            as Fail
 import           Data.Map.Strict               (Map)
-import           Test.DejaFu.Conc.Internal.STM (ModelSTM)
+
+import           Test.DejaFu.Conc.Internal.STM (ModelSTM, ModelTVar)
 import           Test.DejaFu.Types
 
 --------------------------------------------------------------------------------
--- * The @ModelConc@ Monad
+-- * Types for Modelling Concurrency
 
 -- | The underlying monad is based on continuations over 'Action's.
 --
@@ -32,25 +35,72 @@ import           Test.DejaFu.Types
 -- current expression of threads and exception handlers very difficult
 -- (perhaps even not possible without significant reworking), so I
 -- abandoned the attempt.
-newtype ModelConc n a = ModelConc { runModelConc :: (a -> Action n) -> Action n }
+type ModelConc = Program Basic
 
-instance Functor (ModelConc n) where
-    fmap f m = ModelConc $ \c -> runModelConc m (c . f)
+-- | A representation of a concurrent program for testing.
+--
+-- To construct these, use the 'C.MonadConc' instance, or see
+-- 'Test.DejaFu.Conc.withSetup', 'Test.DejaFu.Conc.withTeardown', and
+-- 'Test.DejaFu.Conc.withSetupAndTeardown'.
+--
+-- @since 2.0.0.0
+data Program pty n a where
+  ModelConc ::
+    { runModelConc :: (a -> Action n) -> Action n
+    } -> Program Basic n a
+  WithSetup ::
+    { wsSetup   :: ModelConc n x
+    , wsProgram :: x -> ModelConc n a
+    } -> Program (WithSetup x) n a
+  WithSetupAndTeardown ::
+    { wstSetup    :: ModelConc n x
+    , wstProgram  :: x -> ModelConc n y
+    , wstTeardown :: x -> Either Condition y -> ModelConc n a
+    } -> Program (WithSetupAndTeardown x y) n a
 
-instance Applicative (ModelConc n) where
-    -- without the @AReturn@, a thread could lock up testing by
-    -- entering an infinite loop (eg: @forever (return ())@)
-    pure x  = ModelConc $ \c -> AReturn $ c x
-    f <*> v = ModelConc $ \c -> runModelConc f (\g -> runModelConc v (c . g))
+-- | A type used to constrain 'Program': a @Program Basic@ is a
+-- \"basic\" program with no set-up or teardown.
+--
+-- Construct with the 'MonadConc' instance.
+--
+-- @since 2.0.0.0
+data Basic
 
-instance Monad (ModelConc n) where
-    return  = pure
-    m >>= k = ModelConc $ \c -> runModelConc m (\x -> runModelConc (k x) c)
+-- | A type used to constrain 'Program': a @Program (WithSetup x)@ is
+-- a program with some set-up action producing a value of type @x@.
+--
+-- Construct with 'Test.DejaFu.Conc.withSetup'.
+--
+-- @since 2.0.0.0
+data WithSetup x
 
-    fail = Fail.fail
+-- | A type used to constrain 'Program': a @Program
+-- (WithSetupAndTeardown x y)@ is a program producing a value of type
+-- @y@ with some set-up action producing a value of type @x@ and a
+-- teardown action producing the final result.
+--
+-- Construct with 'Test.DejaFu.Conc.withTeardown' or
+-- 'Test.DejaFu.Conc.withSetupAndTeardown'.
+--
+-- @since 2.0.0.0
+data WithSetupAndTeardown x y
 
-instance Fail.MonadFail (ModelConc n) where
-    fail e = ModelConc $ \_ -> AThrow (MonadFailException e)
+instance (pty ~ Basic) => Functor (Program pty n) where
+  fmap f m = ModelConc $ \c -> runModelConc m (c . f)
+
+instance (pty ~ Basic) => Applicative (Program pty n) where
+  -- without the @AReturn@, a thread could lock up testing by entering
+  -- an infinite loop (eg: @forever (return ())@)
+  pure x  = ModelConc $ \c -> AReturn $ c x
+  f <*> v = ModelConc $ \c -> runModelConc f (\g -> runModelConc v (c . g))
+
+instance (pty ~ Basic) => Monad (Program pty n) where
+  return  = pure
+  fail    = Fail.fail
+  m >>= k = ModelConc $ \c -> runModelConc m (\x -> runModelConc (k x) c)
+
+instance (pty ~ Basic) => Fail.MonadFail (Program pty n) where
+  fail e = ModelConc $ \_ -> AThrow (MonadFailException e)
 
 -- | An @MVar@ is modelled as a unique ID and a reference holding a
 -- @Maybe@ value.
@@ -77,7 +127,7 @@ data ModelTicket a = ModelTicket
   }
 
 --------------------------------------------------------------------------------
--- * Primitive Actions
+-- ** Primitive Actions
 
 -- | Scheduling is done in terms of a trace of 'Action's. Blocking can
 -- only occur as a result of an action, and they cover (most of) the
@@ -123,12 +173,10 @@ data Action n =
   | ACommit ThreadId IORefId
   | AStop (n ())
 
-  | forall a. ASub (ModelConc n a) (Either Condition a -> Action n)
-  | AStopSub (Action n)
-  | forall a. ADontCheck (Maybe Int) (ModelConc n a) (a -> Action n)
+  | ANewInvariant (Invariant n ()) (Action n)
 
 --------------------------------------------------------------------------------
--- * Scheduling & Traces
+-- ** Scheduling & Traces
 
 -- | Look as far ahead in the given continuation as possible.
 lookahead :: Action n -> Lookahead
@@ -165,6 +213,51 @@ lookahead (AYield _) = WillYield
 lookahead (ADelay n _) = WillThreadDelay n
 lookahead (AReturn _) = WillReturn
 lookahead (AStop _) = WillStop
-lookahead (ASub _ _) = WillSubconcurrency
-lookahead (AStopSub _) = WillStopSubconcurrency
-lookahead (ADontCheck _ _ _) = WillDontCheck
+lookahead (ANewInvariant _ _) = WillRegisterInvariant
+
+-------------------------------------------------------------------------------
+-- * Invariants
+
+-- | Invariants are atomic actions which can inspect the shared state
+-- of your computation, and terminate it on failure.  Invariants have
+-- no visible effects, and are checked after each scheduling point.
+--
+-- To be checked, an invariant must be created during the setup phase
+-- of your 'Program', using 'Test.DejaFu.Conc.registerInvariant'.  The
+-- invariant will then be checked in the main phase (but not in the
+-- setup or teardown phase).  As a consequence of this, any shared
+-- state you want your invariant to check must also be created in the
+-- setup phase, and passed into the main phase as a parameter.
+--
+-- @since 2.0.0.0
+newtype Invariant n a = Invariant { runInvariant :: (a -> IAction n) -> IAction n }
+
+instance Functor (Invariant n) where
+  fmap f m = Invariant $ \c -> runInvariant m (c . f)
+
+instance Applicative (Invariant n) where
+  pure x  = Invariant $ \c -> c x
+  f <*> v = Invariant $ \c -> runInvariant f (\g -> runInvariant v (c . g))
+
+instance Monad (Invariant n) where
+  return  = pure
+  fail    = Fail.fail
+  m >>= k = Invariant $ \c -> runInvariant m (\x -> runInvariant (k x) c)
+
+instance Fail.MonadFail (Invariant n) where
+  fail e = Invariant $ \_ -> IThrow (MonadFailException e)
+
+instance MonadThrow (Invariant n) where
+  throwM e = Invariant $ \_ -> IThrow e
+
+instance MonadCatch (Invariant n) where
+  catch stm handler = Invariant $ ICatch handler stm
+
+-- | Invariants are represented as a sequence of primitive actions.
+data IAction n
+  = forall a. IInspectIORef (ModelIORef n a) (a -> IAction n)
+  | forall a. IInspectMVar  (ModelMVar  n a) (Maybe a -> IAction n)
+  | forall a. IInspectTVar  (ModelTVar  n a) (a -> IAction n)
+  | forall a e. Exception e => ICatch (e -> Invariant n a) (Invariant n a) (a -> IAction n)
+  | forall e. Exception e => IThrow e
+  | IStop (n ())

@@ -2,18 +2,18 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                dejafu
-version:             1.12.0.0
+version:             2.0.0.0
 synopsis:            A library for unit-testing concurrent programs.
 
 description:
   /[Déjà Fu is] A martial art in which the user's limbs move in time as well as space, […] It is best described as "the feeling that you have been kicked in the head this way before"/ -- Terry Pratchett, Thief of Time
   .
   This package builds on the
-  [concurrency](https://hackage.haskell.org/package/concurrency)
+  <https://hackage.haskell.org/package/concurrency concurrency>
   package by enabling you to deterministically test your concurrent
   programs.
   .
-  See the [website](https://dejafu.readthedocs.io) or README for more.
+  See the <https://dejafu.readthedocs.io website> or README for more.
 
 homepage:            https://github.com/barrucadu/dejafu
 license:             MIT
@@ -33,7 +33,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      dejafu-1.12.0.0
+  tag:      dejafu-2.0.0.0
 
 library
   exposed-modules:     Test.DejaFu
@@ -48,6 +48,7 @@ library
                      , Test.DejaFu.Conc.Internal
                      , Test.DejaFu.Conc.Internal.Common
                      , Test.DejaFu.Conc.Internal.Memory
+                     , Test.DejaFu.Conc.Internal.Program
                      , Test.DejaFu.Conc.Internal.STM
                      , Test.DejaFu.Conc.Internal.Threading
                      , Test.DejaFu.Internal

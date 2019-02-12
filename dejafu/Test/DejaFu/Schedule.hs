@@ -37,16 +37,19 @@ import           Test.DejaFu.Types
 --
 -- 2. The unblocked threads.
 --
--- 3. The state.
+-- 3. The concurrency state.
+--
+-- 4. The scheduler state.
 --
 -- It returns a thread to execute, or @Nothing@ if execution should
 -- abort here, and also a new state.
 --
--- @since 0.8.0.0
+-- @since 2.0.0.0
 newtype Scheduler state = Scheduler
   { scheduleThread
     :: Maybe (ThreadId, ThreadAction)
     -> NonEmpty (ThreadId, Lookahead)
+    -> ConcurrencyState
     -> state
     -> (Maybe ThreadId, state)
   }
@@ -60,7 +63,7 @@ newtype Scheduler state = Scheduler
 -- @since 0.8.0.0
 randomSched :: RandomGen g => Scheduler g
 randomSched = Scheduler go where
-  go _ threads g =
+  go _ threads _ g =
     let threads' = map fst (toList threads)
         (choice, g') = randomR (0, length threads' - 1) g
     in (Just $ eidx threads' choice, g')
@@ -71,8 +74,8 @@ randomSched = Scheduler go where
 -- @since 0.8.0.0
 roundRobinSched :: Scheduler ()
 roundRobinSched = Scheduler go where
-  go Nothing ((tid,_):|_) _ = (Just tid, ())
-  go (Just (prior, _)) threads _ =
+  go Nothing ((tid,_):|_) _ _ = (Just tid, ())
+  go (Just (prior, _)) threads _ _ =
     let threads' = map fst (toList threads)
         candidates =
           if prior >= maximum threads'
@@ -109,7 +112,7 @@ roundRobinSchedNP = makeNonPreemptive roundRobinSched
 -- @since 0.8.0.0
 makeNonPreemptive :: Scheduler s -> Scheduler s
 makeNonPreemptive sched = Scheduler newsched where
-  newsched p@(Just (prior, _)) threads s
+  newsched p@(Just (prior, _)) threads cs s
     | prior `elem` map fst (toList threads) = (Just prior, s)
-    | otherwise = scheduleThread sched p threads s
-  newsched Nothing threads s = scheduleThread sched Nothing threads s
+    | otherwise = scheduleThread sched p threads cs s
+  newsched Nothing threads cs s = scheduleThread sched Nothing threads cs s

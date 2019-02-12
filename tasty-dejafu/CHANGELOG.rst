@@ -7,6 +7,60 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+2.0.0.0 (2019-02-12)
+--------------------
+
+* Git: :tag:`tasty-dejafu-2.0.0.0`
+* Hackage: :hackage:`tasty-dejafu-2.0.0.0`
+
+Added
+~~~~~
+
+* Re-exports for the ``Program`` types and their constructors:
+    * ``Test.Tasty.DejaFu.Program``
+    * ``Test.Tasty.DejaFu.Basic``
+    * ``Test.Tasty.DejaFu.ConcT``
+    * ``Test.Tasty.DejaFu.ConcIO``
+    * ``Test.Tasty.DejaFu.WithSetup``
+    * ``Test.Tasty.DejaFu.WithSetupAndTeardown``
+    * ``Test.Tasty.DejaFu.withSetup``
+    * ``Test.Tasty.DejaFu.withTeardown``
+    * ``Test.Tasty.DejaFu.withSetupAndTeardown``
+
+* Re-exports for the ``Invariant`` type and its functions:
+    * ``Test.Tasty.DejaFu.Invariant``
+    * ``Test.Tasty.DejaFu.registerInvariant``
+    * ``Test.Tasty.DejaFu.inspectIORef``
+    * ``Test.Tasty.DejaFu.inspectMVar``
+    * ``Test.Tasty.DejaFu.inspectTVar``
+
+Changes
+~~~~~~~
+
+* Functions which took a ``ConcIO`` now take a ``Program pty IO``:
+    * ``Test.Tasty.DejaFu.testAuto``
+    * ``Test.Tasty.DejaFu.testAutoWay``
+    * ``Test.Tasty.DejaFu.testAutoWithSettings``
+    * ``Test.Tasty.DejaFu.testDejafu``
+    * ``Test.Tasty.DejaFu.testDejafuWay``
+    * ``Test.Tasty.DejaFu.testDejafuWithSettings``
+    * ``Test.Tasty.DejaFu.testDejafus``
+    * ``Test.Tasty.DejaFu.testDejafusWay``
+    * ``Test.Tasty.DejaFu.testDejafusWithSettings``
+
+Removed
+~~~~~~~
+
+* The deprecated functions:
+    * ``Test.Tasty.DejaFu.testDejafuDiscard``
+    * ``Test.Tasty.DejaFu.testDejafusDiscard``
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The lower bound on :hackage:`dejafu` is >=2.0.
+
+
 1.2.1.0 (2019-01-20)
 --------------------
 

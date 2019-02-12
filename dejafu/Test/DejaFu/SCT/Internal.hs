@@ -15,18 +15,19 @@
 -- considered to form part of the public interface of this library.
 module Test.DejaFu.SCT.Internal where
 
-import           Control.Monad.Conc.Class         (MonadConc)
-import           Data.Coerce                      (Coercible, coerce)
-import qualified Data.IntMap.Strict               as I
-import           Data.List                        (find, mapAccumL)
-import           Data.Maybe                       (fromMaybe)
-import           GHC.Stack                        (HasCallStack)
+import           Control.Monad.Conc.Class          (MonadConc)
+import           Data.Coerce                       (Coercible, coerce)
+import qualified Data.IntMap.Strict                as I
+import           Data.List                         (find, mapAccumL)
+import           Data.Maybe                        (fromMaybe)
+import           GHC.Stack                         (HasCallStack)
 
 import           Test.DejaFu.Conc
-import           Test.DejaFu.Conc.Internal        (Context(..), DCSnapshot(..))
-import           Test.DejaFu.Conc.Internal.Memory (commitThreadId)
+import           Test.DejaFu.Conc.Internal         (Context(..))
+import           Test.DejaFu.Conc.Internal.Memory  (commitThreadId)
+import           Test.DejaFu.Conc.Internal.Program
 import           Test.DejaFu.Internal
-import           Test.DejaFu.Schedule             (Scheduler(..))
+import           Test.DejaFu.Schedule              (Scheduler(..))
 import           Test.DejaFu.SCT.Internal.DPOR
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
@@ -42,47 +43,47 @@ sct :: (MonadConc n, HasCallStack)
   -- ^ Initial state
   -> (s -> Maybe t)
   -- ^ State predicate
-  -> ((Scheduler g -> g -> n (Either Condition a, g, Trace)) -> s -> t -> n (s, Maybe (Either Condition a, Trace)))
+  -> (ConcurrencyState -> (Scheduler g -> g -> n (Either Condition a, g, Trace)) -> s -> t -> n (s, Maybe (Either Condition a, Trace)))
   -- ^ Run the computation and update the state
-  -> ConcT n a
+  -> Program pty n a
   -> n [(Either Condition a, Trace)]
-sct settings s0 sfun srun conc
-    | canDCSnapshot conc = runForDCSnapshot conc >>= \case
-        Just (Right snap, _) -> sct'Snap snap
-        Just (Left f, trace) -> pure [(Left f, trace)]
-        _ -> do
-          debugFatal "Failed to construct snapshot, continuing without."
-          sct'Full
-    | otherwise = sct'Full
+sct settings s0 sfun srun conc = recordSnapshot conc >>= \case
+    Just (Right snap, _) -> sct'Snap snap
+    Just (Left f, trace) -> pure [(Left f, trace)]
+    Nothing -> sct'Full
   where
     sct'Full = sct'
       settings
+      initialCState
       (s0 [initialThread])
       sfun
-      (srun runFull)
+      (srun initialCState runFull)
       runFull
       (toId 1)
       (toId 1)
 
-    sct'Snap snap = let idsrc = cIdSource (dcsContext snap) in sct'
-      settings
-      (s0 (fst (threadsFromDCSnapshot snap)))
-      sfun
-      (srun (runSnap snap))
-      (runSnap snap)
-      (toId $ 1 + fst (_tids idsrc))
-      (toId $ 1 + fst (_iorids idsrc))
+    sct'Snap snap =
+      let idsrc = cIdSource (contextFromSnapshot snap)
+          cstate = cCState (contextFromSnapshot snap)
+      in sct'
+         settings
+         cstate
+         (s0 (fst (threadsFromSnapshot snap)))
+         sfun
+         (srun cstate (runSnap snap))
+         (runSnap snap)
+         (toId $ 1 + fst (_tids idsrc))
+         (toId $ 1 + fst (_iorids idsrc))
 
     runFull sched s = runConcurrent sched (_memtype settings) s conc
-    runSnap snap sched s = runWithDCSnapshot sched (_memtype settings) s snap
-
-    debugFatal = if _debugFatal settings then fatal else debugPrint
-    debugPrint = fromMaybe (const (pure ())) (_debugPrint settings)
+    runSnap snap sched s = runSnapshot sched (_memtype settings) s snap
 
 -- | Like 'sct' but given a function to run the computation.
 sct' :: (MonadConc n, HasCallStack)
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
+  -> ConcurrencyState
+  -- ^ The initial concurrency state
   -> s
   -- ^ Initial state
   -> (s -> Maybe t)
@@ -96,7 +97,7 @@ sct' :: (MonadConc n, HasCallStack)
   -> IORefId
   -- ^ The first available @IORefId@
   -> n [(Either Condition a, Trace)]
-sct' settings s0 sfun srun run nTId nCRId = go Nothing [] s0 where
+sct' settings cstate0 s0 sfun srun run nTId nCRId = go Nothing [] s0 where
   go (Just res) _ _ | earlyExit res = pure []
   go res0 seen !s = case sfun s of
     Just t -> srun s t >>= \case
@@ -128,7 +129,7 @@ sct' settings s0 sfun srun run nTId nCRId = go Nothing [] s0 where
   dosimplify res trace seen s
     | not (_simplify settings) = ((res, trace) :) <$> go (Just res) seen s
     | otherwise = do
-        shrunk <- simplifyExecution settings run nTId nCRId res trace
+        shrunk <- simplifyExecution settings cstate0 run nTId nCRId res trace
         (shrunk :) <$> go (Just res) seen s
 
   earlyExit = fromMaybe (const False) (_earlyExit settings)
@@ -152,6 +153,8 @@ sct' settings s0 sfun srun run nTId nCRId = go Nothing [] s0 where
 simplifyExecution :: (MonadConc n, HasCallStack)
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
+  -> ConcurrencyState
+  -- ^ The initial concurrency state
   -> (forall x. Scheduler x -> x -> n (Either Condition a, x, Trace))
   -- ^ Just run the computation
   -> ThreadId
@@ -162,7 +165,7 @@ simplifyExecution :: (MonadConc n, HasCallStack)
   -- ^ The expected result
   -> Trace
   -> n (Either Condition a, Trace)
-simplifyExecution settings run nTId nCRId res trace
+simplifyExecution settings cstate0 run nTId nCRId res trace
     | tidTrace == simplifiedTrace = do
         debugPrint ("Simplifying new result '" ++ p res ++ "': no simplification possible!")
         pure (res, trace)
@@ -178,7 +181,7 @@ simplifyExecution settings run nTId nCRId res trace
             pure (res, trace)
   where
     tidTrace = toTIdTrace trace
-    simplifiedTrace = simplify (_safeIO settings) (_memtype settings) tidTrace
+    simplifiedTrace = simplify (_safeIO settings) (_memtype settings) cstate0 tidTrace
     fixup = renumber (_memtype settings) (fromId nTId) (fromId nCRId)
 
     debugFatal = if _debugFatal settings then fatal else debugPrint
@@ -194,11 +197,11 @@ replay :: MonadConc n
   -- ^ The reduced sequence of scheduling decisions
   -> n (Either Condition a, [(ThreadId, ThreadAction)], Trace)
 replay run = run (Scheduler (const sched)) where
-    sched runnable ((t, Stop):ts) = case findThread t runnable of
+    sched runnable cs ((t, Stop):ts) = case findThread t runnable of
       Just t' -> (Just t', ts)
-      Nothing -> sched runnable ts
-    sched runnable ((t, _):ts) = (findThread t runnable, ts)
-    sched _ _ = (Nothing, [])
+      Nothing -> sched runnable cs ts
+    sched runnable _ ((t, _):ts) = (findThread t runnable, ts)
+    sched _ _ _ = (Nothing, [])
 
     -- find a thread ignoring names
     findThread tid0 =
@@ -209,10 +212,15 @@ replay run = run (Scheduler (const sched)) where
 
 -- | Simplify a trace by permuting adjacent independent actions to
 -- reduce context switching.
-simplify :: Bool -> MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-simplify safeIO memtype trc0 = loop (length trc0) (prepare trc0) where
-  prepare = dropCommits safeIO memtype . lexicoNormalForm safeIO memtype
-  step = pushForward safeIO memtype . pullBack safeIO memtype
+simplify
+  :: Bool
+  -> MemType
+  -> ConcurrencyState
+  -> [(ThreadId, ThreadAction)]
+  -> [(ThreadId, ThreadAction)]
+simplify safeIO memtype cstate0 trc0 = loop (length trc0) (prepare trc0) where
+  prepare = dropCommits safeIO memtype cstate0 . lexicoNormalForm safeIO memtype cstate0
+  step = pushForward safeIO memtype cstate0 . pullBack safeIO memtype cstate0
 
   loop 0 trc = trc
   loop n trc =
@@ -220,10 +228,15 @@ simplify safeIO memtype trc0 = loop (length trc0) (prepare trc0) where
     in if trc' /= trc then loop (n-1) trc' else trc
 
 -- | Put a trace into lexicographic (by thread ID) normal form.
-lexicoNormalForm :: Bool -> MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-lexicoNormalForm safeIO memtype = go where
+lexicoNormalForm
+  :: Bool
+  -> MemType
+  -> ConcurrencyState
+  -> [(ThreadId, ThreadAction)]
+  -> [(ThreadId, ThreadAction)]
+lexicoNormalForm safeIO memtype cstate0 = go where
   go trc =
-    let trc' = permuteBy safeIO memtype (repeat (>)) trc
+    let trc' = permuteBy safeIO memtype cstate0 (repeat (>)) trc
     in if trc == trc' then trc else go trc'
 
 -- | Swap adjacent independent actions in the trace if a predicate
@@ -231,25 +244,31 @@ lexicoNormalForm safeIO memtype = go where
 permuteBy
   :: Bool
   -> MemType
+  -> ConcurrencyState
   -> [ThreadId -> ThreadId -> Bool]
   -> [(ThreadId, ThreadAction)]
   -> [(ThreadId, ThreadAction)]
-permuteBy safeIO memtype = go initialDepState where
+permuteBy safeIO memtype = go where
   go ds (p:ps) (t1@(tid1, ta1):t2@(tid2, ta2):trc)
     | independent safeIO ds tid1 ta1 tid2 ta2 && p tid1 tid2 = go' ds ps t2 (t1 : trc)
     | otherwise = go' ds ps t1 (t2 : trc)
   go _ _ trc = trc
 
-  go' ds ps t@(tid, ta) trc = t : go (updateDepState memtype ds tid ta) ps trc
+  go' ds ps t@(tid, ta) trc = t : go (updateCState memtype ds tid ta) ps trc
 
 -- | Throw away commit actions which are followed by a memory barrier.
-dropCommits :: Bool -> MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-dropCommits _ SequentialConsistency = id
-dropCommits safeIO memtype = go initialDepState where
+dropCommits
+  :: Bool
+  -> MemType
+  -> ConcurrencyState
+  -> [(ThreadId, ThreadAction)]
+  -> [(ThreadId, ThreadAction)]
+dropCommits _ SequentialConsistency = const id
+dropCommits safeIO memtype = go where
   go ds (t1@(tid1, ta1@(CommitIORef _ iorefid)):t2@(tid2, ta2):trc)
     | isBarrier (simplifyAction ta2) && numBuffered ds iorefid == 1 = go ds (t2:trc)
-    | independent safeIO ds tid1 ta1 tid2 ta2 = t2 : go (updateDepState memtype ds tid2 ta2) (t1:trc)
-  go ds (t@(tid,ta):trc) = t : go (updateDepState memtype ds tid ta) trc
+    | independent safeIO ds tid1 ta1 tid2 ta2 = t2 : go (updateCState memtype ds tid2 ta2) (t1:trc)
+  go ds (t@(tid,ta):trc) = t : go (updateCState memtype ds tid ta) trc
   go _ [] = []
 
 -- | Attempt to reduce context switches by \"pulling\" thread actions
@@ -259,10 +278,15 @@ dropCommits safeIO memtype = go initialDepState where
 -- act3)]@, where @act2@ and @act3@ are independent.  In this case
 -- 'pullBack' will swap them, giving the sequence @[(tidA, act1),
 -- (tidA, act3), (tidB, act2)]@.  It works for arbitrary separations.
-pullBack :: Bool -> MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-pullBack safeIO memtype = go initialDepState where
+pullBack
+  :: Bool
+  -> MemType
+  -> ConcurrencyState
+  -> [(ThreadId, ThreadAction)]
+  -> [(ThreadId, ThreadAction)]
+pullBack safeIO memtype = go where
   go ds (t1@(tid1, ta1):trc@((tid2, _):_)) =
-    let ds' = updateDepState memtype ds tid1 ta1
+    let ds' = updateCState memtype ds tid1 ta1
         trc' = if tid1 /= tid2
                then maybe trc (uncurry (:)) (findAction tid1 ds' trc)
                else trc
@@ -272,7 +296,7 @@ pullBack safeIO memtype = go initialDepState where
   findAction tid0 = fgo where
     fgo ds (t@(tid, ta):trc)
       | tid == tid0 = Just (t, trc)
-      | otherwise = case fgo (updateDepState memtype ds tid ta) trc of
+      | otherwise = case fgo (updateCState memtype ds tid ta) trc of
           Just (ft@(ftid, fa), trc')
             | independent safeIO ds tid ta ftid fa -> Just (ft, t:trc')
           _ -> Nothing
@@ -288,10 +312,15 @@ pullBack safeIO memtype = go initialDepState where
 -- act3)]@, where @act1@ and @act2@ are independent.  In this case
 -- 'pushForward' will swap them, giving the sequence @[(tidB, act2),
 -- (tidA, act1), (tidA, act3)]@.  It works for arbitrary separations.
-pushForward :: Bool -> MemType -> [(ThreadId, ThreadAction)] -> [(ThreadId, ThreadAction)]
-pushForward safeIO memtype = go initialDepState where
+pushForward
+  :: Bool
+  -> MemType
+  -> ConcurrencyState
+  -> [(ThreadId, ThreadAction)]
+  -> [(ThreadId, ThreadAction)]
+pushForward safeIO memtype = go where
   go ds (t1@(tid1, ta1):trc@((tid2, _):_)) =
-    let ds' = updateDepState memtype ds tid1 ta1
+    let ds' = updateCState memtype ds tid1 ta1
     in if tid1 /= tid2
        then maybe (t1 : go ds' trc) (go ds) (findAction tid1 ta1 ds trc)
        else t1 : go ds' trc
@@ -300,7 +329,7 @@ pushForward safeIO memtype = go initialDepState where
   findAction tid0 ta0 = fgo where
     fgo ds (t@(tid, ta):trc)
       | tid == tid0 = Just ((tid0, ta0) : t : trc)
-      | independent safeIO ds tid0 ta0 tid ta = (t:) <$> fgo (updateDepState memtype ds tid ta) trc
+      | independent safeIO ds tid0 ta0 tid ta = (t:) <$> fgo (updateCState memtype ds tid ta) trc
       | otherwise = Nothing
     fgo _ _ = Nothing
 

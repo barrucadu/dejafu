@@ -1,21 +1,21 @@
-{-# LANGUAGE CPP #-}
-
 module Integration.SingleThreaded where
 
 import           Control.Exception         (ArithException(..),
                                             ArrayException(..))
 import           Test.DejaFu               (Condition(..), gives, gives',
-                                            isAbort, isDeadlock,
-                                            isUncaughtException)
-import           Test.DejaFu.Settings      (defaultLengthBound)
-import           Test.DejaFu.Types         (Error(..))
+                                            inspectIORef, inspectMVar,
+                                            inspectTVar, isDeadlock,
+                                            isInvariantFailure,
+                                            isUncaughtException,
+                                            registerInvariant, withSetup)
 
 import           Control.Concurrent.Classy
-import           Control.Monad             (replicateM_)
+import           Control.Monad             (replicateM_, when)
+import           Control.Monad.Catch       (throwM)
 import           Control.Monad.IO.Class    (liftIO)
 import qualified Data.IORef                as IORef
+import           Data.Maybe                (isNothing)
 import           System.Random             (mkStdGen)
-import           Test.DejaFu.Conc          (dontCheck, subconcurrency)
 
 import           Common
 
@@ -26,7 +26,7 @@ tests =
   , testGroup "STM" stmTests
   , testGroup "Exceptions" exceptionTests
   , testGroup "Capabilities" capabilityTests
-  , testGroup "Hacks" hacksTests
+  , testGroup "Program" programTests
   , testGroup "IO" ioTests
   ]
 
@@ -142,7 +142,7 @@ stmTests = toTestList
       ctv <- atomically $ newTVarInt 5
       (5==) <$> readTVarConc ctv
 
-  , djfu "Aborting a transaction blocks the thread" (gives [Left STMDeadlock])
+  , djfu "Aborting a transaction blocks the thread" (gives [Left Deadlock])
       (atomically retry :: MonadConc m => m ()) -- avoid an ambiguous type
 
   , djfu "Aborting a transaction can be caught and recovered from" (gives' [True]) $ do
@@ -246,82 +246,121 @@ capabilityTests = toTestList
 
 --------------------------------------------------------------------------------
 
-hacksTests :: [TestTree]
-hacksTests = toTestList
-  [ testGroup "Subconcurrency"
-    [ djfuS "Failures in subconcurrency can be observed" (gives' [True]) $
-        either (== Deadlock) (const False) <$>
-          subconcurrency (newEmptyMVar >>= readMVar)
-
-    , djfuS "Actions after a failing subconcurrency still happen" (gives' [True]) $ do
-        var <- newMVarInt 0
-        x <- subconcurrency (putMVar var 1)
-        y <- readMVar var
-        pure (either (==Deadlock) (const False) x && y == 0)
-
-    , djfuS "Non-failing subconcurrency returns the final result" (gives' [True]) $ do
-        var <- newMVarInt 3
-        x <- subconcurrency (takeMVar var)
-        pure (either (const False) (==3) x)
-    ]
-
-  , testGroup "DontCheck"
-    [ djfu "Inner state modifications are visible to the outside" (gives' [True]) $ do
-        outer <- dontCheck Nothing $ do
-          inner <- newEmptyMVarInt
-          putMVar inner 5
-          pure inner
-        (==5) <$> takeMVar outer
+programTests :: [TestTree]
+programTests = toTestList
+  [ testGroup "withSetup"
+    [ djfu "Inner state modifications are visible to the outside" (gives' [True]) $
+        withSetup
+          (do inner <- newEmptyMVarInt
+              putMVar inner 5
+              pure inner)
+          (fmap (==5) . takeMVar)
 
     , djfu "Failures abort the whole computation" (alwaysFailsWith isDeadlock) $
-        dontCheck Nothing $ takeMVar =<< newEmptyMVarInt
-
-    , djfuE "Must be the very first thing" LateDontCheck $ do
-        v <- newEmptyMVarInt
-        dontCheck Nothing $ putMVar v 5
-
-    , djfu "Exceeding the length bound aborts the whole computation" (alwaysFailsWith isAbort) $
-        dontCheck (Just 1) $ newEmptyMVarInt >> pure ()
-
-    , djfu "Only counts as one action towards SCT length bounding" (gives' [True]) $ do
-        let ntimes = fromIntegral defaultLengthBound * 5
-        dontCheck Nothing $ replicateM_ ntimes (pure ())
-        pure True
+        withSetup (takeMVar =<< newEmptyMVarInt) (\_ -> pure True)
 
     -- we use 'randomly' here because we specifically want to compare
     -- multiple executions with snapshotting
     , toTestList . testGroup "Snapshotting" $ let snapshotTest n p conc = W n conc p ("randomly", randomly (mkStdGen 0) 150) in
-      [ snapshotTest "State updates are applied correctly" (gives' [2]) $ do
-          r <- dontCheck Nothing $ do
-            r <- newIORefInt 0
-            writeIORef r 1
-            writeIORef r 2
-            pure r
-          readIORef r
+      [ snapshotTest "State updates are applied correctly" (gives' [2]) $
+          withSetup
+            (do r <- newIORefInt 0
+                writeIORef r 1
+                writeIORef r 2
+                pure r)
+            readIORef
 
-      , snapshotTest "Lifted IO is re-run (1)" (gives' [2..151]) $ do
-          r <- dontCheck Nothing $ do
-            r <- liftIO (IORef.newIORef (0::Int))
-            liftIO (IORef.modifyIORef r (+1))
-            pure r
-          liftIO (IORef.readIORef r)
+      , snapshotTest "Lifted IO is re-run (1)" (gives' [2..151]) $
+          withSetup
+            (do r <- liftIO (IORef.newIORef (0::Int))
+                liftIO (IORef.modifyIORef r (+1))
+                pure r)
+            (liftIO . IORef.readIORef)
 
-      , snapshotTest "Lifted IO is re-run (2)" (gives' [1]) $ do
-          r <- dontCheck Nothing $ do
-            let modify r f = liftIO (IORef.readIORef r) >>= liftIO . IORef.writeIORef r . f
-            r <- liftIO (IORef.newIORef (0::Int))
-            modify r (+1)
-            pure r
-          liftIO (IORef.readIORef r)
+      , snapshotTest "Lifted IO is re-run (2)" (gives' [1]) $
+          withSetup
+            (do let modify r f = liftIO (IORef.readIORef r) >>= liftIO . IORef.writeIORef r . f
+                r <- liftIO (IORef.newIORef (0::Int))
+                modify r (+1)
+                pure r)
+            (liftIO . IORef.readIORef)
 
-      , snapshotTest "Lifted IO is re-run (3)" (gives' [1]) $ do
-          r <- dontCheck Nothing $ do
-            r <- liftIO (IORef.newIORef (0::Int))
-            liftIO (IORef.writeIORef r 0)
-            liftIO (IORef.modifyIORef r (+1))
-            pure r
-          liftIO (IORef.readIORef r)
+      , snapshotTest "Lifted IO is re-run (3)" (gives' [1]) $
+          withSetup
+            (do r <- liftIO (IORef.newIORef (0::Int))
+                liftIO (IORef.writeIORef r 0)
+                liftIO (IORef.modifyIORef r (+1))
+                pure r)
+          (liftIO . IORef.readIORef)
       ]
+    ]
+
+  , testGroup "withSetupAndTeardown"
+    [ djfuS "Failures can be observed" (gives' [True]) $
+        withSetupAndTeardown
+          (pure ())
+          (\_ -> pure . either (== Deadlock) (const False))
+          (\_ -> newEmptyMVar >>= readMVar)
+
+    , djfuS "Teardown always happens" (gives' [True]) $
+        withSetupAndTeardown
+          (newMVarInt 0)
+          (\var x -> do
+              y <- readMVar var
+              pure (either (==Deadlock) (const False) x && y == 0))
+          (\var -> putMVar var 1)
+
+    , djfuS "Non-failing inner action returns the final result" (gives' [True]) $
+        withSetupAndTeardown
+          (newMVarInt 3)
+          (\_ x -> pure (either (const False) (==3) x))
+          takeMVar
+    ]
+
+  , testGroup "registerInvariant"
+    [ djfuS "An uncaught exception fails an invariant" (alwaysFailsWith isInvariantFailure) $
+        withSetup (registerInvariant (throwM Overflow)) $
+          \() -> pure True
+    , djfuS "An invariant which never throws always passes" (gives' [True]) $
+        withSetup (registerInvariant (pure ())) $
+          \() -> pure True
+    , djfuS "An invariant can catch exceptions" (gives' [True]) $
+        withSetup (registerInvariant (throwM Overflow `catchArithException` \_ -> pure ())) $
+          \() -> pure True
+    , djfuS "Invariants can read MVars" (alwaysFailsWith isInvariantFailure) $
+        withSetup
+          (do v <- newMVarInt 10
+              registerInvariant (inspectMVar v >>= \x -> when (isNothing x) (throwM Overflow))
+              pure v)
+          takeMVar
+    , djfuS "Invariants can read TVars" (alwaysFailsWith isInvariantFailure) $
+        withSetup
+          (do v <- atomically (newTVar (10::Int))
+              registerInvariant (inspectTVar v >>= \x -> when (x < 5) (throwM Overflow))
+              pure v)
+          (\v -> atomically (writeTVar v 1))
+    , djfuS "Invariants aren't checked in the setup" (gives' [True]) $
+        withSetup
+          (do v <- newIORefInt 10
+              registerInvariant (inspectIORef v >>= \x -> when (x < 5) (throwM Overflow))
+              writeIORef v 1
+              writeIORef v 10)
+          (\_ -> pure True)
+    , djfuS "Invariants aren't checked in the teardown" (gives' [True]) $
+        withSetupAndTeardown
+          (do v <- newIORefInt 10
+              registerInvariant (inspectIORef v >>= \x -> when (x < 5) (throwM Overflow))
+              pure v)
+          (\v _ -> do
+              writeIORef v 1
+              writeIORef v 10
+              pure True)
+          (\_ -> pure ())
+    , djfuS "Invariants aren't checked if added in the main phase" (gives' [True]) $ do
+        v <- newIORefInt 10
+        registerInvariant (inspectIORef v >>= \x -> when (x < 5) (throwM Overflow))
+        writeIORef v 1
+        pure True
     ]
   ]
 

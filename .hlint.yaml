@@ -22,7 +22,7 @@
 # "runST $ do ..." work even though they're impredicative.
 # Unfortunately, this means that HLint's "avoid lambda" warning for
 # this module would lead to code which no longer compiles!
-- ignore: {name: Avoid lambda, within: Test.DejaFu.Conc}
+- ignore: {name: Avoid lambda, within: Test.DejaFu.Conc.Internal.Program}
 
 # Prefer applicative operators over monadic ones.
 - suggest: {name: Generalise monadic functions, lhs: return, rhs: pure}

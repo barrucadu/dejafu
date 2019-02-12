@@ -2,18 +2,20 @@ module Integration.MultiThreaded where
 
 import qualified Control.Concurrent        as C
 import           Control.Exception         (ArithException(..))
-import           Control.Monad             (replicateM, void)
+import           Control.Monad             (replicateM, void, when)
 import           Control.Monad.IO.Class    (liftIO)
 import           System.Random             (mkStdGen)
 import           Test.DejaFu               (Condition(..), gives, gives',
-                                            isUncaughtException)
-import           Test.DejaFu.Types         (Error(..))
+                                            isUncaughtException, withSetup,
+                                            withSetupAndTeardown)
 
-import           Control.Concurrent.Classy
+import           Control.Concurrent.Classy hiding (newQSemN, signalQSemN,
+                                            waitQSemN)
+import           Control.Monad.Catch       (throwM, toException)
 import qualified Data.IORef                as IORef
-import           Test.DejaFu.Conc          (dontCheck, subconcurrency)
 
 import           Common
+import           QSemN
 
 tests :: [TestTree]
 tests =
@@ -23,7 +25,7 @@ tests =
   , testGroup "STM" stmTests
   , testGroup "Exceptions" exceptionTests
   , testGroup "Capabilities" capabilityTests
-  , testGroup "Hacks" hacksTests
+  , testGroup "Program" programTests
   , testGroup "IO" ioTests
   ]
 
@@ -280,76 +282,106 @@ capabilityTests = toTestList
 
 --------------------------------------------------------------------------------
 
-hacksTests :: [TestTree]
-hacksTests = toTestList
-  [ testGroup "Subconcurrency"
-    [ djfuTS "Failure is observable" (gives' [Left Deadlock, Right ()]) $ do
-        var <- newEmptyMVar
-        subconcurrency $ do
-          _ <- fork $ putMVar var ()
-          putMVar var ()
-
-    , djfuTS "Failure does not abort the outer computation" (gives' [(Left Deadlock, ()), (Right (), ())]) $ do
-        var <- newEmptyMVar
-        res <- subconcurrency $ do
-          _ <- fork $ putMVar var ()
-          putMVar var ()
-        (,) <$> pure res <*> readMVar var
-
-    , djfuTS "Success is observable" (gives' [Right ()]) $ do
-        var <- newMVar ()
-        subconcurrency $ do
-          out <- newEmptyMVar
-          _ <- fork $ takeMVar var >>= putMVar out
-          takeMVar out
-
-    , djfuE "It is illegal to start subconcurrency after forking" MultithreadedSubconcurrency $ do
-        var <- newEmptyMVar
-        _ <- fork $ readMVar var
-        _ <- subconcurrency $ pure ()
-        pure ()
-    ]
-
-  , testGroup "DontCheck"
+programTests :: [TestTree]
+programTests = toTestList
+  [ testGroup "withSetup"
     [ djfuT "Inner action is run with a deterministic scheduler" (gives' [1]) $
-        dontCheck Nothing $ do
-          r <- newIORefInt 1
-          _ <- fork (atomicWriteIORef r 2)
-          readIORef r
+        withSetup
+          (do r <- newIORefInt 1
+              _ <- fork (atomicWriteIORef r 2)
+              readIORef r)
+          pure
 
-    , djfuT "Threads created by the inner action persist in the outside" (gives' [1,2]) $ do
-        (ref, trigger) <- dontCheck Nothing $ do
-          r <- newIORefInt 1
-          v <- newEmptyMVar
-          _ <- fork (takeMVar v >> atomicWriteIORef r 2)
-          pure (r, v)
-        putMVar trigger ()
-        readIORef ref
+    , djfuT "Threads created by the inner action persist in the outside" (gives' [1,2]) $
+        withSetup
+          (do r <- newIORefInt 1
+              v <- newEmptyMVar
+              _ <- fork (takeMVar v >> atomicWriteIORef r 2)
+              pure (r, v))
+          (\(ref, trigger) -> do
+              putMVar trigger ()
+              readIORef ref)
 
-    , djfuT "Bound threads created on the inside are bound on the outside" (gives' [True]) $ do
-        (out, trigger) <- dontCheck Nothing $ do
-          v <- newEmptyMVar
-          o <- newEmptyMVar
-          _ <- forkOS (takeMVar v >> isCurrentThreadBound >>= putMVar o)
-          pure (o, v)
-        putMVar trigger ()
-        takeMVar out
+    , djfuT "Bound threads created on the inside are bound on the outside" (gives' [True]) $
+        withSetup
+          (do v <- newEmptyMVar
+              o <- newEmptyMVar
+              _ <- forkOS (takeMVar v >> isCurrentThreadBound >>= putMVar o)
+              pure (o, v))
+          (\(out, trigger) -> do
+              putMVar trigger ()
+              takeMVar out)
 
-    , djfuT "Thread IDs are consistent between the inner action and the outside" (sometimesFailsWith isUncaughtException) $ do
-        trigger <- dontCheck Nothing $ do
-          me <- myThreadId
-          v <- newEmptyMVar
-          _ <- fork $ takeMVar v >> killThread me
-          pure v
-        putMVar trigger ()
+    , djfuT "Thread IDs are consistent between the inner action and the outside" (sometimesFailsWith isUncaughtException) $
+        withSetup
+          (do me <- myThreadId
+              v <- newEmptyMVar
+              _ <- fork $ takeMVar v >> killThread me
+              pure v)
+        (\trigger -> putMVar trigger ())
 
-    , djfuT "Inner action is run under sequential consistency" (gives' [1]) $ do
-        x <- dontCheck Nothing $ do
-          x <- newIORefInt 0
-          writeIORef x 1
-          pure x
-        takeMVar =<< spawn (readIORef x)
+    , djfuT "Inner action is run under sequential consistency" (gives' [1]) $
+        withSetup
+          (do x <- newIORefInt 0
+              writeIORef x 1
+              pure x)
+          (\x -> takeMVar =<< spawn (readIORef x))
+
+    , djfuTS "MVar state is preserved from setup action" (gives [Left Deadlock, Right ()]) $
+        withSetup (newMVar ()) $ \v -> do
+          _ <- fork $ takeMVar v
+          readMVar v
     ]
+
+  , testGroup "withSetupAndTeardown"
+    [ djfuTS "Failure is observable" (gives' [Left Deadlock, Right ()]) $
+        withSetupAndTeardown
+          newEmptyMVar
+          (\_ o -> pure o)
+          (\var -> do
+              _ <- fork $ putMVar var ()
+              putMVar var ())
+
+    , djfuTS "Failure does not abort the outer computation" (gives' [(Left Deadlock, ()), (Right (), ())]) $
+        withSetupAndTeardown
+          newEmptyMVar
+          (\var res -> (,) <$> pure res <*> readMVar var)
+          (\var -> do
+              _ <- fork $ putMVar var ()
+              putMVar var ())
+
+    , djfuTS "Success is observable" (gives' [Right ()]) $
+        withSetupAndTeardown
+          (newMVar ())
+          (\_ o -> pure o)
+          (\var -> do
+              out <- newEmptyMVar
+              _ <- fork $ takeMVar var >>= putMVar out
+              takeMVar out)
+
+    -- adaptation of https://github.com/barrucadu/dejafu/issues/81
+    , djfuS "Identifiers are not re-used" (gives' [(Right (),0)]) $
+        withSetupAndTeardown
+          (newQSemN 0)
+          (\s x -> do
+              o <- remainingQSemN s
+              pure (x, o))
+          (\s ->
+             let interfere_ = waitQSemN s 0 >> signalQSemN s 0
+             in signalQSemN s 0 ||| waitQSemN s 0 ||| interfere_)
+    ]
+
+    , testGroup "registerInvariant"
+      [ djfuT "Invariant failure is nondeterministic if there are races" (gives [Left (InvariantFailure (toException Overflow)), Right (Just 0), Right Nothing]) $
+          withSetup
+            (do v <- newEmptyMVarInt
+                registerInvariant (inspectMVar v >>= \x -> when (x == Just 1) (throwM Overflow))
+                pure v)
+            (\v -> do
+                _ <- fork $ putMVar v 0
+                _ <- fork $ putMVar v 1
+                tryReadMVar v)
+      ]
   ]
 
 -------------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 -- |
 -- Module      : Test.DejaFu.SCT
--- Copyright   : (c) 2015--2018 Michael Walker
+-- Copyright   : (c) 2015--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -22,18 +22,6 @@ module Test.DejaFu.SCT
   , resultsSetWithSettings
   , resultsSetWithSettings'
   , module Test.DejaFu.Settings
-
-  -- * Deprecated
-  , runSCTDiscard
-  , runSCTDiscard'
-  , resultsSetDiscard
-  , resultsSetDiscard'
-  , sctBound
-  , sctBoundDiscard
-  , sctUniformRandom
-  , sctUniformRandomDiscard
-  , sctWeightedRandom
-  , sctWeightedRandomDiscard
   ) where
 
 import           Control.Applicative               ((<|>))
@@ -44,7 +32,6 @@ import qualified Data.Map.Strict                   as M
 import           Data.Maybe                        (fromMaybe)
 import           Data.Set                          (Set)
 import qualified Data.Set                          as S
-import           System.Random                     (RandomGen)
 
 import           Test.DejaFu.Conc
 import           Test.DejaFu.Internal
@@ -64,66 +51,29 @@ import           Test.DejaFu.Utils
 -- The exact executions tried, and the order in which results are
 -- found, is unspecified and may change between releases.
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 runSCT :: MonadConc n
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to run many times.
   -> n [(Either Condition a, Trace)]
 runSCT way = runSCTWithSettings . fromWayAndMemType way
 
 -- | Return the set of results of a concurrent program.
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 resultsSet :: (MonadConc n, Ord a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to run many times.
   -> n (Set (Either Condition a))
 resultsSet way = resultsSetWithSettings . fromWayAndMemType way
-
--- | A variant of 'runSCT' which can selectively discard results.
---
--- The exact executions tried, and the order in which results are
--- found, is unspecified and may change between releases.
---
--- @since 1.0.0.0
-runSCTDiscard :: MonadConc n
-  => (Either Condition a -> Maybe Discard)
-  -- ^ Selectively discard results.
-  -> Way
-  -- ^ How to run the concurrent program.
-  -> MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> ConcT n a
-  -- ^ The computation to run many times.
-  -> n [(Either Condition a, Trace)]
-runSCTDiscard discard way = runSCTWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
-{-# DEPRECATED runSCTDiscard "Use runSCTWithSettings instead" #-}
-
--- | A variant of 'resultsSet' which can selectively discard results.
---
--- @since 1.0.0.0
-resultsSetDiscard :: (MonadConc n, Ord a)
-  => (Either Condition a -> Maybe Discard)
-  -- ^ Selectively discard results.  Traces are always discarded.
-  -> Way
-  -- ^ How to run the concurrent program.
-  -> MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> ConcT n a
-  -- ^ The computation to run many times.
-  -> n (Set (Either Condition a))
-resultsSetDiscard discard way memtype conc =
-  let discard' efa = discard efa <|> Just DiscardTrace
-  in S.fromList . map fst <$> runSCTDiscard discard' way memtype conc
-{-# DEPRECATED resultsSetDiscard "Use resultsSetWithSettings instead" #-}
 
 -- | A strict variant of 'runSCT'.
 --
@@ -133,9 +83,15 @@ resultsSetDiscard discard way memtype conc =
 -- The exact executions tried, and the order in which results are
 -- found, is unspecified and may change between releases.
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 runSCT' :: (MonadConc n, NFData a)
-  => Way -> MemType -> ConcT n a -> n [(Either Condition a, Trace)]
+  => Way
+  -- ^ How to run the concurrent program.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
+  -> Program pty n a
+  -- ^ The computation to run many times.
+  -> n [(Either Condition a, Trace)]
 runSCT' way = runSCTWithSettings' . fromWayAndMemType way
 
 -- | A strict variant of 'resultsSet'.
@@ -143,39 +99,16 @@ runSCT' way = runSCTWithSettings' . fromWayAndMemType way
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 resultsSet' :: (MonadConc n, Ord a, NFData a)
-  => Way -> MemType -> ConcT n a -> n (Set (Either Condition a))
+  => Way
+  -- ^ How to run the concurrent program.
+  -> MemType
+  -- ^ The memory model to use for non-synchronised @IORef@ operations.
+  -> Program pty n a
+  -- ^ The computation to run many times.
+  -> n (Set (Either Condition a))
 resultsSet' way = resultsSetWithSettings' . fromWayAndMemType way
-
--- | A strict variant of 'runSCTDiscard'.
---
--- Demanding the result of this will force it to normal form, which
--- may be more efficient in some situations.
---
--- The exact executions tried, and the order in which results are
--- found, is unspecified and may change between releases.
---
--- @since 1.0.0.0
-runSCTDiscard' :: (MonadConc n, NFData a)
-  => (Either Condition a -> Maybe Discard) -> Way -> MemType -> ConcT n a -> n [(Either Condition a, Trace)]
-runSCTDiscard' discard way memtype conc = do
-  res <- runSCTDiscard discard way memtype conc
-  rnf res `seq` pure res
-{-# DEPRECATED runSCTDiscard' "Use runSCTWithSettings' instead" #-}
-
--- | A strict variant of 'resultsSetDiscard'.
---
--- Demanding the result of this will force it to normal form, which
--- may be more efficient in some situations.
---
--- @since 1.0.0.0
-resultsSetDiscard' :: (MonadConc n, Ord a, NFData a)
-  => (Either Condition a -> Maybe Discard) -> Way -> MemType -> ConcT n a -> n (Set (Either Condition a))
-resultsSetDiscard' discard way memtype conc = do
-  res <- resultsSetDiscard discard way memtype conc
-  rnf res `seq` pure res
-{-# DEPRECATED resultsSetDiscard' "Use resultsSetWithSettings' instead" #-}
 
 -------------------------------------------------------------------------------
 -- Configuration
@@ -185,11 +118,11 @@ resultsSetDiscard' discard way memtype conc = do
 -- The exact executions tried, and the order in which results are
 -- found, is unspecified and may change between releases.
 --
--- @since 1.2.0.0
+-- @since 2.0.0.0
 runSCTWithSettings :: MonadConc n
   => Settings n a
   -- ^ The SCT settings.
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to run many times.
   -> n [(Either Condition a, Trace)]
 runSCTWithSettings settings conc = case _way settings of
@@ -198,13 +131,13 @@ runSCTWithSettings settings conc = case _way settings of
 
         check = findSchedulePrefix
 
-        step run dp (prefix, conservative, sleep) = do
+        step cstate0 run dp (prefix, conservative, sleep) = do
           (res, s, trace) <- run
-            (dporSched (_safeIO settings) (_memtype settings) (cBound cb0))
-            (initialDPORSchedState sleep prefix)
+            (dporSched (_safeIO settings) (cBound (_lengthBound settings) cb0))
+            (initialDPORSchedState sleep prefix cstate0)
 
-          let bpoints = findBacktrackSteps (_safeIO settings) (_memtype settings) (cBacktrack cb0) (schedBoundKill s) (schedBPoints s) trace
-          let newDPOR = incorporateTrace (_safeIO settings) (_memtype settings) conservative trace dp
+          let bpoints = findBacktrackSteps (_safeIO settings) (_memtype settings) (cBacktrack cb0) (schedBoundKill s) cstate0 (schedBPoints s) trace
+          let newDPOR = incorporateTrace (_safeIO settings) (_memtype settings) conservative trace cstate0 dp
 
           pure $ if schedIgnore s
                  then (force newDPOR, Nothing)
@@ -217,20 +150,20 @@ runSCTWithSettings settings conc = case _way settings of
         check (_, 0) = Nothing
         check s = Just s
 
-        step run _ (g, n) = do
+        step _ run _ (g, n) = do
           (res, s, trace) <- run
             (randSched gen)
-            (initialRandSchedState g)
+            (initialRandSchedState (_lengthBound settings) g)
           pure ((schedGen s, n-1), Just (res, trace))
     in sct settings initial check step conc
 
 -- | A variant of 'resultsSet' which takes a 'Settings' record.
 --
--- @since 1.2.0.0
+-- @since 2.0.0.0
 resultsSetWithSettings :: (MonadConc n, Ord a)
   => Settings n a
   -- ^ The SCT settings.
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to run many times.
   -> n (Set (Either Condition a))
 resultsSetWithSettings settings conc =
@@ -245,10 +178,12 @@ resultsSetWithSettings settings conc =
 -- The exact executions tried, and the order in which results are
 -- found, is unspecified and may change between releases.
 --
--- @since 1.2.0.0
+-- @since 2.0.0.0
 runSCTWithSettings' :: (MonadConc n, NFData a)
   => Settings n a
-  -> ConcT n a
+  -- ^ The SCT settings.
+  -> Program pty n a
+  -- ^ The computation to run many times.
   -> n [(Either Condition a, Trace)]
 runSCTWithSettings' settings conc = do
   res <- runSCTWithSettings settings conc
@@ -259,10 +194,12 @@ runSCTWithSettings' settings conc = do
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since 1.2.0.0
+-- @since 2.0.0.0
 resultsSetWithSettings' :: (MonadConc n, Ord a, NFData a)
   => Settings n a
-  -> ConcT n a
+  -- ^ The SCT settings.
+  -> Program pty n a
+  -- ^ The computation to run many times.
   -> n (Set (Either Condition a))
 resultsSetWithSettings' settings conc = do
   res <- resultsSetWithSettings settings conc
@@ -272,23 +209,39 @@ resultsSetWithSettings' settings conc = do
 -- Combined Bounds
 
 -- | Combination bound function
-cBound :: Bounds -> IncrementalBoundFunc ((Int, Maybe ThreadId), M.Map ThreadId Int, Int)
-cBound (Bounds pb fb lb) (Just (k1, k2, k3)) prior lh =
+cBound :: Maybe LengthBound -> Bounds -> IncrementalBoundFunc ((Int, Maybe ThreadId), M.Map ThreadId Int, Int)
+cBound lb (Bounds pb fb) (Just (k1, k2, k3)) prior lh =
   let k1' = maybe (\k _ _ -> k) pBound pb (Just k1) prior lh
       k2' = maybe (\k _ _ -> k) fBound fb (Just k2) prior lh
       k3' = maybe (\k _ _ -> k) lBound lb (Just k3) prior lh
   in (,,) <$> k1' <*> k2' <*> k3'
-cBound _ Nothing _ _ = Just ((0, Nothing), M.empty, 1)
+cBound _ _ Nothing _ _ = Just ((0, Nothing), M.empty, 1)
 
--- | Combination backtracking function. Add all backtracking points
--- corresponding to enabled bound functions.
+-- | Backtracks to the given point.
 --
--- If no bounds are enabled, just backtrack to the given point.
+-- If pre-emption bounding is enabled, also conservatively adds a
+-- backtracking point prior to the most recent transition before that
+-- point.  This may result in the same state being reached multiple
+-- times, but is needed because of the artificial dependency imposed
+-- by the bound.
 cBacktrack :: Bounds -> BacktrackFunc
-cBacktrack (Bounds (Just _) _ _) = pBacktrack
-cBacktrack (Bounds _ (Just _) _) = fBacktrack
-cBacktrack (Bounds _ _ (Just _)) = lBacktrack
-cBacktrack _ = backtrackAt (\_ _ -> False)
+cBacktrack (Bounds (Just _) _) bs =
+    backtrackAt (\_ _ -> False) bs . concatMap addConservative
+  where
+    addConservative o@(i, _, tid) = o : case conservative i of
+      Just j  -> [(j, True, tid)]
+      Nothing -> []
+
+    -- index of conservative point
+    conservative i = go (reverse (take (i-1) bs)) (i-1) where
+      go _ (-1) = Nothing
+      go (b1:rest@(b2:_)) j
+        | bcktThreadid b1 /= bcktThreadid b2
+          && not (isCommitRef $ bcktAction b1)
+          && not (isCommitRef $ bcktAction b2) = Just j
+        | otherwise = go rest (j-1)
+      go _ _ = Nothing
+cBacktrack _ bs = backtrackAt (\_ _ -> False) bs
 
 -------------------------------------------------------------------------------
 -- Pre-emption bounding
@@ -299,26 +252,6 @@ pBound :: PreemptionBound -> IncrementalBoundFunc (Int, Maybe ThreadId)
 pBound (PreemptionBound pb) k prior lhead =
   let k'@(pcount, _) = preEmpCountInc (fromMaybe (0, Nothing) k) prior lhead
   in if pcount <= pb then Just k' else Nothing
-
--- | Add a backtrack point, and also conservatively add one prior to
--- the most recent transition before that point. This may result in
--- the same state being reached multiple times, but is needed because
--- of the artificial dependency imposed by the bound.
-pBacktrack :: BacktrackFunc
-pBacktrack bs = backtrackAt (\_ _ -> False) bs . concatMap addConservative where
-  addConservative o@(i, _, tid) = o : case conservative i of
-    Just j  -> [(j, True, tid)]
-    Nothing -> []
-
-  -- index of conservative point
-  conservative i = go (reverse (take (i-1) bs)) (i-1) where
-    go _ (-1) = Nothing
-    go (b1:rest@(b2:_)) j
-      | bcktThreadid b1 /= bcktThreadid b2
-        && not (isCommitRef $ bcktAction b1)
-        && not (isCommitRef $ bcktAction b2) = Just j
-      | otherwise = go rest (j-1)
-    go _ _ = Nothing
 
 -------------------------------------------------------------------------------
 -- Fair bounding
@@ -331,13 +264,6 @@ fBound (FairBound fb) k prior lhead =
      then Just k'
      else Nothing
 
--- | Add a backtrack point. If the thread doesn't exist or is blocked,
--- or performs a release operation, add all unblocked threads.
-fBacktrack :: BacktrackFunc
-fBacktrack = backtrackAt check where
-  -- True if a release operation is performed.
-  check t b = Just True == (willRelease <$> M.lookup t (bcktRunnable b))
-
 -------------------------------------------------------------------------------
 -- Length bounding
 
@@ -346,147 +272,6 @@ lBound :: LengthBound -> IncrementalBoundFunc Int
 lBound (LengthBound lb) len _ _ =
   let len' = maybe 1 (+1) len
   in if len' < lb then Just len' else Nothing
-
--- | Add a backtrack point. If the thread doesn't exist or is blocked,
--- add all unblocked threads.
-lBacktrack :: BacktrackFunc
-lBacktrack = backtrackAt (\_ _ -> False)
-
--------------------------------------------------------------------------------
--- Systematic concurrency testing
-
--- | SCT via BPOR.
---
--- Schedules are generated by running the computation with a
--- deterministic scheduler with some initial list of decisions. At
--- each step of execution, possible-conflicting actions are looked
--- for, if any are found, \"backtracking points\" are added, to cause
--- the events to happen in a different order in a future execution.
---
--- Note that unlike with non-bounded partial-order reduction, this may
--- do some redundant work as the introduction of a bound can make
--- previously non-interfering events interfere with each other.
---
--- The exact executions tried, and the order in which results are
--- found, is unspecified and may change between releases.
---
--- @since 1.0.0.0
-sctBound :: MonadConc n
-  => MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> Bounds
-  -- ^ The combined bounds.
-  -> ConcT n a
-  -- ^ The computation to run many times
-  -> n [(Either Condition a, Trace)]
-sctBound = sctBoundDiscard (const Nothing)
-{-# DEPRECATED sctBound "Use runSCT instead" #-}
-
--- | A variant of 'sctBound' which can selectively discard results.
---
--- The exact executions tried, and the order in which results are
--- found, is unspecified and may change between releases.
---
--- @since 1.0.0.0
-sctBoundDiscard :: MonadConc n
-  => (Either Condition a -> Maybe Discard)
-  -- ^ Selectively discard results.
-  -> MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> Bounds
-  -- ^ The combined bounds.
-  -> ConcT n a
-  -- ^ The computation to run many times
-  -> n [(Either Condition a, Trace)]
-sctBoundDiscard discard memtype cb = runSCTWithSettings $
-  set ldiscard (Just discard) (fromWayAndMemType (systematically cb) memtype)
-{-# DEPRECATED sctBoundDiscard "Use runSCTWithSettings instead" #-}
-
--- | SCT via uniform random scheduling.
---
--- Schedules are generated by assigning to each new thread a random
--- weight. Threads are then scheduled by a weighted random selection.
---
--- This is not guaranteed to find all distinct results.
---
--- @since 1.0.0.0
-sctUniformRandom :: (MonadConc n, RandomGen g)
-  => MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> g
-  -- ^ The random number generator.
-  -> Int
-  -- ^ The number of executions to perform.
-  -> ConcT n a
-  -- ^ The computation to run many times.
-  -> n [(Either Condition a, Trace)]
-sctUniformRandom = sctUniformRandomDiscard (const Nothing)
-{-# DEPRECATED sctUniformRandom "Use runSCT instead" #-}
-
--- | A variant of 'sctUniformRandom' which can selectively discard
--- results.
---
--- This is not guaranteed to find all distinct results.
---
--- @since 1.0.0.0
-sctUniformRandomDiscard :: (MonadConc n, RandomGen g)
-  => (Either Condition a -> Maybe Discard)
-  -- ^ Selectively discard results.
-  -> MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> g
-  -- ^ The random number generator.
-  -> Int
-  -- ^ The number of executions to perform.
-  -> ConcT n a
-  -- ^ The computation to run many times.
-  -> n [(Either Condition a, Trace)]
-sctUniformRandomDiscard discard memtype g lim = runSCTWithSettings $
-  set ldiscard (Just discard) (fromWayAndMemType (uniformly g lim) memtype)
-{-# DEPRECATED sctUniformRandomDiscard "Use runSCTWithSettings instead" #-}
-
--- | SCT via weighted random scheduling.
---
--- Schedules are generated by assigning to each new thread a random
--- weight. Threads are then scheduled by a weighted random selection.
---
--- This is not guaranteed to find all distinct results.
---
--- @since 1.7.0.0
-sctWeightedRandom :: (MonadConc n, RandomGen g)
-  => MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> g
-  -- ^ The random number generator.
-  -> Int
-  -- ^ The number of executions to perform.
-  -> ConcT n a
-  -- ^ The computation to run many times.
-  -> n [(Either Condition a, Trace)]
-sctWeightedRandom = sctWeightedRandomDiscard (const Nothing)
-{-# DEPRECATED sctWeightedRandom "Use runSCT instead" #-}
-
--- | A variant of 'sctWeightedRandom' which can selectively discard
--- results.
---
--- This is not guaranteed to find all distinct results.
---
--- @since 1.7.0.0
-sctWeightedRandomDiscard :: (MonadConc n, RandomGen g)
-  => (Either Condition a -> Maybe Discard)
-  -- ^ Selectively discard results.
-  -> MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> g
-  -- ^ The random number generator.
-  -> Int
-  -- ^ The number of executions to perform.
-  -> ConcT n a
-  -- ^ The computation to run many times.
-  -> n [(Either Condition a, Trace)]
-sctWeightedRandomDiscard discard memtype g lim = runSCTWithSettings $
-  set ldiscard (Just discard) (fromWayAndMemType (randomly g lim) memtype)
-{-# DEPRECATED sctWeightedRandomDiscard "Use runSCTWithSettings instead" #-}
 
 -------------------------------------------------------------------------------
 -- Utilities

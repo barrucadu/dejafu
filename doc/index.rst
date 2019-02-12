@@ -21,13 +21,13 @@ This is Déjà Fu
    :maxdepth: 2
    :caption: Migration Guides
 
+   migration_1x_2x
    migration_0x_1x
 
 .. toctree::
    :maxdepth: 2
    :caption: Developer Documentation
 
-   adding_a_new_primitive
    contributing
    ghc
    release_process

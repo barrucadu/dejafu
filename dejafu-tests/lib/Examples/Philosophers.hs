@@ -4,21 +4,27 @@ module Examples.Philosophers where
 
 import           Control.Monad            (forever, replicateM)
 import           Control.Monad.Conc.Class
+import           System.Random            (mkStdGen)
 import           Test.DejaFu
 
 import           Common
 
 tests :: [TestTree]
 tests =
-  [ testDejafuWay way defaultMemType "deadlocks" deadlocksSometimes (philosophers 3)
-  , let settings = set lshowAborts True (fromWayAndMemType way defaultMemType)
-    in testDejafuWithSettings settings "loops (with aborts present)" abortsSometimes (philosophers 3)
-  , expectFail $ testDejafuWay way defaultMemType "loops (with aborts hidden)" abortsSometimes (philosophers 3)
-  ]
+    [ testDejafuWithSettings settings "deadlocks" deadlocksAlways test
+    , let settings' = set llengthBound (Just 30) $
+            fromWayAndMemType (randomly (mkStdGen 0) 150) defaultMemType
+      in testDejafuWithSettings settings' "deadlocks (with random scheduling)" deadlocksAlways test
+    , let settings' = set lshowAborts True settings
+      in testDejafuWithSettings settings' "loops (with aborts present)" abortsSometimes test
+    , expectFail $ testDejafuWithSettings settings "loops (with aborts hidden)" abortsSometimes test
+    ]
+  where
+    test = philosophers 3
 
 -- | Shorter execution length bound
-way :: Way
-way = systematically defaultBounds { boundLength = Just 30 }
+settings :: Settings IO a
+settings = set llengthBound (Just 30) defaultSettings
 
 --------------------------------------------------------------------------------
 

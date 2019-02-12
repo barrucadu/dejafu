@@ -5,7 +5,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Types
--- Copyright   : (c) 2017--2018 Michael Walker
+-- Copyright   : (c) 2017--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -21,7 +21,11 @@ import           Control.Exception                    (Exception(..),
 import           Data.Function                        (on)
 import           Data.Functor.Contravariant           (Contravariant(..))
 import           Data.Functor.Contravariant.Divisible (Divisible(..))
+import           Data.Map.Strict                      (Map)
+import qualified Data.Map.Strict                      as M
 import           Data.Semigroup                       (Semigroup(..))
+import           Data.Set                             (Set)
+import qualified Data.Set                             as S
 import           GHC.Generics                         (Generic)
 
 -------------------------------------------------------------------------------
@@ -106,7 +110,7 @@ initialThread = ThreadId (Id (Just "main") 0)
 
 -- | All the actions that a thread can perform.
 --
--- @since 1.11.0.0
+-- @since 2.0.0.0
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -194,12 +198,8 @@ data ThreadAction =
   -- ^ A 'return' or 'pure' action was executed.
   | Stop
   -- ^ Cease execution and terminate.
-  | Subconcurrency
-  -- ^ Start executing an action with @subconcurrency@.
-  | StopSubconcurrency
-  -- ^ Stop executing an action with @subconcurrency@.
-  | DontCheck Trace
-  -- ^ Execute an action with @dontCheck@.
+  | RegisterInvariant
+  -- ^ Register an invariant.
   deriving (Eq, Generic, Show)
 
 -- this makes me sad
@@ -242,13 +242,11 @@ instance NFData ThreadAction where
   rnf LiftIO = ()
   rnf Return = ()
   rnf Stop = ()
-  rnf Subconcurrency = ()
-  rnf StopSubconcurrency = ()
-  rnf (DontCheck as) = rnf as
+  rnf RegisterInvariant = ()
 
 -- | A one-step look-ahead at what a thread will do next.
 --
--- @since 1.11.0.0
+-- @since 2.0.0.0
 data Lookahead =
     WillFork
   -- ^ Will start a new thread.
@@ -325,12 +323,8 @@ data Lookahead =
   -- ^ Will execute a 'return' or 'pure' action.
   | WillStop
   -- ^ Will cease execution and terminate.
-  | WillSubconcurrency
-  -- ^ Will execute an action with @subconcurrency@.
-  | WillStopSubconcurrency
-  -- ^ Will stop executing an extion with @subconcurrency@.
-  | WillDontCheck
-  -- ^ Will execute an action with @dontCheck@.
+  | WillRegisterInvariant
+  -- ^ Will register an invariant
   deriving (Eq, Generic, Show)
 
 -- this also makes me sad
@@ -368,9 +362,7 @@ instance NFData Lookahead where
   rnf WillLiftIO = ()
   rnf WillReturn = ()
   rnf WillStop = ()
-  rnf WillSubconcurrency = ()
-  rnf WillStopSubconcurrency = ()
-  rnf WillDontCheck = ()
+  rnf WillRegisterInvariant = ()
 
 -- | All the actions that an STM transaction can perform.
 --
@@ -438,19 +430,14 @@ instance NFData Decision
 -------------------------------------------------------------------------------
 -- * Conditions
 
--- | A type synonym for 'Condition', use that instead.
---
--- @since 1.12.0.0
-{-# DEPRECATED Failure "The 'Failure' type has been split up into 'Condition' and 'Error', with different semantics." #-}
-type Failure = Condition
-
 -- | An indication of how a concurrent computation terminated, if it
 -- didn't produce a value.
 --
 -- The @Eq@, @Ord@, and @NFData@ instances compare/evaluate the
--- exception with @show@ in the @UncaughtException@ case.
+-- exception with @show@ in the @UncaughtException@ and
+-- @InvariantFailure@ cases.
 --
--- @since 1.12.0.0
+-- @since 2.0.0.0
 data Condition
   = Abort
   -- ^ The scheduler chose to abort execution. This will be produced
@@ -458,20 +445,18 @@ data Condition
   -- bounds (there have been too many pre-emptions, the computation
   -- has executed for too long, or there have been too many yields).
   | Deadlock
-  -- ^ Every thread is blocked, and the main thread is /not/ blocked
-  -- in an STM transaction.
-  | STMDeadlock
-  -- ^ Every thread is blocked, and the main thread is blocked in an
-  -- STM transaction.
+  -- ^ Every thread is blocked
   | UncaughtException SomeException
   -- ^ An uncaught exception bubbled to the top of the computation.
+  | InvariantFailure SomeException
+  -- ^ An uncaught exception caused an invariant to fail.
   deriving (Show, Generic)
 
 instance Eq Condition where
   Abort                  == Abort                  = True
   Deadlock               == Deadlock               = True
-  STMDeadlock            == STMDeadlock            = True
   (UncaughtException e1) == (UncaughtException e2) = show e1 == show e2
+  (InvariantFailure  e1) == (InvariantFailure  e2) = show e1 == show e2
   _ == _ = False
 
 instance Ord Condition where
@@ -479,11 +464,12 @@ instance Ord Condition where
     transform :: Condition -> (Int, Maybe String)
     transform Abort = (1, Nothing)
     transform Deadlock = (2, Nothing)
-    transform STMDeadlock = (3, Nothing)
-    transform (UncaughtException e) = (4, Just (show e))
+    transform (UncaughtException e) = (3, Just (show e))
+    transform (InvariantFailure  e) = (4, Just (show e))
 
 instance NFData Condition where
   rnf (UncaughtException e) = rnf (show e)
+  rnf (InvariantFailure  e) = rnf (show e)
   rnf f = f `seq` ()
 
 -- | Check if a condition is an @Abort@.
@@ -493,12 +479,11 @@ isAbort :: Condition -> Bool
 isAbort Abort = True
 isAbort _ = False
 
--- | Check if a condition is a @Deadlock@ or an @STMDeadlock@.
+-- | Check if a condition is a @Deadlock@.
 --
 -- @since 0.9.0.0
 isDeadlock :: Condition -> Bool
 isDeadlock Deadlock = True
-isDeadlock STMDeadlock = True
 isDeadlock _ = False
 
 -- | Check if a condition is an @UncaughtException@
@@ -508,13 +493,20 @@ isUncaughtException :: Condition -> Bool
 isUncaughtException (UncaughtException _) = True
 isUncaughtException _ = False
 
+-- | Check if a condition is an @InvariantFailure@
+--
+-- @since 2.0.0.0
+isInvariantFailure :: Condition -> Bool
+isInvariantFailure (InvariantFailure _) = True
+isInvariantFailure _ = False
+
 -------------------------------------------------------------------------------
 -- * Errors
 
 -- | An indication that there is a bug in dejafu or you are using it
 -- incorrectly.
 --
--- @since 1.12.0.0
+-- @since 2.0.0.0
 data Error
   = ScheduledBlockedThread
   -- ^ Raised as an exception if the scheduler attempts to schedule a
@@ -522,14 +514,6 @@ data Error
   | ScheduledMissingThread
   -- ^ Raised as an exception if the scheduler attempts to schedule a
   -- nonexistent thread.
-  | NestedSubconcurrency
-  -- ^ Raised as an exception if a @subconcurrency@ is nested inside
-  -- another @subconcurrency@ or a @dontCheck@.
-  | MultithreadedSubconcurrency
-  -- ^ Raised as an exception if @subconcurrency@ is called after
-  -- forking threads.
-  | LateDontCheck
-  -- ^ Raised as an exception if @dontCheck@ is called after the first action.
   deriving (Show, Eq, Ord, Bounded, Enum, Generic)
 
 instance Exception Error
@@ -538,33 +522,17 @@ instance Exception Error
 --
 -- @since 1.12.0.0
 isSchedulerError :: Error -> Bool
-isSchedulerError ScheduledBlockedThread = True
-isSchedulerError ScheduledMissingThread = True
-isSchedulerError _ = False
-
--- | Check if an error is an incorrect usage of dejafu.
---
--- @since 1.12.0.0
-isIncorrectUsage :: Error -> Bool
-isIncorrectUsage NestedSubconcurrency = True
-isIncorrectUsage MultithreadedSubconcurrency = True
-isIncorrectUsage LateDontCheck = True
-isIncorrectUsage _ = False
+isSchedulerError _ = True
 
 -------------------------------------------------------------------------------
 -- * Schedule bounding
 
--- | @since 0.2.0.0
+-- | @since 2.0.0.0
 data Bounds = Bounds
   { boundPreemp :: Maybe PreemptionBound
   , boundFair   :: Maybe FairBound
-  , boundLength :: Maybe LengthBound
-  } deriving (Eq, Ord, Read, Show)
+  } deriving (Eq, Ord, Read, Show, Generic)
 
--- | @since 1.3.1.0
-deriving instance Generic Bounds
-
--- | @since 0.5.1.0
 instance NFData Bounds
 
 -- | Restrict the number of pre-emptive context switches allowed in an
@@ -757,3 +725,97 @@ deriving instance Generic MonadFailException
 
 -- | @since 1.3.1.0
 instance NFData MonadFailException
+
+-------------------------------------------------------------------------------
+-- ** Concurrency state
+
+-- | A summary of the concurrency state of the program.
+--
+-- @since 2.0.0.0
+data ConcurrencyState = ConcurrencyState
+  { concIOState :: Map IORefId Int
+  -- ^ Keep track of which @IORef@s have buffered writes.
+  , concMVState :: Set MVarId
+  -- ^ Keep track of which @MVar@s are full.
+  , concMaskState :: Map ThreadId MaskingState
+  -- ^ Keep track of thread masking states. If a thread isn't present,
+  -- the masking state is assumed to be @Unmasked@. This nicely
+  -- provides compatibility with dpor-0.1, where the thread IDs are
+  -- not available.
+  } deriving (Eq, Show)
+
+instance NFData ConcurrencyState where
+  rnf cstate = rnf
+    ( concIOState cstate
+    , concMVState cstate
+    , [(t, show m) | (t, m) <- M.toList (concMaskState cstate)]
+    )
+
+-- | Check if a @IORef@ has a buffered write pending.
+--
+-- @since 2.0.0.0
+isBuffered :: ConcurrencyState -> IORefId -> Bool
+isBuffered cstate r = numBuffered cstate r /= 0
+
+-- | Check how many buffered writes an @IORef@ has.
+--
+-- @since 2.0.0.0
+numBuffered :: ConcurrencyState -> IORefId -> Int
+numBuffered cstate r = M.findWithDefault 0 r (concIOState cstate)
+
+-- | Check if an @MVar@ is full.
+--
+-- @since 2.0.0.0
+isFull :: ConcurrencyState -> MVarId -> Bool
+isFull cstate v = S.member v (concMVState cstate)
+
+-- | Check if an exception can interrupt a thread (action).
+--
+-- @since 2.0.0.0
+canInterrupt :: ConcurrencyState -> ThreadId -> ThreadAction -> Bool
+canInterrupt cstate tid act
+  -- If masked interruptible, blocked actions can be interrupted.
+  | isMaskedInterruptible cstate tid = case act of
+    BlockedPutMVar  _ -> True
+    BlockedReadMVar _ -> True
+    BlockedTakeMVar _ -> True
+    BlockedSTM      _ -> True
+    BlockedThrowTo  _ -> True
+    _ -> False
+  -- If masked uninterruptible, nothing can be.
+  | isMaskedUninterruptible cstate tid = False
+  -- If no mask, anything can be.
+  | otherwise = True
+
+-- | Check if an exception can interrupt a thread (lookahead).
+--
+-- @since 2.0.0.0
+canInterruptL :: ConcurrencyState -> ThreadId -> Lookahead -> Bool
+canInterruptL cstate tid lh
+  -- If masked interruptible, actions which can block may be
+  -- interrupted.
+  | isMaskedInterruptible cstate tid = case lh of
+    WillPutMVar  _ -> True
+    WillReadMVar _ -> True
+    WillTakeMVar _ -> True
+    WillSTM        -> True
+    WillThrowTo  _ -> True
+    _ -> False
+  -- If masked uninterruptible, nothing can be.
+  | isMaskedUninterruptible cstate tid = False
+  -- If no mask, anything can be.
+  | otherwise = True
+
+-- | Check if a thread is masked interruptible.
+--
+-- @since 2.0.0.0
+isMaskedInterruptible :: ConcurrencyState -> ThreadId -> Bool
+isMaskedInterruptible cstate tid =
+  M.lookup tid (concMaskState cstate) == Just MaskedInterruptible
+
+-- | Check if a thread is masked uninterruptible.
+--
+-- @since 2.0.0.0
+isMaskedUninterruptible :: ConcurrencyState -> ThreadId -> Bool
+isMaskedUninterruptible cstate tid =
+  M.lookup tid (concMaskState cstate) == Just MaskedUninterruptible

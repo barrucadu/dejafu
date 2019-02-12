@@ -1,16 +1,10 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeFamilies #-}
-
 -- |
 -- Module      : Test.DejaFu.Conc
--- Copyright   : (c) 2016--2018 Michael Walker
+-- Copyright   : (c) 2016--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, FlexibleInstances, GeneralizedNewtypeDeriving, TypeFamilies
+-- Portability : portable
 --
 -- Deterministic traced execution of concurrent computations.
 --
@@ -18,28 +12,38 @@
 -- out to the supplied scheduler after each step to determine which
 -- thread runs next.
 module Test.DejaFu.Conc
-  ( -- * The @ConcT@ monad transformer
-    ConcT
+  ( -- * Expressing concurrent programs
+    Program
+  , Basic
+  , ConcT
   , ConcIO
 
-  -- * Executing computations
-  , Condition(..)
+  -- ** Setup and teardown
+  , WithSetup
+  , WithSetupAndTeardown
+  , withSetup
+  , withTeardown
+  , withSetupAndTeardown
+
+  -- ** Invariants
+  , Invariant
+  , registerInvariant
+  , inspectIORef
+  , inspectMVar
+  , inspectTVar
+
+  -- * Executing concurrent programs
+  , Snapshot
   , MemType(..)
   , runConcurrent
-  , subconcurrency
-  , dontCheck
+  , recordSnapshot
+  , runSnapshot
 
-  -- ** Snapshotting
+  -- ** Scheduling
+  , module Test.DejaFu.Schedule
 
-  -- $snapshotting_io
-
-  , DCSnapshot
-  , runForDCSnapshot
-  , runWithDCSnapshot
-  , canDCSnapshot
-  , threadsFromDCSnapshot
-
-  -- * Execution traces
+  -- * Results
+  , Condition(..)
   , Trace
   , Decision(..)
   , ThreadId(..)
@@ -50,349 +54,140 @@ module Test.DejaFu.Conc
   , MaskingState(..)
   , showTrace
   , showCondition
-
-  -- * Scheduling
-  , module Test.DejaFu.Schedule
-
-  -- * Deprecated
-  , Failure
   ) where
 
-import           Control.Exception                   (MaskingState(..))
-import qualified Control.Monad.Catch                 as Ca
-import           Control.Monad.Fail                  (MonadFail)
-import qualified Control.Monad.IO.Class              as IO
-import           Control.Monad.Trans.Class           (MonadTrans(..))
-import qualified Data.Foldable                       as F
-import           Data.List                           (partition)
-import qualified Data.Map.Strict                     as M
-import           Data.Maybe                          (isNothing)
-import           Test.DejaFu.Schedule
+import           Control.Exception                 (MaskingState(..))
 
-import qualified Control.Monad.Conc.Class            as C
-import           Test.DejaFu.Conc.Internal
 import           Test.DejaFu.Conc.Internal.Common
-import           Test.DejaFu.Conc.Internal.STM       (ModelSTM)
-import           Test.DejaFu.Conc.Internal.Threading (_blocking)
-import           Test.DejaFu.Internal
+import           Test.DejaFu.Conc.Internal.Program
+import           Test.DejaFu.Conc.Internal.STM     (ModelTVar)
+import           Test.DejaFu.Schedule
 import           Test.DejaFu.Types
 import           Test.DejaFu.Utils
 
+-------------------------------------------------------------------------------
+-- Expressing concurrent programs
+
 -- | @since 1.4.0.0
-newtype ConcT n a = C { unC :: ModelConc n a }
-  deriving (Functor, Applicative, Monad, MonadFail)
+type ConcT = Program Basic
 
 -- | A 'MonadConc' implementation using @IO@.
 --
 -- @since 0.4.0.0
 type ConcIO = ConcT IO
 
-toConc :: ((a -> Action n) -> Action n) -> ConcT n a
-toConc = C . ModelConc
+-------------------------------------------------------------------------------
+-- Setup & teardown
 
-wrap :: (ModelConc n a -> ModelConc n a) -> ConcT n a -> ConcT n a
-wrap f = C . f . unC
-
--- | @since 1.0.0.0
-instance IO.MonadIO n => IO.MonadIO (ConcT n) where
-  liftIO ma = toConc (\c -> ALift (fmap c (IO.liftIO ma)))
-
-instance MonadTrans ConcT where
-  lift ma = toConc (\c -> ALift (fmap c ma))
-
-instance Ca.MonadCatch (ConcT n) where
-  catch ma h = toConc (ACatching (unC . h) (unC ma))
-
-instance Ca.MonadThrow (ConcT n) where
-  throwM e = toConc (\_ -> AThrow e)
-
-instance Ca.MonadMask (ConcT n) where
-  mask                mb = toConc (AMasking MaskedInterruptible   (\f -> unC $ mb $ wrap f))
-  uninterruptibleMask mb = toConc (AMasking MaskedUninterruptible (\f -> unC $ mb $ wrap f))
-
-#if MIN_VERSION_exceptions(0,10,0)
-  generalBracket acquire release use = Ca.mask $ \unmasked -> do
-    resource <- acquire
-    b <- unmasked (use resource) `Ca.catch` (\e -> release resource (Ca.ExitCaseException e) >> Ca.throwM e)
-    c <- release resource (Ca.ExitCaseSuccess b)
-    pure (b, c)
-#elif MIN_VERSION_exceptions(0,9,0)
-  -- from https://github.com/fpco/stackage/issues/3315#issuecomment-368583481
-  generalBracket acquire release cleanup use = Ca.mask $ \unmasked -> do
-    resource <- acquire
-    result <- unmasked (use resource) `Ca.catch` (\e -> cleanup resource e >> Ca.throwM e)
-    _ <- release resource
-    pure result
-#endif
-
-instance Monad n => C.MonadConc (ConcT n) where
-  type MVar     (ConcT n) = ModelMVar n
-  type IORef    (ConcT n) = ModelIORef n
-  type Ticket   (ConcT n) = ModelTicket
-  type STM      (ConcT n) = ModelSTM n
-  type ThreadId (ConcT n) = ThreadId
-
-  -- ----------
-
-  forkWithUnmaskN   n ma = toConc (AFork n (\umask -> runModelConc (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
-  forkOnWithUnmaskN n _  = C.forkWithUnmaskN n
-  forkOSWithUnmaskN n ma
-    | C.rtsSupportsBoundThreads =
-      toConc (AForkOS n (\umask -> runModelConc (unC $ ma $ wrap umask) (\_ -> AStop (pure ()))))
-    | otherwise = fail "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
-
-  isCurrentThreadBound = toConc AIsBound
-
-  -- This implementation lies and returns 2 until a value is set. This
-  -- will potentially avoid special-case behaviour for 1 capability,
-  -- so it seems a sane choice.
-  getNumCapabilities      = toConc AGetNumCapabilities
-  setNumCapabilities caps = toConc (\c -> ASetNumCapabilities caps (c ()))
-
-  myThreadId = toConc AMyTId
-
-  yield = toConc (\c -> AYield (c ()))
-  threadDelay n = toConc (\c -> ADelay n (c ()))
-
-  -- ----------
-
-  newIORefN n a = toConc (ANewIORef n a)
-
-  readIORef   ref = toConc (AReadIORef    ref)
-  readForCAS ref = toConc (AReadIORefCas ref)
-
-  peekTicket' _ = ticketVal
-
-  writeIORef ref      a = toConc (\c -> AWriteIORef ref a (c ()))
-  casIORef   ref tick a = toConc (ACasIORef ref tick a)
-
-  atomicModifyIORef ref f = toConc (AModIORef    ref f)
-  modifyIORefCAS    ref f = toConc (AModIORefCas ref f)
-
-  -- ----------
-
-  newEmptyMVarN n = toConc (ANewMVar n)
-
-  putMVar  var a = toConc (\c -> APutMVar var a (c ()))
-  readMVar var   = toConc (AReadMVar var)
-  takeMVar var   = toConc (ATakeMVar var)
-
-  tryPutMVar  var a = toConc (ATryPutMVar  var a)
-  tryReadMVar var   = toConc (ATryReadMVar var)
-  tryTakeMVar var   = toConc (ATryTakeMVar var)
-
-  -- ----------
-
-  throwTo tid e = toConc (\c -> AThrowTo tid e (c ()))
-
-  -- ----------
-
-  atomically = toConc . AAtom
-
--- | Run a concurrent computation with a given 'Scheduler' and initial
--- state, returning either the final result or the condition which
--- prevented that. Also returned is the final state of the scheduler,
--- and an execution trace.
+-- | A concurrent program with some set-up action.
 --
--- If the RTS supports bound threads (ghc -threaded when linking) then
--- the main thread of the concurrent computation will be bound, and
--- @forkOS@ / @forkOSN@ will work during execution.  If not, then the
--- main thread will not be found, and attempting to fork a bound
--- thread will raise an error.
+-- In terms of results, this is the same as @setup >>= program@.
+-- However, the setup action will be __snapshotted__ (see
+-- 'recordSnapshot' and 'runSnapshot') by the testing functions.  This
+-- means that even if dejafu runs this program many many times, the
+-- setup action will only be run the first time, and its effects
+-- remembered for subsequent executions.
 --
--- __Warning:__ Blocking on the action of another thread in 'liftIO'
--- cannot be detected! So if you perform some potentially blocking
--- action in a 'liftIO' the entire collection of threads may deadlock!
--- You should therefore keep @IO@ blocks small, and only perform
--- blocking operations with the supplied primitives, insofar as
--- possible.
---
--- __Note:__ In order to prevent computation from hanging, the runtime
--- will assume that a deadlock situation has arisen if the scheduler
--- attempts to (a) schedule a blocked thread, or (b) schedule a
--- nonexistent thread. In either of those cases, the computation will
--- be halted.
---
--- @since 1.0.0.0
-runConcurrent :: C.MonadConc n
-  => Scheduler s
-  -> MemType
-  -> s
-  -> ConcT n a
-  -> n (Either Condition a, s, Trace)
-runConcurrent sched memtype s ma = do
-  res <- runConcurrency False sched memtype s initialIdSource 2 (unC ma)
-  out <- efromJust <$> C.readIORef (finalRef res)
-  pure ( out
-       , cSchedState (finalContext res)
-       , F.toList (finalTrace res)
-       )
+-- @since 2.0.0.0
+withSetup
+  :: Program Basic n x
+  -- ^ Setup action
+  -> (x -> Program Basic n a)
+  -- ^ Main program
+  -> Program (WithSetup x) n a
+withSetup setup p = WithSetup
+  { wsSetup   = setup
+  , wsProgram = p
+  }
 
--- | Run a concurrent computation and return its result.
+-- | A concurrent program with some set-up and teardown actions.
 --
--- This can only be called in the main thread, when no other threads
--- exist. Calls to 'subconcurrency' cannot be nested, or placed inside
--- a call to 'dontCheck'. Violating either of these conditions will
--- result in the computation throwing a @NestedSubconcurrency@ or
--- @MultithreadedSubconcurrency@ error.
+-- This is similar to
 --
--- @since 0.6.0.0
-subconcurrency :: ConcT n a -> ConcT n (Either Condition a)
-subconcurrency ma = toConc (ASub (unC ma))
+-- @
+-- do
+--   x <- setup
+--   y <- program x
+--   teardown x y
+-- @
+--
+-- But with two differences:
+--
+--   * The setup action can be __snapshotted__, as described for
+--     'withSetup'
+--
+--   * The teardown action will be executed even if the main action
+--     fails to produce a value.
+--
+-- @since 2.0.0.0
+withTeardown
+  :: (x -> Either Condition y -> Program Basic n a)
+  -- ^ Teardown action
+  -> Program (WithSetup x) n y
+  -- ^ Main program
+  -> Program (WithSetupAndTeardown x y) n a
+withTeardown teardown ws = WithSetupAndTeardown
+  { wstSetup    = wsSetup ws
+  , wstProgram  = wsProgram ws
+  , wstTeardown = teardown
+  }
 
--- | Run an arbitrary action which gets some special treatment:
+-- | A combination of 'withSetup' and 'withTeardown' for convenience.
 --
---  * For systematic testing, 'dontCheck' is not dependent with
---    anything, even if the action has dependencies.
+-- @
+-- withSetupAndTeardown setup teardown =
+--   withTeardown teardown . withSetup setup
+-- @
 --
---  * For pre-emption bounding, 'dontCheck' counts for zero
---    pre-emptions, even if the action performs pre-emptive context
---    switches.
---
---  * For fair bounding, 'dontCheck' counts for zero yields/delays,
---    even if the action performs yields or delays.
---
---  * For length bounding, 'dontCheck' counts for one step, even if
---    the action has many.
---
---   * All SCT functions use 'runForDCSnapshot' / 'runWithDCSnapshot'
---     to ensure that the action is only executed once, although you
---     should be careful with @IO@ (see note on snapshotting @IO@).
---
--- The action is executed atomically with a deterministic scheduler
--- under sequential consistency.  Any threads created inside the
--- action continue to exist in the main computation.
---
--- This must be the first thing done in the main thread.  Violating
--- this condition will result in the computation throwing a
--- @LateDontCheck@ exception.
---
--- If the action does not successfully produce a value (deadlock,
--- length bound exceeded, etc), the whole computation is terminated.
---
--- @since 1.1.0.0
-dontCheck
-  :: Maybe Int
-  -- ^ An optional length bound.
-  -> ConcT n a
-  -- ^ The action to execute.
-  -> ConcT n a
-dontCheck lb ma = toConc (ADontCheck lb (unC ma))
+-- @since 2.0.0.0
+withSetupAndTeardown
+  :: Program Basic n x
+  -- ^ Setup action
+  -> (x -> Either Condition y -> Program Basic n a)
+  -- ^ Teardown action
+  -> (x -> Program Basic n y)
+  -- ^ Main program
+  -> Program (WithSetupAndTeardown x y) n a
+withSetupAndTeardown setup teardown =
+  withTeardown teardown . withSetup setup
 
 -------------------------------------------------------------------------------
--- Snapshotting
+-- Invariants
 
--- $snapshotting_io
+-- | Call this in the setup phase to register new invariant which will
+-- be checked after every scheduling point in the main phase.
+-- Invariants are atomic actions which can inspect the shared state of
+-- your computation.
 --
--- __Snapshotting @IO@:__ A snapshot captures entire state of your
--- concurrent program: the state of every thread, the number of
--- capabilities, the values of any @IORef@s, @MVar@s, and @TVar@s, and
--- records any @IO@ that you performed.
+-- If the invariant throws an exception, the execution will be aborted
+-- with n @InvariantFailure@.  Any teardown action will still be run.
 --
--- When restoring a snapshot this @IO@ is replayed, in order.  But the
--- whole snapshotted computation is not.  So the effects of the @IO@
--- take place again, but any return values are ignored.  For example,
--- this program will not do what you want:
---
--- @
--- bad_snapshot = do
---   r <- dontCheck Nothing $ do
---     r <- liftIO (newIORef 0)
---     liftIO (modifyIORef r (+1))
---     pure r
---   liftIO (readIORef r)
--- @
---
--- When the snapshot is taken, the value in the @IORef@ will be 1.
--- When the snapshot is restored for the first time, those @IO@
--- actions will be run again, /but their return values will be discarded/.
--- The value in the @IORef@ will be 2.  When the snapshot
--- is restored for the second time, the value in the @IORef@ will be
--- 3.  And so on.
---
--- To safely use @IO@ in a snapshotted computation, __the combined effect must be idempotent__.
--- You should either use actions which set the state to the final
--- value directly, rather than modifying it (eg, using a combination
--- of @liftIO . readIORef@ and @liftIO . writeIORef@ here), or reset
--- the state to a known value.  Both of these approaches will work:
---
--- @
--- good_snapshot1 = do
---   r <- dontCheck Nothing $ do
---     let modify r f = liftIO (readIORef r) >>= liftIO . writeIORef r . f
---     r <- liftIO (newIORef 0)
---     modify r (+1)
---     pure r
---   liftIO (readIORef r)
---
--- good_snapshot2 = do
---   r <- dontCheck Nothing $ do
---     r <- liftIO (newIORef 0)
---     liftIO (writeIORef r 0)
---     liftIO (modifyIORef r (+1))
---     pure r
---   liftIO (readIORef r)
--- @
+-- @since 2.0.0.0
+registerInvariant :: Invariant n a -> Program Basic n ()
+registerInvariant inv = ModelConc (\c -> ANewInvariant (() <$ inv) (c ()))
 
--- | Like 'runConcurrent', but terminates immediately after running
--- the 'dontCheck' action with a 'DCSnapshot' which can be used in
--- 'runWithDCSnapshot' to avoid doing that work again.
+-- | Read the content of an @IORef@.
 --
--- If this program does not contain a legal use of 'dontCheck', then
--- the result will be @Nothing@.
+-- This returns the globally visible value, which may not be the same
+-- as the value visible to any particular thread when using a memory
+-- model other than 'SequentialConsistency'.
 --
--- If you are using the SCT functions on an action which contains a
--- 'dontCheck', snapshotting will be handled for you, without you
--- needing to call this function yourself.
---
--- @since 1.1.0.0
-runForDCSnapshot :: C.MonadConc n
-  => ConcT n a
-  -> n (Maybe (Either Condition (DCSnapshot n a), Trace))
-runForDCSnapshot ma = do
-  res <- runConcurrency True roundRobinSchedNP SequentialConsistency () initialIdSource 2 (unC ma)
-  out <- C.readIORef (finalRef res)
-  pure $ case (finalRestore res, out) of
-    (Just _, Just (Left f)) -> Just (Left f, F.toList (finalTrace res))
-    (Just restore, _) -> Just (Right (DCSnapshot (finalContext res) restore (finalRef res)), F.toList (finalTrace res))
-    (_, _) -> Nothing
+-- @since 2.0.0.0
+inspectIORef :: ModelIORef n a -> Invariant n a
+inspectIORef = Invariant . IInspectIORef
 
--- | Like 'runConcurrent', but uses a 'DCSnapshot' produced by
--- 'runForDCSnapshot' to skip the 'dontCheck' work.
+-- | Read the content of an @MVar@.
 --
--- If you are using the SCT functions on an action which contains a
--- 'dontCheck', snapshotting will be handled for you, without you
--- needing to call this function yourself.
+-- This is essentially @tryReadMVar@.
 --
--- @since 1.1.0.0
-runWithDCSnapshot :: C.MonadConc n
-  => Scheduler s
-  -> MemType
-  -> s
-  -> DCSnapshot n a
-  -> n (Either Condition a, s, Trace)
-runWithDCSnapshot sched memtype s snapshot = do
-  let context = (dcsContext snapshot) { cSchedState = s }
-  let restore = dcsRestore snapshot
-  let ref = dcsRef snapshot
-  res <- runConcurrencyWithSnapshot sched memtype context restore ref
-  out <- efromJust <$> C.readIORef (finalRef res)
-  pure ( out
-       , cSchedState (finalContext res)
-       , F.toList (finalTrace res)
-       )
+-- @since 2.0.0.0
+inspectMVar :: ModelMVar n a -> Invariant n (Maybe a)
+inspectMVar = Invariant . IInspectMVar
 
--- | Check if a 'DCSnapshot' can be taken from this computation.
+-- | Read the content of a @TVar@.
 --
--- @since 1.1.0.0
-canDCSnapshot :: ConcT n a -> Bool
-canDCSnapshot (C (ModelConc k)) = lookahead (k undefined) == WillDontCheck
-
--- | Get the threads which exist in a snapshot, partitioned into
--- runnable and not runnable.
+-- This is essentially @readTVar@.
 --
--- @since 1.1.0.0
-threadsFromDCSnapshot :: DCSnapshot n a -> ([ThreadId], [ThreadId])
-threadsFromDCSnapshot snapshot = partition isRunnable (M.keys threads) where
-  threads = cThreads (dcsContext snapshot)
-  isRunnable tid = isNothing (_blocking =<< M.lookup tid threads)
+-- @since 2.0.0.0
+inspectTVar :: ModelTVar n a -> Invariant n a
+inspectTVar = Invariant . IInspectTVar

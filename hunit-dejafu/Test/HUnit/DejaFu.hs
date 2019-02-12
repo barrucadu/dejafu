@@ -1,16 +1,14 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 -- |
 -- Module      : Test.HUnit.DejaFu
--- Copyright   : (c) 2015--2018 Michael Walker
+-- Copyright   : (c) 2015--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
--- Portability : FlexibleContexts, FlexibleInstances, LambdaCase, TypeSynonymInstances
+-- Portability : FlexibleContexts, FlexibleInstances, LambdaCase
 --
 -- This module allows using Deja Fu predicates with HUnit to test the
 -- behaviour of concurrent systems.
@@ -43,7 +41,24 @@ module Test.HUnit.DejaFu
   , Condition
   , Predicate
   , ProPredicate(..)
+  -- *** Settings
   , module Test.DejaFu.Settings
+  -- *** Expressing concurrent programs
+  , Program
+  , Basic
+  , ConcT
+  , ConcIO
+  , WithSetup
+  , WithSetupAndTeardown
+  , withSetup
+  , withTeardown
+  , withSetupAndTeardown
+  -- *** Invariants
+  , Invariant
+  , registerInvariant
+  , inspectIORef
+  , inspectMVar
+  , inspectTVar
 
   -- * Refinement property testing
   , testProperty
@@ -58,10 +73,6 @@ module Test.HUnit.DejaFu
   , R.refines, (R.=>=)
   , R.strictlyRefines, (R.->-)
   , R.equivalentTo, (R.===)
-
-  -- * Deprecated
-  , testDejafuDiscard
-  , testDejafusDiscard
   ) where
 
 import           Control.Monad.Catch    (try)
@@ -76,17 +87,6 @@ import qualified Test.DejaFu.Types      as D
 import           Test.HUnit             (Assertable(..), Test(..), Testable(..),
                                          assertFailure, assertString)
 import           Test.HUnit.Lang        (HUnitFailure(..))
-
-showCondition :: Condition -> String
-#if MIN_VERSION_dejafu(1,12,0)
-showCondition = Conc.showCondition
-#else
--- | An alias for 'Failure'.
---
--- @since 1.2.1.0
-type Condition = Failure
-showCondition = Conc.showFail
-#endif
 
 --------------------------------------------------------------------------------
 -- HUnit-style unit testing
@@ -113,9 +113,9 @@ assertableP = alwaysTrue $ \case
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 testAuto :: (Eq a, Show a)
-  => Conc.ConcIO a
+  => Program pty IO a
   -- ^ The computation to test.
   -> Test
 testAuto = testAutoWithSettings defaultSettings
@@ -123,24 +123,24 @@ testAuto = testAutoWithSettings defaultSettings
 -- | Variant of 'testAuto' which tests a computation under a given
 -- execution way and memory model.
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 testAutoWay :: (Eq a, Show a)
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> Conc.ConcIO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testAutoWay way = testAutoWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testAuto' which takes a settings record.
 --
--- @since 1.1.0.0
+-- @since 2.0.0.0
 testAutoWithSettings :: (Eq a, Show a)
   => Settings IO a
   -- ^ The SCT settings.
-  -> Conc.ConcIO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testAutoWithSettings settings = testDejafusWithSettings settings
@@ -151,13 +151,13 @@ testAutoWithSettings settings = testDejafusWithSettings settings
 
 -- | Check that a predicate holds.
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 testDejafu :: Show b
   => String
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> Conc.ConcIO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testDejafu = testDejafuWithSettings defaultSettings
@@ -165,7 +165,7 @@ testDejafu = testDejafuWithSettings defaultSettings
 -- | Variant of 'testDejafu' which takes a way to execute the program
 -- and a memory model.
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 testDejafuWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
@@ -175,14 +175,14 @@ testDejafuWay :: Show b
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> Conc.ConcIO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testDejafuWay way = testDejafuWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testDejafu' which takes a settings record.
 --
--- @since 1.1.0.0
+-- @since 2.0.0.0
 testDejafuWithSettings :: Show b
   => Settings IO a
   -- ^ The SCT settings.
@@ -190,41 +190,20 @@ testDejafuWithSettings :: Show b
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> Conc.ConcIO a
+  -> Program p IO a
   -- ^ The computation to test.
   -> Test
 testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name, p)]
-
--- | Variant of 'testDejafuWay' which can selectively discard results.
---
--- @since 1.0.0.0
-testDejafuDiscard :: Show b
-  => (Either Condition a -> Maybe Discard)
-  -- ^ Selectively discard results.
-  -> Way
-  -- ^ How to execute the concurrent program.
-  -> MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> String
-  -- ^ The name of the test.
-  -> ProPredicate a b
-  -- ^ The predicate to check.
-  -> Conc.ConcIO a
-  -- ^ The computation to test.
-  -> Test
-testDejafuDiscard discard way =
-  testDejafuWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
-{-# DEPRECATED testDejafuDiscard "Use testDejafuWithSettings instead" #-}
 
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test. This will share work between the predicates, rather than
 -- running the concurrent computation many times for each predicate.
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 testDejafus :: Show b
   => [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> Conc.ConcIO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testDejafus = testDejafusWithSettings defaultSettings
@@ -232,7 +211,7 @@ testDejafus = testDejafusWithSettings defaultSettings
 -- | Variant of 'testDejafus' which takes a way to execute the program
 -- and a memory model.
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 testDejafusWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
@@ -240,43 +219,23 @@ testDejafusWay :: Show b
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> Conc.ConcIO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testDejafusWay way = testDejafusWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testDejafus' which takes a settings record.
 --
--- @since 1.1.0.0
+-- @since 2.0.0.0
 testDejafusWithSettings :: Show b
   => Settings IO a
   -- ^ The SCT settings.
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> Conc.ConcIO a
+  -> Program pty IO a
   -- ^ The computation to test.
   -> Test
 testDejafusWithSettings = testconc
-
--- | Variant of 'testDejafusWay' which can selectively discard
--- results, beyond what each predicate already discards.
---
--- @since 1.0.1.0
-testDejafusDiscard :: Show b
-  => (Either Condition a -> Maybe Discard)
-  -- ^ Selectively discard results.
-  -> Way
-  -- ^ How to execute the concurrent program.
-  -> MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> [(String, ProPredicate a b)]
-  -- ^ The list of predicates (with names) to check.
-  -> Conc.ConcIO a
-  -- ^ The computation to test.
-  -> Test
-testDejafusDiscard discard way =
-  testDejafusWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
-{-# DEPRECATED testDejafusDiscard "Use testDejafusWithSettings instead" #-}
 
 
 -------------------------------------------------------------------------------
@@ -320,7 +279,7 @@ testPropertyFor = testprop
 testconc :: Show b
   => Settings IO a
   -> [(String, ProPredicate a b)]
-  -> Conc.ConcIO a
+  -> Program pty IO a
   -> Test
 testconc settings tests concio = case map toTest tests of
   [t] -> t
@@ -362,7 +321,7 @@ showErr res
 
   failures = intersperse "" . map (indent . showres) . take 5 $ _failures res
 
-  showres (r, t) = either showCondition show r ++ " " ++ Conc.showTrace t
+  showres (r, t) = either Conc.showCondition show r ++ " " ++ Conc.showTrace t
 
   rest = if moreThan (_failures res) 5 then "\n\t..." else ""
 

@@ -23,7 +23,7 @@ module Test.DejaFu.Settings
   , randomly
   , uniformly
 
-  -- *** Schedule bounds
+  -- *** Schedule bounding
 
   -- | Schedule bounding is used by the 'systematically' approach to
   -- limit the search-space, which in general will be huge.
@@ -50,12 +50,22 @@ module Test.DejaFu.Settings
   , Bounds(..)
   , PreemptionBound(..)
   , FairBound(..)
-  , LengthBound(..)
   , defaultBounds
   , defaultPreemptionBound
   , defaultFairBound
-  , defaultLengthBound
   , noBounds
+
+  -- *** Length bounding
+
+  -- | Length bounding can be used to test potentially nonterminating
+  -- computations.  Any execution exceeding the length bound gets
+  -- discarded.
+  --
+  -- While 'PreemptionBound' and 'FairBound' are only used by
+  -- 'systematically', all 'Way's use the length bound.
+
+  , LengthBound(..)
+  , llengthBound
 
   -- ** The @MemType@
 
@@ -258,6 +268,7 @@ defaultSettings = fromWayAndMemType defaultWay defaultMemType
 fromWayAndMemType :: Applicative n => Way -> MemType -> Settings n a
 fromWayAndMemType way memtype = Settings
   { _way = way
+  , _lengthBound = Nothing
   , _memtype = memtype
   , _discard = Nothing
   , _debugShow = Nothing
@@ -332,7 +343,7 @@ uniformly :: RandomGen g
 uniformly = Randomly $ \g -> (1, g)
 
 -------------------------------------------------------------------------------
--- Schedule bounds
+-- Schedule bounding
 
 -- | All bounds enabled, using their default values.
 --
@@ -344,7 +355,6 @@ defaultBounds :: Bounds
 defaultBounds = Bounds
   { boundPreemp = Just defaultPreemptionBound
   , boundFair   = Just defaultFairBound
-  , boundLength = Nothing
   }
 
 -- | A sensible default preemption bound: 2.
@@ -365,14 +375,6 @@ defaultPreemptionBound = 2
 defaultFairBound :: FairBound
 defaultFairBound = 5
 
--- | There is no default length bound.
---
--- This is only suitable if your computation will always terminate!
---
--- @since 1.8.0.0
-defaultLengthBound :: LengthBound
-defaultLengthBound = 250
-
 -- | No bounds enabled. This forces the scheduler to just use
 -- partial-order reduction and sleep sets to prune the search
 -- space. This will /ONLY/ work if your computation always terminates!
@@ -382,8 +384,16 @@ noBounds :: Bounds
 noBounds = Bounds
   { boundPreemp = Nothing
   , boundFair   = Nothing
-  , boundLength = Nothing
   }
+
+-------------------------------------------------------------------------------
+-- Length bounding
+
+-- | A lens into the length bound.
+--
+-- @since 2.0.0.0
+llengthBound :: Lens' (Settings n a) (Maybe LengthBound)
+llengthBound afb s = (\b -> s {_lengthBound = b}) <$> afb (_lengthBound s)
 
 -------------------------------------------------------------------------------
 -- The @MemType@

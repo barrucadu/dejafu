@@ -2,15 +2,19 @@
 
 {- |
 Module      : Test.DejaFu
-Copyright   : (c) 2015--2018 Michael Walker
+Copyright   : (c) 2015--2019 Michael Walker
 License     : MIT
 Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 Stability   : experimental
 Portability : TupleSections
 
-dejafu is a library for unit-testing concurrent Haskell programs,
-written using the [concurrency](https://hackage.haskell.org/package/concurrency)
-package's 'MonadConc' typeclass.
+dejafu is a library for unit-testing concurrent Haskell programs which
+are written using the <https://hackage.haskell.org/package/concurrency
+concurrency> package's 'MonadConc' typeclass.
+
+For more in-depth documentation, including migration guides from
+earlier versions of dejafu, see the <https://dejafu.readthedocs.io
+website>.
 
 __A first test:__ This is a simple concurrent program which forks two
 threads and each races to write to the same @MVar@:
@@ -46,15 +50,65 @@ and, for each, a summarised execution trace leading to that result:
 
  * Each \"-\" represents one \"step\" of the computation.
 
-__Conditions:__ A program may fail to terminate in a way which
-produces a value. dejafu can detect a few such cases:
+__Memory models:__ dejafu supports three different memory models,
+which affect how one thread's 'IORef' updates become visible to other
+threads.
 
- * 'Deadlock', if every thread is blocked.
+ * Sequential consistency: a program behaves as a simple interleaving
+   of the actions in different threads. When an 'IORef' is written to,
+   that write is immediately visible to all threads.
 
- * 'STMDeadlock', if every thread is blocked /and/ the main thread is
-   blocked in an STM transaction.
+  * Total store order (TSO): each thread has a write buffer.  A thread
+    sees its writes immediately, but other threads will only see
+    writes when they are committed, which may happen later.  Writes
+    are committed in the same order that they are created.
 
- * 'UncaughtException', if the main thread is killed by an exception.
+  * Partial store order (PSO): each 'IORef' has a write buffer.  A
+    thread sees its writes immediately, but other threads will only
+    see writes when they are committed, which may happen later.
+    Writes to different 'IORef's are not necessarily committed in the
+    same order that they are created.
+
+This small example shows the difference between sequential consistency
+and TSO:
+
+>>> :{
+let relaxed = do
+      r1 <- newIORef False
+      r2 <- newIORef False
+      x <- spawn $ writeIORef r1 True >> readIORef r2
+      y <- spawn $ writeIORef r2 True >> readIORef r1
+      (,) <$> readMVar x <*> readMVar y
+:}
+
+The 'autocheckWay' function will let us specify the memory model:
+
+>>> autocheckWay defaultWay SequentialConsistency relaxed
+[pass] Successful
+[fail] Deterministic
+    (False,True) S0---------S1----S0--S2----S0--
+<BLANKLINE>
+    (True,True) S0---------S1-P2----S1---S0---
+<BLANKLINE>
+    (True,False) S0---------S2----S1----S0---
+False
+
+>>> autocheckWay defaultWay TotalStoreOrder relaxed
+[pass] Successful
+[fail] Deterministic
+    (False,True) S0---------S1----S0--S2----S0--
+<BLANKLINE>
+    (False,False) S0---------S1--P2----S1--S0---
+<BLANKLINE>
+    (True,False) S0---------S2----S1----S0---
+<BLANKLINE>
+    (True,True) S0---------S1-C-S2----S1---S0---
+False
+
+The result @(False,False)@ is possible using TSO and PSO, but not
+sequential consistency.  The \"C\" in the trace shows where a /commit/
+action occurred, which makes a write to an 'IORef' visible to all
+threads.
 
 __Beware of 'liftIO':__ dejafu works by running your test case lots of
 times with different schedules.  If you use 'liftIO' at all, make sure
@@ -107,9 +161,9 @@ If you need more information, use these functions.
 -}
 
   , Result(..)
-  , Condition(..)
   , runTest
   , runTestWay
+  , runTestWithSettings
 
   -- ** Predicates
 
@@ -169,23 +223,24 @@ Helper functions to identify conditions.
 
 -}
 
+  , Condition(..)
   , isAbort
   , isDeadlock
   , isUncaughtException
+  , isInvariantFailure
 
-  -- * Property testing
+  -- * Property-based testing
 
   {- |
 
-dejafu can also use a property-testing style to test stateful
+dejafu can also use a property-based testing style to test stateful
 operations for a variety of inputs.  Inputs are generated using the
-[leancheck](https://hackage.haskell.org/package/leancheck) library for
+<https://hackage.haskell.org/package/leancheck leancheck> library for
 enumerative testing.
 
-__Testing @MVar@ operations with multiple producers__:
-
-These are a little different to the property tests you may be familiar
-with from libraries like QuickCheck (and leancheck).  As we're testing
+__Testing @MVar@ operations with multiple producers__: These are a
+little different to the property tests you may be familiar with from
+libraries like QuickCheck (and leancheck).  As we're testing
 properties of /stateful/ and /concurrent/ things, we need to provide
 some extra information.
 
@@ -237,10 +292,26 @@ interference we have provided: the left term never empties a full
 
   , module Test.DejaFu.Refinement
 
-  -- * Deprecated
-  , Failure
-  , dejafuDiscard
-  ) where
+  -- * Expressing concurrent programs
+  , Program
+  , Basic
+  , ConcT
+  , ConcIO
+
+  -- ** Setup and teardown
+  , WithSetup
+  , WithSetupAndTeardown
+  , withSetup
+  , withTeardown
+  , withSetupAndTeardown
+
+  -- ** Invariants
+  , Invariant
+  , registerInvariant
+  , inspectIORef
+  , inspectMVar
+  , inspectTVar
+) where
 
 import           Control.Arrow            (first)
 import           Control.DeepSeq          (NFData(..))
@@ -302,9 +373,9 @@ let relaxed = do
 --     "world" S0----S2--S0--
 -- False
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 autocheck :: (MonadConc n, MonadIO n, Eq a, Show a)
-  => ConcT n a
+  => Program pty n a
   -- ^ The computation to test.
   -> n Bool
 autocheck = autocheckWithSettings defaultSettings
@@ -334,13 +405,13 @@ autocheck = autocheckWithSettings defaultSettings
 --     (True,False) S0---------S2----S1----S0---
 -- False
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 autocheckWay :: (MonadConc n, MonadIO n, Eq a, Show a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to test.
   -> n Bool
 autocheckWay way = autocheckWithSettings . fromWayAndMemType way
@@ -369,16 +440,16 @@ autocheckWay way = autocheckWithSettings . fromWayAndMemType way
 --     (True,False) S0---------S2----S1----S0---
 -- False
 --
--- @since 1.2.0.0
+-- @since 2.0.0.0
 autocheckWithSettings :: (MonadConc n, MonadIO n, Eq a, Show a)
   => Settings n a
   -- ^ The SCT settings.
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to test.
   -> n Bool
 autocheckWithSettings settings = dejafusWithSettings settings
   [ ("Successful", representative successful)
-  , ("Deterministic", alwaysSame) -- already representative
+  , ("Deterministic", representative alwaysSame)
   ]
 
 -- | Check a predicate and print the result to stdout, return 'True'
@@ -395,13 +466,13 @@ autocheckWithSettings settings = dejafusWithSettings settings
 --     "world" S0----S2--S0--
 -- False
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 dejafu :: (MonadConc n, MonadIO n, Show b)
   => String
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to test.
   -> n Bool
 dejafu = dejafuWithSettings defaultSettings
@@ -425,7 +496,7 @@ dejafu = dejafuWithSettings defaultSettings
 --     "world" S0----S2--S1-S0--
 -- False
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 dejafuWay :: (MonadConc n, MonadIO n, Show b)
   => Way
   -- ^ How to run the concurrent program.
@@ -435,7 +506,7 @@ dejafuWay :: (MonadConc n, MonadIO n, Show b)
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to test.
   -> n Bool
 dejafuWay way = dejafuWithSettings . fromWayAndMemType way
@@ -451,7 +522,7 @@ dejafuWay way = dejafuWithSettings . fromWayAndMemType way
 --     "world" S0----S2--S1-S0--
 -- False
 --
--- @since 1.2.0.0
+-- @since 2.0.0.0
 dejafuWithSettings :: (MonadConc n, MonadIO n, Show b)
   => Settings n a
   -- ^ The SCT settings.
@@ -459,39 +530,11 @@ dejafuWithSettings :: (MonadConc n, MonadIO n, Show b)
   -- ^ The name of the test.
   -> ProPredicate a b
   -- ^ The predicate to check.
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to test.
   -> n Bool
 dejafuWithSettings settings name test =
   dejafusWithSettings settings [(name, test)]
-
--- | Variant of 'dejafuWay' which can selectively discard results.
---
--- >>> dejafuDiscard (\_ -> Just DiscardTrace) defaultWay defaultMemType "Discarding" alwaysSame example
--- [fail] Discarding
---     "hello" <trace discarded>
--- <BLANKLINE>
---     "world" <trace discarded>
--- False
---
--- @since 1.0.0.0
-dejafuDiscard :: (MonadConc n, MonadIO n, Show b)
-  => (Either Condition a -> Maybe Discard)
-  -- ^ Selectively discard results.
-  -> Way
-  -- ^ How to run the concurrent program.
-  -> MemType
-  -- ^ The memory model to use for non-synchronised @IORef@ operations.
-  -> String
-  -- ^ The name of the test.
-  -> ProPredicate a b
-  -- ^ The predicate to check.
-  -> ConcT n a
-  -- ^ The computation to test.
-  -> n Bool
-dejafuDiscard discard way =
-  dejafuWithSettings . set ldiscard (Just discard) . fromWayAndMemType way
-{-# DEPRECATED dejafuDiscard "Use dejafuWithSettings instead" #-}
 
 -- | Variant of 'dejafu' which takes a collection of predicates to
 -- test, returning 'True' if all pass.
@@ -504,11 +547,11 @@ dejafuDiscard discard way =
 -- [pass] B
 -- False
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 dejafus :: (MonadConc n, MonadIO n, Show b)
   => [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to test.
   -> n Bool
 dejafus = dejafusWithSettings defaultSettings
@@ -526,7 +569,7 @@ dejafus = dejafusWithSettings defaultSettings
 -- [pass] B
 -- False
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 dejafusWay :: (MonadConc n, MonadIO n, Show b)
   => Way
   -- ^ How to run the concurrent program.
@@ -534,7 +577,7 @@ dejafusWay :: (MonadConc n, MonadIO n, Show b)
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to test.
   -> n Bool
 dejafusWay way = dejafusWithSettings . fromWayAndMemType way
@@ -551,13 +594,13 @@ dejafusWay way = dejafusWithSettings . fromWayAndMemType way
 -- [pass] B
 -- False
 --
--- @since 1.2.0.0
+-- @since 2.0.0.0
 dejafusWithSettings :: (MonadConc n, MonadIO n, Show b)
   => Settings n a
   -- ^ The SCT settings.
   -> [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to test.
   -> n Bool
 dejafusWithSettings settings tests conc = do
@@ -627,11 +670,11 @@ instance Foldable Result where
 -- found, is unspecified and may change between releases.  This may
 -- affect which failing traces are reported, when there is a failure.
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 runTest :: MonadConc n
   => ProPredicate a b
   -- ^ The predicate to check
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to test
   -> n (Result b)
 runTest = runTestWithSettings defaultSettings
@@ -643,7 +686,7 @@ runTest = runTestWithSettings defaultSettings
 -- found, is unspecified and may change between releases.  This may
 -- affect which failing traces are reported, when there is a failure.
 --
--- @since 1.0.0.0
+-- @since 2.0.0.0
 runTestWay :: MonadConc n
   => Way
   -- ^ How to run the concurrent program.
@@ -651,7 +694,7 @@ runTestWay :: MonadConc n
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
   -> ProPredicate a b
   -- ^ The predicate to check
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to test
   -> n (Result b)
 runTestWay way = runTestWithSettings . fromWayAndMemType way
@@ -662,13 +705,13 @@ runTestWay way = runTestWithSettings . fromWayAndMemType way
 -- found, is unspecified and may change between releases.  This may
 -- affect which failing traces are reported, when there is a failure.
 --
--- @since 1.2.0.0
+-- @since 2.0.0.0
 runTestWithSettings :: MonadConc n
   => Settings n a
   -- ^ The SCT settings.
   -> ProPredicate a b
   -- ^ The predicate to check
-  -> ConcT n a
+  -> Program pty n a
   -- ^ The computation to test
   -> n (Result b)
 runTestWithSettings settings p conc =
@@ -723,7 +766,7 @@ representative p = p
       in result { _failures = simplestsBy (==) (_failures result) }
   }
 
--- | Check that a computation never fails.
+-- | Check that a computation never produces a @Left@ value.
 --
 -- @since 1.9.1.0
 successful :: Predicate a
@@ -801,8 +844,7 @@ exceptionsAlways = alwaysTrue $ either isUncaughtException (const False)
 exceptionsSometimes :: Predicate a
 exceptionsSometimes = somewhereTrue $ either isUncaughtException (const False)
 
--- | Check that a computation always gives the same, successful,
--- result.
+-- | Check that a computation always gives the same, @Right@, result.
 --
 -- > alwaysSame = alwaysSameBy (==)
 --
@@ -811,7 +853,7 @@ alwaysSame :: Eq a => Predicate a
 alwaysSame = alwaysSameBy (==)
 
 -- | Check that a computation always gives the same (according to the
--- provided function), successful, result.
+-- provided function), @Right@, result.
 --
 -- > alwaysSameOn = alwaysSameBy ((==) `on` f)
 --
@@ -829,14 +871,15 @@ alwaysSameBy f = ProPredicate
   , peval = \xs ->
       let (failures, successes) = partition (isLeft . fst) xs
           simpleSuccesses = simplestsBy (f `on` efromRight) successes
-      in case (failures, simpleSuccesses) of
+          simpleFailures  = simplestsBy ((==) `on` efromLeft) failures
+      in case (simpleFailures, simpleSuccesses) of
         ([], []) -> defaultPass
         ([], [_]) -> defaultPass
-        (_, _) -> defaultFail (failures ++ simpleSuccesses)
+        (_, _) -> defaultFail (simpleFailures ++ simpleSuccesses)
   }
 
 -- | Check that a computation never fails, and gives multiple distinct
--- successful results.
+-- @Right@ results.
 --
 -- > notAlwaysSame = notAlwaysSameBy (==)
 --
@@ -845,7 +888,7 @@ notAlwaysSame :: Eq a => Predicate a
 notAlwaysSame = notAlwaysSameBy (==)
 
 -- | Check that a computation never fails, and gives multiple distinct
--- (according to the provided function) successful results.
+-- (according to the provided function) @Right@ results.
 --
 -- > notAlwaysSameOn = notAlwaysSameBy ((==) `on` f)
 --
@@ -854,7 +897,7 @@ notAlwaysSameOn :: Eq b => (a -> b) -> Predicate a
 notAlwaysSameOn f = notAlwaysSameBy ((==) `on` f)
 
 -- | Check that a computation never fails, and gives multiple distinct
--- successful results, by applying a transformation on results.
+-- @Right@ results, by applying a transformation on results.
 --
 -- This inverts the condition, so (eg) @notAlwaysSameBy (==)@ will
 -- pass if there are unequal results.
@@ -865,13 +908,14 @@ notAlwaysSameBy f = ProPredicate
     { pdiscard = const Nothing
     , peval = \xs ->
         let (failures, successes) = partition (isLeft . fst) xs
+            simpleFailures = simplestsBy ((==) `on` efromLeft) failures
         in case successes of
-          [x] -> defaultFail (x : failures)
+          [x] -> defaultFail (x : simpleFailures)
           _  ->
             let res = go successes (defaultFail [])
             in case failures of
               [] -> res
-              _ -> res { _failures = failures ++ _failures res, _pass = False }
+              _ -> res { _failures = simpleFailures ++ _failures res, _pass = False }
     }
   where
     y1 .*. y2 = not (on f (efromRight . fst) y1 y2)
@@ -945,7 +989,9 @@ gives expected = ProPredicate
 
     failures = filter (\(r, _) -> r `notElem` expected)
 
--- | Variant of 'gives' that doesn't allow for non-success conditions.
+-- | Variant of 'gives' that doesn't allow for @Left@ results.
+--
+-- > gives' = gives . map Right
 --
 -- @since 1.0.0.0
 gives' :: (Eq a, Show a) => [a] -> Predicate a

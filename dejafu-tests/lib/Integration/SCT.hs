@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-deprecations #-}
-
 module Integration.SCT where
 
 import           Control.Concurrent.Classy hiding (check)
@@ -89,21 +87,9 @@ resultsSetTests = toTestList
     , testCase "Proper results from resultsSet'" $ do
         tested <- resultsSet' defaultWay defaultMemType testAction
         results @=? tested
-    , testCase "Proper results from resultsSetDiscard" $ do
-        tested <-
-          resultsSetDiscard discarder defaultWay defaultMemType testAction
-        resultsWithDiscard @=? tested
-    , testCase "Proper results from resultsSetDiscard'" $ do
-        tested <-
-          resultsSetDiscard' discarder defaultWay defaultMemType testAction
-        resultsWithDiscard @=? tested
     ]
   where
     results = S.fromList $ map Right [1, 2] ++ [Left Deadlock]
-    resultsWithDiscard = S.fromList [Right 2, Left Deadlock]
-    discarder (Right 1) = Just DiscardResultAndTrace
-    discarder (Right 2) = Just DiscardTrace
-    discarder _ = Nothing
     testAction = do
       mvar <- newEmptyMVarInt
       _ <- fork $ putMVar mvar 1

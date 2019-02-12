@@ -4,14 +4,11 @@ module Integration.Regressions where
 
 import           Test.DejaFu               (exceptionsAlways, gives')
 
-import           Control.Concurrent.Classy hiding (newQSemN, signalQSemN,
-                                            waitQSemN)
+import           Control.Concurrent.Classy
 import           Control.Exception         (AsyncException(..))
 import qualified Control.Monad.Catch       as E
-import           Test.DejaFu.Conc          (subconcurrency)
 
 import           Common
-import           QSemN
 
 tests :: [TestTree]
 tests = toTestList
@@ -26,18 +23,6 @@ tests = toTestList
       _ <- fork . atomically $ writeTQueue b True
       let both x y = readTQueue x `orElse` readTQueue y `orElse` retry
       atomically $ both a b
-
-  , djfuS "https://github.com/barrucadu/dejafu/issues/71" (gives' [()]) $ do
-      s <- newEmptyMVar
-      _ <- subconcurrency (takeMVar s ||| pure ())
-      pure ()
-
-  , djfuS "https://github.com/barrucadu/dejafu/issues/81" (gives' [(Right (),0)]) $ do
-      s <- newQSemN 0
-      let interfere_ = waitQSemN s 0 >> signalQSemN s 0
-      x <- subconcurrency (signalQSemN s 0 ||| waitQSemN s 0 ||| interfere_)
-      o <- remainingQSemN s
-      pure (x, o)
 
   , djfu "https://github.com/barrucadu/dejafu/issues/111" (gives' [1]) $ do
       v <- atomically $ newTVarInt 1

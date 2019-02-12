@@ -114,7 +114,8 @@ import           Data.Set                 (Set)
 import qualified Data.Set                 as S
 import           Test.LeanCheck           (Listable(..), concatMapT, mapT)
 
-import           Test.DejaFu.Conc         (ConcIO, Condition, subconcurrency)
+import           Test.DejaFu.Conc         (ConcIO, Condition,
+                                           withSetupAndTeardown)
 import           Test.DejaFu.SCT          (runSCT)
 import           Test.DejaFu.Settings     (defaultMemType, defaultWay)
 
@@ -411,12 +412,14 @@ evalSigWithSeed :: Ord o
   -> x
   -> IO (Set (Maybe Condition, o))
 evalSigWithSeed sig x = do
-  results <- runSCT defaultWay defaultMemType $ do
-    s <- initialise sig x
-    r <- subconcurrency $ do
-      _ <- fork (interfere sig s x)
-      _ <- expression sig s
-      pure ()
-    o <- observe sig s x
-    pure (either Just (const Nothing) r, o)
+  results <- runSCT defaultWay defaultMemType $
+    withSetupAndTeardown
+      (initialise sig x)
+      (\s r -> do
+          o <- observe sig s x
+          pure (either Just (const Nothing) r, o))
+      (\s -> do
+          _ <- fork (interfere sig s x)
+          _ <- expression sig s
+          pure ())
   pure . S.fromList $ map (\(Right a, _) -> a) results
