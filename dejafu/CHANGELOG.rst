@@ -50,6 +50,9 @@ Added
 Changed
 ~~~~~~~
 
+* ``Test.DejaFu.alwaysSameBy`` and ``Test.DejaFu.notAlwaysSameBy``
+  return a representative trace for each unique condition.
+
 * Functions which took a ``ConcT`` now take a ``Program pty``:
     * ``Test.DejaFu.autocheck``
     * ``Test.DejaFu.autocheckWay``

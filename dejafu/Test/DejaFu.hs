@@ -449,7 +449,7 @@ autocheckWithSettings :: (MonadConc n, MonadIO n, Eq a, Show a)
   -> n Bool
 autocheckWithSettings settings = dejafusWithSettings settings
   [ ("Successful", representative successful)
-  , ("Deterministic", alwaysSame) -- already representative
+  , ("Deterministic", representative alwaysSame)
   ]
 
 -- | Check a predicate and print the result to stdout, return 'True'
@@ -871,10 +871,11 @@ alwaysSameBy f = ProPredicate
   , peval = \xs ->
       let (failures, successes) = partition (isLeft . fst) xs
           simpleSuccesses = simplestsBy (f `on` efromRight) successes
-      in case (failures, simpleSuccesses) of
+          simpleFailures  = simplestsBy ((==) `on` efromLeft) failures
+      in case (simpleFailures, simpleSuccesses) of
         ([], []) -> defaultPass
         ([], [_]) -> defaultPass
-        (_, _) -> defaultFail (failures ++ simpleSuccesses)
+        (_, _) -> defaultFail (simpleFailures ++ simpleSuccesses)
   }
 
 -- | Check that a computation never fails, and gives multiple distinct
@@ -907,13 +908,14 @@ notAlwaysSameBy f = ProPredicate
     { pdiscard = const Nothing
     , peval = \xs ->
         let (failures, successes) = partition (isLeft . fst) xs
+            simpleFailures = simplestsBy ((==) `on` efromLeft) failures
         in case successes of
-          [x] -> defaultFail (x : failures)
+          [x] -> defaultFail (x : simpleFailures)
           _  ->
             let res = go successes (defaultFail [])
             in case failures of
               [] -> res
-              _ -> res { _failures = failures ++ _failures res, _pass = False }
+              _ -> res { _failures = simpleFailures ++ _failures res, _pass = False }
     }
   where
     y1 .*. y2 = not (on f (efromRight . fst) y1 y2)
