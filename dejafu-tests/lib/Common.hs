@@ -22,6 +22,7 @@ import           Test.DejaFu                (Condition, Predicate,
                                              ProPredicate(..), Result(..), Way,
                                              alwaysTrue, somewhereTrue)
 import           Test.DejaFu.Conc           (randomSched, runConcurrent)
+import           Test.DejaFu.Internal
 import qualified Test.DejaFu.SCT            as SCT
 import           Test.DejaFu.SCT.Internal
 import           Test.DejaFu.Types
@@ -123,10 +124,13 @@ prop_dep_fun safeIO conc = H.property $ do
     seed <- H.forAll genInt
     fs <- H.forAll $ genList HGen.bool
 
-    -- todo: 1 1 is not right if a snapshot is restored
+    -- todo: this doesn't work with setup actions that (a) fork a
+    -- thread or (b) make an IORef. this is because it permutes the
+    -- trace using the initialCState, rather than the post-setup
+    -- state.
     (efa1, tids1, efa2, tids2) <- liftIO $ runNorm
       seed
-      (renumber mem 1 1 . permuteBy safeIO mem (map (\f _ _ -> f) fs))
+      (renumber mem 1 1 . permuteBy safeIO mem initialCState (map (\f _ _ -> f) fs))
       mem
     H.footnote ("            to: " ++ show tids2)
     H.footnote ("rewritten from: " ++ show tids1)
@@ -138,7 +142,7 @@ prop_dep_fun safeIO conc = H.property $ do
       let tids1 = toTIdTrace trc1
       (efa2, _, trc2) <- replay (play memtype conc) (norm tids1)
       let tids2 = toTIdTrace trc2
-      pure (efa1, map fst tids1, efa2, map fst tids2)
+      pure (efa1, tids1, efa2, tids2)
 
     play memtype c s g = runConcurrent s memtype g c
 

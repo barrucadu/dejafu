@@ -245,14 +245,14 @@ memoryProps = toTestList
 sctProps :: [TestTree]
 sctProps = toTestList
   [ testProperty "canInterrupt ==> canInterruptL" $ do
-      ds <- H.forAll genDepState
+      ds <- H.forAll genCState
       tid <- H.forAll genThreadId
-      act <- H.forAll (HGen.filter (SCT.canInterrupt ds tid) genThreadAction)
-      H.assert (SCT.canInterruptL ds tid (D.rewind act))
+      act <- H.forAll (HGen.filter (D.canInterrupt ds tid) genThreadAction)
+      H.assert (D.canInterruptL ds tid (D.rewind act))
 
   , testProperty "dependent ==> dependent'" $ do
       safeIO <- H.forAll HGen.bool
-      ds <- H.forAll genDepState
+      ds <- H.forAll genCState
       tid1 <- H.forAll genThreadId
       tid2 <- H.forAll genThreadId
       ta1 <- H.forAll genThreadAction
@@ -261,7 +261,7 @@ sctProps = toTestList
 
   , testProperty "dependent x y == dependent y x" $ do
       safeIO <- H.forAll HGen.bool
-      ds <- H.forAll genDepState
+      ds <- H.forAll genCState
       tid1 <- H.forAll genThreadId
       tid2 <- H.forAll genThreadId
       ta1 <- H.forAll genThreadAction
@@ -269,7 +269,7 @@ sctProps = toTestList
       SCT.dependent safeIO ds tid1 ta1 tid2 ta2 H.=== SCT.dependent safeIO ds tid2 ta2 tid1 ta1
 
   , testProperty "dependentActions x y == dependentActions y x" $ do
-      ds <- H.forAll genDepState
+      ds <- H.forAll genCState
       a1 <- H.forAll genActionType
       a2 <- H.forAll genActionType
       SCT.dependentActions ds a1 a2 H.=== SCT.dependentActions ds a2 a1
@@ -435,8 +435,8 @@ genSynchronisedActionType = HGen.choice
   , pure D.SynchronisedOther
   ]
 
-genDepState :: H.Gen SCT.DepState
-genDepState = SCT.DepState
+genCState :: H.Gen D.ConcurrencyState
+genCState = D.ConcurrencyState
   <$> genSmallMap genIORefId genSmallInt
   <*> genSmallSet genMVarId
   <*> genSmallMap genThreadId genMaskingState

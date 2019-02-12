@@ -47,8 +47,21 @@ Added
 
 * ``Test.DejaFu.runTestWithSettings`` function.
 
+* A simplified form of the concurrency state:
+    * ``Test.DejaFu.Types.ConcurrencyState``
+    * ``Test.DejaFu.Types.isBuffered``
+    * ``Test.DejaFu.Types.numBuffered``
+    * ``Test.DejaFu.Types.isFull``
+    * ``Test.DejaFu.Types.canInterrupt``
+    * ``Test.DejaFu.Types.canInterruptL``
+    * ``Test.DejaFu.Types.isMaskedInterruptible``
+    * ``Test.DejaFu.Types.isMaskedUninterruptible``
+
 Changed
 ~~~~~~~
+
+* ``Test.DejaFu.Schedule.Scheduler`` has a ``ConcurrencyState``
+  parameter.
 
 * ``Test.DejaFu.alwaysSameBy`` and ``Test.DejaFu.notAlwaysSameBy``
   return a representative trace for each unique condition.

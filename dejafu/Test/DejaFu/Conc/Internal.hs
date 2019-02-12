@@ -79,6 +79,7 @@ runConcurrency invariants forSnapshot sched memtype g idsrc caps ma = do
                     , cCaps          = caps
                     , cInvariants    = InvariantContext { icActive = invariants, icBlocked = [] }
                     , cNewInvariants = []
+                    , cCState        = initialCState
                     }
   (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
   let threads0 = launch' Unmasked initialThread (const c) (cThreads ctx)
@@ -125,6 +126,7 @@ data Context n g = Context
   , cCaps          :: Int
   , cInvariants    :: InvariantContext n
   , cNewInvariants :: [Invariant n ()]
+  , cCState        :: ConcurrencyState
   }
 
 -- | Run a collection of threads, until there are no threads left.
@@ -171,7 +173,7 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
              Nothing -> E.throwM ScheduledMissingThread
            Nothing -> die Abort restore sofar prior ctx'
     where
-      (choice, g')  = scheduleThread sched prior (efromList runnable') (cSchedState ctx)
+      (choice, g')  = scheduleThread sched prior (efromList runnable') (cCState ctx) (cSchedState ctx)
       runnable'     = [(t, lookahead (_continuation a)) | (t, a) <- sortOn fst $ M.assocs runnable]
       runnable      = M.filter (not . isBlocked) threadsc
       threadsc      = addCommitThreads (cWriteBuf ctx) threads
@@ -197,7 +199,7 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
             if forSnapshot
             then restore threads' >> actionSnap threads'
             else restore threads'
-      let ctx' = fixContext chosen actOrTrc res ctx
+      let ctx' = fixContext memtype chosen actOrTrc res ctx
       case res of
         Succeeded _ -> checkInvariants (cInvariants ctx') >>= \case
           Right ic ->
@@ -214,22 +216,21 @@ runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty 
       getPrior a = Just (chosen, a)
 
 -- | Apply the context update from stepping an action.
-fixContext :: ThreadId -> ThreadAction -> What n g -> Context n g -> Context n g
-fixContext chosen act (Succeeded ctx@Context{..}) _ =
-  ctx { cThreads = delCommitThreads $
-        if (interruptible <$> M.lookup chosen cThreads) /= Just False
-        then unblockWaitingOn chosen cThreads
-        else cThreads
-      , cInvariants = unblockInvariants act cInvariants
+fixContext :: MemType -> ThreadId -> ThreadAction -> What n g -> Context n g -> Context n g
+fixContext memtype tid act what ctx0 = fixContextCommon $ case what of
+    Succeeded ctx@Context{..} -> ctx
+      { cThreads =
+          if (interruptible <$> M.lookup tid cThreads) /= Just False
+          then unblockWaitingOn tid cThreads
+          else cThreads
       }
-fixContext _ act (Failed _) ctx@Context{..} =
-  ctx { cThreads = delCommitThreads cThreads
-      , cInvariants = unblockInvariants act cInvariants
-      }
-fixContext _ act (Snap ctx@Context{..}) _ =
-  ctx { cThreads = delCommitThreads cThreads
-      , cInvariants = unblockInvariants act cInvariants
-      }
+    _ -> ctx0
+  where
+  fixContextCommon ctx@Context{..} = ctx
+    { cThreads    = delCommitThreads cThreads
+    , cInvariants = unblockInvariants act cInvariants
+    , cCState     = updateCState memtype cCState tid act
+    }
 
 -- | @unblockWaitingOn tid@ unblocks every thread blocked in a
 -- @throwTo tid@.

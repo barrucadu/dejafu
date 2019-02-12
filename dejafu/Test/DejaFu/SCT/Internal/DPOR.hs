@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 
 -- |
@@ -10,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : DeriveAnyClass, DeriveGeneric, FlexibleContexts, LambdaCase, ViewPatterns
+-- Portability : DeriveAnyClass, DeriveGeneric, FlexibleContexts, ViewPatterns
 --
 -- Internal types and functions for SCT via dynamic partial-order
 -- reduction.  This module is NOT considered to form part of the
@@ -18,8 +17,7 @@
 module Test.DejaFu.SCT.Internal.DPOR where
 
 import           Control.Applicative  ((<|>))
-import           Control.DeepSeq      (NFData(..))
-import           Control.Exception    (MaskingState(..))
+import           Control.DeepSeq      (NFData)
 import qualified Data.Foldable        as F
 import           Data.Function        (on)
 import           Data.List            (nubBy, partition, sortOn)
@@ -104,7 +102,7 @@ data BacktrackStep = BacktrackStep
   , bcktBacktracks :: Map ThreadId Bool
   -- ^ The list of alternative threads to run, and whether those
   -- alternatives were added conservatively due to the bound.
-  , bcktState      :: DepState
+  , bcktState      :: ConcurrencyState
   -- ^ Some domain-specific state at this point.
   } deriving (Eq, Show, Generic, NFData)
 
@@ -164,12 +162,14 @@ incorporateTrace :: HasCallStack
   -> Trace
   -- ^ The execution trace: the decision made, the runnable threads,
   -- and the action performed.
+  -> ConcurrencyState
+  -- ^ The initial concurrency state
   -> DPOR
   -> DPOR
-incorporateTrace safeIO memtype conservative trace dpor0 = grow initialDepState (initialDPORThread dpor0) trace dpor0 where
+incorporateTrace safeIO memtype conservative trace state0 dpor0 = grow state0 (initialDPORThread dpor0) trace dpor0 where
   grow state tid trc@((d, _, a):rest) dpor =
     let tid'   = tidOf tid d
-        state' = updateDepState memtype state tid' a
+        state' = updateCState memtype state tid' a
     in case dporNext dpor of
          Just (t, child)
            | t == tid' ->
@@ -190,7 +190,7 @@ incorporateTrace safeIO memtype conservative trace dpor0 = grow initialDepState 
 
   -- Construct a new subtree corresponding to a trace suffix.
   subtree state tid sleep ((_, _, a):rest) = validateDPOR $
-    let state' = updateDepState memtype state tid a
+    let state' = updateCState memtype state tid a
         sleep' = M.filterWithKey (\t a' -> not $ dependent safeIO state' tid a t a') sleep
     in DPOR
         { dporRunnable = S.fromList $ case rest of
@@ -235,6 +235,8 @@ findBacktrackSteps
   -> Bool
   -- ^ Whether the computation was aborted due to no decisions being
   -- in-bounds.
+  -> ConcurrencyState
+  -- ^ The initial concurrency state.
   -> Seq ([(ThreadId, Lookahead)], [ThreadId])
   -- ^ A sequence of threads at each step: the list of runnable
   -- in-bound threads (with lookahead values), and the list of threads
@@ -244,12 +246,12 @@ findBacktrackSteps
   -> Trace
   -- ^ The execution trace.
   -> [BacktrackStep]
-findBacktrackSteps safeIO memtype backtrack boundKill = go initialDepState S.empty initialThread [] . F.toList where
+findBacktrackSteps safeIO memtype backtrack boundKill state0 = go state0 S.empty initialThread [] . F.toList where
   -- Walk through the traces one step at a time, building up a list of
   -- new backtracking points.
   go state allThreads tid bs ((e,i):is) ((d,_,a):ts) =
     let tid' = tidOf tid d
-        state' = updateDepState memtype state tid' a
+        state' = updateCState memtype state tid' a
         this = BacktrackStep
           { bcktThreadid   = tid'
           , bcktDecision   = d
@@ -344,7 +346,7 @@ data DPORSchedState k = DPORSchedState
   , schedBoundKill :: Bool
   -- ^ Whether the execution was terminated due to all decisions being
   -- out of bounds.
-  , schedDepState  :: DepState
+  , schedCState    :: ConcurrencyState
   -- ^ State used by the dependency function to determine when to
   -- remove decisions from the sleep set.
   , schedBState    :: Maybe k
@@ -356,14 +358,16 @@ initialDPORSchedState :: Map ThreadId ThreadAction
   -- ^ The initial sleep set.
   -> [ThreadId]
   -- ^ The schedule prefix.
+  -> ConcurrencyState
+  -- ^ The initial concurrency state.
   -> DPORSchedState k
-initialDPORSchedState sleep prefix = DPORSchedState
+initialDPORSchedState sleep prefix state0 = DPORSchedState
   { schedSleep     = sleep
   , schedPrefix    = prefix
   , schedBPoints   = Sq.empty
   , schedIgnore    = False
   , schedBoundKill = False
-  , schedDepState  = initialDepState
+  , schedCState    = state0
   , schedBState    = Nothing
   }
 
@@ -442,19 +446,22 @@ backtrackAt toAll bs0 = backtrackAt' . nubBy ((==) `on` fst') . sortOn fst' wher
 dporSched :: HasCallStack
   => Bool
   -- ^ True if all IO is thread safe.
-  -> MemType
   -> IncrementalBoundFunc k
   -- ^ Bound function: returns true if that schedule prefix terminated
   -- with the lookahead decision fits within the bound.
   -> Scheduler (DPORSchedState k)
-dporSched safeIO memtype boundf = Scheduler $ \prior threads s ->
+dporSched safeIO boundf = Scheduler $ \prior threads cstate s ->
   let
     -- The next scheduler state
     nextState rest = s
       { schedBPoints  = schedBPoints s |> (restrictToBound fst threads', rest)
-      , schedDepState = nextDepState
+      -- we only update this after using the current value; so in
+      -- effect this field is the depstate *before* the action which
+      -- just happened, we need this because we need to know if the
+      -- prior action (in the state we did it from) is dependent with
+      -- anything in the sleep set.
+      , schedCState = cstate
       }
-    nextDepState = let ds = schedDepState s in maybe ds (uncurry $ updateDepState memtype ds) prior
 
     -- Pick a new thread to run, not considering bounds. Choose the
     -- current thread if available and it hasn't just yielded,
@@ -522,7 +529,7 @@ dporSched safeIO memtype boundf = Scheduler $ \prior threads s ->
     [] ->
       let choices  = restrictToBound id initialise
           checkDep t a = case prior of
-            Just (tid, act) -> dependent safeIO (schedDepState s) tid act t a
+            Just (tid, act) -> dependent safeIO (schedCState s) tid act t a
             Nothing -> False
           ssleep'  = M.filterWithKey (\t a -> not $ checkDep t a) $ schedSleep s
           choices' = filter (`notElem` M.keys ssleep') choices
@@ -542,7 +549,7 @@ dporSched safeIO memtype boundf = Scheduler $ \prior threads s ->
 --
 -- This implements a stronger check that @not (dependent ...)@, as it
 -- handles some cases which 'dependent' doesn't need to care about.
-independent :: Bool -> DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
+independent :: Bool -> ConcurrencyState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
 independent safeIO ds t1 a1 t2 a2
     | t1 == t2 = False
     | check t1 a1 t2 a2 = False
@@ -569,7 +576,7 @@ independent safeIO ds t1 a1 t2 a2
 -- This is basically the same as 'dependent'', but can make use of the
 -- additional information in a 'ThreadAction' to make better decisions
 -- in a few cases.
-dependent :: Bool -> DepState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
+dependent :: Bool -> ConcurrencyState -> ThreadId -> ThreadAction -> ThreadId -> ThreadAction -> Bool
 dependent safeIO ds t1 a1 t2 a2 = case (a1, a2) of
   -- When masked interruptible, a thread can only be interrupted when
   -- actually blocked. 'dependent'' has to assume that all
@@ -601,7 +608,7 @@ dependent safeIO ds t1 a1 t2 a2 = case (a1, a2) of
 --
 -- Termination of the initial thread is handled specially in the DPOR
 -- implementation.
-dependent' :: Bool -> DepState -> ThreadId -> ThreadAction -> ThreadId -> Lookahead -> Bool
+dependent' :: Bool -> ConcurrencyState -> ThreadId -> ThreadAction -> ThreadId -> Lookahead -> Bool
 dependent' safeIO ds t1 a1 t2 l2 = case (a1, l2) of
   -- Worst-case assumption: all IO is dependent.
   (LiftIO, WillLiftIO) -> not safeIO
@@ -630,7 +637,7 @@ dependent' safeIO ds t1 a1 t2 l2 = case (a1, l2) of
 -- | Check if two 'ActionType's are dependent. Note that this is not
 -- sufficient to know if two 'ThreadAction's are dependent, without
 -- being so great an over-approximation as to be useless!
-dependentActions :: DepState -> ActionType -> ActionType -> Bool
+dependentActions :: ConcurrencyState -> ActionType -> ActionType -> Bool
 dependentActions ds a1 a2 = case (a1, a2) of
   (UnsynchronisedRead _, UnsynchronisedRead _) -> False
 
@@ -663,131 +670,6 @@ dependentActions ds a1 a2 = case (a1, a2) of
   (SynchronisedRead  v1, SynchronisedWrite v2) | v1 == v2 -> True
 
   (_, _) -> maybe False (\r -> Just r == iorefOf a2) (iorefOf a1)
-
--------------------------------------------------------------------------------
--- ** Dependency function state
-
-data DepState = DepState
-  { depIOState :: Map IORefId Int
-  -- ^ Keep track of which @IORef@s have buffered writes.
-  , depMVState :: Set MVarId
-  -- ^ Keep track of which @MVar@s are full.
-  , depMaskState :: Map ThreadId MaskingState
-  -- ^ Keep track of thread masking states. If a thread isn't present,
-  -- the masking state is assumed to be @Unmasked@. This nicely
-  -- provides compatibility with dpor-0.1, where the thread IDs are
-  -- not available.
-  } deriving (Eq, Show)
-
-instance NFData DepState where
-  rnf depstate = rnf ( depIOState depstate
-                     , depMVState depstate
-                     , [(t, m `seq` ()) | (t, m) <- M.toList (depMaskState depstate)]
-                     )
-
--- | Initial dependency state.
-initialDepState :: DepState
-initialDepState = DepState M.empty S.empty M.empty
-
--- | Update the dependency state with the action that has just
--- happened.
-updateDepState :: MemType -> DepState -> ThreadId -> ThreadAction -> DepState
-updateDepState memtype depstate tid act = DepState
-  { depIOState   = updateIOState memtype act $ depIOState   depstate
-  , depMVState   = updateMVState         act $ depMVState   depstate
-  , depMaskState = updateMaskState tid   act $ depMaskState depstate
-  }
-
--- | Update the @IORef@ buffer state with the action that has just
--- happened.
-updateIOState :: MemType -> ThreadAction -> Map IORefId Int -> Map IORefId Int
-updateIOState SequentialConsistency _ = const M.empty
-updateIOState _ (CommitIORef _ r) = (`M.alter` r) $ \case
-  Just 1  -> Nothing
-  Just n  -> Just (n-1)
-  Nothing -> Nothing
-updateIOState _ (WriteIORef    r) = M.insertWith (+) r 1
-updateIOState _ ta
-  | isBarrier $ simplifyAction ta = const M.empty
-  | otherwise = id
-
--- | Update the @MVar@ full/empty state with the action that has just
--- happened.
-updateMVState :: ThreadAction -> Set MVarId -> Set MVarId
-updateMVState (PutMVar mvid _) = S.insert mvid
-updateMVState (TryPutMVar mvid True _) = S.insert mvid
-updateMVState (TakeMVar mvid _) = S.delete mvid
-updateMVState (TryTakeMVar mvid True _) = S.delete mvid
-updateMVState _ = id
-
--- | Update the thread masking state with the action that has just
--- happened.
-updateMaskState :: ThreadId -> ThreadAction -> Map ThreadId MaskingState -> Map ThreadId MaskingState
-updateMaskState tid (Fork tid2) = \masks -> case M.lookup tid masks of
-  -- A thread inherits the masking state of its parent.
-  Just ms -> M.insert tid2 ms masks
-  Nothing -> masks
-updateMaskState tid (SetMasking   _ ms) = M.insert tid ms
-updateMaskState tid (ResetMasking _ ms) = M.insert tid ms
-updateMaskState tid (Throw True) = M.delete tid
-updateMaskState _ (ThrowTo tid True) = M.delete tid
-updateMaskState tid Stop = M.delete tid
-updateMaskState _ _ = id
-
--- | Check if a @IORef@ has a buffered write pending.
-isBuffered :: DepState -> IORefId -> Bool
-isBuffered depstate r = numBuffered depstate r /= 0
-
--- | Check how many buffered writes an @IORef@ has.
-numBuffered :: DepState -> IORefId -> Int
-numBuffered depstate r = M.findWithDefault 0 r (depIOState depstate)
-
--- | Check if an @MVar@ is full.
-isFull :: DepState -> MVarId -> Bool
-isFull depstate v = S.member v (depMVState depstate)
-
--- | Check if an exception can interrupt a thread (action).
-canInterrupt :: DepState -> ThreadId -> ThreadAction -> Bool
-canInterrupt depstate tid act
-  -- If masked interruptible, blocked actions can be interrupted.
-  | isMaskedInterruptible depstate tid = case act of
-    BlockedPutMVar  _ -> True
-    BlockedReadMVar _ -> True
-    BlockedTakeMVar _ -> True
-    BlockedSTM      _ -> True
-    BlockedThrowTo  _ -> True
-    _ -> False
-  -- If masked uninterruptible, nothing can be.
-  | isMaskedUninterruptible depstate tid = False
-  -- If no mask, anything can be.
-  | otherwise = True
-
--- | Check if an exception can interrupt a thread (lookahead).
-canInterruptL :: DepState -> ThreadId -> Lookahead -> Bool
-canInterruptL depstate tid lh
-  -- If masked interruptible, actions which can block may be
-  -- interrupted.
-  | isMaskedInterruptible depstate tid = case lh of
-    WillPutMVar  _ -> True
-    WillReadMVar _ -> True
-    WillTakeMVar _ -> True
-    WillSTM        -> True
-    WillThrowTo  _ -> True
-    _ -> False
-  -- If masked uninterruptible, nothing can be.
-  | isMaskedUninterruptible depstate tid = False
-  -- If no mask, anything can be.
-  | otherwise = True
-
--- | Check if a thread is masked interruptible.
-isMaskedInterruptible :: DepState -> ThreadId -> Bool
-isMaskedInterruptible depstate tid =
-  M.lookup tid (depMaskState depstate) == Just MaskedInterruptible
-
--- | Check if a thread is masked uninterruptible.
-isMaskedUninterruptible :: DepState -> ThreadId -> Bool
-isMaskedUninterruptible depstate tid =
-  M.lookup tid (depMaskState depstate) == Just MaskedUninterruptible
 
 -------------------------------------------------------------------------------
 -- * Utilities

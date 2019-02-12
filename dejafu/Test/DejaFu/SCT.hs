@@ -131,13 +131,13 @@ runSCTWithSettings settings conc = case _way settings of
 
         check = findSchedulePrefix
 
-        step run dp (prefix, conservative, sleep) = do
+        step cstate0 run dp (prefix, conservative, sleep) = do
           (res, s, trace) <- run
-            (dporSched (_safeIO settings) (_memtype settings) (cBound (_lengthBound settings) cb0))
-            (initialDPORSchedState sleep prefix)
+            (dporSched (_safeIO settings) (cBound (_lengthBound settings) cb0))
+            (initialDPORSchedState sleep prefix cstate0)
 
-          let bpoints = findBacktrackSteps (_safeIO settings) (_memtype settings) (cBacktrack cb0) (schedBoundKill s) (schedBPoints s) trace
-          let newDPOR = incorporateTrace (_safeIO settings) (_memtype settings) conservative trace dp
+          let bpoints = findBacktrackSteps (_safeIO settings) (_memtype settings) (cBacktrack cb0) (schedBoundKill s) cstate0 (schedBPoints s) trace
+          let newDPOR = incorporateTrace (_safeIO settings) (_memtype settings) conservative trace cstate0 dp
 
           pure $ if schedIgnore s
                  then (force newDPOR, Nothing)
@@ -150,7 +150,7 @@ runSCTWithSettings settings conc = case _way settings of
         check (_, 0) = Nothing
         check s = Just s
 
-        step run _ (g, n) = do
+        step _ run _ (g, n) = do
           (res, s, trace) <- run
             (randSched gen)
             (initialRandSchedState (_lengthBound settings) g)

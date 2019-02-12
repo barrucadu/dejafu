@@ -2,23 +2,26 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 
 -- |
 -- Module      : Test.DejaFu.Internal
--- Copyright   : (c) 2017--2018 Michael Walker
+-- Copyright   : (c) 2017--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : DeriveAnyClass, DeriveGeneric, FlexibleContexts, GADTs
+-- Portability : DeriveAnyClass, DeriveGeneric, FlexibleContexts, GADTs, LambdaCase
 --
 -- Internal types and functions used throughout DejaFu.  This module
 -- is NOT considered to form part of the public interface of this
 -- library.
 module Test.DejaFu.Internal where
 
-import           Control.DeepSeq          (NFData)
+import           Control.DeepSeq          (NFData(..))
+import           Control.Exception        (MaskingState(..))
 import qualified Control.Monad.Conc.Class as C
 import           Data.List.NonEmpty       (NonEmpty(..))
+import           Data.Map.Strict          (Map)
 import qualified Data.Map.Strict          as M
 import           Data.Maybe               (fromMaybe)
 import           Data.Set                 (Set)
@@ -322,6 +325,58 @@ simplifyLookahead (WillCommitIORef _ r) = PartiallySynchronisedCommit r
 simplifyLookahead WillSTM         = SynchronisedOther
 simplifyLookahead (WillThrowTo _) = SynchronisedOther
 simplifyLookahead _ = UnsynchronisedOther
+
+-------------------------------------------------------------------------------
+-- * Concurrency state
+
+-- | Initial concurrency state.
+initialCState :: ConcurrencyState
+initialCState = ConcurrencyState M.empty S.empty M.empty
+
+-- | Update the concurrency state with the action that has just
+-- happened.
+updateCState :: MemType -> ConcurrencyState -> ThreadId -> ThreadAction -> ConcurrencyState
+updateCState memtype cstate tid act = ConcurrencyState
+  { concIOState   = updateIOState memtype act $ concIOState   cstate
+  , concMVState   = updateMVState         act $ concMVState   cstate
+  , concMaskState = updateMaskState tid   act $ concMaskState cstate
+  }
+
+-- | Update the @IORef@ buffer state with the action that has just
+-- happened.
+updateIOState :: MemType -> ThreadAction -> Map IORefId Int -> Map IORefId Int
+updateIOState SequentialConsistency _ = const M.empty
+updateIOState _ (CommitIORef _ r) = (`M.alter` r) $ \case
+  Just 1  -> Nothing
+  Just n  -> Just (n-1)
+  Nothing -> Nothing
+updateIOState _ (WriteIORef    r) = M.insertWith (+) r 1
+updateIOState _ ta
+  | isBarrier $ simplifyAction ta = const M.empty
+  | otherwise = id
+
+-- | Update the @MVar@ full/empty state with the action that has just
+-- happened.
+updateMVState :: ThreadAction -> Set MVarId -> Set MVarId
+updateMVState (PutMVar mvid _) = S.insert mvid
+updateMVState (TryPutMVar mvid True _) = S.insert mvid
+updateMVState (TakeMVar mvid _) = S.delete mvid
+updateMVState (TryTakeMVar mvid True _) = S.delete mvid
+updateMVState _ = id
+
+-- | Update the thread masking state with the action that has just
+-- happened.
+updateMaskState :: ThreadId -> ThreadAction -> Map ThreadId MaskingState -> Map ThreadId MaskingState
+updateMaskState tid (Fork tid2) = \masks -> case M.lookup tid masks of
+  -- A thread inherits the masking state of its parent.
+  Just ms -> M.insert tid2 ms masks
+  Nothing -> masks
+updateMaskState tid (SetMasking   _ ms) = M.insert tid ms
+updateMaskState tid (ResetMasking _ ms) = M.insert tid ms
+updateMaskState tid (Throw True) = M.delete tid
+updateMaskState _ (ThrowTo tid True) = M.delete tid
+updateMaskState tid Stop = M.delete tid
+updateMaskState _ _ = id
 
 -------------------------------------------------------------------------------
 -- * Error reporting

@@ -326,6 +326,11 @@ programTests = toTestList
               writeIORef x 1
               pure x)
           (\x -> takeMVar =<< spawn (readIORef x))
+
+    , djfuTS "MVar state is preserved from setup action" (gives [Left Deadlock, Right ()]) $
+        withSetup (newMVar ()) $ \v -> do
+          _ <- fork $ takeMVar v
+          readMVar v
     ]
 
   , testGroup "withSetupAndTeardown"

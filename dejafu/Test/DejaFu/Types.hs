@@ -5,7 +5,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Types
--- Copyright   : (c) 2017--2018 Michael Walker
+-- Copyright   : (c) 2017--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -21,7 +21,11 @@ import           Control.Exception                    (Exception(..),
 import           Data.Function                        (on)
 import           Data.Functor.Contravariant           (Contravariant(..))
 import           Data.Functor.Contravariant.Divisible (Divisible(..))
+import           Data.Map.Strict                      (Map)
+import qualified Data.Map.Strict                      as M
 import           Data.Semigroup                       (Semigroup(..))
+import           Data.Set                             (Set)
+import qualified Data.Set                             as S
 import           GHC.Generics                         (Generic)
 
 -------------------------------------------------------------------------------
@@ -721,3 +725,97 @@ deriving instance Generic MonadFailException
 
 -- | @since 1.3.1.0
 instance NFData MonadFailException
+
+-------------------------------------------------------------------------------
+-- ** Concurrency state
+
+-- | A summary of the concurrency state of the program.
+--
+-- @since 2.0.0.0
+data ConcurrencyState = ConcurrencyState
+  { concIOState :: Map IORefId Int
+  -- ^ Keep track of which @IORef@s have buffered writes.
+  , concMVState :: Set MVarId
+  -- ^ Keep track of which @MVar@s are full.
+  , concMaskState :: Map ThreadId MaskingState
+  -- ^ Keep track of thread masking states. If a thread isn't present,
+  -- the masking state is assumed to be @Unmasked@. This nicely
+  -- provides compatibility with dpor-0.1, where the thread IDs are
+  -- not available.
+  } deriving (Eq, Show)
+
+instance NFData ConcurrencyState where
+  rnf cstate = rnf
+    ( concIOState cstate
+    , concMVState cstate
+    , [(t, show m) | (t, m) <- M.toList (concMaskState cstate)]
+    )
+
+-- | Check if a @IORef@ has a buffered write pending.
+--
+-- @since 2.0.0.0
+isBuffered :: ConcurrencyState -> IORefId -> Bool
+isBuffered cstate r = numBuffered cstate r /= 0
+
+-- | Check how many buffered writes an @IORef@ has.
+--
+-- @since 2.0.0.0
+numBuffered :: ConcurrencyState -> IORefId -> Int
+numBuffered cstate r = M.findWithDefault 0 r (concIOState cstate)
+
+-- | Check if an @MVar@ is full.
+--
+-- @since 2.0.0.0
+isFull :: ConcurrencyState -> MVarId -> Bool
+isFull cstate v = S.member v (concMVState cstate)
+
+-- | Check if an exception can interrupt a thread (action).
+--
+-- @since 2.0.0.0
+canInterrupt :: ConcurrencyState -> ThreadId -> ThreadAction -> Bool
+canInterrupt cstate tid act
+  -- If masked interruptible, blocked actions can be interrupted.
+  | isMaskedInterruptible cstate tid = case act of
+    BlockedPutMVar  _ -> True
+    BlockedReadMVar _ -> True
+    BlockedTakeMVar _ -> True
+    BlockedSTM      _ -> True
+    BlockedThrowTo  _ -> True
+    _ -> False
+  -- If masked uninterruptible, nothing can be.
+  | isMaskedUninterruptible cstate tid = False
+  -- If no mask, anything can be.
+  | otherwise = True
+
+-- | Check if an exception can interrupt a thread (lookahead).
+--
+-- @since 2.0.0.0
+canInterruptL :: ConcurrencyState -> ThreadId -> Lookahead -> Bool
+canInterruptL cstate tid lh
+  -- If masked interruptible, actions which can block may be
+  -- interrupted.
+  | isMaskedInterruptible cstate tid = case lh of
+    WillPutMVar  _ -> True
+    WillReadMVar _ -> True
+    WillTakeMVar _ -> True
+    WillSTM        -> True
+    WillThrowTo  _ -> True
+    _ -> False
+  -- If masked uninterruptible, nothing can be.
+  | isMaskedUninterruptible cstate tid = False
+  -- If no mask, anything can be.
+  | otherwise = True
+
+-- | Check if a thread is masked interruptible.
+--
+-- @since 2.0.0.0
+isMaskedInterruptible :: ConcurrencyState -> ThreadId -> Bool
+isMaskedInterruptible cstate tid =
+  M.lookup tid (concMaskState cstate) == Just MaskedInterruptible
+
+-- | Check if a thread is masked uninterruptible.
+--
+-- @since 2.0.0.0
+isMaskedUninterruptible :: ConcurrencyState -> ThreadId -> Bool
+isMaskedUninterruptible cstate tid =
+  M.lookup tid (concMaskState cstate) == Just MaskedUninterruptible

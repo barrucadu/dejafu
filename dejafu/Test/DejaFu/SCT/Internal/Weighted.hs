@@ -45,7 +45,7 @@ initialRandSchedState = RandSchedState M.empty
 -- and makes a weighted random choice out of the runnable threads at
 -- every step.
 randSched :: RandomGen g => (g -> (Int, g)) -> Scheduler (RandSchedState g)
-randSched weightf = Scheduler $ \_ threads s ->
+randSched weightf = Scheduler $ \_ threads _ s ->
   let
     -- Select a thread
     pick idx ((x, f):xs)
