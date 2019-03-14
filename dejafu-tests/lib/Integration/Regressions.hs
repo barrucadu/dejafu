@@ -56,4 +56,8 @@ tests = toTestList
       _ <- fork (setNumCapabilities 2)
       _ <- fork (setNumCapabilities 3)
       getNumCapabilities
+
+  , djfu "https://github.com/barrucadu/dejafu/issues/267" exceptionsAlways $ do
+      tid <- myThreadId
+      uninterruptibleMask_ (throwTo tid ThreadKilled)
   ]

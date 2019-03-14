@@ -534,7 +534,7 @@ stepThread _ _ _ _ tid (AThrowTo t e c) = synchronised $ \ctx@Context{..} ->
       blocked  = block (OnMask t) tid cThreads
   in case M.lookup t cThreads of
        Just thread
-         | interruptible thread -> stepThrow (ThrowTo t) t e ctx { cThreads = threads' }
+         | interruptible thread || t == tid -> stepThrow (ThrowTo t) t e ctx { cThreads = threads' }
          | otherwise -> pure
            ( Succeeded ctx { cThreads = blocked }
            , BlockedThrowTo t
