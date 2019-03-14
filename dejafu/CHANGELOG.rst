@@ -6,6 +6,18 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+2.0.0.1 (2019-03-14)
+--------------------
+
+* Git: :tag:`dejafu-2.0.0.1`
+* Hackage: :hackage:`dejafu-2.0.0.1`
+
+Fixed
+~~~~~
+
+* (:issue:`267`) Throwing an asynchronous exception to the current
+  thread interrupts the current thread even if it is masked.
+
 
 2.0.0.0 (2019-02-12)
 --------------------
