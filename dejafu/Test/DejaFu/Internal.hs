@@ -165,6 +165,7 @@ tvarsRead act = S.fromList $ case act of
 rewind :: ThreadAction -> Lookahead
 rewind (Fork _) = WillFork
 rewind (ForkOS _) = WillForkOS
+rewind (SupportsBoundThreads _) = WillSupportsBoundThreads
 rewind (IsCurrentThreadBound _) = WillIsCurrentThreadBound
 rewind MyThreadId = WillMyThreadId
 rewind (GetNumCapabilities _) = WillGetNumCapabilities

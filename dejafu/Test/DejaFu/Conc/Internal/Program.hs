@@ -92,10 +92,14 @@ instance (pty ~ Basic, Monad n) => C.MonadConc (Program pty n) where
 
   forkWithUnmaskN   n ma = ModelConc (AFork n (\umask -> runModelConc (ma umask) (\_ -> AStop (pure ()))))
   forkOnWithUnmaskN n _  = C.forkWithUnmaskN n
-  forkOSWithUnmaskN n ma
-    | C.rtsSupportsBoundThreads =
+
+  supportsBoundThreads = ModelConc ASupportsBoundThreads
+
+  forkOSWithUnmaskN n ma = C.supportsBoundThreads >>= \case
+    True ->
       ModelConc (AForkOS n (\umask -> runModelConc (ma umask) (\_ -> AStop (pure ()))))
-    | otherwise = fail "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
+    False ->
+      fail "RTS doesn't support multiple OS threads (use ghc -threaded when linking)"
 
   isCurrentThreadBound = ModelConc AIsBound
 

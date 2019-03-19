@@ -116,6 +116,8 @@ data ThreadAction =
   -- ^ Start a new thread.
   | ForkOS ThreadId
   -- ^ Start a new bound thread.
+  | SupportsBoundThreads Bool
+  -- ^ Check if bound threads are supported.
   | IsCurrentThreadBound Bool
   -- ^ Check if the current thread is bound.
   | MyThreadId
@@ -206,6 +208,7 @@ data ThreadAction =
 instance NFData ThreadAction where
   rnf (Fork t) = rnf t
   rnf (ForkOS t) = rnf t
+  rnf (SupportsBoundThreads b) = rnf b
   rnf (IsCurrentThreadBound b) = rnf b
   rnf MyThreadId = ()
   rnf (GetNumCapabilities i) = rnf i
@@ -252,6 +255,8 @@ data Lookahead =
   -- ^ Will start a new thread.
   | WillForkOS
   -- ^ Will start a new bound thread.
+  | WillSupportsBoundThreads
+  -- ^ Will check if bound threads are supported.
   | WillIsCurrentThreadBound
   -- ^ Will check if the current thread is bound.
   | WillMyThreadId
@@ -331,6 +336,7 @@ data Lookahead =
 instance NFData Lookahead where
   rnf WillFork = ()
   rnf WillForkOS = ()
+  rnf WillSupportsBoundThreads = ()
   rnf WillIsCurrentThreadBound = ()
   rnf WillMyThreadId = ()
   rnf WillGetNumCapabilities = ()

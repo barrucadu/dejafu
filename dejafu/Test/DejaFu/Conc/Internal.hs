@@ -83,7 +83,8 @@ runConcurrency invariants forSnapshot sched memtype g idsrc caps ma = do
                     }
   (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
   let threads0 = launch' Unmasked initialThread (const c) (cThreads ctx)
-  threads <- (if C.rtsSupportsBoundThreads then makeBound initialThread else pure) threads0
+  sbt <- C.supportsBoundThreads
+  threads <- (if sbt then makeBound initialThread else pure) threads0
   res <- runThreads forSnapshot sched memtype ref ctx { cThreads = threads }
   killAllThreads (finalContext res)
   pure res
@@ -101,7 +102,8 @@ runConcurrencyWithSnapshot sched memtype ctx restore ma = do
   let threads0 = M.delete initialThread (cThreads ctx)
   let threads1 = launch' Unmasked initialThread (const c) threads0
   let boundThreads = M.filter (isJust . _bound) threads1
-  threads2 <- (if C.rtsSupportsBoundThreads then makeBound initialThread else pure) threads1
+  sbt <- C.supportsBoundThreads
+  threads2 <- (if sbt then makeBound initialThread else pure) threads1
   threads3 <- foldrM makeBound threads2 (M.keys boundThreads)
   restore threads3
   res <- runThreads False sched memtype ref ctx { cThreads = threads3 }
@@ -288,6 +290,14 @@ stepThread _ _ _ _ tid (AForkOS n a b) = \ctx@Context{..} -> do
   threads'' <- makeBound newtid threads'
   pure ( Succeeded ctx { cThreads = goto (b newtid) tid threads'', cIdSource = idSource' }
        , ForkOS newtid
+       , const (pure ())
+       )
+
+-- check if we support bound threads
+stepThread _ _ _ _ tid (ASupportsBoundThreads c) = \ctx@Context{..} -> do
+  sbt <- C.supportsBoundThreads
+  pure ( Succeeded ctx { cThreads = goto (c sbt) tid cThreads }
+       , SupportsBoundThreads sbt
        , const (pure ())
        )
 

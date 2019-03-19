@@ -136,6 +136,8 @@ data ModelTicket a = ModelTicket
 data Action n =
     AFork   String ((forall b. ModelConc n b -> ModelConc n b) -> Action n) (ThreadId -> Action n)
   | AForkOS String ((forall b. ModelConc n b -> ModelConc n b) -> Action n) (ThreadId -> Action n)
+
+  | ASupportsBoundThreads (Bool -> Action n)
   | AIsBound (Bool -> Action n)
   | AMyTId (ThreadId -> Action n)
 
@@ -182,6 +184,7 @@ data Action n =
 lookahead :: Action n -> Lookahead
 lookahead (AFork _ _ _) = WillFork
 lookahead (AForkOS _ _ _) = WillForkOS
+lookahead (ASupportsBoundThreads _) = WillSupportsBoundThreads
 lookahead (AIsBound _) = WillIsCurrentThreadBound
 lookahead (AMyTId _) = WillMyThreadId
 lookahead (AGetNumCapabilities _) = WillGetNumCapabilities
