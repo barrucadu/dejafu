@@ -313,18 +313,16 @@ interference we have provided: the left term never empties a full
   , inspectTVar
 ) where
 
-import           Control.Arrow            (first)
-import           Control.DeepSeq          (NFData(..))
-import           Control.Monad            (unless, when)
-import           Control.Monad.Conc.Class (MonadConc)
-import           Control.Monad.IO.Class   (MonadIO(..))
-import           Data.Either              (isLeft)
-import           Data.Function            (on)
-import           Data.List                (intercalate, intersperse, partition)
-import           Data.Maybe               (catMaybes, isJust, isNothing,
-                                           mapMaybe)
-import           Data.Profunctor          (Profunctor(..))
-import           System.Environment       (lookupEnv)
+import           Control.Arrow          (first)
+import           Control.DeepSeq        (NFData(..))
+import           Control.Monad          (unless, when)
+import           Control.Monad.IO.Class (MonadIO(..))
+import           Data.Either            (isLeft)
+import           Data.Function          (on)
+import           Data.List              (intercalate, intersperse, partition)
+import           Data.Maybe             (catMaybes, isJust, isNothing, mapMaybe)
+import           Data.Profunctor        (Profunctor(..))
+import           System.Environment     (lookupEnv)
 
 import           Test.DejaFu.Conc
 import           Test.DejaFu.Internal
@@ -373,8 +371,8 @@ let relaxed = do
 --     "world" S0----S2--S0--
 -- False
 --
--- @since 2.0.0.0
-autocheck :: (MonadConc n, MonadIO n, Eq a, Show a)
+-- @since unreleased
+autocheck :: (MonadDejaFu n, MonadIO n, Eq a, Show a)
   => Program pty n a
   -- ^ The computation to test.
   -> n Bool
@@ -405,8 +403,8 @@ autocheck = autocheckWithSettings defaultSettings
 --     (True,False) S0---------S2----S1----S0---
 -- False
 --
--- @since 2.0.0.0
-autocheckWay :: (MonadConc n, MonadIO n, Eq a, Show a)
+-- @since unreleased
+autocheckWay :: (MonadDejaFu n, MonadIO n, Eq a, Show a)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
@@ -440,8 +438,8 @@ autocheckWay way = autocheckWithSettings . fromWayAndMemType way
 --     (True,False) S0---------S2----S1----S0---
 -- False
 --
--- @since 2.0.0.0
-autocheckWithSettings :: (MonadConc n, MonadIO n, Eq a, Show a)
+-- @since unreleased
+autocheckWithSettings :: (MonadDejaFu n, MonadIO n, Eq a, Show a)
   => Settings n a
   -- ^ The SCT settings.
   -> Program pty n a
@@ -466,8 +464,8 @@ autocheckWithSettings settings = dejafusWithSettings settings
 --     "world" S0----S2--S0--
 -- False
 --
--- @since 2.0.0.0
-dejafu :: (MonadConc n, MonadIO n, Show b)
+-- @since unreleased
+dejafu :: (MonadDejaFu n, MonadIO n, Show b)
   => String
   -- ^ The name of the test.
   -> ProPredicate a b
@@ -496,8 +494,8 @@ dejafu = dejafuWithSettings defaultSettings
 --     "world" S0----S2--S1-S0--
 -- False
 --
--- @since 2.0.0.0
-dejafuWay :: (MonadConc n, MonadIO n, Show b)
+-- @since unreleased
+dejafuWay :: (MonadDejaFu n, MonadIO n, Show b)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
@@ -522,8 +520,8 @@ dejafuWay way = dejafuWithSettings . fromWayAndMemType way
 --     "world" S0----S2--S1-S0--
 -- False
 --
--- @since 2.0.0.0
-dejafuWithSettings :: (MonadConc n, MonadIO n, Show b)
+-- @since unreleased
+dejafuWithSettings :: (MonadDejaFu n, MonadIO n, Show b)
   => Settings n a
   -- ^ The SCT settings.
   -> String
@@ -547,8 +545,8 @@ dejafuWithSettings settings name test =
 -- [pass] B
 -- False
 --
--- @since 2.0.0.0
-dejafus :: (MonadConc n, MonadIO n, Show b)
+-- @since unreleased
+dejafus :: (MonadDejaFu n, MonadIO n, Show b)
   => [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
   -> Program pty n a
@@ -569,8 +567,8 @@ dejafus = dejafusWithSettings defaultSettings
 -- [pass] B
 -- False
 --
--- @since 2.0.0.0
-dejafusWay :: (MonadConc n, MonadIO n, Show b)
+-- @since unreleased
+dejafusWay :: (MonadDejaFu n, MonadIO n, Show b)
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
@@ -594,8 +592,8 @@ dejafusWay way = dejafusWithSettings . fromWayAndMemType way
 -- [pass] B
 -- False
 --
--- @since 2.0.0.0
-dejafusWithSettings :: (MonadConc n, MonadIO n, Show b)
+-- @since unreleased
+dejafusWithSettings :: (MonadDejaFu n, MonadIO n, Show b)
   => Settings n a
   -- ^ The SCT settings.
   -> [(String, ProPredicate a b)]
@@ -670,8 +668,8 @@ instance Foldable Result where
 -- found, is unspecified and may change between releases.  This may
 -- affect which failing traces are reported, when there is a failure.
 --
--- @since 2.0.0.0
-runTest :: MonadConc n
+-- @since unreleased
+runTest :: MonadDejaFu n
   => ProPredicate a b
   -- ^ The predicate to check
   -> Program pty n a
@@ -686,8 +684,8 @@ runTest = runTestWithSettings defaultSettings
 -- found, is unspecified and may change between releases.  This may
 -- affect which failing traces are reported, when there is a failure.
 --
--- @since 2.0.0.0
-runTestWay :: MonadConc n
+-- @since unreleased
+runTestWay :: MonadDejaFu n
   => Way
   -- ^ How to run the concurrent program.
   -> MemType
@@ -705,8 +703,8 @@ runTestWay way = runTestWithSettings . fromWayAndMemType way
 -- found, is unspecified and may change between releases.  This may
 -- affect which failing traces are reported, when there is a failure.
 --
--- @since 2.0.0.0
-runTestWithSettings :: MonadConc n
+-- @since unreleased
+runTestWithSettings :: MonadDejaFu n
   => Settings n a
   -- ^ The SCT settings.
   -> ProPredicate a b

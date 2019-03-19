@@ -17,18 +17,17 @@
 -- library.
 module Test.DejaFu.Internal where
 
-import           Control.DeepSeq          (NFData(..))
-import           Control.Exception        (MaskingState(..))
-import qualified Control.Monad.Conc.Class as C
-import           Data.List.NonEmpty       (NonEmpty(..))
-import           Data.Map.Strict          (Map)
-import qualified Data.Map.Strict          as M
-import           Data.Maybe               (fromMaybe)
-import           Data.Set                 (Set)
-import qualified Data.Set                 as S
-import           GHC.Generics             (Generic)
-import           GHC.Stack                (HasCallStack, withFrozenCallStack)
-import           System.Random            (RandomGen)
+import           Control.DeepSeq    (NFData(..))
+import           Control.Exception  (MaskingState(..))
+import           Data.List.NonEmpty (NonEmpty(..))
+import           Data.Map.Strict    (Map)
+import qualified Data.Map.Strict    as M
+import           Data.Maybe         (fromMaybe)
+import           Data.Set           (Set)
+import qualified Data.Set           as S
+import           GHC.Generics       (Generic)
+import           GHC.Stack          (HasCallStack, withFrozenCallStack)
+import           System.Random      (RandomGen)
 
 import           Test.DejaFu.Types
 
@@ -450,12 +449,12 @@ fatal msg = withFrozenCallStack $ error ("(dejafu) " ++ msg)
 -- | Run with a continuation that writes its value into a reference,
 -- returning the computation and the reference.  Using the reference
 -- is non-blocking, it is up to you to ensure you wait sufficiently.
-runRefCont :: C.MonadConc n
+runRefCont :: MonadDejaFu n
   => (n () -> x)
   -> (a -> Maybe b)
   -> ((a -> x) -> x)
-  -> n (x, C.IORef n (Maybe b))
+  -> n (x, Ref n (Maybe b))
 runRefCont act f k = do
-  ref <- C.newIORef Nothing
-  let c = k (act . C.writeIORef ref . f)
+  ref <- newRef Nothing
+  let c = k (act . writeRef ref . f)
   pure (c, ref)

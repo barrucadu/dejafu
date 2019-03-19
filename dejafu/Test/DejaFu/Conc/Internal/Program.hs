@@ -176,8 +176,8 @@ instance (pty ~ Basic, Monad n) => C.MonadConc (Program pty n) where
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 --
--- @since 2.0.0.0
-runConcurrent :: C.MonadConc n
+-- @since unreleased
+runConcurrent :: MonadDejaFu n
   => Scheduler s
   -> MemType
   -> s
@@ -185,7 +185,7 @@ runConcurrent :: C.MonadConc n
   -> n (Either Condition a, s, Trace)
 runConcurrent sched memtype s ma@(ModelConc _) = do
   res <- runConcurrency [] False sched memtype s initialIdSource 2 ma
-  out <- efromJust <$> C.readIORef (finalRef res)
+  out <- efromJust <$> readRef (finalRef res)
   pure ( out
        , cSchedState (finalContext res)
        , F.toList (finalTrace res)
@@ -256,9 +256,9 @@ runConcurrent sched memtype s ma = recordSnapshot ma >>= \case
 --   (liftIO . readIORef)
 -- @
 --
--- @since 2.0.0.0
+-- @since unreleased
 recordSnapshot
-  :: C.MonadConc n
+  :: MonadDejaFu n
   => Program pty n a
   -> n (Maybe (Either Condition (Snapshot pty n a), Trace))
 recordSnapshot ModelConc{..} = pure Nothing
@@ -271,9 +271,9 @@ recordSnapshot WithSetupAndTeardown{..} =
 
 -- | Runs a program with snapshotted setup to completion.
 --
--- @since 2.0.0.0
+-- @since unreleased
 runSnapshot
-  :: C.MonadConc n
+  :: MonadDejaFu n
   => Scheduler s
   -> MemType
   -> s
@@ -282,7 +282,7 @@ runSnapshot
 runSnapshot sched memtype s (WS SimpleSnapshot{..}) = do
   let context = fromSnapContext s snapContext
   CResult{..} <- runConcurrencyWithSnapshot sched memtype context snapRestore snapNext
-  out <- efromJust <$> C.readIORef finalRef
+  out <- efromJust <$> readRef finalRef
   pure ( out
        , cSchedState finalContext
        , F.toList finalTrace
@@ -291,9 +291,9 @@ runSnapshot sched memtype s (WSAT SimpleSnapshot{..} teardown) = do
   let context = fromSnapContext s snapContext
   intermediateResult <- runConcurrencyWithSnapshot sched memtype context snapRestore snapNext
   let idsrc = cIdSource (finalContext intermediateResult)
-  out1 <- efromJust <$> C.readIORef (finalRef intermediateResult)
+  out1 <- efromJust <$> readRef (finalRef intermediateResult)
   teardownResult <- simpleRunConcurrency False idsrc (teardown out1)
-  out2 <- efromJust <$> C.readIORef (finalRef teardownResult)
+  out2 <- efromJust <$> readRef (finalRef teardownResult)
   pure ( out2
        , cSchedState (finalContext intermediateResult)
        , F.toList (finalTrace intermediateResult)
@@ -332,7 +332,7 @@ threadsFromSnapshot snap = (initialThread : runnable, blocked) where
 -- | 'recordSnapshot' implemented generically.
 --
 -- Throws an error if the snapshot could not be produced.
-defaultRecordSnapshot :: C.MonadConc n
+defaultRecordSnapshot :: MonadDejaFu n
   => (SimpleSnapshot n a -> x -> snap)
   -> ModelConc n x
   -> (x -> ModelConc n a)
@@ -340,7 +340,7 @@ defaultRecordSnapshot :: C.MonadConc n
 defaultRecordSnapshot mkSnapshot setup program = do
   CResult{..} <- simpleRunConcurrency True initialIdSource setup
   let trc = F.toList finalTrace
-  out <- C.readIORef finalRef
+  out <- readRef finalRef
   pure . Just $ case out of
     Just (Right a) ->
       let snap = mkSnapshot (SimpleSnapshot finalContext finalRestore (program a)) a
@@ -355,7 +355,7 @@ defaultRecordSnapshot mkSnapshot setup program = do
 
 -- | Run a concurrent program with a deterministic scheduler in
 -- snapshotting or non-snapshotting mode.
-simpleRunConcurrency ::(C.MonadConc n, HasCallStack)
+simpleRunConcurrency ::(MonadDejaFu n, HasCallStack)
   => Bool
   -> IdSource
   -> ModelConc n a

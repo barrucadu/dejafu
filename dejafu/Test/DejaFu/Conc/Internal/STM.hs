@@ -7,7 +7,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.STM
--- Copyright   : (c) 2017--2018 Michael Walker
+-- Copyright   : (c) 2017--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -18,15 +18,14 @@
 -- of this library.
 module Test.DejaFu.Conc.Internal.STM where
 
-import           Control.Applicative      (Alternative(..))
-import           Control.Exception        (Exception, SomeException,
-                                           fromException, toException)
-import           Control.Monad            (MonadPlus(..))
-import           Control.Monad.Catch      (MonadCatch(..), MonadThrow(..))
-import qualified Control.Monad.Conc.Class as C
-import qualified Control.Monad.Fail       as Fail
-import qualified Control.Monad.STM.Class  as S
-import           Data.List                (nub)
+import           Control.Applicative     (Alternative(..))
+import           Control.Exception       (Exception, SomeException,
+                                          fromException, toException)
+import           Control.Monad           (MonadPlus(..))
+import           Control.Monad.Catch     (MonadCatch(..), MonadThrow(..))
+import qualified Control.Monad.Fail      as Fail
+import qualified Control.Monad.STM.Class as S
+import           Data.List               (nub)
 
 import           Test.DejaFu.Internal
 import           Test.DejaFu.Types
@@ -100,7 +99,7 @@ data STMAction n
 -- value.
 data ModelTVar n a = ModelTVar
   { tvarId  :: TVarId
-  , tvarRef :: C.IORef n a
+  , tvarRef :: Ref n a
   }
 
 --------------------------------------------------------------------------------
@@ -126,7 +125,7 @@ data Result a =
 
 -- | Run a transaction, returning the result and new initial 'TVarId'.
 -- If the transaction failed, any effects are undone.
-runTransaction :: C.MonadConc n
+runTransaction :: MonadDejaFu n
   => ModelSTM n a
   -> IdSource
   -> n (Result a, IdSource, [TAction])
@@ -138,14 +137,14 @@ runTransaction ma tvid = do
 --
 -- If the transaction fails, its effects will automatically be undone,
 -- so the undo action returned will be @pure ()@.
-doTransaction :: C.MonadConc n
+doTransaction :: MonadDejaFu n
   => ModelSTM n a
   -> IdSource
   -> n (Result a, n (), IdSource, [TAction])
 doTransaction ma idsource = do
   (c, ref) <- runRefCont SStop (Just . Right) (runModelSTM ma)
   (idsource', undo, readen, written, trace) <- go ref c (pure ()) idsource [] [] []
-  res <- C.readIORef ref
+  res <- readRef ref
 
   case res of
     Just (Right val) -> pure (Success (nub readen) (nub written) val, undo, idsource', reverse trace)
@@ -166,15 +165,15 @@ doTransaction ma idsource = do
       case tact of
         TStop  -> pure (newIDSource, newUndo, newReaden, newWritten, TStop:newSofar)
         TRetry -> do
-          C.writeIORef ref Nothing
+          writeRef ref Nothing
           pure (newIDSource, newUndo, newReaden, newWritten, TRetry:newSofar)
         TThrow -> do
-          C.writeIORef ref (Just . Left $ case act of SThrow e -> toException e; _ -> undefined)
+          writeRef ref (Just . Left $ case act of SThrow e -> toException e; _ -> undefined)
           pure (newIDSource, newUndo, newReaden, newWritten, TThrow:newSofar)
         _ -> go ref newAct newUndo newIDSource newReaden newWritten newSofar
 
 -- | Run a transaction for one step.
-stepTrans :: C.MonadConc n
+stepTrans :: MonadDejaFu n
   => STMAction n
   -> IdSource
   -> n (STMAction n, n (), IdSource, [TVarId], [TVarId], TAction)
@@ -199,17 +198,17 @@ stepTrans act idsource = case act of
         Nothing   -> pure (SThrow exc, nothing, idsource, [], [], TCatch trace Nothing))
 
     stepRead ModelTVar{..} c = do
-      val <- C.readIORef tvarRef
+      val <- readRef tvarRef
       pure (c val, nothing, idsource, [tvarId], [], TRead tvarId)
 
     stepWrite ModelTVar{..} a c = do
-      old <- C.readIORef tvarRef
-      C.writeIORef tvarRef a
-      pure (c, C.writeIORef tvarRef old, idsource, [], [tvarId], TWrite tvarId)
+      old <- readRef tvarRef
+      writeRef tvarRef a
+      pure (c, writeRef tvarRef old, idsource, [], [tvarId], TWrite tvarId)
 
     stepNew n a c = do
       let (idsource', tvid) = nextTVId n idsource
-      ref <- C.newIORef a
+      ref <- newRef a
       let tvar = ModelTVar tvid ref
       pure (c tvar, nothing, idsource', [], [tvid], TNew tvid)
 

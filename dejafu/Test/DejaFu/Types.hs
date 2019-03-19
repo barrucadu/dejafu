@@ -1,7 +1,9 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- |
 -- Module      : Test.DejaFu.Types
@@ -9,24 +11,89 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : DeriveGeneric, GeneralizedNewtypeDeriving, LambdaCase, StandaloneDeriving
+-- Portability : DeriveGeneric, GeneralizedNewtypeDeriving, LambdaCase, RankNTypes, StandaloneDeriving, TypeFamilies
 --
 -- Common types and functions used throughout DejaFu.
 module Test.DejaFu.Types where
 
+import qualified Control.Concurrent                   as IO
 import           Control.DeepSeq                      (NFData(..))
 import           Control.Exception                    (Exception(..),
                                                        MaskingState(..),
                                                        SomeException)
+import           Control.Monad                        (forever)
+import           Control.Monad.Catch                  (MonadThrow)
 import           Data.Function                        (on)
 import           Data.Functor.Contravariant           (Contravariant(..))
 import           Data.Functor.Contravariant.Divisible (Divisible(..))
+import qualified Data.IORef                           as IO
 import           Data.Map.Strict                      (Map)
 import qualified Data.Map.Strict                      as M
 import           Data.Semigroup                       (Semigroup(..))
 import           Data.Set                             (Set)
 import qualified Data.Set                             as S
 import           GHC.Generics                         (Generic)
+
+-------------------------------------------------------------------------------
+-- * The DejaFu Monad
+
+-- | todo: docs
+--
+-- @since unreleased
+class MonadThrow m => MonadDejaFu m where
+  type Ref m :: * -> *
+
+  newRef :: a -> m (Ref m a)
+
+  readRef :: Ref m a -> m a
+
+  writeRef :: Ref m a -> a -> m ()
+
+  type BoundThread m :: * -> *
+
+  forkBoundThread :: Maybe (m (BoundThread m a))
+
+  runInBoundThread :: BoundThread m a -> m a -> m a
+
+  killBoundThread :: BoundThread m a -> m ()
+
+-- | todo: docs
+--
+-- @since unreleased
+data IOBoundThread a = IOBoundThread
+  { iobtRunInBoundThread :: IO a -> IO a
+  , iobtKillBoundThread  :: IO ()
+  }
+
+-- | @since unreleased
+instance MonadDejaFu IO where
+  type Ref IO = IO.IORef
+
+  newRef   = IO.newIORef
+  readRef  = IO.readIORef
+  writeRef = IO.writeIORef
+
+  type BoundThread IO = IOBoundThread
+
+  forkBoundThread = Just $ do
+      runboundIO <- IO.newEmptyMVar
+      getboundIO <- IO.newEmptyMVar
+      tid <- IO.forkOS (go runboundIO getboundIO)
+      pure IOBoundThread
+        { iobtRunInBoundThread = run runboundIO getboundIO
+        , iobtKillBoundThread  = IO.killThread tid
+        }
+    where
+      go runboundIO getboundIO = forever $ do
+        na <- IO.takeMVar runboundIO
+        IO.putMVar getboundIO =<< na
+
+      run runboundIO getboundIO ma = do
+        IO.putMVar runboundIO ma
+        IO.takeMVar getboundIO
+
+  runInBoundThread = iobtRunInBoundThread
+  killBoundThread  = iobtKillBoundThread
 
 -------------------------------------------------------------------------------
 -- * Identifiers

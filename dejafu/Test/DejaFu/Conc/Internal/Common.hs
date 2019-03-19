@@ -17,7 +17,6 @@ module Test.DejaFu.Conc.Internal.Common where
 
 import           Control.Exception             (Exception, MaskingState(..))
 import           Control.Monad.Catch           (MonadCatch(..), MonadThrow(..))
-import qualified Control.Monad.Conc.Class      as C
 import qualified Control.Monad.Fail            as Fail
 import           Data.Map.Strict               (Map)
 
@@ -106,7 +105,7 @@ instance (pty ~ Basic) => Fail.MonadFail (Program pty n) where
 -- @Maybe@ value.
 data ModelMVar n a = ModelMVar
   { mvarId  :: MVarId
-  , mvarRef :: C.IORef n (Maybe a)
+  , mvarRef :: Ref n (Maybe a)
   }
 
 -- | A @IORef@ is modelled as a unique ID and a reference holding
@@ -114,7 +113,7 @@ data ModelMVar n a = ModelMVar
 -- committed value.
 data ModelIORef n a = ModelIORef
   { iorefId  :: IORefId
-  , iorefRef :: C.IORef n (Map ThreadId a, Integer, a)
+  , iorefRef :: Ref n (Map ThreadId a, Integer, a)
   }
 
 -- | A @Ticket@ is modelled as the ID of the @ModelIORef@ it came from,
