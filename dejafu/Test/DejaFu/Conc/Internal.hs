@@ -297,7 +297,7 @@ stepThread _ _ _ _ tid (AForkOS n a b) = \ctx@Context{..} -> case forkBoundThrea
          , const (pure ())
          )
   Nothing ->
-    fatal "tried to fork bound thread but the underlying monad doesn't support them"
+    stepThrow Throw tid (MonadFailException "dejafu is running with bound threads disabled - do not use forkOS") ctx
 
 -- check if we support bound threads
 stepThread _ _ _ _ tid (ASupportsBoundThreads c) = \ctx@Context{..} -> do
