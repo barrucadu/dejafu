@@ -55,7 +55,7 @@ module Control.Monad.Conc.Class
   -- To a foreign library, the bound thread will look exactly like an
   -- ordinary operating system thread created using OS functions like
   -- pthread_create or CreateThread.
-  , IO.rtsSupportsBoundThreads
+  , rtsSupportsBoundThreads
   , runInBoundThread
   , runInUnboundThread
 
@@ -150,7 +150,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Do not be put off by the use of @UndecidableInstances@, it is safe
 -- here.
 --
--- @since 1.6.0.0
+-- @since unreleased
 class ( Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -160,6 +160,7 @@ class ( Monad m
         (forkWithUnmask | forkWithUnmaskN)
       , (forkOnWithUnmask | forkOnWithUnmaskN)
       , (forkOSWithUnmask | forkOSWithUnmaskN)
+      , supportsBoundThreads
       , isCurrentThreadBound
       , getNumCapabilities
       , setNumCapabilities
@@ -270,6 +271,13 @@ class ( Monad m
   -- @since 1.5.0.0
   forkOSWithUnmaskN :: String -> ((forall a. m a -> m a) -> m ()) -> m (ThreadId m)
   forkOSWithUnmaskN _ = forkOSWithUnmask
+
+  -- | Returns 'True' if bound threads can be forked.  If 'False',
+  -- 'isCurrentThreadBound' will always return 'False' and both
+  -- 'forkOS' and 'runInBoundThread' will fail.
+  --
+  -- @since unreleased
+  supportsBoundThreads :: m Bool
 
   -- | Returns 'True' if the calling thread is bound, that is, if it
   -- is safe to use foreign libraries that rely on thread-local state
@@ -560,6 +568,18 @@ forkOnN name i ma = forkOnWithUnmaskN name i (const ma)
 forkOSN :: MonadConc m => String -> m () -> m (ThreadId m)
 forkOSN name ma = forkOSWithUnmaskN name (const ma)
 
+-- | 'True' if bound threads are supported.  If
+-- 'rtsSupportsBoundThreads' is 'False', 'isCurrentThreadBound' will
+-- always return 'False' and both 'forkOS' and 'runInBoundThread' will
+-- fail.
+--
+-- Use 'supportsBoundThreads' in 'MonadConc' instead.
+--
+-- @since 1.3.0.0
+{-# DEPRECATED rtsSupportsBoundThreads "Use 'supportsBoundThreads' instead" #-}
+rtsSupportsBoundThreads :: Bool
+rtsSupportsBoundThreads = IO.rtsSupportsBoundThreads
+
 -- | Run the computation passed as the first argument.  If the calling
 -- thread is not /bound/, a bound thread is created temporarily.
 -- @runInBoundThread@ doesn't finish until the inner computation
@@ -726,6 +746,7 @@ instance MonadConc IO where
     labelMe n
     ma umask
 
+  supportsBoundThreads = pure IO.rtsSupportsBoundThreads
   isCurrentThreadBound = IO.isCurrentThreadBound
 
   getNumCapabilities  = IO.getNumCapabilities
@@ -797,6 +818,7 @@ instance MonadConc m => MonadConc (IsConc m) where
   forkOSWithUnmask      ma = toIsConc (forkOSWithUnmask      (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkOSWithUnmaskN n   ma = toIsConc (forkOSWithUnmaskN n   (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
 
+  supportsBoundThreads = toIsConc supportsBoundThreads
   isCurrentThreadBound = toIsConc isCurrentThreadBound
 
   getNumCapabilities  = toIsConc getNumCapabilities
@@ -845,6 +867,7 @@ instance C => MonadConc (T m) where                            { \
   forkOSWithUnmask      = liftedFork F forkOSWithUnmask        ; \
   forkOSWithUnmaskN n   = liftedFork F (forkOSWithUnmaskN n  ) ; \
                                                                  \
+  supportsBoundThreads = lift supportsBoundThreads             ; \
   isCurrentThreadBound = lift isCurrentThreadBound             ; \
                                                                  \
   getNumCapabilities  = lift getNumCapabilities                ; \

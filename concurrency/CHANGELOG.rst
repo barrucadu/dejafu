@@ -7,6 +7,22 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Added
+~~~~~
+
+* The ``Control.Monad.Conc.Class.supportsBoundThreads`` function, like
+  ``rtsSupportsBoundThreads`` but returns a monadic result.
+
+Deprecated
+~~~~~~~~~~
+
+* ``Control.Monad.Conc.Class.rtsSupportsBoundThreads``, in favour of
+  ``supportsBoundThreads``.
+
+
 1.6.2.0 (2018-11-28)
 --------------------
 
