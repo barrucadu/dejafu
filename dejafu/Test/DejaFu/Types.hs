@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
@@ -11,7 +12,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : DeriveGeneric, GeneralizedNewtypeDeriving, LambdaCase, RankNTypes, StandaloneDeriving, TypeFamilies
+-- Portability : DeriveGeneric, FlexibleInstances, GeneralizedNewtypeDeriving, LambdaCase, RankNTypes, StandaloneDeriving, TypeFamilies
 --
 -- Common types and functions used throughout DejaFu.
 module Test.DejaFu.Types where
@@ -23,6 +24,9 @@ import           Control.Exception                    (Exception(..),
                                                        SomeException)
 import           Control.Monad                        (forever)
 import           Control.Monad.Catch                  (MonadThrow)
+import           Control.Monad.Catch.Pure             (CatchT)
+import qualified Control.Monad.ST                     as ST
+import           Control.Monad.Trans.Class            (lift)
 import           Data.Function                        (on)
 import           Data.Functor.Contravariant           (Contravariant(..))
 import           Data.Functor.Contravariant.Divisible (Divisible(..))
@@ -32,7 +36,8 @@ import qualified Data.Map.Strict                      as M
 import           Data.Semigroup                       (Semigroup(..))
 import           Data.Set                             (Set)
 import qualified Data.Set                             as S
-import           GHC.Generics                         (Generic)
+import qualified Data.STRef                           as ST
+import           GHC.Generics                         (Generic, V1)
 
 -------------------------------------------------------------------------------
 -- * The DejaFu Monad
@@ -94,6 +99,21 @@ instance MonadDejaFu IO where
 
   runInBoundThread = iobtRunInBoundThread
   killBoundThread  = iobtKillBoundThread
+
+-- | @since unreleased
+instance MonadDejaFu (CatchT (ST.ST t)) where
+  type Ref (CatchT (ST.ST t)) = ST.STRef t
+
+  newRef     = lift . ST.newSTRef
+  readRef    = lift . ST.readSTRef
+  writeRef r = lift . ST.writeSTRef r
+
+  -- V1 has no constructors
+  type BoundThread (CatchT (ST.ST t)) = V1
+
+  forkBoundThread  = Nothing
+  runInBoundThread = undefined
+  killBoundThread  = undefined
 
 -------------------------------------------------------------------------------
 -- * Identifiers
