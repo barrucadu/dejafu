@@ -150,7 +150,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Do not be put off by the use of @UndecidableInstances@, it is safe
 -- here.
 --
--- @since unreleased
+-- @since 1.7.0.0
 class ( Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -276,7 +276,7 @@ class ( Monad m
   -- 'isCurrentThreadBound' will always return 'False' and both
   -- 'forkOS' and 'runInBoundThread' will fail.
   --
-  -- @since unreleased
+  -- @since 1.7.0.0
   supportsBoundThreads :: m Bool
 
   -- | Returns 'True' if the calling thread is bound, that is, if it

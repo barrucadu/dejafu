@@ -51,7 +51,7 @@ import           GHC.Generics                         (Generic, V1)
 -- needs the ability to throw exceptions, as these are used to
 -- communicate 'Error's, so there is a 'MonadThrow' constraint.
 --
--- @since unreleased
+-- @since 2.1.0.0
 class MonadThrow m => MonadDejaFu m where
   -- | The type of mutable references.  These references will always
   -- contain a value, and so don't need to handle emptiness (like
@@ -90,7 +90,7 @@ class MonadThrow m => MonadDejaFu m where
 
 -- | A bound thread in @IO@.
 --
--- @since unreleased
+-- @since 2.1.0.0
 data IOBoundThread a = IOBoundThread
   { iobtRunInBoundThread :: IO a -> IO a
     -- ^ Pass an action to the bound thread, run it, and return the
@@ -99,7 +99,7 @@ data IOBoundThread a = IOBoundThread
     -- ^ Terminate the bound thread.
   }
 
--- | @since unreleased
+-- | @since 2.1.0.0
 instance MonadDejaFu IO where
   type Ref IO = IO.IORef
 
@@ -131,7 +131,7 @@ instance MonadDejaFu IO where
 
 -- | This instance does not support bound threads.
 --
--- @since unreleased
+-- @since 2.1.0.0
 instance MonadDejaFu (CatchT (ST.ST t)) where
   type Ref (CatchT (ST.ST t)) = ST.STRef t
 

@@ -7,8 +7,11 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-unreleased
-----------
+1.7.0.0 (2019-03-24)
+--------------------
+
+* Git: :tag:`concurrency-1.7.0.0`
+* Hackage: :hackage:`concurrency-1.7.0.0`
 
 Added
 ~~~~~

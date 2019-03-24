@@ -48,7 +48,7 @@ import           Test.DejaFu.Utils
 -- The exact executions tried, and the order in which results are
 -- found, is unspecified and may change between releases.
 --
--- @since unreleased
+-- @since 2.1.0.0
 runSCT :: MonadDejaFu n
   => Way
   -- ^ How to run the concurrent program.
@@ -61,7 +61,7 @@ runSCT way = runSCTWithSettings . fromWayAndMemType way
 
 -- | Return the set of results of a concurrent program.
 --
--- @since unreleased
+-- @since 2.1.0.0
 resultsSet :: (MonadDejaFu n, Ord a)
   => Way
   -- ^ How to run the concurrent program.
@@ -80,7 +80,7 @@ resultsSet way = resultsSetWithSettings . fromWayAndMemType way
 -- The exact executions tried, and the order in which results are
 -- found, is unspecified and may change between releases.
 --
--- @since unreleased
+-- @since 2.1.0.0
 runSCT' :: (MonadDejaFu n, NFData a)
   => Way
   -- ^ How to run the concurrent program.
@@ -96,7 +96,7 @@ runSCT' way = runSCTWithSettings' . fromWayAndMemType way
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since unreleased
+-- @since 2.1.0.0
 resultsSet' :: (MonadDejaFu n, Ord a, NFData a)
   => Way
   -- ^ How to run the concurrent program.
@@ -115,7 +115,7 @@ resultsSet' way = resultsSetWithSettings' . fromWayAndMemType way
 -- The exact executions tried, and the order in which results are
 -- found, is unspecified and may change between releases.
 --
--- @since unreleased
+-- @since 2.1.0.0
 runSCTWithSettings :: MonadDejaFu n
   => Settings n a
   -- ^ The SCT settings.
@@ -156,7 +156,7 @@ runSCTWithSettings settings conc = case _way settings of
 
 -- | A variant of 'resultsSet' which takes a 'Settings' record.
 --
--- @since unreleased
+-- @since 2.1.0.0
 resultsSetWithSettings :: (MonadDejaFu n, Ord a)
   => Settings n a
   -- ^ The SCT settings.
@@ -175,7 +175,7 @@ resultsSetWithSettings settings conc =
 -- The exact executions tried, and the order in which results are
 -- found, is unspecified and may change between releases.
 --
--- @since unreleased
+-- @since 2.1.0.0
 runSCTWithSettings' :: (MonadDejaFu n, NFData a)
   => Settings n a
   -- ^ The SCT settings.
@@ -191,7 +191,7 @@ runSCTWithSettings' settings conc = do
 -- Demanding the result of this will force it to normal form, which
 -- may be more efficient in some situations.
 --
--- @since unreleased
+-- @since 2.1.0.0
 resultsSetWithSettings' :: (MonadDejaFu n, Ord a, NFData a)
   => Settings n a
   -- ^ The SCT settings.

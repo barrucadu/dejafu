@@ -7,8 +7,11 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-unreleased
-----------
+2.1.0.0 (2019-03-24)
+--------------------
+
+* Git: :tag:`dejafu-2.1.0.0`
+* Hackage: :hackage:`dejafu-2.1.0.0`
 
 Added
 ~~~~~
@@ -57,6 +60,11 @@ Changed
         * ``resultsSetWithSettings``
         * ``runSCTWithSettings'``
         * ``resultsSetWithSettings'``
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The version bound on :hackage:`concurrency` is >=1.7 and <1.8.
 
 
 2.0.0.1 (2019-03-14)

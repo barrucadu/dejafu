@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                dejafu
-version:             2.0.0.1
+version:             2.1.0.0
 synopsis:            A library for unit-testing concurrent programs.
 
 description:
@@ -20,7 +20,7 @@ license:             MIT
 license-file:        LICENSE
 author:              Michael Walker
 maintainer:          mike@barrucadu.co.uk
-copyright:           (c) 2015--2018 Michael Walker
+copyright:           (c) 2015--2019 Michael Walker
 category:            Concurrency
 build-type:          Simple
 extra-source-files:  README.markdown CHANGELOG.rst
@@ -33,7 +33,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      dejafu-2.0.0.1
+  tag:      dejafu-2.1.0.0
 
 library
   exposed-modules:     Test.DejaFu
@@ -59,7 +59,7 @@ library
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base              >=4.9 && <5
-                     , concurrency       >=1.6 && <1.7
+                     , concurrency       >=1.7 && <1.8
                      , containers        >=0.5 && <0.7
                      , contravariant     >=1.2 && <1.6
                      , deepseq           >=1.1 && <2

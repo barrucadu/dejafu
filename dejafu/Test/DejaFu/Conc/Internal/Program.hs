@@ -170,7 +170,7 @@ instance (pty ~ Basic, Monad n) => C.MonadConc (Program pty n) where
 -- nonexistent thread. In either of those cases, the computation will
 -- be halted.
 --
--- @since unreleased
+-- @since 2.1.0.0
 runConcurrent :: MonadDejaFu n
   => Scheduler s
   -> MemType
@@ -250,7 +250,7 @@ runConcurrent sched memtype s ma = recordSnapshot ma >>= \case
 --   (liftIO . readIORef)
 -- @
 --
--- @since unreleased
+-- @since 2.1.0.0
 recordSnapshot
   :: MonadDejaFu n
   => Program pty n a
@@ -265,7 +265,7 @@ recordSnapshot WithSetupAndTeardown{..} =
 
 -- | Runs a program with snapshotted setup to completion.
 --
--- @since unreleased
+-- @since 2.1.0.0
 runSnapshot
   :: MonadDejaFu n
   => Scheduler s

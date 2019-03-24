@@ -371,7 +371,7 @@ let relaxed = do
 --     "world" S0----S2--S0--
 -- False
 --
--- @since unreleased
+-- @since 2.1.0.0
 autocheck :: (MonadDejaFu n, MonadIO n, Eq a, Show a)
   => Program pty n a
   -- ^ The computation to test.
@@ -403,7 +403,7 @@ autocheck = autocheckWithSettings defaultSettings
 --     (True,False) S0---------S2----S1----S0---
 -- False
 --
--- @since unreleased
+-- @since 2.1.0.0
 autocheckWay :: (MonadDejaFu n, MonadIO n, Eq a, Show a)
   => Way
   -- ^ How to run the concurrent program.
@@ -438,7 +438,7 @@ autocheckWay way = autocheckWithSettings . fromWayAndMemType way
 --     (True,False) S0---------S2----S1----S0---
 -- False
 --
--- @since unreleased
+-- @since 2.1.0.0
 autocheckWithSettings :: (MonadDejaFu n, MonadIO n, Eq a, Show a)
   => Settings n a
   -- ^ The SCT settings.
@@ -464,7 +464,7 @@ autocheckWithSettings settings = dejafusWithSettings settings
 --     "world" S0----S2--S0--
 -- False
 --
--- @since unreleased
+-- @since 2.1.0.0
 dejafu :: (MonadDejaFu n, MonadIO n, Show b)
   => String
   -- ^ The name of the test.
@@ -494,7 +494,7 @@ dejafu = dejafuWithSettings defaultSettings
 --     "world" S0----S2--S1-S0--
 -- False
 --
--- @since unreleased
+-- @since 2.1.0.0
 dejafuWay :: (MonadDejaFu n, MonadIO n, Show b)
   => Way
   -- ^ How to run the concurrent program.
@@ -520,7 +520,7 @@ dejafuWay way = dejafuWithSettings . fromWayAndMemType way
 --     "world" S0----S2--S1-S0--
 -- False
 --
--- @since unreleased
+-- @since 2.1.0.0
 dejafuWithSettings :: (MonadDejaFu n, MonadIO n, Show b)
   => Settings n a
   -- ^ The SCT settings.
@@ -545,7 +545,7 @@ dejafuWithSettings settings name test =
 -- [pass] B
 -- False
 --
--- @since unreleased
+-- @since 2.1.0.0
 dejafus :: (MonadDejaFu n, MonadIO n, Show b)
   => [(String, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
@@ -567,7 +567,7 @@ dejafus = dejafusWithSettings defaultSettings
 -- [pass] B
 -- False
 --
--- @since unreleased
+-- @since 2.1.0.0
 dejafusWay :: (MonadDejaFu n, MonadIO n, Show b)
   => Way
   -- ^ How to run the concurrent program.
@@ -592,7 +592,7 @@ dejafusWay way = dejafusWithSettings . fromWayAndMemType way
 -- [pass] B
 -- False
 --
--- @since unreleased
+-- @since 2.1.0.0
 dejafusWithSettings :: (MonadDejaFu n, MonadIO n, Show b)
   => Settings n a
   -- ^ The SCT settings.
@@ -668,7 +668,7 @@ instance Foldable Result where
 -- found, is unspecified and may change between releases.  This may
 -- affect which failing traces are reported, when there is a failure.
 --
--- @since unreleased
+-- @since 2.1.0.0
 runTest :: MonadDejaFu n
   => ProPredicate a b
   -- ^ The predicate to check
@@ -684,7 +684,7 @@ runTest = runTestWithSettings defaultSettings
 -- found, is unspecified and may change between releases.  This may
 -- affect which failing traces are reported, when there is a failure.
 --
--- @since unreleased
+-- @since 2.1.0.0
 runTestWay :: MonadDejaFu n
   => Way
   -- ^ How to run the concurrent program.
@@ -703,7 +703,7 @@ runTestWay way = runTestWithSettings . fromWayAndMemType way
 -- found, is unspecified and may change between releases.  This may
 -- affect which failing traces are reported, when there is a failure.
 --
--- @since unreleased
+-- @since 2.1.0.0
 runTestWithSettings :: MonadDejaFu n
   => Settings n a
   -- ^ The SCT settings.
