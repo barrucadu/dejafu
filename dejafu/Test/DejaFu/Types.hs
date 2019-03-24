@@ -40,34 +40,63 @@ import qualified Data.STRef                           as ST
 import           GHC.Generics                         (Generic, V1)
 
 -------------------------------------------------------------------------------
--- * The DejaFu Monad
+-- * The @MonadDejaFu@ typeclass
 
--- | todo: docs
+-- | The @MonadDejaFu@ class captures the two things needed to run a
+-- concurrent program which we can't implement in normal Haskell:
+-- mutable references, and the ability to create a bound thread in
+-- @IO@.
+--
+-- In addition to needing the operations in this class, dejafu also
+-- needs the ability to throw exceptions, as these are used to
+-- communicate 'Error's, so there is a 'MonadThrow' constraint.
 --
 -- @since unreleased
 class MonadThrow m => MonadDejaFu m where
+  -- | The type of mutable references.  These references will always
+  -- contain a value, and so don't need to handle emptiness (like
+  -- @MVar@ does).
+  --
+  -- These references are always used from the same Haskell thread, so
+  -- it's safe to implement these using unsynchronised primitives with
+  -- relaxed-memory behaviours (like @IORef@s).
   type Ref m :: * -> *
 
+  -- | Create a new reference holding a given initial value.
   newRef :: a -> m (Ref m a)
 
+  -- | Read the current value in the reference.
   readRef :: Ref m a -> m a
 
+  -- | Replace the value in the reference.
   writeRef :: Ref m a -> a -> m ()
 
+  -- | A handle to a bound thread.  If the monad doesn't support bound
+  -- threads (for example, if it's not based on @IO@), then this
+  -- should be some type which can't be constructed, like 'V1'.
   type BoundThread m :: * -> *
 
+  -- | Fork a new bound thread, if the monad supports them.
   forkBoundThread :: Maybe (m (BoundThread m a))
 
+  -- | Run an action in a previously created bound thread.
   runInBoundThread :: BoundThread m a -> m a -> m a
 
+  -- | Terminate a previously created bound thread.
+  --
+  -- After termination, 'runInBoundThread' and 'killBoundThread' will
+  -- never be called on this @BoundThread m a@ value again.
   killBoundThread :: BoundThread m a -> m ()
 
--- | todo: docs
+-- | A bound thread in @IO@.
 --
 -- @since unreleased
 data IOBoundThread a = IOBoundThread
   { iobtRunInBoundThread :: IO a -> IO a
+    -- ^ Pass an action to the bound thread, run it, and return the
+    -- result to this thread.
   , iobtKillBoundThread  :: IO ()
+    -- ^ Terminate the bound thread.
   }
 
 -- | @since unreleased
@@ -100,7 +129,9 @@ instance MonadDejaFu IO where
   runInBoundThread = iobtRunInBoundThread
   killBoundThread  = iobtKillBoundThread
 
--- | @since unreleased
+-- | This instance does not support bound threads.
+--
+-- @since unreleased
 instance MonadDejaFu (CatchT (ST.ST t)) where
   type Ref (CatchT (ST.ST t)) = ST.STRef t
 
