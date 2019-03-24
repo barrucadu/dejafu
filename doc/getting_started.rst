@@ -27,10 +27,10 @@ There are a few different packages under the Déjà Fu umbrella:
 .. csv-table::
    :header: "Package", "Version", "Summary"
 
-   ":hackage:`concurrency`",  "1.6.2.0",  "Typeclasses, functions, and data types for concurrency and STM"
-   ":hackage:`dejafu`",       "2.0.0.1", "Systematic testing for Haskell concurrency"
-   ":hackage:`hunit-dejafu`", "2.0.0.0",  "Déjà Fu support for the HUnit test framework"
-   ":hackage:`tasty-dejafu`", "2.0.0.0",  "Déjà Fu support for the tasty test framework"
+   ":hackage:`concurrency`",  "1.7.0.0",  "Typeclasses, functions, and data types for concurrency and STM"
+   ":hackage:`dejafu`",       "2.1.0.0", "Systematic testing for Haskell concurrency"
+   ":hackage:`hunit-dejafu`", "2.0.0.1",  "Déjà Fu support for the HUnit test framework"
+   ":hackage:`tasty-dejafu`", "2.0.0.1",  "Déjà Fu support for the tasty test framework"
 
 
 Installation

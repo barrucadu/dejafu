@@ -17,7 +17,6 @@ module Test.DejaFu.Conc.Internal.Common where
 
 import           Control.Exception             (Exception, MaskingState(..))
 import           Control.Monad.Catch           (MonadCatch(..), MonadThrow(..))
-import qualified Control.Monad.Conc.Class      as C
 import qualified Control.Monad.Fail            as Fail
 import           Data.Map.Strict               (Map)
 
@@ -106,7 +105,7 @@ instance (pty ~ Basic) => Fail.MonadFail (Program pty n) where
 -- @Maybe@ value.
 data ModelMVar n a = ModelMVar
   { mvarId  :: MVarId
-  , mvarRef :: C.IORef n (Maybe a)
+  , mvarRef :: Ref n (Maybe a)
   }
 
 -- | A @IORef@ is modelled as a unique ID and a reference holding
@@ -114,7 +113,7 @@ data ModelMVar n a = ModelMVar
 -- committed value.
 data ModelIORef n a = ModelIORef
   { iorefId  :: IORefId
-  , iorefRef :: C.IORef n (Map ThreadId a, Integer, a)
+  , iorefRef :: Ref n (Map ThreadId a, Integer, a)
   }
 
 -- | A @Ticket@ is modelled as the ID of the @ModelIORef@ it came from,
@@ -136,6 +135,8 @@ data ModelTicket a = ModelTicket
 data Action n =
     AFork   String ((forall b. ModelConc n b -> ModelConc n b) -> Action n) (ThreadId -> Action n)
   | AForkOS String ((forall b. ModelConc n b -> ModelConc n b) -> Action n) (ThreadId -> Action n)
+
+  | ASupportsBoundThreads (Bool -> Action n)
   | AIsBound (Bool -> Action n)
   | AMyTId (ThreadId -> Action n)
 
@@ -182,6 +183,7 @@ data Action n =
 lookahead :: Action n -> Lookahead
 lookahead (AFork _ _ _) = WillFork
 lookahead (AForkOS _ _ _) = WillForkOS
+lookahead (ASupportsBoundThreads _) = WillSupportsBoundThreads
 lookahead (AIsBound _) = WillIsCurrentThreadBound
 lookahead (AMyTId _) = WillMyThreadId
 lookahead (AGetNumCapabilities _) = WillGetNumCapabilities

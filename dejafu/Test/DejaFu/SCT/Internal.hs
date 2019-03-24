@@ -5,7 +5,7 @@
 
 -- |
 -- Module      : Test.DejaFu.SCT.Internal
--- Copyright   : (c) 2018 Michael Walker
+-- Copyright   : (c) 2018--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -15,7 +15,6 @@
 -- considered to form part of the public interface of this library.
 module Test.DejaFu.SCT.Internal where
 
-import           Control.Monad.Conc.Class          (MonadConc)
 import           Data.Coerce                       (Coercible, coerce)
 import qualified Data.IntMap.Strict                as I
 import           Data.List                         (find, mapAccumL)
@@ -36,7 +35,7 @@ import           Test.DejaFu.Utils
 -- * Exploration
 
 -- | General-purpose SCT function.
-sct :: (MonadConc n, HasCallStack)
+sct :: (MonadDejaFu n, HasCallStack)
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
   -> ([ThreadId] -> s)
@@ -79,7 +78,7 @@ sct settings s0 sfun srun conc = recordSnapshot conc >>= \case
     runSnap snap sched s = runSnapshot sched (_memtype settings) s snap
 
 -- | Like 'sct' but given a function to run the computation.
-sct' :: (MonadConc n, HasCallStack)
+sct' :: (MonadDejaFu n, HasCallStack)
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
   -> ConcurrencyState
@@ -150,7 +149,7 @@ sct' settings cstate0 s0 sfun srun run nTId nCRId = go Nothing [] s0 where
 -- Unlike shrinking in randomised property-testing tools like
 -- QuickCheck or Hedgehog, we only run the test case /once/, at the
 -- end, rather than after every simplification step.
-simplifyExecution :: (MonadConc n, HasCallStack)
+simplifyExecution :: (MonadDejaFu n, HasCallStack)
   => Settings n a
   -- ^ The SCT settings ('Way' is ignored)
   -> ConcurrencyState
@@ -190,7 +189,7 @@ simplifyExecution settings cstate0 run nTId nCRId res trace
     p = either show debugShow
 
 -- | Replay an execution.
-replay :: MonadConc n
+replay :: MonadDejaFu n
   => (forall x. Scheduler x -> x -> n (Either Condition a, x, Trace))
   -- ^ Run the computation
   -> [(ThreadId, ThreadAction)]

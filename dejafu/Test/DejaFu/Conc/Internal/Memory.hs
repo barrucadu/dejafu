@@ -6,7 +6,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.Memory
--- Copyright   : (c) 2016--2018 Michael Walker
+-- Copyright   : (c) 2016--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -25,7 +25,6 @@
 -- Memory Models/, N. Zhang, M. Kusano, and C. Wang (2015).
 module Test.DejaFu.Conc.Internal.Memory where
 
-import qualified Control.Monad.Conc.Class            as C
 import           Data.Map.Strict                     (Map)
 import qualified Data.Map.Strict                     as M
 import           Data.Maybe                          (maybeToList)
@@ -61,20 +60,20 @@ emptyBuffer :: WriteBuffer n
 emptyBuffer = WriteBuffer M.empty
 
 -- | Add a new write to the end of a buffer.
-bufferWrite :: C.MonadConc n => WriteBuffer n -> (ThreadId, Maybe IORefId) -> ModelIORef n a -> a -> n (WriteBuffer n)
+bufferWrite :: MonadDejaFu n => WriteBuffer n -> (ThreadId, Maybe IORefId) -> ModelIORef n a -> a -> n (WriteBuffer n)
 bufferWrite (WriteBuffer wb) k@(tid, _) ref@ModelIORef{..} new = do
   -- Construct the new write buffer
   let write = singleton $ BufferedWrite tid ref new
   let buffer' = M.insertWith (flip (><)) k write wb
 
   -- Write the thread-local value to the @IORef@'s update map.
-  (locals, count, def) <- C.readIORef iorefRef
-  C.writeIORef iorefRef (M.insert tid new locals, count, def)
+  (locals, count, def) <- readRef iorefRef
+  writeRef iorefRef (M.insert tid new locals, count, def)
 
   pure (WriteBuffer buffer')
 
 -- | Commit the write at the head of a buffer.
-commitWrite :: C.MonadConc n => WriteBuffer n -> (ThreadId, Maybe IORefId) -> n (WriteBuffer n)
+commitWrite :: MonadDejaFu n => WriteBuffer n -> (ThreadId, Maybe IORefId) -> n (WriteBuffer n)
 commitWrite w@(WriteBuffer wb) k = case maybe EmptyL viewl $ M.lookup k wb of
   BufferedWrite _ ref a :< rest -> do
     _ <- writeImmediate ref a
@@ -83,21 +82,21 @@ commitWrite w@(WriteBuffer wb) k = case maybe EmptyL viewl $ M.lookup k wb of
 
 -- | Read from a @IORef@, returning a newer thread-local non-committed
 -- write if there is one.
-readIORef :: C.MonadConc n => ModelIORef n a -> ThreadId -> n a
+readIORef :: MonadDejaFu n => ModelIORef n a -> ThreadId -> n a
 readIORef ref tid = do
   (val, _) <- readIORefPrim ref tid
   pure val
 
 -- | Read from a @IORef@, returning a @Ticket@ representing the current
 -- view of the thread.
-readForTicket :: C.MonadConc n => ModelIORef n a -> ThreadId -> n (ModelTicket a)
+readForTicket :: MonadDejaFu n => ModelIORef n a -> ThreadId -> n (ModelTicket a)
 readForTicket ref@ModelIORef{..} tid = do
   (val, count) <- readIORefPrim ref tid
   pure (ModelTicket iorefId count val)
 
 -- | Perform a compare-and-swap on a @IORef@ if the ticket is still
 -- valid. This is strict in the \"new\" value argument.
-casIORef :: C.MonadConc n => ModelIORef n a -> ThreadId -> ModelTicket a -> a -> n (Bool, ModelTicket a, n ())
+casIORef :: MonadDejaFu n => ModelIORef n a -> ThreadId -> ModelTicket a -> a -> n (Bool, ModelTicket a, n ())
 casIORef ref tid (ModelTicket _ cc _) !new = do
   tick'@(ModelTicket _ cc' _) <- readForTicket ref tid
 
@@ -109,28 +108,28 @@ casIORef ref tid (ModelTicket _ cc _) !new = do
   else pure (False, tick', pure ())
 
 -- | Read the local state of a @IORef@.
-readIORefPrim :: C.MonadConc n => ModelIORef n a -> ThreadId -> n (a, Integer)
+readIORefPrim :: MonadDejaFu n => ModelIORef n a -> ThreadId -> n (a, Integer)
 readIORefPrim ModelIORef{..} tid = do
-  (vals, count, def) <- C.readIORef iorefRef
+  (vals, count, def) <- readRef iorefRef
   pure (M.findWithDefault def tid vals, count)
 
 -- | Read the global state of a @IORef@.
-readIORefGlobal :: C.MonadConc n => ModelIORef n a -> n a
+readIORefGlobal :: MonadDejaFu n => ModelIORef n a -> n a
 readIORefGlobal ModelIORef{..} = do
-  (_, _, def) <- C.readIORef iorefRef
+  (_, _, def) <- readRef iorefRef
   pure def
 
 -- | Write and commit to a @IORef@ immediately, clearing the update map
 -- and incrementing the write count.
-writeImmediate :: C.MonadConc n => ModelIORef n a -> a -> n (n ())
+writeImmediate :: MonadDejaFu n => ModelIORef n a -> a -> n (n ())
 writeImmediate ModelIORef{..} a = do
-  (_, count, _) <- C.readIORef iorefRef
-  let effect = C.writeIORef iorefRef (M.empty, count + 1, a)
+  (_, count, _) <- readRef iorefRef
+  let effect = writeRef iorefRef (M.empty, count + 1, a)
   effect
   pure effect
 
 -- | Flush all writes in the buffer.
-writeBarrier :: C.MonadConc n => WriteBuffer n -> n ()
+writeBarrier :: MonadDejaFu n => WriteBuffer n -> n ()
 writeBarrier (WriteBuffer wb) = mapM_ flush $ M.elems wb where
   flush = mapM_ $ \(BufferedWrite _ ref a) -> writeImmediate ref a
 
@@ -162,7 +161,7 @@ data Blocking = Blocking | NonBlocking
 data Emptying = Emptying | NonEmptying
 
 -- | Put into a @MVar@, blocking if full.
-putIntoMVar :: C.MonadConc n
+putIntoMVar :: MonadDejaFu n
   => ModelMVar n a
   -> a
   -> Action n
@@ -172,7 +171,7 @@ putIntoMVar :: C.MonadConc n
 putIntoMVar cvar a c = mutMVar Blocking cvar a (const c)
 
 -- | Try to put into a @MVar@, not blocking if full.
-tryPutIntoMVar :: C.MonadConc n
+tryPutIntoMVar :: MonadDejaFu n
   => ModelMVar n a
   -> a
   -> (Bool -> Action n)
@@ -182,7 +181,7 @@ tryPutIntoMVar :: C.MonadConc n
 tryPutIntoMVar = mutMVar NonBlocking
 
 -- | Read from a @MVar@, blocking if empty.
-readFromMVar :: (C.MonadConc n, HasCallStack)
+readFromMVar :: (MonadDejaFu n, HasCallStack)
   => ModelMVar n a
   -> (a -> Action n)
   -> ThreadId
@@ -191,7 +190,7 @@ readFromMVar :: (C.MonadConc n, HasCallStack)
 readFromMVar cvar c = seeMVar NonEmptying Blocking cvar (c . efromJust)
 
 -- | Try to read from a @MVar@, not blocking if empty.
-tryReadFromMVar :: C.MonadConc n
+tryReadFromMVar :: MonadDejaFu n
   => ModelMVar n a
   -> (Maybe a -> Action n)
   -> ThreadId
@@ -200,7 +199,7 @@ tryReadFromMVar :: C.MonadConc n
 tryReadFromMVar = seeMVar NonEmptying NonBlocking
 
 -- | Take from a @MVar@, blocking if empty.
-takeFromMVar :: (C.MonadConc n, HasCallStack)
+takeFromMVar :: (MonadDejaFu n, HasCallStack)
   => ModelMVar n a
   -> (a -> Action n)
   -> ThreadId
@@ -209,7 +208,7 @@ takeFromMVar :: (C.MonadConc n, HasCallStack)
 takeFromMVar cvar c = seeMVar Emptying Blocking cvar (c . efromJust)
 
 -- | Try to take from a @MVar@, not blocking if empty.
-tryTakeFromMVar :: C.MonadConc n
+tryTakeFromMVar :: MonadDejaFu n
   => ModelMVar n a
   -> (Maybe a -> Action n)
   -> ThreadId
@@ -218,7 +217,7 @@ tryTakeFromMVar :: C.MonadConc n
 tryTakeFromMVar = seeMVar Emptying NonBlocking
 
 -- | Mutate a @MVar@, in either a blocking or nonblocking way.
-mutMVar :: C.MonadConc n
+mutMVar :: MonadDejaFu n
   => Blocking
   -> ModelMVar n a
   -> a
@@ -226,7 +225,7 @@ mutMVar :: C.MonadConc n
   -> ThreadId
   -> Threads n
   -> n (Bool, Threads n, [ThreadId], n ())
-mutMVar blocking ModelMVar{..} a c threadid threads = C.readIORef mvarRef >>= \case
+mutMVar blocking ModelMVar{..} a c threadid threads = readRef mvarRef >>= \case
   Just _ -> case blocking of
     Blocking ->
       let threads' = block (OnMVarEmpty mvarId) threadid threads
@@ -234,14 +233,14 @@ mutMVar blocking ModelMVar{..} a c threadid threads = C.readIORef mvarRef >>= \c
     NonBlocking ->
       pure (False, goto (c False) threadid threads, [], pure ())
   Nothing -> do
-    let effect = C.writeIORef mvarRef $ Just a
+    let effect = writeRef mvarRef $ Just a
     let (threads', woken) = wake (OnMVarFull mvarId) threads
     effect
     pure (True, goto (c True) threadid threads', woken, effect)
 
 -- | Read a @MVar@, in either a blocking or nonblocking
 -- way.
-seeMVar :: C.MonadConc n
+seeMVar :: MonadDejaFu n
   => Emptying
   -> Blocking
   -> ModelMVar n a
@@ -249,10 +248,10 @@ seeMVar :: C.MonadConc n
   -> ThreadId
   -> Threads n
   -> n (Bool, Threads n, [ThreadId], n ())
-seeMVar emptying blocking ModelMVar{..} c threadid threads = C.readIORef mvarRef >>= \case
+seeMVar emptying blocking ModelMVar{..} c threadid threads = readRef mvarRef >>= \case
   val@(Just _) -> do
     let effect = case emptying of
-          Emptying -> C.writeIORef mvarRef Nothing
+          Emptying -> writeRef mvarRef Nothing
           NonEmptying -> pure ()
     let (threads', woken) = wake (OnMVarEmpty mvarId) threads
     effect

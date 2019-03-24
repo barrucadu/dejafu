@@ -4,7 +4,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.Threading
--- Copyright   : (c) 2016--2018 Michael Walker
+-- Copyright   : (c) 2016--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -16,8 +16,6 @@ module Test.DejaFu.Conc.Internal.Threading where
 
 import           Control.Exception                (Exception, MaskingState(..),
                                                    SomeException, fromException)
-import           Control.Monad                    (forever)
-import qualified Control.Monad.Conc.Class         as C
 import           Data.List                        (intersect)
 import           Data.Map.Strict                  (Map)
 import qualified Data.Map.Strict                  as M
@@ -44,18 +42,8 @@ data Thread n = Thread
   -- ^ Stack of exception handlers
   , _masking      :: MaskingState
   -- ^ The exception masking state.
-  , _bound        :: Maybe (BoundThread n)
+  , _bound        :: Maybe (BoundThread n (Action n))
   -- ^ State for the associated bound thread, if it exists.
-  }
-
--- | The state of a bound thread.
-data BoundThread n = BoundThread
-  { _runboundIO :: C.MVar n (n (Action n))
-  -- ^ Run an @IO@ action in the bound thread by writing to this.
-  , _getboundIO :: C.MVar n (Action n)
-  -- ^ Get the result of the above by reading from this.
-  , _boundTId   :: C.ThreadId n
-  -- ^ Thread ID
   }
 
 -- | Construct a thread with just one action
@@ -167,33 +155,24 @@ wake blockedOn threads = (unblock <$> threads, M.keys $ M.filter isBlocked threa
 -- ** Bound threads
 
 -- | Turn a thread into a bound thread.
-makeBound :: (C.MonadConc n, HasCallStack) => ThreadId -> Threads n -> n (Threads n)
-makeBound tid threads = do
-    runboundIO <- C.newEmptyMVar
-    getboundIO <- C.newEmptyMVar
-    btid <- C.forkOSN ("bound worker for '" ++ show tid ++ "'") (go runboundIO getboundIO)
-    let bt = BoundThread runboundIO getboundIO btid
-    pure (eadjust (\t -> t { _bound = Just bt }) tid threads)
-  where
-    go runboundIO getboundIO = forever $ do
-      na <- C.takeMVar runboundIO
-      C.putMVar getboundIO =<< na
+makeBound :: (MonadDejaFu n, HasCallStack)
+  => n (BoundThread n (Action n)) -> ThreadId -> Threads n -> n (Threads n)
+makeBound fbt tid threads = do
+  bt <- fbt
+  pure (eadjust (\t -> t { _bound = Just bt }) tid threads)
 
 -- | Kill a thread and remove it from the thread map.
 --
 -- If the thread is bound, the worker thread is cleaned up.
-kill :: (C.MonadConc n, HasCallStack) => ThreadId -> Threads n -> n (Threads n)
+kill :: (MonadDejaFu n, HasCallStack) => ThreadId -> Threads n -> n (Threads n)
 kill tid threads = do
   let thread = elookup tid threads
-  maybe (pure ()) (C.killThread . _boundTId) (_bound thread)
+  maybe (pure ()) killBoundThread (_bound thread)
   pure (M.delete tid threads)
-
 -- | Run an action.
 --
 -- If the thread is bound, the action is run in the worker thread.
-runLiftedAct :: C.MonadConc n => ThreadId -> Threads n -> n (Action n) -> n (Action n)
+runLiftedAct :: MonadDejaFu n => ThreadId -> Threads n -> n (Action n) -> n (Action n)
 runLiftedAct tid threads ma = case _bound =<< M.lookup tid threads of
-  Just bt -> do
-    C.putMVar (_runboundIO bt) ma
-    C.takeMVar (_getboundIO bt)
+  Just bt -> runInBoundThread bt ma
   Nothing -> ma

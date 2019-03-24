@@ -1,7 +1,10 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
 
 -- |
 -- Module      : Test.DejaFu.Types
@@ -9,24 +12,139 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : DeriveGeneric, GeneralizedNewtypeDeriving, LambdaCase, StandaloneDeriving
+-- Portability : DeriveGeneric, FlexibleInstances, GeneralizedNewtypeDeriving, LambdaCase, RankNTypes, StandaloneDeriving, TypeFamilies
 --
 -- Common types and functions used throughout DejaFu.
 module Test.DejaFu.Types where
 
+import qualified Control.Concurrent                   as IO
 import           Control.DeepSeq                      (NFData(..))
 import           Control.Exception                    (Exception(..),
                                                        MaskingState(..),
                                                        SomeException)
+import           Control.Monad                        (forever)
+import           Control.Monad.Catch                  (MonadThrow)
+import           Control.Monad.Catch.Pure             (CatchT)
+import qualified Control.Monad.ST                     as ST
+import           Control.Monad.Trans.Class            (lift)
 import           Data.Function                        (on)
 import           Data.Functor.Contravariant           (Contravariant(..))
 import           Data.Functor.Contravariant.Divisible (Divisible(..))
+import qualified Data.IORef                           as IO
 import           Data.Map.Strict                      (Map)
 import qualified Data.Map.Strict                      as M
 import           Data.Semigroup                       (Semigroup(..))
 import           Data.Set                             (Set)
 import qualified Data.Set                             as S
-import           GHC.Generics                         (Generic)
+import qualified Data.STRef                           as ST
+import           GHC.Generics                         (Generic, V1)
+
+-------------------------------------------------------------------------------
+-- * The @MonadDejaFu@ typeclass
+
+-- | The @MonadDejaFu@ class captures the two things needed to run a
+-- concurrent program which we can't implement in normal Haskell:
+-- mutable references, and the ability to create a bound thread in
+-- @IO@.
+--
+-- In addition to needing the operations in this class, dejafu also
+-- needs the ability to throw exceptions, as these are used to
+-- communicate 'Error's, so there is a 'MonadThrow' constraint.
+--
+-- @since 2.1.0.0
+class MonadThrow m => MonadDejaFu m where
+  -- | The type of mutable references.  These references will always
+  -- contain a value, and so don't need to handle emptiness (like
+  -- @MVar@ does).
+  --
+  -- These references are always used from the same Haskell thread, so
+  -- it's safe to implement these using unsynchronised primitives with
+  -- relaxed-memory behaviours (like @IORef@s).
+  type Ref m :: * -> *
+
+  -- | Create a new reference holding a given initial value.
+  newRef :: a -> m (Ref m a)
+
+  -- | Read the current value in the reference.
+  readRef :: Ref m a -> m a
+
+  -- | Replace the value in the reference.
+  writeRef :: Ref m a -> a -> m ()
+
+  -- | A handle to a bound thread.  If the monad doesn't support bound
+  -- threads (for example, if it's not based on @IO@), then this
+  -- should be some type which can't be constructed, like 'V1'.
+  type BoundThread m :: * -> *
+
+  -- | Fork a new bound thread, if the monad supports them.
+  forkBoundThread :: Maybe (m (BoundThread m a))
+
+  -- | Run an action in a previously created bound thread.
+  runInBoundThread :: BoundThread m a -> m a -> m a
+
+  -- | Terminate a previously created bound thread.
+  --
+  -- After termination, 'runInBoundThread' and 'killBoundThread' will
+  -- never be called on this @BoundThread m a@ value again.
+  killBoundThread :: BoundThread m a -> m ()
+
+-- | A bound thread in @IO@.
+--
+-- @since 2.1.0.0
+data IOBoundThread a = IOBoundThread
+  { iobtRunInBoundThread :: IO a -> IO a
+    -- ^ Pass an action to the bound thread, run it, and return the
+    -- result to this thread.
+  , iobtKillBoundThread  :: IO ()
+    -- ^ Terminate the bound thread.
+  }
+
+-- | @since 2.1.0.0
+instance MonadDejaFu IO where
+  type Ref IO = IO.IORef
+
+  newRef   = IO.newIORef
+  readRef  = IO.readIORef
+  writeRef = IO.writeIORef
+
+  type BoundThread IO = IOBoundThread
+
+  forkBoundThread = Just $ do
+      runboundIO <- IO.newEmptyMVar
+      getboundIO <- IO.newEmptyMVar
+      tid <- IO.forkOS (go runboundIO getboundIO)
+      pure IOBoundThread
+        { iobtRunInBoundThread = run runboundIO getboundIO
+        , iobtKillBoundThread  = IO.killThread tid
+        }
+    where
+      go runboundIO getboundIO = forever $ do
+        na <- IO.takeMVar runboundIO
+        IO.putMVar getboundIO =<< na
+
+      run runboundIO getboundIO ma = do
+        IO.putMVar runboundIO ma
+        IO.takeMVar getboundIO
+
+  runInBoundThread = iobtRunInBoundThread
+  killBoundThread  = iobtKillBoundThread
+
+-- | This instance does not support bound threads.
+--
+-- @since 2.1.0.0
+instance MonadDejaFu (CatchT (ST.ST t)) where
+  type Ref (CatchT (ST.ST t)) = ST.STRef t
+
+  newRef     = lift . ST.newSTRef
+  readRef    = lift . ST.readSTRef
+  writeRef r = lift . ST.writeSTRef r
+
+  -- V1 has no constructors
+  type BoundThread (CatchT (ST.ST t)) = V1
+
+  forkBoundThread  = Nothing
+  runInBoundThread = undefined
+  killBoundThread  = undefined
 
 -------------------------------------------------------------------------------
 -- * Identifiers
@@ -116,6 +234,8 @@ data ThreadAction =
   -- ^ Start a new thread.
   | ForkOS ThreadId
   -- ^ Start a new bound thread.
+  | SupportsBoundThreads Bool
+  -- ^ Check if bound threads are supported.
   | IsCurrentThreadBound Bool
   -- ^ Check if the current thread is bound.
   | MyThreadId
@@ -206,6 +326,7 @@ data ThreadAction =
 instance NFData ThreadAction where
   rnf (Fork t) = rnf t
   rnf (ForkOS t) = rnf t
+  rnf (SupportsBoundThreads b) = rnf b
   rnf (IsCurrentThreadBound b) = rnf b
   rnf MyThreadId = ()
   rnf (GetNumCapabilities i) = rnf i
@@ -252,6 +373,8 @@ data Lookahead =
   -- ^ Will start a new thread.
   | WillForkOS
   -- ^ Will start a new bound thread.
+  | WillSupportsBoundThreads
+  -- ^ Will check if bound threads are supported.
   | WillIsCurrentThreadBound
   -- ^ Will check if the current thread is bound.
   | WillMyThreadId
@@ -331,6 +454,7 @@ data Lookahead =
 instance NFData Lookahead where
   rnf WillFork = ()
   rnf WillForkOS = ()
+  rnf WillSupportsBoundThreads = ()
   rnf WillIsCurrentThreadBound = ()
   rnf WillMyThreadId = ()
   rnf WillGetNumCapabilities = ()

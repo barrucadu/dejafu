@@ -7,6 +7,25 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.7.0.0 (2019-03-24)
+--------------------
+
+* Git: :tag:`concurrency-1.7.0.0`
+* Hackage: :hackage:`concurrency-1.7.0.0`
+
+Added
+~~~~~
+
+* The ``Control.Monad.Conc.Class.supportsBoundThreads`` function, like
+  ``rtsSupportsBoundThreads`` but returns a monadic result.
+
+Deprecated
+~~~~~~~~~~
+
+* ``Control.Monad.Conc.Class.rtsSupportsBoundThreads``, in favour of
+  ``supportsBoundThreads``.
+
+
 1.6.2.0 (2018-11-28)
 --------------------
 

@@ -3,14 +3,15 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal
--- Copyright   : (c) 2016--2018 Michael Walker
+-- Copyright   : (c) 2016--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : FlexibleContexts, LambdaCase, MultiWayIf, RankNTypes, RecordWildCards
+-- Portability : FlexibleContexts, LambdaCase, MultiWayIf, RankNTypes, RecordWildCards, ScopedTypeVariables
 --
 -- Concurrent monads with a fixed scheduler: internal types and
 -- functions. This module is NOT considered to form part of the public
@@ -21,7 +22,6 @@ import           Control.Exception                   (Exception,
                                                       MaskingState(..),
                                                       toException)
 import qualified Control.Monad.Catch                 as E
-import qualified Control.Monad.Conc.Class            as C
 import           Data.Foldable                       (foldrM)
 import           Data.Functor                        (void)
 import           Data.List                           (nub, partition, sortOn)
@@ -50,7 +50,7 @@ type SeqTrace
 -- | The result of running a concurrent program.
 data CResult n g a = CResult
   { finalContext :: Context n g
-  , finalRef :: C.IORef n (Maybe (Either Condition a))
+  , finalRef :: Ref n (Maybe (Either Condition a))
   , finalRestore :: Threads n -> n ()
   -- ^ Meaningless if this result doesn't come from a snapshotting
   -- execution.
@@ -61,7 +61,7 @@ data CResult n g a = CResult
 -- | Run a concurrent computation with a given 'Scheduler' and initial
 -- state, returning a Condition reason on error. Also returned is the
 -- final state of the scheduler, and an execution trace.
-runConcurrency :: (C.MonadConc n, HasCallStack)
+runConcurrency :: (MonadDejaFu n, HasCallStack)
   => [Invariant n ()]
   -> Bool
   -> Scheduler g
@@ -83,13 +83,15 @@ runConcurrency invariants forSnapshot sched memtype g idsrc caps ma = do
                     }
   (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
   let threads0 = launch' Unmasked initialThread (const c) (cThreads ctx)
-  threads <- (if C.rtsSupportsBoundThreads then makeBound initialThread else pure) threads0
+  threads <- case forkBoundThread of
+    Just fbt -> makeBound fbt initialThread threads0
+    Nothing  -> pure threads0
   res <- runThreads forSnapshot sched memtype ref ctx { cThreads = threads }
   killAllThreads (finalContext res)
   pure res
 
 -- | Like 'runConcurrency' but starts from a snapshot.
-runConcurrencyWithSnapshot :: (C.MonadConc n, HasCallStack)
+runConcurrencyWithSnapshot :: (MonadDejaFu n, HasCallStack)
   => Scheduler g
   -> MemType
   -> Context n g
@@ -100,16 +102,19 @@ runConcurrencyWithSnapshot sched memtype ctx restore ma = do
   (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
   let threads0 = M.delete initialThread (cThreads ctx)
   let threads1 = launch' Unmasked initialThread (const c) threads0
-  let boundThreads = M.filter (isJust . _bound) threads1
-  threads2 <- (if C.rtsSupportsBoundThreads then makeBound initialThread else pure) threads1
-  threads3 <- foldrM makeBound threads2 (M.keys boundThreads)
-  restore threads3
-  res <- runThreads False sched memtype ref ctx { cThreads = threads3 }
+  threads <- case forkBoundThread of
+    Just fbt -> do
+      let boundThreads = M.filter (isJust . _bound) threads1
+      threads' <- makeBound fbt initialThread threads1
+      foldrM (makeBound fbt) threads' (M.keys boundThreads)
+    Nothing -> pure threads1
+  restore threads
+  res <- runThreads False sched memtype ref ctx { cThreads = threads }
   killAllThreads (finalContext res)
   pure res
 
 -- | Kill the remaining threads
-killAllThreads :: (C.MonadConc n, HasCallStack) => Context n g -> n ()
+killAllThreads :: (MonadDejaFu n, HasCallStack) => Context n g -> n ()
 killAllThreads ctx =
   let finalThreads = cThreads ctx
   in mapM_ (`kill` finalThreads) (M.keys finalThreads)
@@ -130,17 +135,17 @@ data Context n g = Context
   }
 
 -- | Run a collection of threads, until there are no threads left.
-runThreads :: (C.MonadConc n, HasCallStack)
+runThreads :: (MonadDejaFu n, HasCallStack)
   => Bool
   -> Scheduler g
   -> MemType
-  -> C.IORef n (Maybe (Either Condition a))
+  -> Ref n (Maybe (Either Condition a))
   -> Context n g
   -> n (CResult n g a)
 runThreads forSnapshot sched memtype ref = schedule (const $ pure ()) Seq.empty Nothing where
   -- signal failure & terminate
   die reason finalR finalT finalD finalC = do
-    C.writeIORef ref (Just $ Left reason)
+    writeRef ref (Just $ Left reason)
     stop finalR finalT finalD finalC
 
   -- just terminate; 'ref' must have been written to before calling
@@ -256,7 +261,7 @@ data What n g
 --
 -- Note: the returned snapshot action will definitely not do the right
 -- thing with relaxed memory.
-stepThread :: (C.MonadConc n, HasCallStack)
+stepThread :: forall n g. (MonadDejaFu n, HasCallStack)
   => Bool
   -- ^ Should we record a snapshot?
   -> Bool
@@ -282,12 +287,23 @@ stepThread _ _ _ _ tid (AFork n a b) = \ctx@Context{..} -> pure $
      )
 
 -- start a new bound thread, assigning it the next 'ThreadId'
-stepThread _ _ _ _ tid (AForkOS n a b) = \ctx@Context{..} -> do
-  let (idSource', newtid) = nextTId n cIdSource
-  let threads' = launch tid newtid a cThreads
-  threads'' <- makeBound newtid threads'
-  pure ( Succeeded ctx { cThreads = goto (b newtid) tid threads'', cIdSource = idSource' }
-       , ForkOS newtid
+stepThread _ _ _ _ tid (AForkOS n a b) = \ctx@Context{..} -> case forkBoundThread of
+  Just fbt -> do
+    let (idSource', newtid) = nextTId n cIdSource
+    let threads' = launch tid newtid a cThreads
+    threads'' <- makeBound fbt newtid threads'
+    pure ( Succeeded ctx { cThreads = goto (b newtid) tid threads'', cIdSource = idSource' }
+         , ForkOS newtid
+         , const (pure ())
+         )
+  Nothing ->
+    stepThrow Throw tid (MonadFailException "dejafu is running with bound threads disabled - do not use forkOS") ctx
+
+-- check if we support bound threads
+stepThread _ _ _ _ tid (ASupportsBoundThreads c) = \ctx@Context{..} -> do
+  let sbt = isJust (forkBoundThread :: Maybe (n (BoundThread n ())))
+  pure ( Succeeded ctx { cThreads = goto (c sbt) tid cThreads }
+       , SupportsBoundThreads sbt
        , const (pure ())
        )
 
@@ -337,11 +353,11 @@ stepThread _ _ _ _ tid (ADelay n c) = \ctx@Context{..} ->
 -- create a new @MVar@, using the next 'MVarId'.
 stepThread _ _ _ _ tid (ANewMVar n c) = \ctx@Context{..} -> do
   let (idSource', newmvid) = nextMVId n cIdSource
-  ref <- C.newIORef Nothing
+  ref <- newRef Nothing
   let mvar = ModelMVar newmvid ref
   pure ( Succeeded ctx { cThreads = goto (c mvar) tid cThreads, cIdSource = idSource' }
        , NewMVar newmvid
-       , const (C.writeIORef ref Nothing)
+       , const (writeRef ref Nothing)
        )
 
 -- put a value into a @MVar@, blocking the thread until it's empty.
@@ -398,11 +414,11 @@ stepThread _ _ _ _ tid (ATryTakeMVar mvar@ModelMVar{..} c) = synchronised $ \ctx
 stepThread _ _ _ _  tid (ANewIORef n a c) = \ctx@Context{..} -> do
   let (idSource', newiorid) = nextIORId n cIdSource
   let val = (M.empty, 0, a)
-  ioref <- C.newIORef val
+  ioref <- newRef val
   let ref = ModelIORef newiorid ioref
   pure ( Succeeded ctx { cThreads = goto (c ref) tid cThreads, cIdSource = idSource' }
        , NewIORef newiorid
-       , const (C.writeIORef ioref val)
+       , const (writeRef ioref val)
        )
 
 -- read from a @IORef@.
@@ -609,7 +625,7 @@ stepThread _ _ _ _ tid (ANewInvariant inv c) = \ctx@Context{..} ->
 
 -- | Handle an exception being thrown from an @AAtom@, @AThrow@, or
 -- @AThrowTo@.
-stepThrow :: (C.MonadConc n, Exception e)
+stepThrow :: (MonadDejaFu n, Exception e)
   => (Bool -> ThreadAction)
   -- ^ Action to include in the trace.
   -> ThreadId
@@ -641,7 +657,7 @@ stepThrow act tid e ctx@Context{..} = case propagate some tid cThreads of
     some = toException e
 
 -- | Helper for actions impose a write barrier.
-synchronised :: C.MonadConc n
+synchronised :: MonadDejaFu n
   => (Context n g -> n x)
   -- ^ Action to run after the write barrier.
   -> Context n g
@@ -674,7 +690,7 @@ unblockInvariants act ic = InvariantContext active blocked where
 
 -- | Check all active invariants, returning an arbitrary failure if
 -- multiple ones fail.
-checkInvariants :: C.MonadConc n
+checkInvariants :: MonadDejaFu n
   => InvariantContext n
   -> n (Either E.SomeException (InvariantContext n))
 checkInvariants ic = go (icActive ic) >>= \case
@@ -687,7 +703,7 @@ checkInvariants ic = go (icActive ic) >>= \case
     go [] = pure (Right [])
 
 -- | Check an invariant.
-checkInvariant :: C.MonadConc n
+checkInvariant :: MonadDejaFu n
   => Invariant n a
   -> n (Either E.SomeException ([IORefId], [MVarId], [TVarId]))
 checkInvariant inv = doInvariant inv >>= \case
@@ -695,13 +711,13 @@ checkInvariant inv = doInvariant inv >>= \case
   (Left exc, _, _, _) -> pure (Left exc)
 
 -- | Run an invariant (more primitive)
-doInvariant :: C.MonadConc n
+doInvariant :: MonadDejaFu n
   => Invariant n a
   -> n (Either E.SomeException a, [IORefId], [MVarId], [TVarId])
 doInvariant inv = do
     (c, ref) <- runRefCont IStop (Just . Right) (runInvariant inv)
     (iorefs, mvars, tvars) <- go ref c [] [] []
-    val <- C.readIORef ref
+    val <- readRef ref
     pure (efromJust val, nub iorefs, nub mvars, nub tvars)
   where
     go ref act iorefs mvars tvars = do
@@ -715,21 +731,21 @@ doInvariant inv = do
         Right Nothing ->
           pure (newIORefs, newMVars, newTVars)
         Left exc -> do
-          C.writeIORef ref (Just (Left exc))
+          writeRef ref (Just (Left exc))
           pure (newIORefs, newMVars, newTVars)
 
 -- | Run an invariant for one step
-stepInvariant :: C.MonadConc n
+stepInvariant :: MonadDejaFu n
   => IAction n
   -> n (Either E.SomeException (Maybe (IAction n)), [IORefId], [MVarId], [TVarId])
 stepInvariant (IInspectIORef ioref@ModelIORef{..} k) = do
   a <- readIORefGlobal ioref
   pure (Right (Just (k a)), [iorefId], [], [])
 stepInvariant (IInspectMVar ModelMVar{..} k) = do
-  a <- C.readIORef mvarRef
+  a <- readRef mvarRef
   pure (Right (Just (k a)), [], [mvarId], [])
 stepInvariant (IInspectTVar ModelTVar{..} k) = do
-  a <- C.readIORef tvarRef
+  a <- readRef tvarRef
   pure (Right (Just (k a)), [], [], [tvarId])
 stepInvariant (ICatch h nx k) = doInvariant nx >>= \case
   (Right a, iorefs, mvars, tvars) ->

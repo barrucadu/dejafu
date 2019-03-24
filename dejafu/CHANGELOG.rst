@@ -6,6 +6,67 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+
+2.1.0.0 (2019-03-24)
+--------------------
+
+* Git: :tag:`dejafu-2.1.0.0`
+* Hackage: :hackage:`dejafu-2.1.0.0`
+
+Added
+~~~~~
+
+* The ``Test.DejaFu.Types.MonadDejaFu`` typeclass, containing the
+  primitives needed to run a concurrent program.  There are instances
+  for:
+    * ``IO``, which is probably the ``MonadConc`` instance people used
+      previously, so there is no breaking change there.
+    * ``CatchT (ST t)``, meaning that concurrent programs can be run
+      without ``IO`` once more.
+
+* Thread action constructors for ``MonadConc``
+  ``supportsBoundThreads`` function:
+    * ``Test.DejaFu.Types.ThreadAction``, ``SupportsBoundThreads``
+    * ``Test.DejaFu.Types.Lookahead``, ``WillSupportsBoundThreads``
+
+Changed
+~~~~~~~
+
+* Many functions which had a ``MonadConc`` constraint now have a
+  ``MonadDejaFu`` constraint:
+    * In ``Test.DejaFu``
+        * ``autocheck``
+        * ``autocheckWay``
+        * ``autocheckWithSettings``
+        * ``dejafu``
+        * ``dejafuWay``
+        * ``dejafuWithSettings``
+        * ``dejafus``
+        * ``dejafusWay``
+        * ``dejafusWithSettings``
+        * ``runTest``
+        * ``runTestWay``
+        * ``runTestWithSettings``
+    * In ``Test.DejaFu.Conc``
+        * ``runConcurrent``
+        * ``recordSnapshot``
+        * ``runSnapshot``
+    * In ``Test.DejaFu.SCT``
+        * ``runSCT``
+        * ``resultsSet``
+        * ``runSCT'``
+        * ``resultsSet'``
+        * ``runSCTWithSettings``
+        * ``resultsSetWithSettings``
+        * ``runSCTWithSettings'``
+        * ``resultsSetWithSettings'``
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The version bound on :hackage:`concurrency` is >=1.7 and <1.8.
+
+
 2.0.0.1 (2019-03-14)
 --------------------
 
