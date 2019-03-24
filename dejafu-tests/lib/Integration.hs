@@ -4,6 +4,7 @@ import           Test.Tasty.Options         (OptionDescription)
 
 import qualified Integration.Async          as A
 import qualified Integration.Litmus         as L
+import qualified Integration.MonadDejaFu    as MD
 import qualified Integration.MultiThreaded  as M
 import qualified Integration.Names          as N
 import qualified Integration.Refinement     as R
@@ -19,6 +20,7 @@ tests =
   [ testGroup "Async"          A.tests
   , testGroup "Litmus"         L.tests
   , testGroup "MultiThreaded"  M.tests
+  , testGroup "MonadDejaFu"    MD.tests
   , testGroup "Names"          N.tests
   , testGroup "Refinement"     R.tests
   , testGroup "Regressions"    G.tests

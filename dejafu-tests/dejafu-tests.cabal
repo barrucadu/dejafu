@@ -23,13 +23,14 @@ library
 
                      , Integration
                      , Integration.Async
-                     , Integration.SingleThreaded
-                     , Integration.MultiThreaded
-                     , Integration.Refinement
                      , Integration.Litmus
+                     , Integration.MonadDejaFu
+                     , Integration.MultiThreaded
+                     , Integration.Names
+                     , Integration.Refinement
                      , Integration.Regressions
                      , Integration.SCT
-                     , Integration.Names
+                     , Integration.SingleThreaded
 
                      , Examples
                      , Examples.AutoUpdate
