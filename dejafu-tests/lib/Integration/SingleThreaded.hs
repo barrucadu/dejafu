@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Integration.SingleThreaded where
 
 import           Control.Exception         (ArithException(..),
@@ -12,6 +14,7 @@ import           Test.DejaFu               (Condition(..), gives, gives',
 import           Control.Concurrent.Classy
 import           Control.Monad             (replicateM_, when)
 import           Control.Monad.Catch       (throwM)
+import           Control.Monad.Fail        (MonadFail)
 import           Control.Monad.IO.Class    (liftIO)
 import qualified Data.IORef                as IORef
 import           Data.Maybe                (isNothing)
@@ -167,7 +170,7 @@ stmTests = toTestList
       (6==) <$> readTVarConc ctv
 
   , djfu "MonadSTM is a MonadFail" (alwaysFailsWith isUncaughtException)
-      (atomically $ fail "hello world" :: MonadConc m => m ())  -- avoid an ambiguous type
+      (atomically $ fail "hello world" :: (MonadConc m, MonadFail (STM m)) => m ())  -- avoid an ambiguous type
 
   , djfu "'retry' is not caught by 'catch'" (gives' [True]) $
       atomically
@@ -226,7 +229,7 @@ exceptionTests = toTestList
       catchArithException (throwTo tid Overflow >> pure False) (\_ -> pure True)
 
   , djfu "MonadConc is a MonadFail" (alwaysFailsWith isUncaughtException)
-      (fail "hello world" :: MonadConc m => m ())  -- avoid an ambiguous type
+      (fail "hello world" :: (MonadConc m, MonadFail m) => m ())  -- avoid an ambiguous type
   ]
 
 --------------------------------------------------------------------------------

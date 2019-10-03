@@ -5,11 +5,12 @@ import           Control.Concurrent.Classy.MVar
 import           Control.Monad.Catch            (mask_, onException,
                                                  uninterruptibleMask_)
 import           Control.Monad.Conc.Class       (MonadConc)
+import           Control.Monad.Fail             (MonadFail)
 import           Data.Maybe
 
 newtype QSemN m = QSemN (MVar m (Int, [(Int, MVar m ())], [(Int, MVar m ())]))
 
-newQSemN :: MonadConc m => Int -> m (QSemN m)
+newQSemN :: (MonadConc m, MonadFail m) => Int -> m (QSemN m)
 newQSemN initial
   | initial < 0 = fail "newQSemN: Initial quantity must be non-negative"
   | otherwise   = QSemN <$> newMVar (initial, [], [])
