@@ -16,6 +16,18 @@ Added
 * ``MonadFail`` instances for ``Control.Monad.Conc.Class.IsConc`` and
   ``Control.Monad.STM.IsSTM``.
 
+Changed
+~~~~~~~
+
+* Added ``MonadFail`` constraints to
+  ``Control.Concurrent.Classy.QSem.newQSem`` and
+  ``Control.Concurrent.Classy.QSemN.newQSemN``.
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* Fixed a compilation error with GHC 8.8
+
 
 1.7.0.0 (2019-03-24)
 --------------------

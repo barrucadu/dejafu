@@ -17,6 +17,7 @@ module Control.Concurrent.Classy.QSem
 
 import           Control.Concurrent.Classy.QSemN
 import           Control.Monad.Conc.Class        (MonadConc)
+import           Control.Monad.Fail              (MonadFail)
 
 -- | @QSem@ is a quantity semaphore in which the resource is acquired
 -- and released in units of one. It provides guaranteed FIFO ordering
@@ -35,7 +36,7 @@ newtype QSem m = QSem (QSemN m)
 -- quantity must be at least 0.
 --
 -- @since 1.0.0.0
-newQSem :: MonadConc m => Int -> m (QSem m)
+newQSem :: (MonadConc m, MonadFail m) => Int -> m (QSem m)
 newQSem initial
   | initial < 0 = fail "newQSem: Initial quantity mus tbe non-negative."
   | otherwise   = QSem <$> newQSemN initial
