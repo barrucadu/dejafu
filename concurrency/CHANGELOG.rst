@@ -7,6 +7,16 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Added
+~~~~~
+
+* ``MonadFail`` instances for ``Control.Monad.Conc.Class.IsConc`` and
+  ``Control.Monad.STM.IsSTM``.
+
+
 1.7.0.0 (2019-03-24)
 --------------------
 
