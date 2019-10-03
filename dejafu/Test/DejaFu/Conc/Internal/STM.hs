@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -11,7 +12,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : ExistentialQuantification, NoMonoLocalBinds, RecordWildCards, TypeFamilies
+-- Portability : CPP, ExistentialQuantification, NoMonoLocalBinds, RecordWildCards, TypeFamilies
 --
 -- 'MonadSTM' testing implementation, internal types and definitions.
 -- This module is NOT considered to form part of the public interface
@@ -51,7 +52,10 @@ instance Monad (ModelSTM n) where
     return  = pure
     m >>= k = ModelSTM $ \c -> runModelSTM m (\x -> runModelSTM (k x) c)
 
+#if MIN_VERSION_base(4,13,0)
+#else
     fail = Fail.fail
+#endif
 
 instance Fail.MonadFail (ModelSTM n) where
     fail e = ModelSTM $ \_ -> SThrow (MonadFailException e)

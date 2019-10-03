@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
@@ -8,7 +9,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : ExistentialQuantification, GADTs, RankNTypes
+-- Portability : CPP, ExistentialQuantification, GADTs, RankNTypes
 --
 -- Common types and utility functions for deterministic execution of
 -- 'MonadConc' implementations. This module is NOT considered to form
@@ -95,8 +96,12 @@ instance (pty ~ Basic) => Applicative (Program pty n) where
 
 instance (pty ~ Basic) => Monad (Program pty n) where
   return  = pure
-  fail    = Fail.fail
   m >>= k = ModelConc $ \c -> runModelConc m (\x -> runModelConc (k x) c)
+
+#if MIN_VERSION_base(4,13,0)
+#else
+  fail = Fail.fail
+#endif
 
 instance (pty ~ Basic) => Fail.MonadFail (Program pty n) where
   fail e = ModelConc $ \_ -> AThrow (MonadFailException e)
@@ -243,8 +248,12 @@ instance Applicative (Invariant n) where
 
 instance Monad (Invariant n) where
   return  = pure
-  fail    = Fail.fail
   m >>= k = Invariant $ \c -> runInvariant m (\x -> runInvariant (k x) c)
+
+#if MIN_VERSION_base(4,13,0)
+#else
+  fail = Fail.fail
+#endif
 
 instance Fail.MonadFail (Invariant n) where
   fail e = Invariant $ \_ -> IThrow (MonadFailException e)
