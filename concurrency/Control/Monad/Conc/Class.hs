@@ -793,7 +793,7 @@ labelMe n  = do
 newtype IsConc m a = IsConc { unIsConc :: m a }
   deriving (Functor, Applicative, Monad, MonadThrow, MonadCatch, MonadMask)
 
--- | @since unreleased
+-- | @since 1.8.0.0
 deriving instance MonadFail m => MonadFail (IsConc m)
 
 -- | Wrap an @m a@ value inside an @IsConc@ if @m@ has a @MonadConc@

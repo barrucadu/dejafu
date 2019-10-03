@@ -187,7 +187,7 @@ instance MonadSTM STM.STM where
 newtype IsSTM m a = IsSTM { unIsSTM :: m a }
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Ca.MonadThrow, Ca.MonadCatch)
 
--- | @since unreleased
+-- | @since 1.8.0.0
 deriving instance MonadFail m => MonadFail (IsSTM m)
 
 -- | Wrap an @m a@ value inside an @IsSTM@ if @m@ has a @MonadSTM@
