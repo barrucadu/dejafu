@@ -41,3 +41,9 @@
 - ignore: {name: Reduce duplication, within: Integration.MultiThreaded}
 - ignore: {name: Reduce duplication, within: Integration.SCT}
 - ignore: {name: Reduce duplication, within: Integration.SingleThreaded}
+
+# These are tests of the laws
+- ignore: {name: "Use <$>", within: Examples.ClassLaws}
+- ignore: {name: "Alternative law, right identity", within: Examples.ClassLaws}
+- ignore: {name: "Alternative law, left identity", within: Examples.ClassLaws}
+- ignore: {name: "Monoid law, right identity", within: Unit.Properties}
