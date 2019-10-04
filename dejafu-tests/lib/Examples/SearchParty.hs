@@ -19,6 +19,7 @@ import           Control.Concurrent.Classy.STM.TMVar (TMVar, isEmptyTMVar,
                                                       tryTakeTMVar)
 import           Control.Monad                       (unless, when)
 import           Control.Monad.Conc.Class
+import qualified Control.Monad.Fail                  as F
 import           Control.Monad.STM.Class
 import           Data.Functor                        (void)
 import           Data.Maybe                          (fromJust, isNothing)
@@ -91,15 +92,16 @@ instance MonadConc m => Applicative (Find m) where
 instance MonadConc m => Monad (Find m) where
   return = pure
 
-  fail _ = Find $ workItem' Nothing
-
   (Find mf) >>= g = Find $ do
     f   <- mf
     res <- result f
 
-    case res of
-      Just a  -> unFind $ g a
-      Nothing -> fail ""
+    unFind $ case res of
+      Just a  -> g a
+      Nothing -> F.fail ""
+
+instance MonadConc m => F.MonadFail (Find m) where
+    fail _ = Find $ workItem' Nothing
 
 --------------------------------------------------------------------------------
 -- Execution

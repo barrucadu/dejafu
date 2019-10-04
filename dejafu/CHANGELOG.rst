@@ -7,6 +7,19 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+2.1.0.1 (2019-10-04)
+--------------------
+
+* Git: :tag:`dejafu-2.1.0.1`
+* Hackage: :hackage:`dejafu-2.1.0.1`
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* Fixed a compilation error with GHC 8.8
+* The upper version bound on :hackage:`concurrency` is <1.9.
+
+
 2.1.0.0 (2019-03-24)
 --------------------
 

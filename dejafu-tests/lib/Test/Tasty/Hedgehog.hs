@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 {-
@@ -159,13 +160,21 @@ instance IsOption HedgehogShrinkRetries where
   optionName = pure "hedgehog-retries"
   optionHelp = pure "Number of times to re-run a test during shrinking"
 
+getReport :: Report a -> (TestCount, a)
+#if MIN_VERSION_hedgehog(1,0,0)
+getReport (Report testCount _ _ status) = (testCount, status)
+#else
+getReport (Report testCount _ status) = (testCount, status)
+#endif
+
 reportToProgress :: Int
                  -> Int
                  -> Int
                  -> Report Progress
                  -> T.Progress
-reportToProgress testLimit _ shrinkLimit (Report testsDone _ status) =
+reportToProgress testLimit _ shrinkLimit report =
   let
+    (testsDone, status) = getReport report
     ratio x y = 1.0 * fromIntegral x / fromIntegral y
   in
     -- TODO add details for tests run / discarded / shrunk
@@ -180,7 +189,8 @@ reportOutput :: Bool
              -> String
              -> Report Result
              -> IO String
-reportOutput _ showReplay name report@(Report _ _ status) = do
+reportOutput _ showReplay name report = do
+  let (_, status) = getReport report
   -- TODO add details for tests run / discarded / shrunk
   s <- renderResult Nothing (Just (PropertyName name)) report
   pure $ case status of

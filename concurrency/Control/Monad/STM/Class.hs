@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- |
@@ -9,7 +10,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, RankNTypes, TemplateHaskell, TypeFamilies
+-- Portability : CPP, RankNTypes, StandaloneDeriving, TemplateHaskell, TypeFamilies
 --
 -- This module provides an abstraction over 'STM', which can be used
 -- with 'MonadConc'.
@@ -62,6 +63,7 @@ module Control.Monad.STM.Class
 import           Control.Applicative          (Alternative(..))
 import           Control.Exception            (Exception)
 import           Control.Monad                (MonadPlus(..), unless)
+import           Control.Monad.Fail           (MonadFail(..))
 import           Control.Monad.Reader         (ReaderT)
 import           Control.Monad.Trans          (lift)
 import           Control.Monad.Trans.Identity (IdentityT)
@@ -184,6 +186,9 @@ instance MonadSTM STM.STM where
 -- @since 1.2.2.0
 newtype IsSTM m a = IsSTM { unIsSTM :: m a }
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, Ca.MonadThrow, Ca.MonadCatch)
+
+-- | @since 1.8.0.0
+deriving instance MonadFail m => MonadFail (IsSTM m)
 
 -- | Wrap an @m a@ value inside an @IsSTM@ if @m@ has a @MonadSTM@
 -- instance.

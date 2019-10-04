@@ -7,6 +7,31 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.8.0.0 (2019-10-04)
+--------------------
+
+* Git: :tag:`concurrency-1.8.0.0`
+* Hackage: :hackage:`concurrency-1.8.0.0`
+
+Added
+~~~~~
+
+* ``MonadFail`` instances for ``Control.Monad.Conc.Class.IsConc`` and
+  ``Control.Monad.STM.IsSTM``.
+
+Changed
+~~~~~~~
+
+* Added ``MonadFail`` constraints to
+  ``Control.Concurrent.Classy.QSem.newQSem`` and
+  ``Control.Concurrent.Classy.QSemN.newQSemN``.
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* Fixed a compilation error with GHC 8.8
+
+
 1.7.0.0 (2019-03-24)
 --------------------
 

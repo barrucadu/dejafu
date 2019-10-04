@@ -4,6 +4,7 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- |
@@ -12,7 +13,7 @@
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
--- Portability : CPP, FlexibleContexts, PolyKinds, RankNTypes, ScopedTypeVariables, TypeFamilies
+-- Portability : CPP, FlexibleContexts, PolyKinds, RankNTypes, ScopedTypeVariables, StandaloneDeriving, TypeFamilies
 --
 -- This module captures in a typeclass the interface of concurrency
 -- monads.
@@ -94,6 +95,7 @@ import           Control.Exception            (AsyncException(ThreadKilled),
 import           Control.Monad.Catch          (MonadCatch, MonadMask,
                                                MonadThrow)
 import qualified Control.Monad.Catch          as Ca
+import           Control.Monad.Fail           (MonadFail(..))
 import           Control.Monad.STM.Class      (IsSTM, MonadSTM, TVar, fromIsSTM,
                                                readTVar)
 import           Control.Monad.Trans.Control  (MonadTransControl, StT, liftWith)
@@ -790,6 +792,9 @@ labelMe n  = do
 -- @since 1.2.2.0
 newtype IsConc m a = IsConc { unIsConc :: m a }
   deriving (Functor, Applicative, Monad, MonadThrow, MonadCatch, MonadMask)
+
+-- | @since 1.8.0.0
+deriving instance MonadFail m => MonadFail (IsConc m)
 
 -- | Wrap an @m a@ value inside an @IsConc@ if @m@ has a @MonadConc@
 -- instance.
