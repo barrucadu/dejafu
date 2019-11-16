@@ -7,6 +7,19 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.8.1.0 (2019-11-16)
+====================
+
+* Git: :tag:`concurrency-1.8.1.0`
+* Hackage: :hackage:`concurrency-1.8.1.0`
+
+Added
+~~~~~
+
+* (:issue:`303`) ``Control.Monad.Conc.Class.newTVarConc``, with a
+  default implementation of ``atomically . newTVar``.
+
+
 1.8.0.0 (2019-10-04)
 --------------------
 
