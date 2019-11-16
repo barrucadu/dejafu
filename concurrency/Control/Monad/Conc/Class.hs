@@ -9,7 +9,7 @@
 
 -- |
 -- Module      : Control.Monad.Conc.Class
--- Copyright   : (c) 2016--2018 Michael Walker
+-- Copyright   : (c) 2016--2019 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -97,7 +97,7 @@ import           Control.Monad.Catch          (MonadCatch, MonadMask,
 import qualified Control.Monad.Catch          as Ca
 import           Control.Monad.Fail           (MonadFail(..))
 import           Control.Monad.STM.Class      (IsSTM, MonadSTM, TVar, fromIsSTM,
-                                               readTVar)
+                                               newTVar, readTVar)
 import           Control.Monad.Trans.Control  (MonadTransControl, StT, liftWith)
 import           Data.Proxy                   (Proxy(..))
 
@@ -472,6 +472,14 @@ class ( Monad m
   -- @since 1.0.0.0
   atomically :: STM m a -> m a
 
+  -- | Create a @TVar@. This may be implemented differently for speed.
+  --
+  -- > newTVarConc = atomically . newTVar
+  --
+  -- @since unreleased
+  newTVarConc :: a -> m (TVar (STM m) a)
+  newTVarConc = atomically . newTVar
+
   -- | Read the current value stored in a @TVar@. This may be
   -- implemented differently for speed.
   --
@@ -774,6 +782,7 @@ instance MonadConc IO where
   casIORef            = IO.casIORef
   modifyIORefCAS      = IO.atomicModifyIORefCAS
   atomically          = IO.atomically
+  newTVarConc         = IO.newTVarIO
   readTVarConc        = IO.readTVarIO
 
 -- | Label the current thread, if the given label is nonempty.
@@ -852,6 +861,7 @@ instance MonadConc m => MonadConc (IsConc m) where
   modifyIORefCAS r    = toIsConc . modifyIORefCAS r
   modifyIORefCAS_ r   = toIsConc . modifyIORefCAS_ r
   atomically          = toIsConc . atomically . fromIsSTM
+  newTVarConc         = toIsConc . newTVarConc
   readTVarConc        = toIsConc . readTVarConc
 
 -------------------------------------------------------------------------------
@@ -901,6 +911,7 @@ instance C => MonadConc (T m) where                            { \
   modifyIORefCAS r    = lift . modifyIORefCAS r                ; \
   modifyIORefCAS_ r   = lift . modifyIORefCAS_ r               ; \
   atomically          = lift . atomically                      ; \
+  newTVarConc         = lift . newTVarConc                     ; \
   readTVarConc        = lift . readTVarConc                    }
 
 -- | New threads inherit the reader state of their parent, but do not

@@ -7,6 +7,16 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+==========
+
+Added
+~~~~~
+
+* (:issue:`303`) ``Control.Monad.Conc.Class.newTVarConc``, with a
+  default implementation of ``atomically . newTVar``.
+
+
 1.8.0.0 (2019-10-04)
 --------------------
 
