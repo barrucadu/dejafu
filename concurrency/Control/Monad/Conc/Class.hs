@@ -476,7 +476,7 @@ class ( Monad m
   --
   -- > newTVarConc = atomically . newTVar
   --
-  -- @since unreleased
+  -- @since 1.8.1.0
   newTVarConc :: a -> m (TVar (STM m) a)
   newTVarConc = atomically . newTVar
 
