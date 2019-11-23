@@ -25,11 +25,12 @@ import           Data.List.NonEmpty   (toList)
 import           Data.Map.Strict      (Map)
 import qualified Data.Map.Strict      as M
 import           Data.Maybe           (isJust, isNothing, listToMaybe,
-                                       maybeToList)
+                                       mapMaybe, maybeToList)
 import           Data.Sequence        (Seq, (|>))
 import qualified Data.Sequence        as Sq
 import           Data.Set             (Set)
 import qualified Data.Set             as S
+import qualified Data.Vector          as V
 import           GHC.Generics         (Generic)
 import           GHC.Stack            (HasCallStack)
 
@@ -246,7 +247,7 @@ findBacktrackSteps
   -> Trace
   -- ^ The execution trace.
   -> [BacktrackStep]
-findBacktrackSteps safeIO memtype backtrack boundKill state0 = go state0 S.empty initialThread [] . F.toList where
+findBacktrackSteps safeIO memtype backtrack boundKill state0 = go state0 S.empty initialThread V.empty . F.toList where
   -- Walk through the traces one step at a time, building up a list of
   -- new backtracking points.
   go state allThreads tid bs ((e,i):is) ((d,_,a):ts) =
@@ -260,32 +261,33 @@ findBacktrackSteps safeIO memtype backtrack boundKill state0 = go state0 S.empty
           , bcktBacktracks = M.fromList $ map (\i' -> (i', False)) i
           , bcktState      = state
           }
-        bs' = doBacktrack killsEarly allThreads' e (bs++[this])
+        bs' = doBacktrack killsEarly allThreads' e (V.snoc bs this)
         runnable = S.fromList (M.keys $ bcktRunnable this)
         allThreads' = allThreads `S.union` runnable
         killsEarly = null ts && boundKill
     in go state' allThreads' tid' bs' is ts
-  go _ _ _ bs _ _ = bs
+  go _ _ _ bs _ _ = V.toList bs
 
   -- Find the prior actions dependent with this one and add
   -- backtracking points.
   doBacktrack killsEarly allThreads enabledThreads bs =
-    let tagged = reverse $ zip [0..] bs
-        idxs   = [ (i, False, u)
+    let idxs   = [ (i, False, u)
                  | (u, n) <- enabledThreads
                  , v <- S.toList allThreads
                  , u /= v
-                 , i <- maybeToList (findIndex u n v tagged)]
+                 , i <- maybeToList (findIndex u n v (V.length bs - 1))]
 
         findIndex u n v = go' where
           {-# INLINE go' #-}
-          go' ((i,b):rest)
+          go' (-1) = Nothing
+          go' i =
+            let b = bs V.! i
             -- If this is the final action in the trace and the
             -- execution was killed due to nothing being within bounds
             -- (@killsEarly == True@) assume worst-case dependency.
-            | bcktThreadid b == v && (killsEarly || isDependent b) = Just i
-            | otherwise = go' rest
-          go' [] = Nothing
+            in if bcktThreadid b == v && (killsEarly || isDependent b)
+               then Just i
+               else go' (i-1)
 
           {-# INLINE isDependent #-}
           isDependent b
@@ -392,7 +394,7 @@ type IncrementalBoundFunc k
 -- backtracking points, and then use @backtrackAt@ to do the actual
 -- work.
 type BacktrackFunc
-  = [BacktrackStep] -> [(Int, Bool, ThreadId)] -> [BacktrackStep]
+  = V.Vector BacktrackStep -> [(Int, Bool, ThreadId)] -> V.Vector BacktrackStep
 
 -- | Add a backtracking point. If the thread isn't runnable, add all
 -- runnable threads. If the backtracking point is already present,
@@ -405,29 +407,21 @@ backtrackAt :: HasCallStack
 backtrackAt toAll bs0 = backtrackAt' . nubBy ((==) `on` fst') . sortOn fst' where
   fst' (x,_,_) = x
 
-  backtrackAt' ((i,c,t):is) = go i bs0 i c t is
-  backtrackAt' [] = bs0
+  backtrackAt' is = bs0 V.// mapMaybe go is
 
-  go i0 (b:bs) 0 c tid is
-    -- If the backtracking point is already present, don't re-add it,
-    -- UNLESS this would force it to backtrack (it's conservative)
-    -- where before it might not.
-    | not (toAll tid b) && tid `M.member` bcktRunnable b =
-      let val = M.lookup tid $ bcktBacktracks b
-          b' = if isNothing val || (val == Just False && c)
-            then b { bcktBacktracks = backtrackTo tid c b }
-            else b
-      in b' : case is of
-        ((i',c',t'):is') -> go i' bs (i'-i0-1) c' t' is'
-        [] -> bs
-    -- Otherwise just backtrack to everything runnable.
-    | otherwise =
-      let b' = b { bcktBacktracks = backtrackAll c b }
-      in b' : case is of
-        ((i',c',t'):is') -> go i' bs (i'-i0-1) c' t' is'
-        [] -> bs
-  go i0 (b:bs) i c tid is = b : go i0 bs (i-1) c tid is
-  go _ [] _ _ _ _ = fatal "ran out of schedule whilst backtracking!"
+  go (i,c,t) =
+    let b = bs0 V.! i
+    in if not (toAll t b) && t `M.member` bcktRunnable b
+       -- If the backtracking point is already present, don't re-add
+       -- it, UNLESS this would force it to backtrack (it's
+       -- conservative) where before it might not.
+       then
+         let val = M.lookup t $ bcktBacktracks b
+         in if isNothing val || (val == Just False && c)
+            then Just (i, b { bcktBacktracks = backtrackTo t c b })
+            else Nothing
+       -- Otherwise just backtrack to everything runnable.
+       else Just (i, b { bcktBacktracks = backtrackAll c b })
 
   -- Backtrack to a single thread
   backtrackTo tid c = M.insert tid c . bcktBacktracks

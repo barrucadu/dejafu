@@ -29,6 +29,7 @@ import qualified Data.Map.Strict                   as M
 import           Data.Maybe                        (fromMaybe)
 import           Data.Set                          (Set)
 import qualified Data.Set                          as S
+import qualified Data.Vector                       as V
 
 import           Test.DejaFu.Conc
 import           Test.DejaFu.Internal
@@ -225,19 +226,24 @@ cBacktrack :: Bounds -> BacktrackFunc
 cBacktrack (Bounds (Just _) _) bs =
     backtrackAt (\_ _ -> False) bs . concatMap addConservative
   where
+    lbs = V.toList bs
+
     addConservative o@(i, _, tid) = o : case conservative i of
       Just j  -> [(j, True, tid)]
       Nothing -> []
 
     -- index of conservative point
-    conservative i = go (reverse (take (i-1) bs)) (i-1) where
-      go _ (-1) = Nothing
-      go (b1:rest@(b2:_)) j
-        | bcktThreadid b1 /= bcktThreadid b2
-          && not (isCommitRef $ bcktAction b1)
-          && not (isCommitRef $ bcktAction b2) = Just j
-        | otherwise = go rest (j-1)
-      go _ _ = Nothing
+    conservative i = go (i-2) where
+      go j
+        | j < 1 = Nothing
+        | otherwise =
+          let b1 = bs V.! j
+              b2 = bs V.! (j-1)
+          in if bcktThreadid b1 /= bcktThreadid b2
+                && not (isCommitRef $ bcktAction b1)
+                && not (isCommitRef $ bcktAction b2)
+             then Just (j+1)
+             else go (j-1)
 cBacktrack _ bs = backtrackAt (\_ _ -> False) bs
 
 -------------------------------------------------------------------------------
