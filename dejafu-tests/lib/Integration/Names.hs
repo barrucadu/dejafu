@@ -93,7 +93,7 @@ testTVarNames =
     checkTVars =
       let validTVar =
             maybe False (`elem` [tvarName1, tvarName2]) . tvarName
-      in all (all validTVar) . map tvarsOf
+      in all (all validTVar . tvarsOf)
 
 testThreadNames :: Assertion
 testThreadNames =
@@ -113,4 +113,4 @@ testThreadNames =
       let validTid =
             maybe False (`elem` [threadName1, threadName2, threadName3]) .
             threadName
-      in all (all validTid) . map tidsOf
+      in all (all validTid . tidsOf)

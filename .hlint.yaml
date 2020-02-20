@@ -37,6 +37,7 @@
 # I don't think these help.
 - ignore: {name: Avoid lambda, within: Integration.Refinement}
 - ignore: {name: Reduce duplication, within: Unit.Properties}
+- ignore: {name: Use nonTermination, within: Unit.Properties}
 - ignore: {name: Reduce duplication, within: Integration.Litmus}
 - ignore: {name: Reduce duplication, within: Integration.MultiThreaded}
 - ignore: {name: Reduce duplication, within: Integration.SCT}
@@ -44,6 +45,7 @@
 
 # These are tests of the laws
 - ignore: {name: "Use <$>", within: Examples.ClassLaws}
+- ignore: {name: "Use fmap", within: Examples.ClassLaws}
 - ignore: {name: "Alternative law, right identity", within: Examples.ClassLaws}
 - ignore: {name: "Alternative law, left identity", within: Examples.ClassLaws}
 - ignore: {name: "Monoid law, right identity", within: Unit.Properties}
