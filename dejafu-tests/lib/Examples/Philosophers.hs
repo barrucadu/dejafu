@@ -33,7 +33,7 @@ settings = set llengthBound (Just 30) defaultSettings
 philosophers :: MonadConc m => Int -> m ()
 philosophers n = do
   forks <- replicateM n newEmptyMVar
-  let phils = map (\(i,p) -> p i forks) $ zip [0..] $ replicate n philosopher
+  let phils = zipWith (\i p -> p i forks) [0..] (replicate n philosopher)
   cvars <- mapM spawn phils
   mapM_ takeMVar cvars
 

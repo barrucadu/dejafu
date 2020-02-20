@@ -29,7 +29,7 @@ module Control.Concurrent.Classy.STM.TMVar
   , swapTMVar
   ) where
 
-import           Control.Monad           (liftM, unless, when)
+import           Control.Monad           (unless, when)
 import           Control.Monad.STM.Class
 import           Data.Maybe              (isJust, isNothing)
 
@@ -131,7 +131,7 @@ tryReadTMVar (TMVar ctvar) = readTVar ctvar
 --
 -- @since 1.0.0.0
 isEmptyTMVar :: MonadSTM stm => TMVar stm a -> stm Bool
-isEmptyTMVar ctmvar = isNothing `liftM` tryReadTMVar ctmvar
+isEmptyTMVar ctmvar = isNothing <$> tryReadTMVar ctmvar
 
 -- | Swap the contents of a 'TMVar' returning the old contents, or
 -- 'retry' if it is empty.

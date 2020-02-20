@@ -68,12 +68,14 @@ module Test.Tasty.Hedgehog (
   , HedgehogShrinkRetries(..)
   ) where
 
+import           Control.Monad.IO.Class     (MonadIO)
 import           Data.Typeable
 
 import           Test.Tasty.Options
 import qualified Test.Tasty.Providers       as T
 
 import           Hedgehog
+import           Hedgehog.Internal.Config   (UseColor(EnableColor))
 import           Hedgehog.Internal.Property
 import           Hedgehog.Internal.Report
 import           Hedgehog.Internal.Runner   as H
@@ -184,6 +186,13 @@ reportToProgress testLimit _ shrinkLimit report =
       Shrinking fr ->
         T.Progress "Shrinking" (ratio (failureShrinks fr) shrinkLimit)
 
+renderResult' :: MonadIO m => Maybe PropertyName -> Report Result -> m String
+#if MIN_VERSION_hedgehog(1,0,2)
+renderResult' = renderResult EnableColor
+#else
+renderResult' = renderResult (Just EnableColor)
+#endif
+
 reportOutput :: Bool
              -> Bool
              -> String
@@ -192,7 +201,7 @@ reportOutput :: Bool
 reportOutput _ showReplay name report = do
   let (_, status) = getReport report
   -- TODO add details for tests run / discarded / shrunk
-  s <- renderResult Nothing (Just (PropertyName name)) report
+  s <- renderResult' (Just (PropertyName name)) report
   pure $ case status of
     Failed fr -> do
       let
@@ -205,6 +214,23 @@ reportOutput _ showReplay name report = do
       s ++ replayStr
     GaveUp -> "Gave up"
     OK -> "OK"
+
+propertyConfig' :: TestLimit -> DiscardLimit -> ShrinkLimit -> ShrinkRetries -> PropertyConfig
+#if MIN_VERSION_hedgehog(1,0,2)
+propertyConfig' testLimit discardLimit shrinkLimit shrinkRetries = PropertyConfig
+  { propertyDiscardLimit        = discardLimit
+  , propertyShrinkLimit         = shrinkLimit
+  , propertyShrinkRetries       = shrinkRetries
+  , propertyTerminationCriteria = NoConfidenceTermination testLimit
+  }
+#else
+propertyConfig' testLimit discardLimit shrinkLimit shrinkRetries = PropertyConfig
+  { propertyDiscardLimit  = discardLimit
+  , propertyShrinkLimit   = shrinkLimit
+  , propertyShrinkRetries = shrinkRetries
+  , propertyTestLimit     = testLimit
+  }
+#endif
 
 instance T.IsTest HP where
   testOptions =
@@ -226,8 +252,7 @@ instance T.IsTest HP where
       HedgehogDiscardLimit discards = lookupOption opts
       HedgehogShrinkLimit   shrinks = lookupOption opts
       HedgehogShrinkRetries retries = lookupOption opts
-      config =
-        PropertyConfig
+      config = propertyConfig'
           (TestLimit tests)
           (DiscardLimit discards)
           (ShrinkLimit shrinks)
