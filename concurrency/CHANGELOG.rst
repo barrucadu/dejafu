@@ -6,6 +6,16 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+unreleased
+==========
+
+Changed
+~~~~~~~
+
+* (:issue:`286`) Pulled in changes from :hackage:`stm-2.5.0.0` package:
+
+  * Changed ``newTBQueue`` to accept ``Natural`` as a size.
+  * Changed ``lengthTBQueue`` to return a ``Natural``.
 
 1.8.1.0 (2019-11-16)
 ====================
