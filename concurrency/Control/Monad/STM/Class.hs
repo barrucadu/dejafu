@@ -43,9 +43,7 @@
 -- here.
 --
 -- __Deviations:__ An instance of @MonadSTM@ is not required to be a
--- @MonadFix@, unlike @STM@. The @always@ and @alwaysSucceeds@
--- functions are not provided; if you need these file an issue and
--- I'll look into it.
+-- @MonadFix@, unlike @STM@.
 module Control.Monad.STM.Class
   ( MonadSTM(..)
   , retry

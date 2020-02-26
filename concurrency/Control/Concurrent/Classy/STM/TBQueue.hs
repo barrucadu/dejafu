@@ -36,23 +36,24 @@ module Control.Concurrent.Classy.STM.TBQueue
   ) where
 
 import           Control.Monad.STM.Class
+import           Numeric.Natural
 
 -- | 'TBQueue' is an abstract type representing a bounded FIFO
 -- channel.
 --
--- @since 1.0.0.0
+-- @since 1.9.0.0
 data TBQueue stm a
-   = TBQueue (TVar stm Int)
+   = TBQueue (TVar stm Natural)
              (TVar stm [a])
-             (TVar stm Int)
+             (TVar stm Natural)
              (TVar stm [a])
-             {-# UNPACK #-} !Int
+             !Natural
 
--- | Build and returns a new instance of 'TBQueue'
+-- | Builds and returns a new instance of 'TBQueue'
 --
--- @since 1.0.0.0
+-- @since 1.9.0.0
 newTBQueue :: MonadSTM stm
-  => Int   -- ^ maximum number of elements the queue can hold
+  => Natural -- ^ maximum number of elements the queue can hold
   -> stm (TBQueue stm a)
 newTBQueue size = do
   readT  <- newTVar []
@@ -67,11 +68,11 @@ newTBQueue size = do
 writeTBQueue :: MonadSTM stm => TBQueue stm a -> a -> stm ()
 writeTBQueue (TBQueue rsize _ wsize writeT _) a = do
   w <- readTVar wsize
-  if w /= 0
+  if w > 0
   then writeTVar wsize $! w - 1
   else do
     r <- readTVar rsize
-    if r /= 0
+    if r > 0
     then do
       writeTVar rsize 0
       writeTVar wsize $! r - 1
@@ -130,10 +131,20 @@ flushTBQueue (TBQueue rsize r wsize w size) = do
 --
 -- @since 1.0.0.0
 peekTBQueue :: MonadSTM stm => TBQueue stm a -> stm a
-peekTBQueue c = do
-  x <- readTBQueue c
-  unGetTBQueue c x
-  pure x
+peekTBQueue (TBQueue _ readT _ writeT _) = do
+  xs <- readTVar readT
+  case xs of
+    (x:_) -> pure x
+    [] -> do
+      ys <- readTVar writeT
+      case ys of
+        [] -> retry
+        _  -> do
+          let (z:zs) = reverse ys -- NB. lazy: we want the transaction to be
+                                  -- short, otherwise it will conflict
+          writeTVar writeT []
+          writeTVar readT (z:zs)
+          pure z
 
 -- | A version of 'peekTBQueue' which does not retry. Instead it
 -- returns @Nothing@ if no value is available.
@@ -167,8 +178,8 @@ unGetTBQueue (TBQueue rsize readT wsize _ _) a = do
 
 -- |Return the length of a 'TBQueue'.
 --
--- @since 1.6.1.0
-lengthTBQueue :: MonadSTM stm => TBQueue stm a -> stm Int
+-- @since 1.9.0.0
+lengthTBQueue :: MonadSTM stm => TBQueue stm a -> stm Natural
 lengthTBQueue (TBQueue rsize _ wsize _ size) = do
   r <- readTVar rsize
   w <- readTVar wsize
