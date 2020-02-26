@@ -116,6 +116,8 @@ Changed
     * Make definition of ``readTQueue`` consistent with
       ``readTBQueue``
 
+    * Performance improvements to ``peekTQueue`` and ``peekTBQueue``.
+
 Miscellaneous
 ~~~~~~~~~~~~~
 

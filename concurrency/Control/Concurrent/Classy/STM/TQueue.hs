@@ -108,10 +108,20 @@ flushTQueue (TQueue r w) = do
 --
 -- @since 1.0.0.0
 peekTQueue :: MonadSTM stm => TQueue stm a -> stm a
-peekTQueue c = do
-  x <- readTQueue c
-  unGetTQueue c x
-  pure x
+peekTQueue (TQueue readT writeT) = do
+  xs <- readTVar readT
+  case xs of
+    (x:_) -> pure x
+    [] -> do
+      ys <- readTVar writeT
+      case ys of
+        [] -> retry
+        _  -> do
+          let (z:zs) = reverse ys -- NB. lazy: we want the transaction to be
+                                  -- short, otherwise it will conflict
+          writeTVar writeT []
+          writeTVar readT (z:zs)
+          pure z
 
 -- | A version of 'peekTQueue' which does not retry. Instead it
 -- returns @Nothing@ if no value is available.
