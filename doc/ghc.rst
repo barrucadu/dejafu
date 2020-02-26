@@ -1,9 +1,9 @@
 Supported GHC Versions
 ======================
 
-Déjà Fu supports the latest four GHC releases, after GHC 8.0.  For
-testing purposes, we use Stackage LTSes as a proxy for GHC versions.
-The currently supported versions are:
+Déjà Fu supports the latest four GHC releases, at least.  For testing
+purposes, we use Stackage LTSes as a proxy for GHC versions.  The
+currently supported versions are:
 
 .. csv-table::
    :header: "GHC", "Stackage", "base"
