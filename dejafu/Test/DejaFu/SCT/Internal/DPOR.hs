@@ -75,7 +75,7 @@ validateDPOR dpor
     | not (todo `S.isSubsetOf` runnable) = fatal "thread exists in todo set but not runnable set"
     | not (done `S.isSubsetOf` runnable) = fatal "thread exists in done set but not runnable set"
     | not (taken `S.isSubsetOf` done) = fatal "thread exists in taken set but not done set"
-    | not (todo `disjoint` done) = fatal "thread exists in both taken set and done set"
+    | not (todo `disjoint` done) = fatal "thread exists in both todo set and done set"
     | not (maybe True (`S.member` done) next) = fatal "taken thread does not exist in done set"
     | otherwise = dpor
   where
@@ -166,14 +166,14 @@ incorporateTrace :: HasCallStack
   -- ^ The initial concurrency state
   -> DPOR
   -> DPOR
-incorporateTrace safeIO memtype conservative trace state0 dpor0 = grow state0 (initialDPORThread dpor0) trace dpor0 where
-  grow state tid trc@((d, _, a):rest) dpor =
+incorporateTrace safeIO memtype conservative = grow initialThread where
+  grow tid trc@((d, _, a):rest) state dpor =
     let tid'   = tidOf tid d
         state' = updateCState memtype state tid' a
     in case dporNext dpor of
          Just (t, child)
            | t == tid' ->
-             validateDPOR $ dpor { dporNext = Just (tid', grow state' tid' rest child) }
+             validateDPOR $ dpor { dporNext = Just (tid', grow tid' rest state' child) }
            | hasTodos child -> fatal "replacing child with todos!"
          _ -> validateDPOR $
            let taken = M.insert tid' a (dporTaken dpor)
@@ -183,7 +183,7 @@ incorporateTrace safeIO memtype conservative trace state0 dpor0 = grow state0 (i
                    , dporNext  = Just (tid', subtree state' tid' sleep trc)
                    , dporDone  = S.insert tid' (dporDone dpor)
                    }
-  grow _ _ [] _ = fatal "trace exhausted without reading a to-do point!"
+  grow _ _ _ _ = fatal "trace exhausted without reading a to-do point!"
 
   -- check if there are to-do points in a tree
   hasTodos dpor = not (M.null (dporTodo dpor)) || (case dporNext dpor of Just (_, dpor') -> hasTodos dpor'; _ -> False)
@@ -210,7 +210,7 @@ incorporateTrace safeIO memtype conservative trace state0 dpor0 = grow state0 (i
           ((d', _, a'):_) -> M.singleton (tidOf tid d') a'
           [] -> M.empty
         }
-  subtree _ _ _ [] = fatal "subtree suffix empty!"
+  subtree _ _ _ _ = fatal "subtree suffix empty!"
 
 -- | Produce a list of new backtracking points from an execution
 -- trace. These are then used to inform new \"to-do\" points in the
@@ -673,10 +673,6 @@ dependentActions ds a1 a2 = case (a1, a2) of
 
 -------------------------------------------------------------------------------
 -- * Utilities
-
--- The initial thread of a DPOR tree.
-initialDPORThread :: DPOR -> ThreadId
-initialDPORThread = S.elemAt 0 . dporRunnable
 
 -- | Check if a thread yielded.
 didYield :: ThreadAction -> Bool
