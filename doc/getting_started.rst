@@ -28,7 +28,7 @@ There are a few different packages under the Déjà Fu umbrella:
    :header: "Package", "Version", "Summary"
 
    ":hackage:`concurrency`",  "1.9.0.0",  "Typeclasses, functions, and data types for concurrency and STM"
-   ":hackage:`dejafu`",       "2.1.0.2", "Systematic testing for Haskell concurrency"
+   ":hackage:`dejafu`",       "2.1.0.3", "Systematic testing for Haskell concurrency"
    ":hackage:`hunit-dejafu`", "2.0.0.1",  "Déjà Fu support for the HUnit test framework"
    ":hackage:`tasty-dejafu`", "2.0.0.1",  "Déjà Fu support for the tasty test framework"
 
