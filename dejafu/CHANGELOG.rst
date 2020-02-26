@@ -6,6 +6,14 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+unreleased
+----------
+
+Fixed
+~~~~~
+
+* Fixed an internal error message.
+
 
 2.1.0.2 (2020-02-29)
 --------------------

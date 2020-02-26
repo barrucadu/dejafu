@@ -75,7 +75,7 @@ validateDPOR dpor
     | not (todo `S.isSubsetOf` runnable) = fatal "thread exists in todo set but not runnable set"
     | not (done `S.isSubsetOf` runnable) = fatal "thread exists in done set but not runnable set"
     | not (taken `S.isSubsetOf` done) = fatal "thread exists in taken set but not done set"
-    | not (todo `disjoint` done) = fatal "thread exists in both taken set and done set"
+    | not (todo `disjoint` done) = fatal "thread exists in both todo set and done set"
     | not (maybe True (`S.member` done) next) = fatal "taken thread does not exist in done set"
     | otherwise = dpor
   where
