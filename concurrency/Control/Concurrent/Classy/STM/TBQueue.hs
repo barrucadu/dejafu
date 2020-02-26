@@ -41,7 +41,7 @@ import           Numeric.Natural
 -- | 'TBQueue' is an abstract type representing a bounded FIFO
 -- channel.
 --
--- @since unreleased
+-- @since 1.9.0.0
 data TBQueue stm a
    = TBQueue (TVar stm Natural)
              (TVar stm [a])
@@ -51,7 +51,7 @@ data TBQueue stm a
 
 -- | Builds and returns a new instance of 'TBQueue'
 --
--- @since unreleased
+-- @since 1.9.0.0
 newTBQueue :: MonadSTM stm
   => Natural -- ^ maximum number of elements the queue can hold
   -> stm (TBQueue stm a)
@@ -178,7 +178,7 @@ unGetTBQueue (TBQueue rsize readT wsize _ _) a = do
 
 -- |Return the length of a 'TBQueue'.
 --
--- @since unreleased
+-- @since 1.9.0.0
 lengthTBQueue :: MonadSTM stm => TBQueue stm a -> stm Natural
 lengthTBQueue (TBQueue rsize _ wsize _ size) = do
   r <- readTVar rsize
