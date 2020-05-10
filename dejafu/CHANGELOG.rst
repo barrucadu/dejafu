@@ -6,6 +6,26 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+2.2.0.0 (2020-05-10)
+--------------------
+
+* Git: :tag:`dejafu-2.2.0.0`
+* Hackage: :hackage:`dejafu-2.2.0.0`
+
+Added
+~~~~~
+
+* Thread action constructors for the ``MonadConc`` ``getMaskingState``
+  function:
+    * ``Test.DejaFu.Types.ThreadAction``, ``GetMaskingState``
+    * ``Test.DejaFu.Types.Lookahead``, ``WillGetMaskingState``
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The version bound on :hackage:`concurrency` is >=1.10 <1.11.
+
+
 2.1.0.3 (2020-02-29)
 --------------------
 

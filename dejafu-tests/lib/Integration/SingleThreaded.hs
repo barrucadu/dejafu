@@ -3,7 +3,8 @@
 module Integration.SingleThreaded where
 
 import           Control.Exception         (ArithException(..),
-                                            ArrayException(..))
+                                            ArrayException(..),
+                                            MaskingState(..))
 import           Test.DejaFu               (Condition(..), gives, gives',
                                             inspectIORef, inspectMVar,
                                             inspectTVar, isDeadlock,
@@ -230,6 +231,12 @@ exceptionTests = toTestList
 
   , djfu "MonadConc is a MonadFail" (alwaysFailsWith isUncaughtException)
       (fail "hello world" :: (MonadConc m, MonadFail m) => m ())  -- avoid an ambiguous type
+
+  , djfu "Masking state is changed by a mask" (gives' [MaskedInterruptible]) $
+      mask_ getMaskingState
+
+  , djfu "Masking state is reset after the mask ends" (gives' [Unmasked]) $
+      mask_ getMaskingState >> getMaskingState
   ]
 
 --------------------------------------------------------------------------------

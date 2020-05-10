@@ -6,8 +6,20 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+1.10.0.0 (2020-05-10)
+---------------------
+
+* Git: :tag:`concurrency-1.10.0.0`
+* Hackage: :hackage:`concurrency-1.10.0.0`
+
+Added
+~~~~~
+
+* (:issue:`312`) ``Control.Monad.Conc.Class.getMaskingState``.
+
+
 1.9.0.0 (2020-02-26)
-====================
+--------------------
 
 * Git: :tag:`concurrency-1.9.0.0`
 * Hackage: :hackage:`concurrency-1.9.0.0`
@@ -20,8 +32,9 @@ Changed
   * Changed ``newTBQueue`` to accept ``Natural`` as a size.
   * Changed ``lengthTBQueue`` to return a ``Natural``.
 
+
 1.8.1.0 (2019-11-16)
-====================
+--------------------
 
 * Git: :tag:`concurrency-1.8.1.0`
 * Hackage: :hackage:`concurrency-1.8.1.0`

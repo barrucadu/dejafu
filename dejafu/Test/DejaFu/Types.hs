@@ -8,7 +8,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Types
--- Copyright   : (c) 2017--2019 Michael Walker
+-- Copyright   : (c) 2017--2020 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -228,7 +228,7 @@ initialThread = ThreadId (Id (Just "main") 0)
 
 -- | All the actions that a thread can perform.
 --
--- @since 2.0.0.0
+-- @since 2.2.0.0
 data ThreadAction =
     Fork ThreadId
   -- ^ Start a new thread.
@@ -311,6 +311,8 @@ data ThreadAction =
   -- ^ Return to an earlier masking state.  If 'True', this is being
   -- used to return to the state of the masked block in the argument
   -- passed to a 'mask'ed function.
+  | GetMaskingState MaskingState
+  -- ^ Get the current masking state.
   | LiftIO
   -- ^ Lift an IO action. Note that this can only happen with
   -- 'ConcIO'.
@@ -360,6 +362,8 @@ instance NFData ThreadAction where
   rnf (BlockedThrowTo t) = rnf t
   rnf (SetMasking b m) = rnf (b, show m)
   rnf (ResetMasking b m) = rnf (b, show m)
+  -- deepseq<1.4.4.0 doesn't have an instance for MaskingState
+  rnf (GetMaskingState m) = m `seq` ()
   rnf LiftIO = ()
   rnf Return = ()
   rnf Stop = ()
@@ -367,7 +371,7 @@ instance NFData ThreadAction where
 
 -- | A one-step look-ahead at what a thread will do next.
 --
--- @since 2.0.0.0
+-- @since 2.2.0.0
 data Lookahead =
     WillFork
   -- ^ Will start a new thread.
@@ -439,6 +443,8 @@ data Lookahead =
   -- ^ Will return to an earlier masking state.  If 'True', this is
   -- being used to return to the state of the masked block in the
   -- argument passed to a 'mask'ed function.
+  | WillGetMaskingState
+  -- ^ Will get the masking state.
   | WillLiftIO
   -- ^ Will lift an IO action. Note that this can only happen with
   -- 'ConcIO'.
@@ -483,6 +489,7 @@ instance NFData Lookahead where
   rnf (WillThrowTo t) = rnf t
   rnf (WillSetMasking b m) = rnf (b, show m)
   rnf (WillResetMasking b m) = rnf (b, show m)
+  rnf WillGetMaskingState = ()
   rnf WillLiftIO = ()
   rnf WillReturn = ()
   rnf WillStop = ()

@@ -91,7 +91,8 @@ module Control.Monad.Conc.Class
 
 -- for the class and utilities
 import           Control.Exception            (AsyncException(ThreadKilled),
-                                               Exception, SomeException)
+                                               Exception, MaskingState,
+                                               SomeException)
 import           Control.Monad.Catch          (MonadCatch, MonadMask,
                                                MonadThrow)
 import qualified Control.Monad.Catch          as Ca
@@ -104,6 +105,7 @@ import           Data.Proxy                   (Proxy(..))
 -- for the 'IO' instance
 import qualified Control.Concurrent           as IO
 import qualified Control.Concurrent.STM.TVar  as IO
+import qualified Control.Exception            as IO
 import qualified Control.Monad.STM            as IO
 import qualified Data.Atomics                 as IO
 import qualified Data.IORef                   as IO
@@ -152,7 +154,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Do not be put off by the use of @UndecidableInstances@, it is safe
 -- here.
 --
--- @since 1.7.0.0
+-- @since 1.10.0.0
 class ( Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -184,6 +186,7 @@ class ( Monad m
       , modifyIORefCAS
       , atomically
       , throwTo
+      , getMaskingState
     #-}
 
   -- | The associated 'MonadSTM' for this class.
@@ -496,6 +499,11 @@ class ( Monad m
   -- @since 1.0.0.0
   throwTo :: Exception e => ThreadId m -> e -> m ()
 
+  -- | Return the 'MaskingState' for the current thread.
+  --
+  -- @since 1.10.0.0
+  getMaskingState :: m MaskingState
+
 -------------------------------------------------------------------------------
 -- Utilities
 
@@ -784,6 +792,7 @@ instance MonadConc IO where
   atomically          = IO.atomically
   newTVarConc         = IO.newTVarIO
   readTVarConc        = IO.readTVarIO
+  getMaskingState     = IO.getMaskingState
 
 -- | Label the current thread, if the given label is nonempty.
 labelMe :: String -> IO ()
@@ -863,6 +872,7 @@ instance MonadConc m => MonadConc (IsConc m) where
   atomically          = toIsConc . atomically . fromIsSTM
   newTVarConc         = toIsConc . newTVarConc
   readTVarConc        = toIsConc . readTVarConc
+  getMaskingState     = toIsConc getMaskingState
 
 -------------------------------------------------------------------------------
 -- Transformer instances
@@ -912,7 +922,8 @@ instance C => MonadConc (T m) where                            { \
   modifyIORefCAS_ r   = lift . modifyIORefCAS_ r               ; \
   atomically          = lift . atomically                      ; \
   newTVarConc         = lift . newTVarConc                     ; \
-  readTVarConc        = lift . readTVarConc                    }
+  readTVarConc        = lift . readTVarConc                    ; \
+  getMaskingState     = lift getMaskingState                   }
 
 -- | New threads inherit the reader state of their parent, but do not
 -- communicate results back.

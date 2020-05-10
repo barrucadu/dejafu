@@ -383,6 +383,7 @@ genThreadAction = HGen.choice
   , D.BlockedThrowTo <$> genThreadId
   , D.SetMasking <$> HGen.bool <*> genMaskingState
   , D.ResetMasking <$> HGen.bool <*> genMaskingState
+  , D.GetMaskingState <$> genMaskingState
   , pure D.LiftIO
   , pure D.Return
   , pure D.Stop

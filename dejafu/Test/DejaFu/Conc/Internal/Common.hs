@@ -5,7 +5,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.Common
--- Copyright   : (c) 2016--2019 Michael Walker
+-- Copyright   : (c) 2016--2020 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -170,6 +170,7 @@ data Action n =
   | APopCatching (Action n)
   | forall a. AMasking MaskingState ((forall b. ModelConc n b -> ModelConc n b) -> ModelConc n a) (a -> Action n)
   | AResetMask Bool Bool MaskingState (Action n)
+  | AGetMasking (MaskingState -> Action n)
 
   | forall a. AAtom (ModelSTM n a) (a -> Action n)
   | ALift (n (Action n))
@@ -215,6 +216,7 @@ lookahead (ACatching _ _ _) = WillCatching
 lookahead (APopCatching _) = WillPopCatching
 lookahead (AMasking ms _ _) = WillSetMasking False ms
 lookahead (AResetMask b1 b2 ms _) = (if b1 then WillSetMasking else WillResetMasking) b2 ms
+lookahead (AGetMasking _) = WillGetMaskingState
 lookahead (ALift _) = WillLiftIO
 lookahead (AYield _) = WillYield
 lookahead (ADelay n _) = WillThreadDelay n
