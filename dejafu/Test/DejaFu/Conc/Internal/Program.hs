@@ -139,6 +139,8 @@ instance (pty ~ Basic, Monad n) => C.MonadConc (Program pty n) where
 
   throwTo tid e = ModelConc (\c -> AThrowTo tid e (c ()))
 
+  getMaskingState = ModelConc (\c -> AGetMasking c)
+
   -- ----------
 
   atomically = ModelConc . AAtom

@@ -59,7 +59,7 @@ library
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base              >=4.9 && <5
-                     , concurrency       >=1.7 && <1.10
+                     , concurrency       >=1.10 && <1.11
                      , containers        >=0.5 && <0.7
                      , contravariant     >=1.2 && <1.6
                      , deepseq           >=1.1 && <2

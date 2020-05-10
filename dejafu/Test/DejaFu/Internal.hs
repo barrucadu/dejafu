@@ -6,7 +6,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Internal
--- Copyright   : (c) 2017--2019 Michael Walker
+-- Copyright   : (c) 2017--2020 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -198,6 +198,7 @@ rewind (ThrowTo t _) = WillThrowTo t
 rewind (BlockedThrowTo t) = WillThrowTo t
 rewind (SetMasking b m) = WillSetMasking b m
 rewind (ResetMasking b m) = WillResetMasking b m
+rewind (GetMaskingState _) = WillGetMaskingState
 rewind LiftIO = WillLiftIO
 rewind Return = WillReturn
 rewind Stop = WillStop

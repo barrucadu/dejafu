@@ -6,7 +6,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal
--- Copyright   : (c) 2016--2019 Michael Walker
+-- Copyright   : (c) 2016--2020 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -595,6 +595,14 @@ stepThread _ _ _ _ tid (AResetMask b1 b2 m c) = \ctx@Context{..} ->
        , (if b1 then SetMasking else ResetMasking) b2 m
        , const (pure ())
        )
+
+-- get the current masking state.
+stepThread _ _ _ _ tid (AGetMasking c) = \ctx@Context{..} -> pure $
+  let m = _masking $ elookup tid cThreads
+  in ( Succeeded ctx { cThreads = goto (c m) tid cThreads }
+     , GetMaskingState m
+     , const (pure ())
+     )
 
 -- execute a 'return' or 'pure'.
 stepThread _ _ _ _ tid (AReturn c) = \ctx@Context{..} ->
