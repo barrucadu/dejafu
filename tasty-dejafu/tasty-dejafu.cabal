@@ -40,6 +40,6 @@ library
                      , dejafu >=2.0  && <2.2
                      , random >=1.0  && <1.2
                      , tagged >=0.8  && <0.9
-                     , tasty  >=0.10 && <1.3
+                     , tasty  >=0.10 && <1.4
   -- hs-source-dirs:      
   default-language:    Haskell2010
