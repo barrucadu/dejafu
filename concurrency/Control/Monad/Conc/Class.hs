@@ -154,7 +154,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Do not be put off by the use of @UndecidableInstances@, it is safe
 -- here.
 --
--- @since unreleased
+-- @since 1.10.0.0
 class ( Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -501,7 +501,7 @@ class ( Monad m
 
   -- | Return the 'MaskingState' for the current thread.
   --
-  -- @since unreleased
+  -- @since 1.10.0.0
   getMaskingState :: m MaskingState
 
 -------------------------------------------------------------------------------
