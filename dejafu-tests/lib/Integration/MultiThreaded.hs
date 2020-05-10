@@ -345,7 +345,7 @@ programTests = toTestList
     , djfuTS "Failure does not abort the outer computation" (gives' [(Left Deadlock, ()), (Right (), ())]) $
         withSetupAndTeardown
           newEmptyMVar
-          (\var res -> (,) <$> pure res <*> readMVar var)
+          (\var res -> (,) res <$> readMVar var)
           (\var -> do
               _ <- fork $ putMVar var ()
               putMVar var ())
