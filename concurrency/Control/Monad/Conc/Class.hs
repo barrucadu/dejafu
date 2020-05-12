@@ -110,6 +110,7 @@ import qualified Control.Monad.STM            as IO
 import qualified Data.Atomics                 as IO
 import qualified Data.IORef                   as IO
 import qualified GHC.Conc                     as IO
+import qualified GHC.IO                       as IO
 
 -- for the transformer instances
 import           Control.Monad.Reader         (ReaderT)
@@ -154,7 +155,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Do not be put off by the use of @UndecidableInstances@, it is safe
 -- here.
 --
--- @since 1.10.0.0
+-- @since unreleased
 class ( Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -187,6 +188,7 @@ class ( Monad m
       , atomically
       , throwTo
       , getMaskingState
+      , unsafeUnmask
     #-}
 
   -- | The associated 'MonadSTM' for this class.
@@ -504,6 +506,9 @@ class ( Monad m
   -- @since 1.10.0.0
   getMaskingState :: m MaskingState
 
+  -- | Set the 'MaskingState' for the current thread to 'MaskedUninterruptible'.
+  unsafeUnmask :: m a -> m a
+
 -------------------------------------------------------------------------------
 -- Utilities
 
@@ -793,6 +798,7 @@ instance MonadConc IO where
   newTVarConc         = IO.newTVarIO
   readTVarConc        = IO.readTVarIO
   getMaskingState     = IO.getMaskingState
+  unsafeUnmask        = IO.unsafeUnmask
 
 -- | Label the current thread, if the given label is nonempty.
 labelMe :: String -> IO ()
@@ -840,6 +846,7 @@ instance MonadConc m => MonadConc (IsConc m) where
   forkOnWithUnmaskN n i ma = toIsConc (forkOnWithUnmaskN n i (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkOSWithUnmask      ma = toIsConc (forkOSWithUnmask      (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkOSWithUnmaskN n   ma = toIsConc (forkOSWithUnmaskN n   (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
+  unsafeUnmask          ma = toIsConc (unsafeUnmask (unIsConc ma))
 
   supportsBoundThreads = toIsConc supportsBoundThreads
   isCurrentThreadBound = toIsConc isCurrentThreadBound
@@ -923,7 +930,8 @@ instance C => MonadConc (T m) where                            { \
   atomically          = lift . atomically                      ; \
   newTVarConc         = lift . newTVarConc                     ; \
   readTVarConc        = lift . readTVarConc                    ; \
-  getMaskingState     = lift getMaskingState                   }
+  getMaskingState     = lift getMaskingState                   ; \
+  unsafeUnmask        = liftedF F unsafeUnmask                 }
 
 -- | New threads inherit the reader state of their parent, but do not
 -- communicate results back.

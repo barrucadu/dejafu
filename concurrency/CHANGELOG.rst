@@ -6,6 +6,14 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+unreleased
+----------
+
+Added
+~~~~~
+
+* (:issue:`316`) ``Control.Monad.Conc.Class.unsafeUnmask``.
+
 1.10.0.0 (2020-05-10)
 ---------------------
 
