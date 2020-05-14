@@ -6,6 +6,18 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+2.3.0.0 (2020-05-14)
+--------------------
+
+* Git: :tag:`dejafu-2.3.0.0`
+* Hackage: :hackage:`dejafu-2.3.0.0`
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The version bound on :hackage:`concurrency` is >=1.11 <1.12.
+
+
 2.2.0.0 (2020-05-10)
 --------------------
 

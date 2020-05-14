@@ -9,7 +9,7 @@
 
 -- |
 -- Module      : Control.Monad.Conc.Class
--- Copyright   : (c) 2016--2019 Michael Walker
+-- Copyright   : (c) 2016--2020 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -72,6 +72,7 @@ module Control.Monad.Conc.Class
   , Ca.mask_
   , uninterruptibleMask
   , Ca.uninterruptibleMask_
+  , interruptible
 
   -- * Mutable State
   , newMVar
@@ -91,7 +92,7 @@ module Control.Monad.Conc.Class
 
 -- for the class and utilities
 import           Control.Exception            (AsyncException(ThreadKilled),
-                                               Exception, MaskingState,
+                                               Exception, MaskingState(..),
                                                SomeException)
 import           Control.Monad.Catch          (MonadCatch, MonadMask,
                                                MonadThrow)
@@ -110,6 +111,7 @@ import qualified Control.Monad.STM            as IO
 import qualified Data.Atomics                 as IO
 import qualified Data.IORef                   as IO
 import qualified GHC.Conc                     as IO
+import qualified GHC.IO                       as IO
 
 -- for the transformer instances
 import           Control.Monad.Reader         (ReaderT)
@@ -154,7 +156,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Do not be put off by the use of @UndecidableInstances@, it is safe
 -- here.
 --
--- @since 1.10.0.0
+-- @since 1.11.0.0
 class ( Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -187,6 +189,7 @@ class ( Monad m
       , atomically
       , throwTo
       , getMaskingState
+      , unsafeUnmask
     #-}
 
   -- | The associated 'MonadSTM' for this class.
@@ -504,6 +507,11 @@ class ( Monad m
   -- @since 1.10.0.0
   getMaskingState :: m MaskingState
 
+  -- | Set the 'MaskingState' for the current thread to 'MaskedUninterruptible'.
+  --
+  -- @since 1.11.0.0
+  unsafeUnmask :: m a -> m a
+
 -------------------------------------------------------------------------------
 -- Utilities
 
@@ -695,6 +703,21 @@ mask = Ca.mask
 uninterruptibleMask :: MonadConc m => ((forall a. m a -> m a) -> m b) -> m b
 uninterruptibleMask = Ca.uninterruptibleMask
 
+-- | Allow asynchronous exceptions to be raised even inside 'mask',
+-- making the operation interruptible.
+--
+-- When called outside 'mask', or inside 'uninterruptibleMask', this
+-- function has no effect.
+--
+-- @since 1.11.0.0
+interruptible :: MonadConc m => m a -> m a
+interruptible act = do
+  st <- getMaskingState
+  case st of
+    Unmasked              -> act
+    MaskedInterruptible   -> unsafeUnmask act
+    MaskedUninterruptible -> act
+
 -- Mutable Variables
 
 -- | Create a new @MVar@ containing a value.
@@ -793,6 +816,7 @@ instance MonadConc IO where
   newTVarConc         = IO.newTVarIO
   readTVarConc        = IO.readTVarIO
   getMaskingState     = IO.getMaskingState
+  unsafeUnmask        = IO.unsafeUnmask
 
 -- | Label the current thread, if the given label is nonempty.
 labelMe :: String -> IO ()
@@ -840,6 +864,7 @@ instance MonadConc m => MonadConc (IsConc m) where
   forkOnWithUnmaskN n i ma = toIsConc (forkOnWithUnmaskN n i (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkOSWithUnmask      ma = toIsConc (forkOSWithUnmask      (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
   forkOSWithUnmaskN n   ma = toIsConc (forkOSWithUnmaskN n   (\umask -> unIsConc $ ma (\mx -> toIsConc (umask $ unIsConc mx))))
+  unsafeUnmask          ma = toIsConc (unsafeUnmask (unIsConc ma))
 
   supportsBoundThreads = toIsConc supportsBoundThreads
   isCurrentThreadBound = toIsConc isCurrentThreadBound
@@ -923,7 +948,8 @@ instance C => MonadConc (T m) where                            { \
   atomically          = lift . atomically                      ; \
   newTVarConc         = lift . newTVarConc                     ; \
   readTVarConc        = lift . readTVarConc                    ; \
-  getMaskingState     = lift getMaskingState                   }
+  getMaskingState     = lift getMaskingState                   ; \
+  unsafeUnmask        = liftedF F unsafeUnmask                 }
 
 -- | New threads inherit the reader state of their parent, but do not
 -- communicate results back.
