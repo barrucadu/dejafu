@@ -72,6 +72,7 @@ module Control.Monad.Conc.Class
   , Ca.mask_
   , uninterruptibleMask
   , Ca.uninterruptibleMask_
+  , interruptible
 
   -- * Mutable State
   , newMVar
@@ -91,7 +92,7 @@ module Control.Monad.Conc.Class
 
 -- for the class and utilities
 import           Control.Exception            (AsyncException(ThreadKilled),
-                                               Exception, MaskingState,
+                                               Exception, MaskingState(..),
                                                SomeException)
 import           Control.Monad.Catch          (MonadCatch, MonadMask,
                                                MonadThrow)
@@ -699,6 +700,21 @@ mask = Ca.mask
 -- @since 1.0.0.0
 uninterruptibleMask :: MonadConc m => ((forall a. m a -> m a) -> m b) -> m b
 uninterruptibleMask = Ca.uninterruptibleMask
+
+-- | Allow asynchronous exceptions to be raised even inside 'mask',
+-- making the operation interruptible.
+--
+-- When called outside 'mask', or inside 'uninterruptibleMask', this
+-- function has no effect.
+--
+-- @since unreleased
+interruptible :: MonadConc m => m a -> m a
+interruptible act = do
+  st <- getMaskingState
+  case st of
+    Unmasked              -> act
+    MaskedInterruptible   -> unsafeUnmask act
+    MaskedUninterruptible -> act
 
 -- Mutable Variables
 
