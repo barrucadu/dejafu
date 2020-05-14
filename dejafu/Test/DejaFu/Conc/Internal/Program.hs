@@ -141,6 +141,8 @@ instance (pty ~ Basic, Monad n) => C.MonadConc (Program pty n) where
 
   getMaskingState = ModelConc (\c -> AGetMasking c)
 
+  unsafeUnmask ma = ModelConc (AMasking Unmasked (const ma))
+
   -- ----------
 
   atomically = ModelConc . AAtom

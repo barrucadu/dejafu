@@ -244,6 +244,14 @@ exceptionTests = toTestList
       killThread tid
       readMVar y
 
+  , djfuT "Exceptions can kill masked threads which have unsafely unmasked" (gives [Left Deadlock, Right ()]) $ do
+      x <- newEmptyMVar
+      y <- newEmptyMVar
+      tid <- fork $ mask_ $ putMVar x () >> unsafeUnmask (putMVar y ())
+      readMVar x
+      killThread tid
+      readMVar y
+
   , djfuT "Throwing to main kills the computation, if unhandled" (alwaysFailsWith isUncaughtException) $ do
       tid <- myThreadId
       j <- spawn $ throwTo tid Overflow

@@ -6,6 +6,15 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+unreleased
+----------
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The version bound on :hackage:`concurrency` is >=1.11 <1.12.
+
+
 2.2.0.0 (2020-05-10)
 --------------------
 
