@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-
-source .travis/setup.sh
-
-$stack install doctest
-
-$stack build
-
-$stack exec -- bash -c "DEJAFU_DOCTEST=y doctest dejafu/Test"
