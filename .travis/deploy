@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 
-source .travis/setup.sh
+export PATH=$HOME/.local/bin:$PATH
+
+stack="stack --no-terminal"
+
+mkdir -p ~/.local/bin
+curl -L https://www.stackage.org/stack/linux-x86_64 | \
+  tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+
+$stack setup
 
 # do not echo hackage password!
 set +x

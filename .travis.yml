@@ -8,13 +8,6 @@ language: c
 # commit.
 if: tag IS blank
 
-# Cache builds
-cache:
-  directories:
-  - $HOME/.ghc
-  - $HOME/.cabal
-  - $HOME/.stack
-
 addons:
   apt:
     packages:
@@ -27,35 +20,7 @@ env:
 script: ./.travis/$MODE
 
 jobs:
-  allow_failures:
-  - env: MODE=test RESOLVER=nightly
   include:
-  # don't build the tests for both the commit and the PR
-  - stage: test
-    if: type != pull_request
-    env: MODE=doctest
-  - stage: test
-    if: type != pull_request
-    env: MODE=lint
-  - stage: test
-    if: type != pull_request
-    env: MODE=test RESOLVER=lts-9.0  STACKVER=1.6.1 # GHC 8.0
-  - stage: test
-    if: type != pull_request
-    env: MODE=test RESOLVER=lts-10.0 STACKVER=1.6.1 # GHC 8.2
-  - stage: test
-    if: type != pull_request
-    env: MODE=test RESOLVER=lts-12.0 STACKVER=1.7.1 # GHC 8.4
-  - stage: test
-    if: type != pull_request
-    env: MODE=test RESOLVER=lts-13.3 STACKVER=1.9.3 # GHC 8.6 - .3 because hedgehog and stylish-haskell aren't in .0
-  - stage: test
-    if: type != pull_request
-    env: MODE=test RESOLVER=lts-15.0 STACKVER=2.1.3 # GHC 8.8
-  - stage: test
-    if: type != pull_request
-    env: MODE=test RESOLVER=nightly
-
   - stage: predeploy
     if: branch=master
     env: MODE=predeploy
