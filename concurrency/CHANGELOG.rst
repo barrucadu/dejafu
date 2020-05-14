@@ -6,14 +6,20 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
-unreleased
-----------
+1.11.0.0 (2020-05-14)
+--------------------
+
+* Git: :tag:`concurrency-1.11.0.0`
+* Hackage: :hackage:`concurrency-1.11.0.0`
+
+**Contributors:** :u:`mitchellwrosen` (:pull:`319`).
 
 Added
 ~~~~~
 
 * (:issue:`316`) ``Control.Monad.Conc.Class.unsafeUnmask``.
 * ``Control.Monad.Conc.Class.interruptible``.
+
 
 1.10.0.0 (2020-05-10)
 ---------------------

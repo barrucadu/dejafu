@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                concurrency
-version:             1.10.0.0
+version:             1.11.0.0
 synopsis:            Typeclasses, functions, and data types for concurrency and STM.
 
 description:
@@ -19,7 +19,7 @@ license:             MIT
 license-file:        LICENSE
 author:              Michael Walker
 maintainer:          mike@barrucadu.co.uk
-copyright:           (c) 2016--2019 Michael Walker
+copyright:           (c) 2016--2020 Michael Walker
 category:            Concurrency
 build-type:          Simple
 extra-source-files:  README.markdown CHANGELOG.rst
@@ -32,7 +32,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      concurrency-1.10.0.0
+  tag:      concurrency-1.11.0.0
 
 library
   exposed-modules:     Control.Monad.Conc.Class

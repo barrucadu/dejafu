@@ -9,7 +9,7 @@
 
 -- |
 -- Module      : Control.Monad.Conc.Class
--- Copyright   : (c) 2016--2019 Michael Walker
+-- Copyright   : (c) 2016--2020 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -156,7 +156,7 @@ import qualified Control.Monad.Writer.Strict  as WS
 -- Do not be put off by the use of @UndecidableInstances@, it is safe
 -- here.
 --
--- @since unreleased
+-- @since 1.11.0.0
 class ( Monad m
       , MonadCatch m, MonadThrow m, MonadMask m
       , MonadSTM (STM m)
@@ -508,6 +508,8 @@ class ( Monad m
   getMaskingState :: m MaskingState
 
   -- | Set the 'MaskingState' for the current thread to 'MaskedUninterruptible'.
+  --
+  -- @since 1.11.0.0
   unsafeUnmask :: m a -> m a
 
 -------------------------------------------------------------------------------
@@ -707,7 +709,7 @@ uninterruptibleMask = Ca.uninterruptibleMask
 -- When called outside 'mask', or inside 'uninterruptibleMask', this
 -- function has no effect.
 --
--- @since unreleased
+-- @since 1.11.0.0
 interruptible :: MonadConc m => m a -> m a
 interruptible act = do
   st <- getMaskingState
