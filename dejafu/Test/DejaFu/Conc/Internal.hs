@@ -513,7 +513,7 @@ stepThread _ _ _ _ tid (AAtom stm c) = synchronised $ \ctx@Context{..} -> do
     Success _ written val -> do
       let (threads', woken) = wake (OnTVar written) cThreads
       pure ( Succeeded ctx { cThreads = goto (c val) tid threads', cIdSource = idSource' }
-           , STM trace woken
+           , STM trace woken Nothing
            , effect
            )
     Retry touched -> do
@@ -523,11 +523,10 @@ stepThread _ _ _ _ tid (AAtom stm c) = synchronised $ \ctx@Context{..} -> do
            , effect
            )
     Exception e -> do
-      let act = STM trace []
-      res' <- stepThrow (const act) tid e ctx
+      res' <- stepThrow (\ms _ -> STM trace [] ms) tid e ctx
       pure $ case res' of
-        (Succeeded ctx', _, effect') -> (Succeeded ctx' { cIdSource = idSource' }, act, effect')
-        (Failed err, _, effect') -> (Failed err, act, effect')
+        (Succeeded ctx', act, effect') -> (Succeeded ctx' { cIdSource = idSource' }, act, effect')
+        (Failed err, act, effect') -> (Failed err, act, effect')
 
 -- lift an action from the underlying monad into the @Conc@
 -- computation.
@@ -557,7 +556,7 @@ stepThread _ _ _ _ tid (AThrowTo t e c) = synchronised $ \ctx@Context{..} ->
            )
        Nothing -> pure
          (Succeeded ctx { cThreads = threads' }
-         , ThrowTo t False
+         , ThrowTo t Nothing False
          , const (pure ())
          )
 
@@ -633,7 +632,7 @@ stepThread _ _ _ _ tid (ANewInvariant inv c) = \ctx@Context{..} ->
 -- | Handle an exception being thrown from an @AAtom@, @AThrow@, or
 -- @AThrowTo@.
 stepThrow :: (MonadDejaFu n, Exception e)
-  => (Bool -> ThreadAction)
+  => (Maybe MaskingState -> Bool -> ThreadAction)
   -- ^ Action to include in the trace.
   -> ThreadId
   -- ^ The thread receiving the exception.
@@ -643,21 +642,21 @@ stepThrow :: (MonadDejaFu n, Exception e)
   -- ^ The execution context.
   -> n (What n g, ThreadAction, Threads n -> n ())
 stepThrow act tid e ctx@Context{..} = case propagate some tid cThreads of
-    Just ts' -> pure
+    Just (ms, ts') -> pure
       ( Succeeded ctx { cThreads = ts' }
-      , act False
+      , act (checkMask ms tid cThreads) False
       , const (pure ())
       )
     Nothing
       | tid == initialThread -> pure
         ( Failed (UncaughtException some)
-        , act True
+        , act Nothing True
         , const (pure ())
         )
       | otherwise -> do
           ts' <- kill tid cThreads
           pure ( Succeeded ctx { cThreads = ts' }
-               , act True
+               , act Nothing True
                , const (pure ())
                )
   where

@@ -61,7 +61,7 @@ tests = toTestList
       tid <- myThreadId
       uninterruptibleMask_ (throwTo tid ThreadKilled)
 
-  , (:[]) . expectFail $ testDejafuWithSettings defaultSettings "https://github.com/barrucadu/dejafu/issues/324 (a)" (gives' [Left ThreadKilled, Left UserInterrupt]) $ do
+  , djfu "https://github.com/barrucadu/dejafu/issues/324 (a)" (gives' [Left ThreadKilled, Left UserInterrupt]) $ do
       var <- newEmptyMVar
       tId <- uninterruptibleMask $ \restore -> fork $ do
         result <- (Right <$> restore (throw UserInterrupt)) `E.catch` (pure . Left)
@@ -70,7 +70,7 @@ tests = toTestList
       v <- takeMVar var
       pure (v :: Either AsyncException ())
 
-  , (:[]) . expectFail $ testDejafuWithSettings defaultSettings "https://github.com/barrucadu/dejafu/issues/324 (b)" (gives' [Left ThreadKilled, Left UserInterrupt]) $ do
+  , djfu "https://github.com/barrucadu/dejafu/issues/324 (b)" (gives' [Left ThreadKilled, Left UserInterrupt]) $ do
       var <- newEmptyMVar
       tId <- uninterruptibleMask $ \restore -> fork $ do
         result <- (Right <$> restore (atomically $ throwSTM UserInterrupt)) `E.catch` (pure . Left)

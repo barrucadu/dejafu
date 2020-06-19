@@ -286,21 +286,24 @@ data ThreadAction =
   | CommitIORef ThreadId IORefId
   -- ^ Commit the last write to the given 'IORef' by the given thread,
   -- so that all threads can see the updated value.
-  | STM [TAction] [ThreadId]
+  | STM [TAction] [ThreadId] (Maybe MaskingState)
   -- ^ An STM transaction was executed, possibly waking up some
-  -- threads.
+  -- threads, possibly jumping to an exception handler and changing
+  -- the masking state.
   | BlockedSTM [TAction]
   -- ^ Got blocked in an STM transaction.
   | Catching
   -- ^ Register a new exception handler
   | PopCatching
   -- ^ Pop the innermost exception handler from the stack.
-  | Throw Bool
-  -- ^ Throw an exception.  If the 'Bool' is @True@, then this killed
-  -- the thread.
-  | ThrowTo ThreadId Bool
-  -- ^ Throw an exception to a thread.  If the 'Bool' is @True@, then
-  -- this killed the thread.
+  | Throw (Maybe MaskingState) Bool
+  -- ^ Throw an exception, and give the resultant masking state after
+  -- jumping to the exception handler (if it changed).  If the 'Bool'
+  -- is @True@, then this killed the thread.
+  | ThrowTo ThreadId (Maybe MaskingState) Bool
+  -- ^ Throw an exception to a thread, and give the resultant masking
+  -- state after jumping to the exception handler (if it changed).  If
+  -- the 'Bool' is @True@, then this killed the thread.
   | BlockedThrowTo ThreadId
   -- ^ Get blocked on a 'throwTo'.
   | SetMasking Bool MaskingState
@@ -353,12 +356,15 @@ instance NFData ThreadAction where
   rnf (WriteIORef c) = rnf c
   rnf (CasIORef c b) = rnf (c, b)
   rnf (CommitIORef t c) = rnf (t, c)
-  rnf (STM as ts) = rnf (as, ts)
+  rnf (STM as ts (Just m)) = m `seq` rnf (as, ts)
+  rnf (STM as ts Nothing) = rnf (as, ts)
   rnf (BlockedSTM as) = rnf as
   rnf Catching = ()
   rnf PopCatching = ()
-  rnf (Throw b) = rnf b
-  rnf (ThrowTo t b) = rnf (t, b)
+  rnf (Throw (Just m) b) = m `seq` rnf b
+  rnf (Throw Nothing b) = rnf b
+  rnf (ThrowTo t (Just m) b) = m `seq` rnf (t, b)
+  rnf (ThrowTo t Nothing b) = rnf (t, b)
   rnf (BlockedThrowTo t) = rnf t
   rnf (SetMasking b m) = rnf (b, show m)
   rnf (ResetMasking b m) = rnf (b, show m)

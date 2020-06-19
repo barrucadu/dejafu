@@ -5,7 +5,7 @@
 
 -- |
 -- Module      : Test.DejaFu.SCT.Internal
--- Copyright   : (c) 2018--2019 Michael Walker
+-- Copyright   : (c) 2018--2020 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -397,10 +397,10 @@ renumber memtype tid0 crid0 = snd . mapAccumL go (I.empty, tid0, I.empty, crid0)
     (s, WriteIORef (renumbered cridmap old))
   updateAction s@(_, _, cridmap, _) (CasIORef old b) =
     (s, CasIORef (renumbered cridmap old) b)
-  updateAction s@(tidmap, _, _, _) (STM tas olds) =
-    (s, STM tas (map (renumbered tidmap) olds))
-  updateAction s@(tidmap, _, _, _) (ThrowTo old b) =
-    (s, ThrowTo (renumbered tidmap old) b)
+  updateAction s@(tidmap, _, _, _) (STM tas olds ms) =
+    (s, STM tas (map (renumbered tidmap) olds) ms)
+  updateAction s@(tidmap, _, _, _) (ThrowTo old ms b) =
+    (s, ThrowTo (renumbered tidmap old) ms b)
   updateAction s@(tidmap, _, _, _) (BlockedThrowTo old) =
     (s, BlockedThrowTo (renumbered tidmap old))
   updateAction s act = (s, act)

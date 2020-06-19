@@ -4,7 +4,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.Threading
--- Copyright   : (c) 2016--2019 Michael Walker
+-- Copyright   : (c) 2016--2020 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -70,18 +70,18 @@ thread ~= theblock = case (_blocking thread, theblock) of
 -- * Exceptions
 
 -- | An exception handler.
-data Handler n = forall e. Exception e => Handler (e -> MaskingState -> Action n)
+data Handler n = forall e. Exception e => Handler MaskingState (e -> Action n)
 
 -- | Propagate an exception upwards, finding the closest handler
 -- which can deal with it.
-propagate :: HasCallStack => SomeException -> ThreadId -> Threads n -> Maybe (Threads n)
+propagate :: HasCallStack => SomeException -> ThreadId -> Threads n -> Maybe (MaskingState, Threads n)
 propagate e tid threads = raise <$> propagate' handlers where
   handlers = _handlers (elookup tid threads)
 
-  raise (act, hs) = except act hs tid threads
+  raise (ms, act, hs) = (ms, except ms act hs tid threads)
 
   propagate' [] = Nothing
-  propagate' (Handler h:hs) = maybe (propagate' hs) (\act -> Just (act, hs)) $ h <$> fromException e
+  propagate' (Handler ms h:hs) = maybe (propagate' hs) (\act -> Just (ms, act, hs)) $ h <$> fromException e
 
 -- | Check if a thread can be interrupted by an exception.
 interruptible :: Thread n -> Bool
@@ -93,7 +93,7 @@ interruptible thread =
 catching :: (Exception e, HasCallStack) => (e -> Action n) -> ThreadId -> Threads n -> Threads n
 catching h = eadjust $ \thread ->
   let ms0 = _masking thread
-      h'  = Handler $ \e ms -> (if ms /= ms0 then AResetMask False False ms0 else id) (h e)
+      h'  = Handler ms0 h
   in thread { _handlers = h' : _handlers thread }
 
 -- | Remove the most recent exception handler.
@@ -102,9 +102,10 @@ uncatching = eadjust $ \thread ->
   thread { _handlers = etail (_handlers thread) }
 
 -- | Raise an exception in a thread.
-except :: HasCallStack => (MaskingState -> Action n) -> [Handler n] -> ThreadId -> Threads n -> Threads n
-except actf hs = eadjust $ \thread -> thread
-  { _continuation = actf (_masking thread)
+except :: HasCallStack => MaskingState -> Action n -> [Handler n] -> ThreadId -> Threads n -> Threads n
+except ms act hs = eadjust $ \thread -> thread
+  { _continuation = act
+  , _masking = ms
   , _handlers = hs
   , _blocking = Nothing
   }
@@ -112,6 +113,13 @@ except actf hs = eadjust $ \thread -> thread
 -- | Set the masking state of a thread.
 mask :: HasCallStack => MaskingState -> ThreadId -> Threads n -> Threads n
 mask ms = eadjust $ \thread -> thread { _masking = ms }
+
+-- | Check the masking state of a thread, returning @Nothing@ if it
+-- matches the given one.
+checkMask :: HasCallStack => MaskingState -> ThreadId -> Threads n -> Maybe MaskingState
+checkMask ms tid threads =
+  let ms0 = M.findWithDefault Unmasked tid (_masking <$> threads)
+  in if ms0 == ms then Nothing else Just ms0
 
 --------------------------------------------------------------------------------
 -- * Manipulating threads

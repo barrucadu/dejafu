@@ -374,12 +374,12 @@ genThreadAction = HGen.choice
   , D.WriteIORef <$> genIORefId
   , D.CasIORef <$> genIORefId <*> HGen.bool
   , D.CommitIORef <$> genThreadId <*> genIORefId
-  , D.STM <$> genSmallList genTAction <*> genSmallList genThreadId
+  , D.STM <$> genSmallList genTAction <*> genSmallList genThreadId <*> HGen.maybe genMaskingState
   , D.BlockedSTM <$> genSmallList genTAction
   , pure D.Catching
   , pure D.PopCatching
-  , D.Throw <$> HGen.bool
-  , D.ThrowTo <$> genThreadId <*> HGen.bool
+  , D.Throw <$> HGen.maybe genMaskingState <*> HGen.bool
+  , D.ThrowTo <$> genThreadId <*> HGen.maybe genMaskingState <*> HGen.bool
   , D.BlockedThrowTo <$> genThreadId
   , D.SetMasking <$> HGen.bool <*> genMaskingState
   , D.ResetMasking <$> HGen.bool <*> genMaskingState
