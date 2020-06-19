@@ -40,6 +40,7 @@
 - ignore: {name: Use nonTermination, within: Unit.Properties}
 - ignore: {name: Reduce duplication, within: Integration.Litmus}
 - ignore: {name: Reduce duplication, within: Integration.MultiThreaded}
+- ignore: {name: Reduce duplication, within: Integration.Regressions}
 - ignore: {name: Reduce duplication, within: Integration.SCT}
 - ignore: {name: Reduce duplication, within: Integration.SingleThreaded}
 
