@@ -286,10 +286,13 @@ data ThreadAction =
   | CommitIORef ThreadId IORefId
   -- ^ Commit the last write to the given 'IORef' by the given thread,
   -- so that all threads can see the updated value.
-  | STM [TAction] [ThreadId] (Maybe MaskingState)
+  | STM [TAction] [ThreadId]
   -- ^ An STM transaction was executed, possibly waking up some
-  -- threads, possibly jumping to an exception handler and changing
-  -- the masking state.
+  -- threads.
+  | ThrownSTM [TAction] (Maybe MaskingState) Bool
+  -- ^ An STM transaction threw an exception.  Give the resultant
+  -- masking state after jumping to the exception handler (if it
+  -- changed).  If the 'Bool' is @True@, then this killed the thread.
   | BlockedSTM [TAction]
   -- ^ Got blocked in an STM transaction.
   | Catching
@@ -356,8 +359,9 @@ instance NFData ThreadAction where
   rnf (WriteIORef c) = rnf c
   rnf (CasIORef c b) = rnf (c, b)
   rnf (CommitIORef t c) = rnf (t, c)
-  rnf (STM as ts (Just m)) = m `seq` rnf (as, ts)
-  rnf (STM as ts Nothing) = rnf (as, ts)
+  rnf (STM as ts) = rnf (as, ts)
+  rnf (ThrownSTM as (Just m) b) = m `seq` rnf (as, b)
+  rnf (ThrownSTM as Nothing b) = rnf (as, b)
   rnf (BlockedSTM as) = rnf as
   rnf Catching = ()
   rnf PopCatching = ()

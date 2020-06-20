@@ -513,7 +513,7 @@ stepThread _ _ _ _ tid (AAtom stm c) = synchronised $ \ctx@Context{..} -> do
     Success _ written val -> do
       let (threads', woken) = wake (OnTVar written) cThreads
       pure ( Succeeded ctx { cThreads = goto (c val) tid threads', cIdSource = idSource' }
-           , STM trace woken Nothing
+           , STM trace woken
            , effect
            )
     Retry touched -> do
@@ -523,7 +523,7 @@ stepThread _ _ _ _ tid (AAtom stm c) = synchronised $ \ctx@Context{..} -> do
            , effect
            )
     Exception e -> do
-      res' <- stepThrow (\ms _ -> STM trace [] ms) tid e ctx
+      res' <- stepThrow (ThrownSTM trace) tid e ctx
       pure $ case res' of
         (Succeeded ctx', act, effect') -> (Succeeded ctx' { cIdSource = idSource' }, act, effect')
         (Failed err, act, effect') -> (Failed err, act, effect')

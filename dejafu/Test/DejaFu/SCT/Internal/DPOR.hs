@@ -590,10 +590,15 @@ dependent safeIO ds t1 a1 t2 a2 = case (a1, a2) of
   -- Dependency of STM transactions can be /greatly/ improved here, as
   -- the 'Lookahead' does not know which @TVar@s will be touched, and
   -- so has to assume all transactions are dependent.
-  (STM _ _ _, STM _ _ _)       -> checkSTM
-  (STM _ _ _, BlockedSTM _)    -> checkSTM
-  (BlockedSTM _, STM _ _ _)    -> checkSTM
-  (BlockedSTM _, BlockedSTM _) -> checkSTM
+  (STM _ _, STM _ _)         -> checkSTM
+  (STM _ _, BlockedSTM _)    -> checkSTM
+  (STM _ _, ThrownSTM _ _ _) -> checkSTM
+  (BlockedSTM _, STM _ _)         -> checkSTM
+  (BlockedSTM _, BlockedSTM _)    -> checkSTM
+  (BlockedSTM _, ThrownSTM _ _ _) -> checkSTM
+  (ThrownSTM _ _ _, STM _ _)         -> checkSTM
+  (ThrownSTM _ _ _, BlockedSTM _)    -> checkSTM
+  (ThrownSTM _ _ _, ThrownSTM _ _ _) -> checkSTM
 
   _ -> dependent' safeIO ds t1 a1 t2 (rewind a2)
     && dependent' safeIO ds t2 a2 t1 (rewind a1)
@@ -623,8 +628,9 @@ dependent' safeIO ds t1 a1 t2 l2 = case (a1, l2) of
   (_, WillThrowTo t) | t == t1 -> canInterrupt  ds t1 a1 && a1 /= Stop
 
   -- Another worst-case: assume all STM is dependent.
-  (STM _ _ _, WillSTM) -> True
+  (STM _ _, WillSTM) -> True
   (BlockedSTM _, WillSTM) -> True
+  (ThrownSTM _ _ _, WillSTM) -> True
 
   -- the number of capabilities is essentially a global shared
   -- variable

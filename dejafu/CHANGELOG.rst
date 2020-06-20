@@ -9,11 +9,17 @@ standard Haskell versioning scheme.
 unreleased
 ----------
 
+Added
+~~~~~
+
+* Thread action constructor for STM transactions which throw an
+  exception: ``Test.DejaFu.Types.ThreadAction`` ``ThrownSTM``
+
 Changed
 ~~~~~~~
 
-* ``Test.DejaFu.Types.ThreadAction``, ``STM``, ``Throw``, and
-  ``ThrowTo`` now include the resultant masking state.
+* ``Test.DejaFu.Types.ThreadAction``, ``Throw``, and ``ThrowTo`` now
+  include the resultant masking state.
 
 Fixed
 ~~~~~
