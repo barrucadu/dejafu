@@ -38,7 +38,7 @@ library
   -- other-extensions:    
   build-depends:       base   >=4.9  && <5
                      , dejafu >=2.0  && <2.4
-                     , random >=1.0  && <1.2
+                     , random >=1.0  && <1.3
                      , tagged >=0.8  && <0.9
                      , tasty  >=0.10 && <1.4
   -- hs-source-dirs:      
