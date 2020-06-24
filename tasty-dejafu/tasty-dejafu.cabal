@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                tasty-dejafu
-version:             2.0.0.4
+version:             2.0.0.5
 synopsis:            Deja Fu support for the Tasty test framework.
 
 description:
@@ -30,7 +30,7 @@ source-repository head
 source-repository this
   type:     git
   location: https://github.com/barrucadu/dejafu.git
-  tag:      tasty-dejafu-2.0.0.4
+  tag:      tasty-dejafu-2.0.0.5
 
 library
   exposed-modules:     Test.Tasty.DejaFu
@@ -38,7 +38,7 @@ library
   -- other-extensions:    
   build-depends:       base   >=4.9  && <5
                      , dejafu >=2.0  && <2.4
-                     , random >=1.0  && <1.2
+                     , random >=1.0  && <1.3
                      , tagged >=0.8  && <0.9
                      , tasty  >=0.10 && <1.4
   -- hs-source-dirs:      

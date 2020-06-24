@@ -34,7 +34,7 @@ cause a **patch level version bump**.
 A new GHC release won't get a Stackage LTS for little while.  When it
 does:
 
-1. Add the LTS to the Travis script.
+1. Add the LTS to the GitHub Actions configuration.
 2. Update the resolver in the stack.yaml.
 3. Put the LTS in the table.
 
@@ -46,7 +46,8 @@ When we want to drop an unsupported version of GHC, we need to bump
 the version bound on :hackage:`base` to preclude it.  This is a
 backwards-incompatible change which causes a **major version bump**.
 
-1. Remove the dropped GHC version from the Travis script.
+1. Remove the dropped GHC version from the GitHub Actions
+   configuration.
 2. Bump the lower bound of :hackage:`base`.
 3. Look through the other dependencies.  Some may not work with our
    new lower bound on :hackage:`base`, so we should bump those too.

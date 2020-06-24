@@ -32,8 +32,8 @@ Release Process
 
 7. Commit.
 
-8. Push to GitHub and wait for Travis to confirm everything is OK.  If
-   it's not OK, fix what is broken before continuing.
+8. Push to GitHub and wait for GitHub Actions to confirm everything is
+   OK.  If it's not OK, fix what is broken before continuing.
 
 9. Merge the PR.
 
@@ -43,13 +43,7 @@ Release Process
 11. Push tags to GitHub.
 
 When the merge commit successfully builds on ``master`` the updated
-packages will be pushed to Hackage by Travis.
-
-See :pull:`284` and the Travis `build of its merge commit`__ if any of
-this is unclear.
-
-.. _PVP: https://pvp.haskell.org/
-.. __: https://travis-ci.org/barrucadu/dejafu/builds/404109093
+packages will be pushed to Hackage by Concourse.
 
 
 Pro tips

@@ -61,8 +61,8 @@ Making the change
 
 4. Submit a PR.
 
-   Travis will run some checks, which might prompt further action.
-   You should expect a response from me in a day or two.
+   GitHub Actions will run some checks, which might prompt further
+   action.  You should expect a response from me in a day or two.
 
 Don't worry about your PR being perfect the first time.  We'll work
 through any issues together, to ensure that Déjà Fu gets the best code
@@ -82,7 +82,7 @@ though; keep these three rules in mind:
 3. Use :hackage:`hlint` and :hackage:`weeder` and fix lints unless you
    have a good reason not to.
 
-Travis runs stylish-haskell, hlint, and weeder on all PRs.
+GitHub Actions runs stylish-haskell and hlint on all PRs.
 
 
 Coverage
