@@ -5,7 +5,7 @@
 
 -- |
 -- Module      : Test.DejaFu.SCT.Internal.DPOR
--- Copyright   : (c) 2015--2018 Michael Walker
+-- Copyright   : (c) 2015--2020 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -590,10 +590,15 @@ dependent safeIO ds t1 a1 t2 a2 = case (a1, a2) of
   -- Dependency of STM transactions can be /greatly/ improved here, as
   -- the 'Lookahead' does not know which @TVar@s will be touched, and
   -- so has to assume all transactions are dependent.
-  (STM _ _, STM _ _)           -> checkSTM
-  (STM _ _, BlockedSTM _)      -> checkSTM
-  (BlockedSTM _, STM _ _)      -> checkSTM
-  (BlockedSTM _, BlockedSTM _) -> checkSTM
+  (STM _ _, STM _ _)       -> checkSTM
+  (STM _ _, BlockedSTM _)  -> checkSTM
+  (STM _ _, ThrownSTM _ _) -> checkSTM
+  (BlockedSTM _, STM _ _)       -> checkSTM
+  (BlockedSTM _, BlockedSTM _)  -> checkSTM
+  (BlockedSTM _, ThrownSTM _ _) -> checkSTM
+  (ThrownSTM _ _, STM _ _)       -> checkSTM
+  (ThrownSTM _ _, BlockedSTM _)  -> checkSTM
+  (ThrownSTM _ _, ThrownSTM _ _) -> checkSTM
 
   _ -> dependent' safeIO ds t1 a1 t2 (rewind a2)
     && dependent' safeIO ds t2 a2 t1 (rewind a1)
@@ -625,6 +630,7 @@ dependent' safeIO ds t1 a1 t2 l2 = case (a1, l2) of
   -- Another worst-case: assume all STM is dependent.
   (STM _ _, WillSTM) -> True
   (BlockedSTM _, WillSTM) -> True
+  (ThrownSTM _ _, WillSTM) -> True
 
   -- the number of capabilities is essentially a global shared
   -- variable

@@ -6,6 +6,31 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+2.4.0.0 (2020-07-01)
+--------------------
+
+* Git: :tag:`dejafu-2.4.0.0`
+* Hackage: :hackage:`dejafu-2.4.0.0`
+
+Added
+~~~~~
+
+* Thread action constructor for STM transactions which throw an
+  exception: ``Test.DejaFu.Types.ThreadAction`` ``ThrownSTM``
+
+Changed
+~~~~~~~
+
+* ``Test.DejaFu.Types.ThreadAction``, ``Throw``, and ``ThrowTo`` now
+  include the resultant masking state, and no bool.
+
+Fixed
+~~~~~
+
+* (:issue:`324`) Jumping out of a restored mask into an exception
+  handler now atomically restores the masking state.
+
+
 2.3.0.1 (2020-06-24)
 --------------------
 

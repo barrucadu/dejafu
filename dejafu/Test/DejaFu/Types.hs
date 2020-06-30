@@ -289,18 +289,23 @@ data ThreadAction =
   | STM [TAction] [ThreadId]
   -- ^ An STM transaction was executed, possibly waking up some
   -- threads.
+  | ThrownSTM [TAction] (Maybe MaskingState)
+  -- ^ An STM transaction threw an exception.  Give the resultant
+  -- masking state after jumping to the exception handler (if the
+  -- thread is still alive).
   | BlockedSTM [TAction]
   -- ^ Got blocked in an STM transaction.
   | Catching
   -- ^ Register a new exception handler
   | PopCatching
   -- ^ Pop the innermost exception handler from the stack.
-  | Throw Bool
-  -- ^ Throw an exception.  If the 'Bool' is @True@, then this killed
-  -- the thread.
-  | ThrowTo ThreadId Bool
-  -- ^ Throw an exception to a thread.  If the 'Bool' is @True@, then
-  -- this killed the thread.
+  | Throw (Maybe MaskingState)
+  -- ^ Throw an exception, and give the resultant masking state after
+  -- jumping to the exception handler (if the thread is still alive).
+  | ThrowTo ThreadId (Maybe MaskingState)
+  -- ^ Throw an exception to a thread, and give the resultant masking
+  -- state after jumping to the exception handler (if the thread is
+  -- still alive).
   | BlockedThrowTo ThreadId
   -- ^ Get blocked on a 'throwTo'.
   | SetMasking Bool MaskingState
@@ -354,11 +359,15 @@ instance NFData ThreadAction where
   rnf (CasIORef c b) = rnf (c, b)
   rnf (CommitIORef t c) = rnf (t, c)
   rnf (STM as ts) = rnf (as, ts)
+  rnf (ThrownSTM as (Just m)) = m `seq` rnf as
+  rnf (ThrownSTM as Nothing) = rnf as
   rnf (BlockedSTM as) = rnf as
   rnf Catching = ()
   rnf PopCatching = ()
-  rnf (Throw b) = rnf b
-  rnf (ThrowTo t b) = rnf (t, b)
+  rnf (Throw (Just m)) = m `seq` ()
+  rnf (Throw Nothing) = ()
+  rnf (ThrowTo t (Just m)) = m `seq` rnf t
+  rnf (ThrowTo t Nothing) = rnf t
   rnf (BlockedThrowTo t) = rnf t
   rnf (SetMasking b m) = rnf (b, show m)
   rnf (ResetMasking b m) = rnf (b, show m)

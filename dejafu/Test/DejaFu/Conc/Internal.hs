@@ -523,11 +523,10 @@ stepThread _ _ _ _ tid (AAtom stm c) = synchronised $ \ctx@Context{..} -> do
            , effect
            )
     Exception e -> do
-      let act = STM trace []
-      res' <- stepThrow (const act) tid e ctx
+      res' <- stepThrow (ThrownSTM trace) tid e ctx
       pure $ case res' of
-        (Succeeded ctx', _, effect') -> (Succeeded ctx' { cIdSource = idSource' }, act, effect')
-        (Failed err, _, effect') -> (Failed err, act, effect')
+        (Succeeded ctx', act, effect') -> (Succeeded ctx' { cIdSource = idSource' }, act, effect')
+        (Failed err, act, effect') -> (Failed err, act, effect')
 
 -- lift an action from the underlying monad into the @Conc@
 -- computation.
@@ -557,7 +556,7 @@ stepThread _ _ _ _ tid (AThrowTo t e c) = synchronised $ \ctx@Context{..} ->
            )
        Nothing -> pure
          (Succeeded ctx { cThreads = threads' }
-         , ThrowTo t False
+         , ThrowTo t Nothing
          , const (pure ())
          )
 
@@ -633,7 +632,7 @@ stepThread _ _ _ _ tid (ANewInvariant inv c) = \ctx@Context{..} ->
 -- | Handle an exception being thrown from an @AAtom@, @AThrow@, or
 -- @AThrowTo@.
 stepThrow :: (MonadDejaFu n, Exception e)
-  => (Bool -> ThreadAction)
+  => (Maybe MaskingState -> ThreadAction)
   -- ^ Action to include in the trace.
   -> ThreadId
   -- ^ The thread receiving the exception.
@@ -645,19 +644,19 @@ stepThrow :: (MonadDejaFu n, Exception e)
 stepThrow act tid e ctx@Context{..} = case propagate some tid cThreads of
     Just ts' -> pure
       ( Succeeded ctx { cThreads = ts' }
-      , act False
+      , act (Just . _masking $ elookup tid ts')
       , const (pure ())
       )
     Nothing
       | tid == initialThread -> pure
         ( Failed (UncaughtException some)
-        , act True
+        , act Nothing
         , const (pure ())
         )
       | otherwise -> do
           ts' <- kill tid cThreads
           pure ( Succeeded ctx { cThreads = ts' }
-               , act True
+               , act Nothing
                , const (pure ())
                )
   where
