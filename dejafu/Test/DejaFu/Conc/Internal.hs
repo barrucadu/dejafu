@@ -556,7 +556,7 @@ stepThread _ _ _ _ tid (AThrowTo t e c) = synchronised $ \ctx@Context{..} ->
            )
        Nothing -> pure
          (Succeeded ctx { cThreads = threads' }
-         , ThrowTo t Nothing False
+         , ThrowTo t Nothing
          , const (pure ())
          )
 
@@ -632,7 +632,7 @@ stepThread _ _ _ _ tid (ANewInvariant inv c) = \ctx@Context{..} ->
 -- | Handle an exception being thrown from an @AAtom@, @AThrow@, or
 -- @AThrowTo@.
 stepThrow :: (MonadDejaFu n, Exception e)
-  => (Maybe MaskingState -> Bool -> ThreadAction)
+  => (Maybe MaskingState -> ThreadAction)
   -- ^ Action to include in the trace.
   -> ThreadId
   -- ^ The thread receiving the exception.
@@ -642,21 +642,21 @@ stepThrow :: (MonadDejaFu n, Exception e)
   -- ^ The execution context.
   -> n (What n g, ThreadAction, Threads n -> n ())
 stepThrow act tid e ctx@Context{..} = case propagate some tid cThreads of
-    Just (ms, ts') -> pure
+    Just ts' -> pure
       ( Succeeded ctx { cThreads = ts' }
-      , act (checkMask ms tid cThreads) False
+      , act (Just . _masking $ elookup tid ts')
       , const (pure ())
       )
     Nothing
       | tid == initialThread -> pure
         ( Failed (UncaughtException some)
-        , act Nothing True
+        , act Nothing
         , const (pure ())
         )
       | otherwise -> do
           ts' <- kill tid cThreads
           pure ( Succeeded ctx { cThreads = ts' }
-               , act Nothing True
+               , act Nothing
                , const (pure ())
                )
   where

@@ -19,7 +19,7 @@ Changed
 ~~~~~~~
 
 * ``Test.DejaFu.Types.ThreadAction``, ``Throw``, and ``ThrowTo`` now
-  include the resultant masking state.
+  include the resultant masking state, and no bool.
 
 Fixed
 ~~~~~

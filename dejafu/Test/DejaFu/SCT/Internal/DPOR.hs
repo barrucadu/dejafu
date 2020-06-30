@@ -565,7 +565,7 @@ independent safeIO ds t1 a1 t2 a2
     -- :(
     --
     -- See #191 / #190
-    check _ (ThrowTo t _ _) tid _ | t == tid = True
+    check _ (ThrowTo t _) tid _ | t == tid = True
     check _ (BlockedThrowTo t) tid _ | t == tid = True
     -- can't re-order an unsynchronised write with something which synchronises that IORef.
     check _ (simplifyAction -> UnsynchronisedWrite r) _ (simplifyAction -> a) | synchronises a r = True
@@ -582,23 +582,23 @@ dependent safeIO ds t1 a1 t2 a2 = case (a1, a2) of
   -- actually blocked. 'dependent'' has to assume that all
   -- potentially-blocking operations can block, and so is more
   -- pessimistic in this case.
-  (ThrowTo t _ _, ThrowTo u _ _)
+  (ThrowTo t _, ThrowTo u _)
     | t == t2 && u == t1 -> canInterrupt ds t1 a1 || canInterrupt ds t2 a2
-  (ThrowTo t _ _, _) | t == t2 -> canInterrupt ds t2 a2 && a2 /= Stop
-  (_, ThrowTo t _ _) | t == t1 -> canInterrupt ds t1 a1 && a1 /= Stop
+  (ThrowTo t _, _) | t == t2 -> canInterrupt ds t2 a2 && a2 /= Stop
+  (_, ThrowTo t _) | t == t1 -> canInterrupt ds t1 a1 && a1 /= Stop
 
   -- Dependency of STM transactions can be /greatly/ improved here, as
   -- the 'Lookahead' does not know which @TVar@s will be touched, and
   -- so has to assume all transactions are dependent.
-  (STM _ _, STM _ _)         -> checkSTM
-  (STM _ _, BlockedSTM _)    -> checkSTM
-  (STM _ _, ThrownSTM _ _ _) -> checkSTM
-  (BlockedSTM _, STM _ _)         -> checkSTM
-  (BlockedSTM _, BlockedSTM _)    -> checkSTM
-  (BlockedSTM _, ThrownSTM _ _ _) -> checkSTM
-  (ThrownSTM _ _ _, STM _ _)         -> checkSTM
-  (ThrownSTM _ _ _, BlockedSTM _)    -> checkSTM
-  (ThrownSTM _ _ _, ThrownSTM _ _ _) -> checkSTM
+  (STM _ _, STM _ _)       -> checkSTM
+  (STM _ _, BlockedSTM _)  -> checkSTM
+  (STM _ _, ThrownSTM _ _) -> checkSTM
+  (BlockedSTM _, STM _ _)       -> checkSTM
+  (BlockedSTM _, BlockedSTM _)  -> checkSTM
+  (BlockedSTM _, ThrownSTM _ _) -> checkSTM
+  (ThrownSTM _ _, STM _ _)       -> checkSTM
+  (ThrownSTM _ _, BlockedSTM _)  -> checkSTM
+  (ThrownSTM _ _, ThrownSTM _ _) -> checkSTM
 
   _ -> dependent' safeIO ds t1 a1 t2 (rewind a2)
     && dependent' safeIO ds t2 a2 t1 (rewind a1)
@@ -622,15 +622,15 @@ dependent' safeIO ds t1 a1 t2 l2 = case (a1, l2) of
   -- thread and if the actions can be interrupted. We can also
   -- slightly improve on that by not considering interrupting the
   -- normal termination of a thread: it doesn't make a difference.
-  (ThrowTo t _ _, WillThrowTo u)
+  (ThrowTo t _, WillThrowTo u)
     | t == t2 && u == t1 -> canInterrupt ds t1 a1 || canInterruptL ds t2 l2
-  (ThrowTo t _ _, _)   | t == t2 -> canInterruptL ds t2 l2 && l2 /= WillStop
+  (ThrowTo t _, _)   | t == t2 -> canInterruptL ds t2 l2 && l2 /= WillStop
   (_, WillThrowTo t) | t == t1 -> canInterrupt  ds t1 a1 && a1 /= Stop
 
   -- Another worst-case: assume all STM is dependent.
   (STM _ _, WillSTM) -> True
   (BlockedSTM _, WillSTM) -> True
-  (ThrownSTM _ _ _, WillSTM) -> True
+  (ThrownSTM _ _, WillSTM) -> True
 
   -- the number of capabilities is essentially a global shared
   -- variable

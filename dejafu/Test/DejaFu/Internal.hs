@@ -136,7 +136,7 @@ tvarsOf act = tvarsRead act `S.union` tvarsWritten act
 tvarsWritten :: ThreadAction -> Set TVarId
 tvarsWritten act = S.fromList $ case act of
   STM trc _ -> concatMap tvarsOf' trc
-  ThrownSTM trc _ _ -> concatMap tvarsOf' trc
+  ThrownSTM trc _ -> concatMap tvarsOf' trc
   BlockedSTM trc -> concatMap tvarsOf' trc
   _ -> []
 
@@ -151,7 +151,7 @@ tvarsWritten act = S.fromList $ case act of
 tvarsRead :: ThreadAction -> Set TVarId
 tvarsRead act = S.fromList $ case act of
   STM trc _ -> concatMap tvarsOf' trc
-  ThrownSTM trc _ _ -> concatMap tvarsOf' trc
+  ThrownSTM trc _ -> concatMap tvarsOf' trc
   BlockedSTM trc -> concatMap tvarsOf' trc
   _ -> []
 
@@ -192,12 +192,12 @@ rewind (WriteIORef c) = WillWriteIORef c
 rewind (CasIORef c _) = WillCasIORef c
 rewind (CommitIORef t c) = WillCommitIORef t c
 rewind (STM _ _) = WillSTM
-rewind (ThrownSTM _ _ _) = WillSTM
+rewind (ThrownSTM _ _) = WillSTM
 rewind (BlockedSTM _) = WillSTM
 rewind Catching = WillCatching
 rewind PopCatching = WillPopCatching
-rewind (Throw _ _) = WillThrow
-rewind (ThrowTo t _ _) = WillThrowTo t
+rewind (Throw _) = WillThrow
+rewind (ThrowTo t _) = WillThrowTo t
 rewind (BlockedThrowTo t) = WillThrowTo t
 rewind (SetMasking b m) = WillSetMasking b m
 rewind (ResetMasking b m) = WillResetMasking b m
@@ -299,7 +299,7 @@ tidsOf (TakeMVar _ tids) = S.fromList tids
 tidsOf (TryTakeMVar _ _ tids) = S.fromList tids
 tidsOf (CommitIORef tid _) = S.singleton tid
 tidsOf (STM _ tids) = S.fromList tids
-tidsOf (ThrowTo tid _ _) = S.singleton tid
+tidsOf (ThrowTo tid _) = S.singleton tid
 tidsOf (BlockedThrowTo tid) = S.singleton tid
 tidsOf _ = S.empty
 
@@ -377,12 +377,12 @@ updateMaskState tid (Fork tid2) = \masks -> case M.lookup tid masks of
   Nothing -> masks
 updateMaskState tid (SetMasking   _ ms) = M.insert tid ms
 updateMaskState tid (ResetMasking _ ms) = M.insert tid ms
-updateMaskState tid (Throw _ True) = M.delete tid
-updateMaskState tid (Throw (Just ms) _) = M.insert tid ms
-updateMaskState tid (ThrownSTM _ _ True) = M.delete tid
-updateMaskState tid (ThrownSTM _ (Just ms) _) = M.insert tid ms
-updateMaskState _ (ThrowTo tid _ True) = M.delete tid
-updateMaskState _ (ThrowTo tid (Just ms) _) = M.insert tid ms
+updateMaskState tid (Throw Nothing) = M.delete tid
+updateMaskState tid (Throw (Just ms)) = M.insert tid ms
+updateMaskState tid (ThrownSTM _ Nothing) = M.delete tid
+updateMaskState tid (ThrownSTM _ (Just ms)) = M.insert tid ms
+updateMaskState _ (ThrowTo tid Nothing) = M.delete tid
+updateMaskState _ (ThrowTo tid (Just ms)) = M.insert tid ms
 updateMaskState tid Stop = M.delete tid
 updateMaskState _ _ = id
 

@@ -74,11 +74,11 @@ data Handler n = forall e. Exception e => Handler MaskingState (e -> Action n)
 
 -- | Propagate an exception upwards, finding the closest handler
 -- which can deal with it.
-propagate :: HasCallStack => SomeException -> ThreadId -> Threads n -> Maybe (MaskingState, Threads n)
+propagate :: HasCallStack => SomeException -> ThreadId -> Threads n -> Maybe (Threads n)
 propagate e tid threads = raise <$> propagate' handlers where
   handlers = _handlers (elookup tid threads)
 
-  raise (ms, act, hs) = (ms, except ms act hs tid threads)
+  raise (ms, act, hs) = except ms act hs tid threads
 
   propagate' [] = Nothing
   propagate' (Handler ms h:hs) = maybe (propagate' hs) (\act -> Just (ms, act, hs)) $ h <$> fromException e
@@ -113,13 +113,6 @@ except ms act hs = eadjust $ \thread -> thread
 -- | Set the masking state of a thread.
 mask :: HasCallStack => MaskingState -> ThreadId -> Threads n -> Threads n
 mask ms = eadjust $ \thread -> thread { _masking = ms }
-
--- | Check the masking state of a thread, returning @Nothing@ if it
--- matches the given one.
-checkMask :: HasCallStack => MaskingState -> ThreadId -> Threads n -> Maybe MaskingState
-checkMask ms tid threads =
-  let ms0 = M.findWithDefault Unmasked tid (_masking <$> threads)
-  in if ms0 == ms then Nothing else Just ms0
 
 --------------------------------------------------------------------------------
 -- * Manipulating threads
