@@ -1,8 +1,5 @@
-dejafu [![Build Status][build-status]][build-log]
+dejafu
 ======
-
-[build-status]: https://travis-ci.org/barrucadu/dejafu.svg?branch=master
-[build-log]:    https://travis-ci.org/barrucadu/dejafu
 
 > [Déjà Fu is] A martial art in which the user's limbs move in time as
 > well as space, […] It is best described as "the feeling that you
