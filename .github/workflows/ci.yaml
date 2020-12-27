@@ -6,6 +6,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
+      - name: 'https://github.com/mstksg/setup-stack/issues/13'
+        run: 'echo "ACTIONS_ALLOW_UNSECURE_COMMANDS=true" >> $GITHUB_ENV'
       - uses: actions/checkout@v2
       - uses: mstksg/setup-stack@v1
       - name: Setup
@@ -21,6 +23,8 @@ jobs:
   doctest:
     runs-on: ubuntu-latest
     steps:
+      - name: 'https://github.com/mstksg/setup-stack/issues/13'
+        run: 'echo "ACTIONS_ALLOW_UNSECURE_COMMANDS=true" >> $GITHUB_ENV'
       - uses: actions/checkout@v2
       - uses: mstksg/setup-stack@v1
       - name: Setup
@@ -48,6 +52,8 @@ jobs:
           - lts-15.0 # ghc-8.8
 
     steps:
+      - name: 'https://github.com/mstksg/setup-stack/issues/13'
+        run: 'echo "ACTIONS_ALLOW_UNSECURE_COMMANDS=true" >> $GITHUB_ENV'
       - uses: actions/checkout@v2
       - uses: mstksg/setup-stack@v1
       - name: Setup
