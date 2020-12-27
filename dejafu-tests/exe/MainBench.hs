@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Main where
 
 import qualified Criterion.Main       as C
@@ -13,10 +15,17 @@ main = C.defaultMain (T.foldTestTree mkBench mempty tests)
 
 -- | Turn a test tree into a list of benchmarks.
 mkBench :: T.TreeFold [C.Benchmark]
+#if MIN_VERSION_tasty(1,4,0)
+mkBench = T.trivialFold
+  { T.foldSingle = \opts lbl t -> [C.bench lbl (benchTest opts t)]
+  , T.foldGroup = \_ lbl bs -> [C.bgroup lbl bs]
+  }
+#else
 mkBench = T.trivialFold
   { T.foldSingle = \opts lbl t -> [C.bench lbl (benchTest opts t)]
   , T.foldGroup = \lbl bs -> [C.bgroup lbl bs]
   }
+#endif
 
 -- | Turn a test into a benchmark.
 benchTest :: T.IsTest t => T.OptionSet -> t -> C.Benchmarkable
