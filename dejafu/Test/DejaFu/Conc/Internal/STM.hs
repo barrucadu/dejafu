@@ -132,10 +132,10 @@ data Result a =
 runTransaction :: MonadDejaFu n
   => ModelSTM n a
   -> IdSource
-  -> n (Result a, IdSource, [TAction])
+  -> n (Result a, n (), IdSource, [TAction])
 runTransaction ma tvid = do
-  (res, _, tvid', trace) <- doTransaction ma tvid
-  pure (res, tvid', trace)
+  (res, effect, _, tvid', trace) <- doTransaction ma tvid
+  pure (res, effect, tvid', trace)
 
 -- | Run a STM transaction, returning an action to undo its effects.
 --
@@ -144,43 +144,44 @@ runTransaction ma tvid = do
 doTransaction :: MonadDejaFu n
   => ModelSTM n a
   -> IdSource
-  -> n (Result a, n (), IdSource, [TAction])
+  -> n (Result a, n (), n (), IdSource, [TAction])
 doTransaction ma idsource = do
   (c, ref) <- runRefCont SStop (Just . Right) (runModelSTM ma)
-  (idsource', undo, readen, written, trace) <- go ref c (pure ()) idsource [] [] []
+  (idsource', effect, undo, readen, written, trace) <- go ref c (pure ()) (pure ()) idsource [] [] []
   res <- readRef ref
 
   case res of
-    Just (Right val) -> pure (Success (nub readen) (nub written) val, undo, idsource', reverse trace)
-    Just (Left  exc) -> undo >> pure (Exception exc,      pure (), idsource, reverse trace)
-    Nothing          -> undo >> pure (Retry $ nub readen, pure (), idsource, reverse trace)
+    Just (Right val) -> pure (Success (nub readen) (nub written) val, effect, undo, idsource', reverse trace)
+    Just (Left  exc) -> undo >> pure (Exception exc,      pure (), pure (), idsource, reverse trace)
+    Nothing          -> undo >> pure (Retry $ nub readen, pure (), pure (), idsource, reverse trace)
 
   where
-    go ref act undo nidsrc readen written sofar = do
-      (act', undo', nidsrc', readen', written', tact) <- stepTrans act nidsrc
+    go ref act effect undo nidsrc readen written sofar = do
+      (act', effect', undo', nidsrc', readen', written', tact) <- stepTrans act nidsrc
 
       let newIDSource = nidsrc'
           newAct = act'
+          newEffect = effect >> effect'
           newUndo = undo' >> undo
           newReaden = readen' ++ readen
           newWritten = written' ++ written
           newSofar = tact : sofar
 
       case tact of
-        TStop  -> pure (newIDSource, newUndo, newReaden, newWritten, TStop:newSofar)
+        TStop  -> pure (newIDSource, newEffect, newUndo, newReaden, newWritten, TStop:newSofar)
         TRetry -> do
           writeRef ref Nothing
-          pure (newIDSource, newUndo, newReaden, newWritten, TRetry:newSofar)
+          pure (newIDSource, newEffect, newUndo, newReaden, newWritten, TRetry:newSofar)
         TThrow -> do
           writeRef ref (Just . Left $ case act of SThrow e -> toException e; _ -> undefined)
-          pure (newIDSource, newUndo, newReaden, newWritten, TThrow:newSofar)
-        _ -> go ref newAct newUndo newIDSource newReaden newWritten newSofar
+          pure (newIDSource, newEffect, newUndo, newReaden, newWritten, TThrow:newSofar)
+        _ -> go ref newAct newEffect newUndo newIDSource newReaden newWritten newSofar
 
 -- | Run a transaction for one step.
 stepTrans :: MonadDejaFu n
   => STMAction n
   -> IdSource
-  -> n (STMAction n, n (), IdSource, [TVarId], [TVarId], TAction)
+  -> n (STMAction n, n (), n (), IdSource, [TVarId], [TVarId], TAction)
 stepTrans act idsource = case act of
   SCatch  h stm c -> stepCatch h stm c
   SRead   ref c   -> stepRead ref c
@@ -189,50 +190,50 @@ stepTrans act idsource = case act of
   SOrElse a b c   -> stepOrElse a b c
   SStop   na      -> stepStop na
 
-  SThrow e -> pure (SThrow e, nothing, idsource, [], [], TThrow)
-  SRetry   -> pure (SRetry,   nothing, idsource, [], [], TRetry)
+  SThrow e -> pure (SThrow e, nothing, nothing, idsource, [], [], TThrow)
+  SRetry   -> pure (SRetry,   nothing, nothing, idsource, [], [], TRetry)
 
   where
     nothing = pure ()
 
     stepCatch h stm c = cases TCatch stm c
-      (\trace -> pure (SRetry, nothing, idsource, [], [], TCatch trace Nothing))
+      (\trace -> pure (SRetry, nothing, nothing, idsource, [], [], TCatch trace Nothing))
       (\trace exc    -> case fromException exc of
         Just exc' -> transaction (TCatch trace . Just) (h exc') c
-        Nothing   -> pure (SThrow exc, nothing, idsource, [], [], TCatch trace Nothing))
+        Nothing   -> pure (SThrow exc, nothing, nothing, idsource, [], [], TCatch trace Nothing))
 
     stepRead ModelTVar{..} c = do
       val <- readRef tvarRef
-      pure (c val, nothing, idsource, [tvarId], [], TRead tvarId)
+      pure (c val, nothing, nothing, idsource, [tvarId], [], TRead tvarId)
 
     stepWrite ModelTVar{..} a c = do
       old <- readRef tvarRef
       writeRef tvarRef a
-      pure (c, writeRef tvarRef old, idsource, [], [tvarId], TWrite tvarId)
+      pure (c, writeRef tvarRef a, writeRef tvarRef old, idsource, [], [tvarId], TWrite tvarId)
 
     stepNew n a c = do
       let (idsource', tvid) = nextTVId n idsource
       ref <- newRef a
       let tvar = ModelTVar tvid ref
-      pure (c tvar, nothing, idsource', [], [tvid], TNew tvid)
+      pure (c tvar, writeRef ref a, nothing, idsource', [], [tvid], TNew tvid)
 
     stepOrElse a b c = cases TOrElse a c
       (\trace   -> transaction (TOrElse trace . Just) b c)
-      (\trace exc -> pure (SThrow exc, nothing, idsource, [], [], TOrElse trace Nothing))
+      (\trace exc -> pure (SThrow exc, nothing, nothing, idsource, [], [], TOrElse trace Nothing))
 
     stepStop na = do
       na
-      pure (SStop na, nothing, idsource, [], [], TStop)
+      pure (SStop na, nothing, nothing, idsource, [], [], TStop)
 
     cases tact stm onSuccess onRetry onException = do
-      (res, undo, idsource', trace) <- doTransaction stm idsource
+      (res, effect, undo, idsource', trace) <- doTransaction stm idsource
       case res of
-        Success readen written val -> pure (onSuccess val, undo, idsource', readen, written, tact trace Nothing)
+        Success readen written val -> pure (onSuccess val, effect, undo, idsource', readen, written, tact trace Nothing)
         Retry readen -> do
-          (res', undo', idsource'', readen', written', trace') <- onRetry trace
-          pure (res', undo', idsource'', readen ++ readen', written', trace')
+          (res', effect', undo', idsource'', readen', written', trace') <- onRetry trace
+          pure (res', effect', undo', idsource'', readen ++ readen', written', trace')
         Exception exc -> onException trace exc
 
     transaction tact stm onSuccess = cases (\t _ -> tact t) stm onSuccess
-      (\trace     -> pure (SRetry, nothing, idsource, [], [], tact trace))
-      (\trace exc -> pure (SThrow exc, nothing, idsource, [], [], tact trace))
+      (\trace     -> pure (SRetry, nothing, nothing, idsource, [], [], tact trace))
+      (\trace exc -> pure (SThrow exc, nothing, nothing, idsource, [], [], tact trace))

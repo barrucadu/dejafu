@@ -6,6 +6,17 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+
+unreleased
+----------
+
+Fixed
+~~~~~
+
+* (:issue:`331`) Initial TVar values from setup actions are now
+  restored for subsequent executions.
+
+
 2.4.0.0 (2020-07-01)
 --------------------
 

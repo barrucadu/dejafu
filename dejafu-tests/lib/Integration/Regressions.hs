@@ -7,6 +7,7 @@ import           Test.DejaFu               (exceptionsAlways, gives')
 import           Control.Concurrent.Classy
 import           Control.Exception         (AsyncException(..))
 import qualified Control.Monad.Catch       as E
+import           System.Random             (mkStdGen)
 
 import           Common
 
@@ -78,4 +79,9 @@ tests = toTestList
       killThread tId
       v <- takeMVar var
       pure (v :: Either AsyncException ())
+
+  , (:[]) . testDejafuWithSettings (fromWayAndMemType (randomly (mkStdGen 0) 10) defaultMemType) "https://github.com/barrucadu/dejafu/issues/331" (gives' [1]) $
+      withSetup (atomically $ newTVar (0::Int)) $ \tvar -> atomically $ do
+        modifyTVar tvar (+1)
+        readTVar tvar
   ]

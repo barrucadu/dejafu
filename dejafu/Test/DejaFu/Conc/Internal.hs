@@ -506,21 +506,19 @@ stepThread _ _ _ memtype _ (ACommit t c) = \ctx@Context{..} -> do
 
 -- run a STM transaction atomically.
 stepThread _ _ _ _ tid (AAtom stm c) = synchronised $ \ctx@Context{..} -> do
-  let transaction = runTransaction stm cIdSource
-  let effect = const (void transaction)
-  (res, idSource', trace) <- transaction
+  (res, effect, idSource', trace) <- runTransaction stm cIdSource
   case res of
     Success _ written val -> do
       let (threads', woken) = wake (OnTVar written) cThreads
       pure ( Succeeded ctx { cThreads = goto (c val) tid threads', cIdSource = idSource' }
            , STM trace woken
-           , effect
+           , const effect
            )
     Retry touched -> do
       let threads' = block (OnTVar touched) tid cThreads
       pure ( Succeeded ctx { cThreads = threads', cIdSource = idSource'}
            , BlockedSTM trace
-           , effect
+           , const effect
            )
     Exception e -> do
       res' <- stepThrow (ThrownSTM trace) tid e ctx
