@@ -161,7 +161,7 @@ blockOn fs = do
       _ -> retry
 
   -- Kill everything if something failed.
-  unless success_ $ mapM_ (_killme . unWrap) fs
+  unless success_ $ mapM_ (\x -> _killme (unWrap x)) fs
 
   pure success_
 

@@ -21,11 +21,9 @@
 # Inapplicable
 - ignore: {name: Use readTVarIO, within: Control.Monad.Conc.Class}
 
-# GHC treats infix $ specially wrt type checking, so that things like
-# "runST $ do ..." work even though they're impredicative.
-# Unfortunately, this means that HLint's "avoid lambda" warning for
-# this module would lead to code which no longer compiles!
+# Type inference errors
 - ignore: {name: Avoid lambda, within: Test.DejaFu.Conc.Internal.Program}
+- ignore: {name: Avoid lambda, within: Examples.SearchParty}
 
 # Prefer applicative operators over monadic ones.
 - suggest: {name: Generalise monadic functions, lhs: return, rhs: pure}
