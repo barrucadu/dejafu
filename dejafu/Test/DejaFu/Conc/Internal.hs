@@ -6,7 +6,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal
--- Copyright   : (c) 2016--2020 Michael Walker
+-- Copyright   : (c) 2016--2021 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -81,7 +81,7 @@ runConcurrency invariants forSnapshot sched memtype g idsrc caps ma = do
                     , cCState        = initialCState
                     }
   (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
-  let threads0 = launch' Unmasked initialThread (const c) (cThreads ctx)
+  let threads0 = launch' Unmasked initialThread (\_ -> c) (cThreads ctx)
   threads <- case forkBoundThread of
     Just fbt -> makeBound fbt initialThread threads0
     Nothing  -> pure threads0
@@ -100,7 +100,7 @@ runConcurrencyWithSnapshot :: (MonadDejaFu n, HasCallStack)
 runConcurrencyWithSnapshot sched memtype ctx restore ma = do
   (c, ref) <- runRefCont AStop (Just . Right) (runModelConc ma)
   let threads0 = M.delete initialThread (cThreads ctx)
-  let threads1 = launch' Unmasked initialThread (const c) threads0
+  let threads1 = launch' Unmasked initialThread (\_ -> c) threads0
   threads <- case forkBoundThread of
     Just fbt -> do
       let boundThreads = M.filter (isJust . _bound) threads1

@@ -12,7 +12,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Conc.Internal.Program
--- Copyright   : (c) 2019 Michael Walker
+-- Copyright   : (c) 2019--2021 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -141,7 +141,7 @@ instance (pty ~ Basic, Monad n) => C.MonadConc (Program pty n) where
 
   getMaskingState = ModelConc (\c -> AGetMasking c)
 
-  unsafeUnmask ma = ModelConc (AMasking Unmasked (const ma))
+  unsafeUnmask ma = ModelConc (AMasking Unmasked (\_ -> ma))
 
   -- ----------
 
