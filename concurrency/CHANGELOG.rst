@@ -6,6 +6,16 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+unreleased
+----------
+
+Fixed
+~~~~~
+
+* (:issue:`334`) Compilation error under GHC 9 due to use of
+  ``const``.
+
+
 1.11.0.0 (2020-05-14)
 --------------------
 

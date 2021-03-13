@@ -9,7 +9,7 @@
 
 -- |
 -- Module      : Control.Monad.Conc.Class
--- Copyright   : (c) 2016--2020 Michael Walker
+-- Copyright   : (c) 2016--2021 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -522,7 +522,7 @@ class ( Monad m
 --
 -- @since 1.5.0.0
 fork :: MonadConc m => m () -> m (ThreadId m)
-fork ma = forkWithUnmask (const ma)
+fork ma = forkWithUnmask (\_ -> ma)
 
 -- | Fork a computation to happen on a specific processor. The
 -- specified int is the /capability number/, typically capabilities
@@ -532,7 +532,7 @@ fork ma = forkWithUnmask (const ma)
 --
 -- @since 1.5.0.0
 forkOn :: MonadConc m => Int -> m () -> m (ThreadId m)
-forkOn c ma = forkOnWithUnmask c (const ma)
+forkOn c ma = forkOnWithUnmask c (\_ -> ma)
 
 -- | Fork a computation to happen in a /bound thread/, which is
 -- necessary if you need to call foreign (non-Haskell) libraries
@@ -540,7 +540,7 @@ forkOn c ma = forkOnWithUnmask c (const ma)
 --
 -- @since 1.5.0.0
 forkOS :: MonadConc m => m () -> m (ThreadId m)
-forkOS ma = forkOSWithUnmask (const ma)
+forkOS ma = forkOSWithUnmask (\_ -> ma)
 
 -- | Fork a thread and call the supplied function when the thread is
 -- about to terminate, with an exception or a returned value. The
@@ -578,21 +578,21 @@ killThread tid = throwTo tid ThreadKilled
 --
 -- @since 1.0.0.0
 forkN :: MonadConc m => String -> m () -> m (ThreadId m)
-forkN name ma = forkWithUnmaskN name (const ma)
+forkN name ma = forkWithUnmaskN name (\_ -> ma)
 
 -- | Like 'forkOn', but the thread is given a name which may be used
 -- to present more useful debugging information.
 --
 -- @since 1.0.0.0
 forkOnN :: MonadConc m => String -> Int -> m () -> m (ThreadId m)
-forkOnN name i ma = forkOnWithUnmaskN name i (const ma)
+forkOnN name i ma = forkOnWithUnmaskN name i (\_ -> ma)
 
 -- | Like 'forkOS', but the thread is given a name which may be used
 -- to present more useful debugging information.
 --
 -- @since 1.5.0.0
 forkOSN :: MonadConc m => String -> m () -> m (ThreadId m)
-forkOSN name ma = forkOSWithUnmaskN name (const ma)
+forkOSN name ma = forkOSWithUnmaskN name (\_ -> ma)
 
 -- | 'True' if bound threads are supported.  If
 -- 'rtsSupportsBoundThreads' is 'False', 'isCurrentThreadBound' will

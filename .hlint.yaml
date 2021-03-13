@@ -15,6 +15,9 @@
 # I don't think this helps
 - ignore: {name: "Avoid lambda using `infix`"}
 
+# Breaks type inference with higher-rank types in GHC 9
+- ignore: {name: Use const}
+
 # Inapplicable
 - ignore: {name: Use readTVarIO, within: Control.Monad.Conc.Class}
 
