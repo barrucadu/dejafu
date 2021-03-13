@@ -2,7 +2,6 @@ module Integration.Names where
 
 import           Control.Concurrent.Classy hiding (check)
 import           Data.Maybe                (mapMaybe)
-import           Test.DejaFu.Conc          (ConcIO)
 import           Test.DejaFu.Internal      (iorefOf, mvarOf, simplifyAction,
                                             tidsOf, tvarsOf)
 import           Test.DejaFu.SCT           (runSCT)

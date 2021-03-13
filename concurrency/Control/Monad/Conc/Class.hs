@@ -101,6 +101,7 @@ import           Control.Monad.Fail           (MonadFail(..))
 import           Control.Monad.STM.Class      (IsSTM, MonadSTM, TVar, fromIsSTM,
                                                newTVar, readTVar)
 import           Control.Monad.Trans.Control  (MonadTransControl, StT, liftWith)
+import           Data.Kind                    (Type)
 import           Data.Proxy                   (Proxy(..))
 
 -- for the 'IO' instance
@@ -195,7 +196,7 @@ class ( Monad m
   -- | The associated 'MonadSTM' for this class.
   --
   -- @since 1.0.0.0
-  type STM m :: * -> *
+  type STM m :: Type -> Type
 
   -- | The mutable reference type, like 'MVar's. This may contain one
   -- value at a time, attempting to read or take from an \"empty\"
@@ -203,26 +204,26 @@ class ( Monad m
   -- \"full\" @MVar@ will block until it is empty.
   --
   -- @since 1.0.0.0
-  type MVar m :: * -> *
+  type MVar m :: Type -> Type
 
   -- | The mutable non-blocking reference type. These may suffer from
   -- relaxed memory effects if functions outside the set @newIORef@,
   -- @readIORef@, @atomicModifyIORef@, and @atomicWriteIORef@ are used.
   --
   -- @since 1.6.0.0
-  type IORef m :: * -> *
+  type IORef m :: Type -> Type
 
   -- | When performing compare-and-swap operations on @IORef@s, a
   -- @Ticket@ is a proof that a thread observed a specific previous
   -- value.
   --
   -- @since 1.0.0.0
-  type Ticket m :: * -> *
+  type Ticket m :: Type -> Type
 
   -- | An abstract handle to a thread.
   --
   -- @since 1.0.0.0
-  type ThreadId m :: *
+  type ThreadId m :: Type
 
   -- | Like 'fork', but the child thread is passed a function that can
   -- be used to unmask asynchronous exceptions. This function should

@@ -8,7 +8,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Types
--- Copyright   : (c) 2017--2020 Michael Walker
+-- Copyright   : (c) 2017--2021 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -31,6 +31,7 @@ import           Data.Function                        (on)
 import           Data.Functor.Contravariant           (Contravariant(..))
 import           Data.Functor.Contravariant.Divisible (Divisible(..))
 import qualified Data.IORef                           as IO
+import           Data.Kind                            (Type)
 import           Data.Map.Strict                      (Map)
 import qualified Data.Map.Strict                      as M
 import           Data.Semigroup                       (Semigroup(..))
@@ -60,7 +61,7 @@ class MonadThrow m => MonadDejaFu m where
   -- These references are always used from the same Haskell thread, so
   -- it's safe to implement these using unsynchronised primitives with
   -- relaxed-memory behaviours (like @IORef@s).
-  type Ref m :: * -> *
+  type Ref m :: Type -> Type
 
   -- | Create a new reference holding a given initial value.
   newRef :: a -> m (Ref m a)
@@ -74,7 +75,7 @@ class MonadThrow m => MonadDejaFu m where
   -- | A handle to a bound thread.  If the monad doesn't support bound
   -- threads (for example, if it's not based on @IO@), then this
   -- should be some type which can't be constructed, like 'V1'.
-  type BoundThread m :: * -> *
+  type BoundThread m :: Type -> Type
 
   -- | Fork a new bound thread, if the monad supports them.
   forkBoundThread :: Maybe (m (BoundThread m a))

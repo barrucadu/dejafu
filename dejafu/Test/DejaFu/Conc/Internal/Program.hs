@@ -259,7 +259,7 @@ recordSnapshot
   :: MonadDejaFu n
   => Program pty n a
   -> n (Maybe (Either Condition (Snapshot pty n a), Trace))
-recordSnapshot ModelConc{..} = pure Nothing
+recordSnapshot ModelConc{} = pure Nothing
 recordSnapshot WithSetup{..} =
   let mkSnapshot snap _ = WS snap
   in defaultRecordSnapshot mkSnapshot wsSetup wsProgram

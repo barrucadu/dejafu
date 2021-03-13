@@ -4,8 +4,7 @@ module Integration.Litmus where
 
 import           Control.Monad            (replicateM, void)
 import           Data.List                (nub, sort)
-import           Test.DejaFu              (MemType(..), defaultWay, gives')
-import           Test.DejaFu.Conc         (ConcIO)
+import           Test.DejaFu              (gives')
 import           Test.DejaFu.SCT          (runSCT)
 import qualified Test.Tasty.Hedgehog      as H
 

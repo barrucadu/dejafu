@@ -4,9 +4,8 @@ import qualified Control.Concurrent.Classy as C
 
 import           Control.Monad.Catch.Pure  (runCatchT)
 import           Control.Monad.ST          (runST)
-import           Test.DejaFu.Conc          (Condition(..), Program,
-                                            roundRobinSched, runConcurrent)
-import           Test.DejaFu.Settings      (defaultMemType)
+import           Test.DejaFu.Conc          (Condition(..), roundRobinSched,
+                                            runConcurrent)
 import           Test.DejaFu.Types         (MonadDejaFu)
 import qualified Test.Tasty.HUnit          as TH
 

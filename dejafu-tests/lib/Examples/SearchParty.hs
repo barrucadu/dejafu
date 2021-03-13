@@ -26,7 +26,7 @@ import           Data.Maybe                          (fromJust, isNothing)
 
 -- test imports
 import           Data.List                           (sort)
-import           Test.DejaFu                         (Predicate, alwaysSameOn)
+import           Test.DejaFu                         (alwaysSameOn)
 
 import           Common
 
