@@ -2,7 +2,6 @@ module Integration.Refinement where
 
 import           Control.Concurrent.Classy.MVar
 import           Control.Monad                  (void)
-import           Test.DejaFu.Conc               (ConcIO)
 import           Test.DejaFu.Refinement
 import           Test.Tasty.DejaFu              (testProperty)
 

@@ -7,6 +7,19 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+2.4.0.2 (2021-03-14)
+--------------------
+
+* Git: :tag:`dejafu-2.4.0.2`
+* Hackage: :hackage:`dejafu-2.4.0.2`
+
+Fixed
+~~~~~
+
+* (:issue:`334`) Compilation error under GHC 9 due to use of
+  ``const``.
+
+
 2.4.0.1 (2020-12-28)
 --------------------
 

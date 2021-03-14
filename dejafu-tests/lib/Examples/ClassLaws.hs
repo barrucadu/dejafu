@@ -13,8 +13,6 @@ import           Control.Monad.IO.Class   (MonadIO, liftIO)
 import           Data.Maybe               (isJust)
 import           Data.Set                 (fromList)
 import qualified Hedgehog                 as H
-import           Test.DejaFu              (defaultMemType, defaultWay)
-import           Test.DejaFu.Conc         (ConcIO)
 import           Test.DejaFu.SCT          (runSCT)
 
 import           Common

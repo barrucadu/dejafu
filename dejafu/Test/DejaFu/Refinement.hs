@@ -7,7 +7,7 @@
 
 -- |
 -- Module      : Test.DejaFu.Refinement
--- Copyright   : (c) 2017--2018 Michael Walker
+-- Copyright   : (c) 2017--2021 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -109,6 +109,7 @@ module Test.DejaFu.Refinement
 
 import           Control.Arrow            (first)
 import           Control.Monad.Conc.Class (fork)
+import           Data.Kind                (Type)
 import           Data.Maybe               (isNothing)
 import           Data.Set                 (Set)
 import qualified Data.Set                 as S
@@ -236,11 +237,11 @@ strictlyRefines = RP Strict
 class Testable a where
   -- | The observation value type.  This is used to compare the
   -- results.
-  type O a :: *
+  type O a :: Type
 
   -- | The seed value type.  This is used to construct the concurrent
   -- states.
-  type X a :: *
+  type X a :: Type
 
   rpropTiers :: a -> [[([String], RefinementProperty (O a) (X a))]]
 

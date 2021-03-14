@@ -9,7 +9,7 @@
 
 -- |
 -- Module      : Control.Monad.Conc.Class
--- Copyright   : (c) 2016--2020 Michael Walker
+-- Copyright   : (c) 2016--2021 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -101,6 +101,7 @@ import           Control.Monad.Fail           (MonadFail(..))
 import           Control.Monad.STM.Class      (IsSTM, MonadSTM, TVar, fromIsSTM,
                                                newTVar, readTVar)
 import           Control.Monad.Trans.Control  (MonadTransControl, StT, liftWith)
+import           Data.Kind                    (Type)
 import           Data.Proxy                   (Proxy(..))
 
 -- for the 'IO' instance
@@ -195,7 +196,7 @@ class ( Monad m
   -- | The associated 'MonadSTM' for this class.
   --
   -- @since 1.0.0.0
-  type STM m :: * -> *
+  type STM m :: Type -> Type
 
   -- | The mutable reference type, like 'MVar's. This may contain one
   -- value at a time, attempting to read or take from an \"empty\"
@@ -203,26 +204,26 @@ class ( Monad m
   -- \"full\" @MVar@ will block until it is empty.
   --
   -- @since 1.0.0.0
-  type MVar m :: * -> *
+  type MVar m :: Type -> Type
 
   -- | The mutable non-blocking reference type. These may suffer from
   -- relaxed memory effects if functions outside the set @newIORef@,
   -- @readIORef@, @atomicModifyIORef@, and @atomicWriteIORef@ are used.
   --
   -- @since 1.6.0.0
-  type IORef m :: * -> *
+  type IORef m :: Type -> Type
 
   -- | When performing compare-and-swap operations on @IORef@s, a
   -- @Ticket@ is a proof that a thread observed a specific previous
   -- value.
   --
   -- @since 1.0.0.0
-  type Ticket m :: * -> *
+  type Ticket m :: Type -> Type
 
   -- | An abstract handle to a thread.
   --
   -- @since 1.0.0.0
-  type ThreadId m :: *
+  type ThreadId m :: Type
 
   -- | Like 'fork', but the child thread is passed a function that can
   -- be used to unmask asynchronous exceptions. This function should
@@ -522,7 +523,7 @@ class ( Monad m
 --
 -- @since 1.5.0.0
 fork :: MonadConc m => m () -> m (ThreadId m)
-fork ma = forkWithUnmask (const ma)
+fork ma = forkWithUnmask (\_ -> ma)
 
 -- | Fork a computation to happen on a specific processor. The
 -- specified int is the /capability number/, typically capabilities
@@ -532,7 +533,7 @@ fork ma = forkWithUnmask (const ma)
 --
 -- @since 1.5.0.0
 forkOn :: MonadConc m => Int -> m () -> m (ThreadId m)
-forkOn c ma = forkOnWithUnmask c (const ma)
+forkOn c ma = forkOnWithUnmask c (\_ -> ma)
 
 -- | Fork a computation to happen in a /bound thread/, which is
 -- necessary if you need to call foreign (non-Haskell) libraries
@@ -540,7 +541,7 @@ forkOn c ma = forkOnWithUnmask c (const ma)
 --
 -- @since 1.5.0.0
 forkOS :: MonadConc m => m () -> m (ThreadId m)
-forkOS ma = forkOSWithUnmask (const ma)
+forkOS ma = forkOSWithUnmask (\_ -> ma)
 
 -- | Fork a thread and call the supplied function when the thread is
 -- about to terminate, with an exception or a returned value. The
@@ -578,21 +579,21 @@ killThread tid = throwTo tid ThreadKilled
 --
 -- @since 1.0.0.0
 forkN :: MonadConc m => String -> m () -> m (ThreadId m)
-forkN name ma = forkWithUnmaskN name (const ma)
+forkN name ma = forkWithUnmaskN name (\_ -> ma)
 
 -- | Like 'forkOn', but the thread is given a name which may be used
 -- to present more useful debugging information.
 --
 -- @since 1.0.0.0
 forkOnN :: MonadConc m => String -> Int -> m () -> m (ThreadId m)
-forkOnN name i ma = forkOnWithUnmaskN name i (const ma)
+forkOnN name i ma = forkOnWithUnmaskN name i (\_ -> ma)
 
 -- | Like 'forkOS', but the thread is given a name which may be used
 -- to present more useful debugging information.
 --
 -- @since 1.5.0.0
 forkOSN :: MonadConc m => String -> m () -> m (ThreadId m)
-forkOSN name ma = forkOSWithUnmaskN name (const ma)
+forkOSN name ma = forkOSWithUnmaskN name (\_ -> ma)
 
 -- | 'True' if bound threads are supported.  If
 -- 'rtsSupportsBoundThreads' is 'False', 'isCurrentThreadBound' will

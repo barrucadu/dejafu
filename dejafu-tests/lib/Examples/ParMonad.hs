@@ -11,7 +11,7 @@ import           Common
 
 tests :: [TestTree]
 tests = toTestList
-  [ TEST' True "testing exposes a deadlock" parFilter deadlocksSometimes [("randomly", toSettings (randomly (mkStdGen 0) 150)), ("systematically", defaultSettings)] True
+  [ TEST' False "testing exposes a deadlock" parFilter deadlocksSometimes [("randomly", toSettings (randomly (mkStdGen 0) 150)), ("systematically", defaultSettings)] True
   ]
 
 parFilter :: (MonadConc m, MonadIO m) => m Bool

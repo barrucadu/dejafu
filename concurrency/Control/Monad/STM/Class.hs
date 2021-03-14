@@ -6,7 +6,7 @@
 
 -- |
 -- Module      : Control.Monad.STM.Class
--- Copyright   : (c) 2016--2017 Michael Walker
+-- Copyright   : (c) 2016--2021 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : experimental
@@ -65,6 +65,7 @@ import           Control.Monad.Fail           (MonadFail(..))
 import           Control.Monad.Reader         (ReaderT)
 import           Control.Monad.Trans          (lift)
 import           Control.Monad.Trans.Identity (IdentityT)
+import           Data.Kind                    (Type)
 
 import qualified Control.Concurrent.STM       as STM
 import qualified Control.Monad.Catch          as Ca
@@ -94,7 +95,7 @@ class (Ca.MonadCatch stm, MonadPlus stm) => MonadSTM stm where
   -- synchronised.
   --
   -- @since 1.0.0.0
-  type TVar stm :: * -> *
+  type TVar stm :: Type -> Type
 
   -- | Create a new @TVar@ containing the given value.
   --

@@ -15,7 +15,6 @@ import           Data.List                       (sort)
 import           Data.Maybe                      (isJust, isNothing)
 import           Data.Typeable                   (Typeable)
 import           Test.DejaFu                     (alwaysTrue)
-import           Test.DejaFu.Conc                (ConcIO)
 
 import           Common
 

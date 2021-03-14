@@ -6,8 +6,7 @@ import           Control.Monad             (replicateM, void, when)
 import           Control.Monad.IO.Class    (liftIO)
 import           System.Random             (mkStdGen)
 import           Test.DejaFu               (Condition(..), gives, gives',
-                                            isUncaughtException, withSetup,
-                                            withSetupAndTeardown)
+                                            isUncaughtException)
 
 import           Control.Concurrent.Classy hiding (newQSemN, signalQSemN,
                                             waitQSemN)

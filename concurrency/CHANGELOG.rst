@@ -6,6 +6,19 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+1.11.0.1 (2021-03-14)
+---------------------
+
+* Git: :tag:`concurrency-1.11.0.1`
+* Hackage: :hackage:`concurrency-1.11.0.1`
+
+Fixed
+~~~~~
+
+* (:issue:`334`) Compilation error under GHC 9 due to use of
+  ``const``.
+
+
 1.11.0.0 (2020-05-14)
 --------------------
 
