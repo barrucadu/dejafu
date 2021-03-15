@@ -1,0 +1,297 @@
+###############################################################################
+## Tasks
+
+x-generic-task: &generic-task
+  platform: linux
+  image_resource:
+    type: docker-image
+    source:
+      repository: haskell
+  inputs:
+    - name: source-git
+
+x-task-build-and-test: &task-build-and-test
+  <<: *generic-task
+  run:
+    dir: source-git
+    path: sh
+    args:
+      - -cxe
+      - |
+        stack="stack --no-terminal"
+
+        # speed up compilation by skipping the dejafu-bench deps;
+        # stack's docs suggest this should work: `stack build
+        # dejafu-tests:dejafu-tests` but it doesn't, it still builds
+        # dejafu-bench too
+        sed -n '/executable dejafu-bench/q;p' dejafu-tests/dejafu-tests.cabal > dejafu-tests.cabal
+        mv dejafu-tests.cabal dejafu-tests/dejafu-tests.cabal
+
+        # use a utf-8 locale so hedgehog failure output doesn't cause an
+        # encoding error - this was the default in the haskell:8.8.1
+        # image but not after that.
+        export LANG=C.UTF-8
+        if [ -f ../stackage-feed/item ]; then
+          apt-get update && apt-get install -y jq
+          resolver="$(jq -r .id < ../stackage-feed/item | cut -d/ -f4)"
+          $stack init --resolver="$resolver" --force
+        fi
+
+        $stack setup
+        $stack build
+        $stack exec dejafu-tests
+
+x-task-prerelease-check: &task-prerelease-check
+  <<: *generic-task
+  run:
+    dir: source-git
+    path: sh
+    args:
+      - -cxe
+      - |
+          CABAL_FILE="${PACKAGE}/${PACKAGE}.cabal"
+          ver=$(grep '^version:' "${CABAL_FILE}" | sed 's/^version: *//')
+
+          fail=false
+          if ! grep -q -E "tag: *${PACKAGE}-${ver}" "${PACKAGE}/${PACKAGE}.cabal"; then
+            echo "missing tag in ${PACKAGE}/${PACKAGE}.cabal" >&2
+            fail=true
+          fi
+          if ! grep -q "^${ver}" "${PACKAGE}/CHANGELOG.rst"; then
+            echo "missing header in ${PACKAGE}/CHANGELOG.rst" >&2
+            fail=true
+          fi
+          if ! grep -q -E "Git.*${PACKAGE}-${ver}" "${PACKAGE}/CHANGELOG.rst"; then
+            echo "missing tag in ${PACKAGE}/CHANGELOG.rst" >&2
+            fail=true
+          fi
+          if ! grep -q -E "Hackage.*${PACKAGE}-${ver}" "${PACKAGE}/CHANGELOG.rst"; then
+            echo "missing hackage link in ${PACKAGE}/CHANGELOG.rst" >&2
+            fail=true
+          fi
+          if ! grep -q -E "${PACKAGE}.*${ver}" README.markdown; then
+            echo "missing package version in README.markdown" >&2
+            fail=true
+          fi
+          if ! grep -q -E "${PACKAGE}.*${ver}" doc/getting_started.rst; then
+            echo "missing package version in doc/getting_started.rst" >&2
+            fail=true
+          fi
+          if git grep -q unreleased "$PACKAGE"; then
+            echo "'unreleased' appears in source" >&2
+            fail=true
+          fi
+          if $fail; then
+            exit 1
+          fi
+
+x-task-release: &task-release
+  <<: *generic-task
+  params:
+    HACKAGE_USERNAME: barrucadu
+    HACKAGE_PASSWORD: ((hackage-password))
+  run:
+    dir: source-git
+    path: sh
+    args:
+      - -cxe
+      - |
+          CABAL_FILE="${PACKAGE}/${PACKAGE}.cabal"
+          ver=$(grep '^version:' "${CABAL_FILE}" | sed 's/^version: *//')
+
+          if curl -fs "http://hackage.haskell.org/package/${PACKAGE}-${ver}" >/dev/null; then
+            echo "version already exists on hackage" >&2
+            exit 0
+          fi
+
+          stack --no-terminal setup
+          echo n | stack --no-terminal upload ${PACKAGE}
+
+###############################################################################
+## Pipeline
+
+resource_types:
+  - name: feed-resource
+    type: docker-image
+    source:
+      repository: registry.barrucadu.dev/feed-resource
+      username: registry
+      password: ((docker-registry-password))
+
+resources:
+  - name: stackage-feed
+    type: feed-resource
+    source:
+      uri: https://www.stackage.org/feed
+  - name: dejafu-git
+    type: git
+    source:
+      uri: https://github.com/barrucadu/dejafu.git
+  - name: concurrency-cabal-git
+    type: git
+    source:
+      uri: https://github.com/barrucadu/dejafu.git
+      paths:
+        - concurrency/concurrency.cabal
+  - name: dejafu-cabal-git
+    type: git
+    source:
+      uri: https://github.com/barrucadu/dejafu.git
+      paths:
+        - dejafu/dejafu.cabal
+  - name: hunit-dejafu-cabal-git
+    type: git
+    source:
+      uri: https://github.com/barrucadu/dejafu.git
+      paths:
+        - hunit-dejafu/hunit-dejafu.cabal
+  - name: tasty-dejafu-cabal-git
+    type: git
+    source:
+      uri: https://github.com/barrucadu/dejafu.git
+      paths:
+        - tasty-dejafu/tasty-dejafu.cabal
+
+jobs:
+  - name: update-pipeline
+    plan:
+      - get: dejafu-git
+        trigger: true
+      - set_pipeline: dejafu
+        file: dejafu-git/concourse/pipeline.yml
+
+  - name: test-snapshot
+    plan:
+      - get: dejafu-git
+        trigger: true
+      - get: stackage-feed
+        trigger: true
+      - task: build-and-test
+        input_mapping:
+          source-git: dejafu-git
+        config:
+          <<: *task-build-and-test
+
+  - name: test-concurrency
+    plan:
+      - get: concurrency-cabal-git
+        trigger: true
+      - task: build-and-test
+        input_mapping:
+          source-git: concurrency-cabal-git
+        config:
+          <<: *task-build-and-test
+
+  - name: test-dejafu
+    plan:
+      - get: dejafu-cabal-git
+        trigger: true
+      - task: build-and-test
+        input_mapping:
+          source-git: dejafu-cabal-git
+        config:
+          <<: *task-build-and-test
+
+  - name: test-hunit-dejafu
+    plan:
+      - get: hunit-dejafu-cabal-git
+        trigger: true
+      - task: build-and-test
+        input_mapping:
+          source-git: hunit-dejafu-cabal-git
+        config:
+          <<: *task-build-and-test
+
+  - name: test-tasty-dejafu
+    plan:
+      - get: tasty-dejafu-cabal-git
+        trigger: true
+      - task: build-and-test
+        input_mapping:
+          source-git: tasty-dejafu-cabal-git
+        config:
+          <<: *task-build-and-test
+
+  - name: release-concurrency
+    plan:
+      - get: concurrency-cabal-git
+        trigger: true
+        passed:
+          - test-concurrency
+      - task: prerelease-check
+        params:
+          PACKAGE: concurrency
+        input_mapping:
+          source-git: concurrency-cabal-git
+        config:
+          <<: *task-prerelease-check
+      - task: release
+        params:
+          PACKAGE: concurrency
+        input_mapping:
+          source-git: concurrency-cabal-git
+        config:
+          <<: *task-release
+
+  - name: release-dejafu
+    plan:
+      - get: dejafu-cabal-git
+        trigger: true
+        passed:
+          - test-dejafu
+      - task: prerelease-check
+        params:
+          PACKAGE: dejafu
+        input_mapping:
+          source-git: dejafu-cabal-git
+        config:
+          <<: *task-prerelease-check
+      - task: release
+        params:
+          PACKAGE: dejafu
+        input_mapping:
+          source-git: dejafu-cabal-git
+        config:
+          <<: *task-release
+
+  - name: release-hunit-dejafu
+    plan:
+      - get: hunit-dejafu-cabal-git
+        trigger: true
+        passed:
+          - test-hunit-dejafu
+      - task: prerelease-check
+        params:
+          PACKAGE: hunit-dejafu
+        input_mapping:
+          source-git: hunit-dejafu-cabal-git
+        config:
+          <<: *task-prerelease-check
+      - task: release
+        params:
+          PACKAGE: hunit-dejafu
+        input_mapping:
+          source-git: hunit-dejafu-cabal-git
+        config:
+          <<: *task-release
+
+  - name: release-tasty-dejafu
+    plan:
+      - get: tasty-dejafu-cabal-git
+        trigger: true
+        passed:
+          - test-tasty-dejafu
+      - task: prerelease-check
+        params:
+          PACKAGE: tasty-dejafu
+        input_mapping:
+          source-git: tasty-dejafu-cabal-git
+        config:
+          <<: *task-prerelease-check
+      - task: release
+        params:
+          PACKAGE: tasty-dejafu
+        input_mapping:
+          source-git: tasty-dejafu-cabal-git
+        config:
+          <<: *task-release
