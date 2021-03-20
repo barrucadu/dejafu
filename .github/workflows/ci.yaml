@@ -6,10 +6,10 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - name: 'https://github.com/mstksg/setup-stack/issues/13'
-        run: 'echo "ACTIONS_ALLOW_UNSECURE_COMMANDS=true" >> $GITHUB_ENV'
       - uses: actions/checkout@v2
-      - uses: mstksg/setup-stack@v2
+      - uses: haskell/actions/setup@v1
+        with:
+          enable-stack: true
       - name: Setup
         run: |
           stack --no-terminal install stylish-haskell hlint
@@ -23,10 +23,10 @@ jobs:
   doctest:
     runs-on: ubuntu-latest
     steps:
-      - name: 'https://github.com/mstksg/setup-stack/issues/13'
-        run: 'echo "ACTIONS_ALLOW_UNSECURE_COMMANDS=true" >> $GITHUB_ENV'
       - uses: actions/checkout@v2
-      - uses: mstksg/setup-stack@v2
+      - uses: haskell/actions/setup@v1
+        with:
+          enable-stack: true
       - name: Setup
         run: |
           set -ex
@@ -53,10 +53,10 @@ jobs:
           - lts-17.0 # ghc-8.10
 
     steps:
-      - name: 'https://github.com/mstksg/setup-stack/issues/13'
-        run: 'echo "ACTIONS_ALLOW_UNSECURE_COMMANDS=true" >> $GITHUB_ENV'
       - uses: actions/checkout@v2
-      - uses: mstksg/setup-stack@v2
+      - uses: haskell/actions/setup@v1
+        with:
+          enable-stack: true
       - name: Setup
         env:
           RESOLVER: ${{ matrix.resolver }}
@@ -64,6 +64,8 @@ jobs:
           set -ex
           if [[ "$RESOLVER" == "lts-9.0" ]]; then
             # need an old stack version to build happy
+            mkdir -p ~/.local/bin
+            export PATH=$HOME/.local/bin:$PATH
             curl -L https://github.com/commercialhaskell/stack/releases/download/v1.6.1/stack-1.6.1-linux-x86_64.tar.gz | \
               tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
 
@@ -86,9 +88,19 @@ jobs:
           fi
           stack --no-terminal setup
       - name: Build
+        env:
+          RESOLVER: ${{ matrix.resolver }}
         run: |
+          if [[ "$RESOLVER" == "lts-9.0" ]]; then
+            export PATH=$HOME/.local/bin:$PATH
+          fi
           stack --no-terminal build --ghc-options="-Werror -Wno-unused-imports"
       - name: Test
+        env:
+          RESOLVER: ${{ matrix.resolver }}
         run: |
+          if [[ "$RESOLVER" == "lts-9.0" ]]; then
+            export PATH=$HOME/.local/bin:$PATH
+          fi
           cd dejafu-tests
           stack --no-terminal exec -- dejafu-tests +RTS -s
