@@ -171,6 +171,9 @@ jobs:
           source-git: dejafu-git
         config:
           <<: *task-build-and-test
+          inputs:
+            - name: stackage-feed
+            - name: source-git
 
   - name: test-concurrency
     plan:
