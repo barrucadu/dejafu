@@ -6,6 +6,19 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+
+1.11.0.2 (2021-08-15)
+---------------------
+
+* Git: :tag:`concurrency-1.11.0.2`
+* Hackage: :hackage:`concurrency-1.11.0.2`
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* Remove reference to freenode in README.
+
+
 1.11.0.1 (2021-03-14)
 ---------------------
 
