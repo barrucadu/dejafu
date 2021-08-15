@@ -7,6 +7,18 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+2.0.0.5 (2021-08-15)
+--------------------
+
+* Git: :tag:`hunit-dejafu-2.0.0.5`
+* Hackage: :hackage:`hunit-dejafu-2.0.0.5`
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* Remove reference to freenode in README.
+
+
 2.0.0.4 (2020-07-01)
 --------------------
 

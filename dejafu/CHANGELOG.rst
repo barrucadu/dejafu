@@ -7,6 +7,18 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+2.4.0.3 (2021-08-15)
+--------------------
+
+* Git: :tag:`dejafu-2.4.0.3`
+* Hackage: :hackage:`dejafu-2.4.0.3`
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* Remove reference to freenode in README.
+
+
 2.4.0.2 (2021-03-14)
 --------------------
 
