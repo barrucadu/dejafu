@@ -6,6 +6,14 @@ standard Haskell versioning scheme.
 
 .. _PVP: https://pvp.haskell.org/
 
+unreleased
+----------
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* Update doctest examples in `Test.DejaFu`.
+
 
 2.4.0.3 (2021-08-15)
 --------------------

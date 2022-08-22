@@ -754,7 +754,7 @@ forConcurrently_ = flip mapConcurrently_
 --
 -- @since 1.1.2.0
 replicateConcurrently :: MonadConc m => Int -> m a -> m [a]
-replicateConcurrently i = runConcurrently . sequenceA . replicate i . Concurrently
+replicateConcurrently i = runConcurrently . replicateM i . Concurrently
 
 -- | 'replicateConcurrently_' is 'replicateConcurrently' with the
 -- return values discarded.

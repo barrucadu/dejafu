@@ -51,3 +51,8 @@
 - ignore: {name: "Alternative law, right identity", within: Examples.ClassLaws}
 - ignore: {name: "Alternative law, left identity", within: Examples.ClassLaws}
 - ignore: {name: "Monoid law, right identity", within: Unit.Properties}
+
+# Not implemented
+- ignore: {name: "Use newEmptyTMVarIO"}
+- ignore: {name: "Use newTMVarIO"}
+- ignore: {name: "Use newTVarIO"}

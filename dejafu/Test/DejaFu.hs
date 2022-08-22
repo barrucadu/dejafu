@@ -491,7 +491,7 @@ dejafu = dejafuWithSettings defaultSettings
 -- [fail] Randomly!
 --     "hello" S0----S1--S0--
 -- <BLANKLINE>
---     "world" S0----S2--S1-S0--
+--     "world" S0---P2--S0--
 -- False
 --
 -- @since 2.1.0.0
@@ -517,7 +517,7 @@ dejafuWay way = dejafuWithSettings . fromWayAndMemType way
 -- [fail] Randomly!
 --     "hello" S0----S1--S0--
 -- <BLANKLINE>
---     "world" S0----S2--S1-S0--
+--     "world" S0---P2--S0--
 -- False
 --
 -- @since 2.1.0.0
