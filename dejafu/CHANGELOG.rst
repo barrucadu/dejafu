@@ -13,6 +13,7 @@ Miscellaneous
 ~~~~~~~~~~~~~
 
 * Update doctest examples in `Test.DejaFu`.
+* The upper bound on :hackage:`leancheck` is <2.
 
 
 2.4.0.3 (2021-08-15)
