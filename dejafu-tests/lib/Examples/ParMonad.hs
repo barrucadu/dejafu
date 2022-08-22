@@ -16,10 +16,9 @@ tests = toTestList
 
 parFilter :: (MonadConc m, MonadIO m) => m Bool
 parFilter = do
-    let p x = x `mod` 2 == 0
     let xs = [0..1] :: [Int]
-    s <- Par.runParIO $ parfilter p xs
-    pure (s == filter p xs)
+    s <- Par.runParIO $ parfilter even xs
+    pure (s == filter even xs)
   where
     parfilter _ []  = pure []
     parfilter f [x] = pure [x | f x]

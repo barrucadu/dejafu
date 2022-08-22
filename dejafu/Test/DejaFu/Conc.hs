@@ -57,6 +57,7 @@ module Test.DejaFu.Conc
   ) where
 
 import           Control.Exception                 (MaskingState(..))
+import           Control.Monad                     (void)
 
 import           Test.DejaFu.Conc.Internal.Common
 import           Test.DejaFu.Conc.Internal.Program
@@ -164,7 +165,7 @@ withSetupAndTeardown setup teardown =
 --
 -- @since 2.0.0.0
 registerInvariant :: Invariant n a -> Program Basic n ()
-registerInvariant inv = ModelConc (\c -> ANewInvariant (() <$ inv) (c ()))
+registerInvariant inv = ModelConc (\c -> ANewInvariant (void inv) (c ()))
 
 -- | Read the content of an @IORef@.
 --

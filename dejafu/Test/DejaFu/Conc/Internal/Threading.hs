@@ -81,7 +81,7 @@ propagate e tid threads = raise <$> propagate' handlers where
   raise (ms, act, hs) = except ms act hs tid threads
 
   propagate' [] = Nothing
-  propagate' (Handler ms h:hs) = maybe (propagate' hs) (\act -> Just (ms, act, hs)) $ h <$> fromException e
+  propagate' (Handler ms h:hs) = maybe (propagate' hs) ((\act -> Just (ms, act, hs)) . h) (fromException e)
 
 -- | Check if a thread can be interrupted by an exception.
 interruptible :: Thread n -> Bool
