@@ -16,7 +16,7 @@ standard Haskell versioning scheme.
 Fixed
 ~~~~~
 
-* Remove inaccurate comment about ```Test.Tasty.DejaFu.testDejafus``
+* Remove inaccurate comment about ``Test.Tasty.DejaFu.testDejafus``
   sharing work.
 
 
@@ -143,7 +143,7 @@ Added
     * ``Test.Tasty.DejaFu.inspectMVar``
     * ``Test.Tasty.DejaFu.inspectTVar``
 
-Changes
+Changed
 ~~~~~~~
 
 * Functions which took a ``ConcIO`` now take a ``Program pty IO``:
