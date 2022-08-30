@@ -5,7 +5,7 @@
 
 -- |
 -- Module      : Test.Tasty.DejaFu
--- Copyright   : (c) 2015--2019 Michael Walker
+-- Copyright   : (c) 2015--2022 Michael Walker
 -- License     : MIT
 -- Maintainer  : Michael Walker <mike@barrucadu.co.uk>
 -- Stability   : stable
@@ -146,9 +146,11 @@ instance IsOption Way where
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
 --
--- @since 2.0.0.0
+-- @since unreleased
 testAuto :: (Eq a, Show a)
-  => Program pty IO a
+  => TestName
+  -- ^ The name of the test group.
+  -> Program pty IO a
   -- ^ The computation to test.
   -> TestTree
 testAuto = testAutoWithSettings defaultSettings
@@ -156,12 +158,14 @@ testAuto = testAutoWithSettings defaultSettings
 -- | Variant of 'testAuto' which tests a computation under a given
 -- execution way and memory model.
 --
--- @since 2.0.0.0
+-- @since unreleased
 testAutoWay :: (Eq a, Show a)
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
+  -> TestName
+  -- ^ The name of the test group.
   -> Program pty IO a
   -- ^ The computation to test.
   -> TestTree
@@ -169,14 +173,16 @@ testAutoWay way = testAutoWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testAuto' which takes a settings record.
 --
--- @since 2.0.0.0
+-- @since unreleased
 testAutoWithSettings :: (Eq a, Show a)
   => Settings IO a
   -- ^ The SCT settings.
+  -> TestName
+  -- ^ The name of the test group.
   -> Program pty IO a
   -- ^ The computation to test.
   -> TestTree
-testAutoWithSettings settings = testDejafusWithSettings settings
+testAutoWithSettings settings groupName = testDejafusWithSettings settings groupName
   [("Never Deadlocks", representative deadlocksNever)
   , ("No Exceptions", representative exceptionsNever)
   , ("Consistent Result", alwaysSame)
@@ -226,14 +232,17 @@ testDejafuWithSettings :: Show b
   -> Program pty IO a
   -- ^ The computation to test.
   -> TestTree
-testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name, p)]
+testDejafuWithSettings settings name p concio =
+  testconc settings concio (name, p)
 
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test.
 --
--- @since 2.0.0.0
+-- @since unreleased
 testDejafus :: Show b
-  => [(TestName, ProPredicate a b)]
+  => TestName
+  -- ^ The name of the test group.
+  -> [(TestName, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
   -> Program pty IO a
   -- ^ The computation to test.
@@ -243,12 +252,14 @@ testDejafus = testDejafusWithSettings defaultSettings
 -- | Variant of 'testDejafus' which takes a way to execute the program
 -- and a memory model.
 --
--- @since 2.0.0.0
+-- @since unreleased
 testDejafusWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
   -> MemType
   -- ^ The memory model to use for non-synchronised @IORef@ operations.
+  -> TestName
+  -- ^ The name of the test group.
   -> [(TestName, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
   -> Program pty IO a
@@ -258,16 +269,19 @@ testDejafusWay way = testDejafusWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testDejafus' which takes a settings record.
 --
--- @since 2.0.0.0
+-- @since unreleased
 testDejafusWithSettings :: Show b
   => Settings IO a
   -- ^ The SCT settings.
+  -> TestName
+  -- ^ The name of the test group.
   -> [(TestName, ProPredicate a b)]
   -- ^ The list of predicates (with names) to check.
   -> Program pty IO a
   -- ^ The computation to test.
   -> TestTree
-testDejafusWithSettings = testconc
+testDejafusWithSettings settings groupName tests concio =
+  testGroup groupName $ map (testconc settings concio) tests
 
 
 -------------------------------------------------------------------------------
@@ -341,18 +355,12 @@ instance IsTest PropTest where
 -- | Produce a Tasty 'Test' from a Deja Fu unit test.
 testconc :: Show b
   => Settings IO a
-  -> [(TestName, ProPredicate a b)]
   -> Program pty IO a
+  -> (TestName, ProPredicate a b)
   -> TestTree
-testconc settings tests concio = case map toTest tests of
-  [t] -> t
-  ts  -> testGroup "Deja Fu Tests" ts
-
-  where
-    toTest (name, p) =
-      let discarder = maybe id D.strengthenDiscard (get ldiscard settings) (pdiscard p)
-          traces    = SCT.runSCTWithSettings (set ldiscard (Just discarder) settings) concio
-      in singleTest name $ ConcTest traces (peval p)
+testconc settings concio (name, p) = singleTest name $ ConcTest traces (peval p) where
+  discarder = maybe id D.strengthenDiscard (get ldiscard settings) (pdiscard p)
+  traces    = SCT.runSCTWithSettings (set ldiscard (Just discarder) settings) concio
 
 -- | Produce a Tasty 'TestTree' from a Deja Fu refinement property test.
 testprop :: (R.Testable p, R.Listable (R.X p), Eq (R.X p), Show (R.X p), Show (R.O p))

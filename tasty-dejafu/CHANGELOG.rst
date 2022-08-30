@@ -7,6 +7,23 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Changed
+~~~~~~~
+
+* (:issue:`361`) The following functions take a ``TestName`` parameter
+  to name the test group, rather than using "Deja Fu Tests":
+
+  * ``Test.Tasty.DejaFu.testAuto``
+  * ``Test.Tasty.DejaFu.testAutoWay``
+  * ``Test.Tasty.DejaFu.testAutoWithSettings``
+  * ``Test.Tasty.DejaFu.testDejafus``
+  * ``Test.Tasty.DejaFu.testDejafusWay``
+  * ``Test.Tasty.DejaFu.testDejafusWithSettings``
+
+
 2.0.0.9 (2022-08-30)
 --------------------
 
