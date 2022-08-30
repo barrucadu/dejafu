@@ -196,8 +196,7 @@ testDejafuWithSettings :: Show b
 testDejafuWithSettings settings name p = testDejafusWithSettings settings [(name, p)]
 
 -- | Variant of 'testDejafu' which takes a collection of predicates to
--- test. This will share work between the predicates, rather than
--- running the concurrent computation many times for each predicate.
+-- test.
 --
 -- @since 2.0.0.0
 testDejafus :: Show b

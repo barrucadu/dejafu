@@ -7,6 +7,16 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Fixed
+~~~~~
+
+* Remove inaccurate comment about ```Test.Tasty.DejaFu.testDejafus``
+  sharing work.
+
+
 2.0.0.8 (2021-08-15)
 --------------------
 
