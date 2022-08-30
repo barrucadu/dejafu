@@ -7,8 +7,11 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-unreleased
-----------
+2.0.0.9 (2022-08-30)
+--------------------
+
+* Git: :tag:`tasty-dejafu-2.0.0.9`
+* Hackage: :hackage:`tasty-dejafu-2.0.0.9`
 
 Fixed
 ~~~~~
