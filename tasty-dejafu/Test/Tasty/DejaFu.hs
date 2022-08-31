@@ -146,7 +146,7 @@ instance IsOption Way where
 -- | Automatically test a computation. In particular, look for
 -- deadlocks, uncaught exceptions, and multiple return values.
 --
--- @since unreleased
+-- @since 2.1.0.0
 testAuto :: (Eq a, Show a)
   => TestName
   -- ^ The name of the test group.
@@ -158,7 +158,7 @@ testAuto = testAutoWithSettings defaultSettings
 -- | Variant of 'testAuto' which tests a computation under a given
 -- execution way and memory model.
 --
--- @since unreleased
+-- @since 2.1.0.0
 testAutoWay :: (Eq a, Show a)
   => Way
   -- ^ How to execute the concurrent program.
@@ -173,7 +173,7 @@ testAutoWay way = testAutoWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testAuto' which takes a settings record.
 --
--- @since unreleased
+-- @since 2.1.0.0
 testAutoWithSettings :: (Eq a, Show a)
   => Settings IO a
   -- ^ The SCT settings.
@@ -238,7 +238,7 @@ testDejafuWithSettings settings name p concio =
 -- | Variant of 'testDejafu' which takes a collection of predicates to
 -- test.
 --
--- @since unreleased
+-- @since 2.1.0.0
 testDejafus :: Show b
   => TestName
   -- ^ The name of the test group.
@@ -252,7 +252,7 @@ testDejafus = testDejafusWithSettings defaultSettings
 -- | Variant of 'testDejafus' which takes a way to execute the program
 -- and a memory model.
 --
--- @since unreleased
+-- @since 2.1.0.0
 testDejafusWay :: Show b
   => Way
   -- ^ How to execute the concurrent program.
@@ -269,7 +269,7 @@ testDejafusWay way = testDejafusWithSettings . fromWayAndMemType way
 
 -- | Variant of 'testDejafus' which takes a settings record.
 --
--- @since unreleased
+-- @since 2.1.0.0
 testDejafusWithSettings :: Show b
   => Settings IO a
   -- ^ The SCT settings.
