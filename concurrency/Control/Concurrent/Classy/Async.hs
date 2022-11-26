@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- |
@@ -174,7 +175,11 @@ instance (MonadConc m, Semigroup a) => Semigroup (Concurrently m a) where
 -- | @since 1.1.2.0
 instance (MonadConc m, Monoid a) => Monoid (Concurrently m a) where
   mempty = pure mempty
+#if MIN_VERSION_base(4,11,0)
+  mappend = (<>)
+#else
   mappend = liftA2 mappend
+#endif
 
 -------------------------------------------------------------------------------
 -- Spawning

@@ -52,6 +52,7 @@ jobs:
           - lts-15.0 # ghc-8.8
           - lts-17.0 # ghc-8.10
           - lts-19.0 # ghc-9.0
+          - lts-20.0 # ghc-9.2
 
     steps:
       - uses: actions/checkout@v3
@@ -95,7 +96,7 @@ jobs:
           if [[ "$RESOLVER" == "lts-9.0" ]]; then
             export PATH=$HOME/.local/bin:$PATH
           fi
-          stack --no-terminal build --ghc-options="-Werror -Wno-unused-imports"
+          stack --no-terminal build --ghc-options="-Werror -Wno-unused-imports -Wno-incomplete-uni-patterns"
       - name: Test
         env:
           RESOLVER: ${{ matrix.resolver }}
