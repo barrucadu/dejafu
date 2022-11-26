@@ -6,6 +6,7 @@ import           Test.DejaFu               (exceptionsAlways, gives')
 
 import           Control.Concurrent.Classy
 import           Control.Exception         (AsyncException(..))
+import           Control.Monad             (void)
 import qualified Control.Monad.Catch       as E
 import           System.Random             (mkStdGen)
 
@@ -45,10 +46,10 @@ tests = toTestList
         (\_ -> pure ())
 
   , djfu "https://github.com/barrucadu/dejafu/issues/161" (gives' [Just (), Nothing]) $ do
-      let try a = (a >> pure ()) `E.catch` (\(_ :: E.SomeException) -> pure ())
+      let try a = void a `E.catch` (\(_ :: E.SomeException) -> pure ())
       let act s = uninterruptibleMask_ (putMVar s ())
       s <- newEmptyMVar
-      t <- mask $ \restore -> fork (try (restore (act s)) >> pure ())
+      t <- mask $ \restore -> fork (void (try (restore (act s))))
       killThread t
       tryReadMVar s
 
