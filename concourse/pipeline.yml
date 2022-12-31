@@ -37,7 +37,7 @@ x-task-build-and-test: &task-build-and-test
           $stack init --resolver="$resolver" --force
         fi
 
-        $stack setup
+        $stack setup --install-ghc
         $stack build
         $stack exec dejafu-tests
 
@@ -104,7 +104,7 @@ x-task-release: &task-release
             exit 0
           fi
 
-          stack --no-terminal setup
+          stack --no-terminal setup --install-ghc
           echo n | stack --no-terminal upload ${PACKAGE}
 
 ###############################################################################
