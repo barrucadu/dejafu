@@ -7,6 +7,15 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* Fix GHC compatibility warning.
+
+
 2.4.0.5 (2023-06-17)
 --------------------
 
