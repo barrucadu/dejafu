@@ -45,7 +45,6 @@ library
 
                      , Common
                      , QSemN
-                     , Test.Tasty.Hedgehog
 
   build-depends:       base
                      , abstract-deque
@@ -62,6 +61,7 @@ library
                      , tasty
                      , tasty-expected-failure
                      , tasty-dejafu
+                     , tasty-hedgehog
                      , tasty-hunit
                      , vector
   hs-source-dirs:      lib

@@ -1,7 +1,6 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-
 module Unit where
 
+import           Data.Maybe          (fromJust)
 import           Data.Proxy          (Proxy(..))
 import           Test.Tasty          (askOption, localOption)
 import           Test.Tasty.Hedgehog (HedgehogDiscardLimit(..),
@@ -9,7 +8,6 @@ import           Test.Tasty.Hedgehog (HedgehogDiscardLimit(..),
                                       HedgehogShrinkRetries(..),
                                       HedgehogTestLimit)
 import           Test.Tasty.Options  (IsOption(..), OptionDescription(..))
-import           Text.Read           (readMaybe)
 
 import qualified Unit.Predicates     as PE
 import qualified Unit.Properties     as PO
@@ -37,46 +35,42 @@ options =
 -- Hedgehog options
 
 -- | The number of successful test cases required before Hedgehog will pass a test
-newtype UnitHedgehogTestLimit = UnitHedgehogTestLimit Int
-  deriving (Eq, Ord, Show, Num, Enum, Real, Integral)
+newtype UnitHedgehogTestLimit = UnitHedgehogTestLimit HedgehogTestLimit
+  deriving (Eq, Ord, Show)
 
 instance IsOption UnitHedgehogTestLimit where
-  defaultValue = 1500
-  parseValue = fmap UnitHedgehogTestLimit . readMaybe
+  defaultValue = UnitHedgehogTestLimit . fromJust $ parseValue "1500"
+  parseValue = fmap UnitHedgehogTestLimit . parseValue
   optionName = pure "unit-hedgehog-tests"
   optionHelp = pure "hedgehog-tests for the unit tests"
 
 -- | The number of discarded cases allowed before Hedgehog will fail a test
-newtype UnitHedgehogDiscardLimit = UnitHedgehogDiscardLimit Int
-  deriving (Eq, Ord, Show, Num, Enum, Real, Integral)
+newtype UnitHedgehogDiscardLimit = UnitHedgehogDiscardLimit HedgehogDiscardLimit
+  deriving (Eq, Ord, Show)
 
 instance IsOption UnitHedgehogDiscardLimit where
-  defaultValue = 1000
-  parseValue = fmap UnitHedgehogDiscardLimit . readMaybe
+  defaultValue = UnitHedgehogDiscardLimit . fromJust $ parseValue "1000"
+  parseValue = fmap UnitHedgehogDiscardLimit . parseValue
   optionName = pure "unit-hedgehog-discards"
   optionHelp = pure "hedgehog-discards for the unit tests"
 
 -- | The number of shrinks allowed before Hedgehog will fail a test
-newtype UnitHedgehogShrinkLimit = UnitHedgehogShrinkLimit Int
-  deriving (Eq, Ord, Show, Num, Enum, Real, Integral)
+newtype UnitHedgehogShrinkLimit = UnitHedgehogShrinkLimit HedgehogShrinkLimit
+  deriving (Eq, Ord, Show)
 
 instance IsOption UnitHedgehogShrinkLimit where
-  defaultValue =
-    let HedgehogShrinkLimit d = defaultValue
-    in fromIntegral d
-  parseValue = fmap UnitHedgehogShrinkLimit . readMaybe
+  defaultValue = UnitHedgehogShrinkLimit defaultValue
+  parseValue = fmap UnitHedgehogShrinkLimit . parseValue
   optionName = pure "unit-hedgehog-shrinks"
   optionHelp = pure "hedgehog-shrinks for the unit tests"
 
 -- | The number of times to re-run a test during shrinking
-newtype UnitHedgehogShrinkRetries = UnitHedgehogShrinkRetries Int
-  deriving (Eq, Ord, Show, Num, Enum, Real, Integral)
+newtype UnitHedgehogShrinkRetries = UnitHedgehogShrinkRetries HedgehogShrinkRetries
+  deriving (Eq, Ord, Show)
 
 instance IsOption UnitHedgehogShrinkRetries where
-  defaultValue =
-    let HedgehogShrinkRetries d = defaultValue
-    in fromIntegral d
-  parseValue = fmap UnitHedgehogShrinkRetries . readMaybe
+  defaultValue = UnitHedgehogShrinkRetries defaultValue
+  parseValue = fmap UnitHedgehogShrinkRetries . parseValue
   optionName = pure "unit-hedgehog-retries"
   optionHelp = pure "hedgehog-retries for the unit tests"
 
@@ -87,7 +81,7 @@ applyHedgehogOptions tt0 =
   askOption $ \(UnitHedgehogDiscardLimit dl) ->
   askOption $ \(UnitHedgehogShrinkLimit sl) ->
   askOption $ \(UnitHedgehogShrinkRetries sr) ->
-  localOption (fromIntegral tl :: HedgehogTestLimit) $
-  localOption (fromIntegral dl :: HedgehogDiscardLimit) $
-  localOption (fromIntegral sl :: HedgehogShrinkLimit) $
-  localOption (fromIntegral sr :: HedgehogShrinkRetries) tt0
+  localOption tl $
+  localOption dl $
+  localOption sl $
+  localOption sr tt0
