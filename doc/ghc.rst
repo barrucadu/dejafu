@@ -2,12 +2,13 @@ Supported GHC Versions
 ======================
 
 Déjà Fu supports the latest four GHC releases, at least.  For testing
-purposes, we use Stackage LTSes as a proxy for GHC versions.  The
+purposes, we use Stackage snapshots as a proxy for GHC versions.  The
 currently supported versions are:
 
 .. csv-table::
    :header: "GHC", "Stackage", "base"
 
+   "9.4",  "Nightly 2023-01-01", "4.17.0.0"
    "9.2",  "LTS 20.0", "4.16.0.0"
    "9.0",  "LTS 19.0", "4.15.0.0"
    "8.10", "LTS 17.0", "4.14.1.0"
@@ -34,12 +35,12 @@ cause a **patch level version bump**.
 3. Remove any unsupported versions from the table.
 4. Make a patch release.
 
-A new GHC release won't get a Stackage LTS for little while.  When it
+A new GHC release won't get a Stackage snapshot for little while.  When it
 does:
 
-1. Add the LTS to the GitHub Actions configuration.
+1. Add the snapshot to the GitHub Actions configuration.
 2. Update the resolver in the stack.yaml.
-3. Put the LTS in the table.
+3. Put the snapshot in the table.
 
 
 Dropping old GHC releases
