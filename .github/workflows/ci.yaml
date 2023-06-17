@@ -47,7 +47,7 @@ jobs:
         resolver:
           - lts-10.0 # ghc-8.2
           - lts-12.0 # ghc-8.4
-          - lts-13.3 # ghc-8.6
+          - lts-14.0 # ghc-8.6
           - lts-15.0 # ghc-8.8
           - lts-17.0 # ghc-8.10
           - lts-19.0 # ghc-9.0
