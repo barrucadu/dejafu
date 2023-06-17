@@ -7,6 +7,19 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+1.11.0.3 (2023-06-17)
+---------------------
+
+* Git: :tag:`concurrency-1.11.0.3`
+* Hackage: :hackage:`concurrency-1.11.0.3`
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`mtl` is <2.4.
+* The upper bound on :hackage:`transformers` is <0.7.
+
+
 1.11.0.2 (2021-08-15)
 ---------------------
 

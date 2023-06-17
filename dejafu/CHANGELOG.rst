@@ -7,6 +7,18 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+2.4.0.5 (2023-06-17)
+--------------------
+
+* Git: :tag:`dejafu-2.4.0.5`
+* Hackage: :hackage:`dejafu-2.4.0.5`
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`transformers` is <0.7.
+
+
 2.4.0.4 (2022-08-22)
 --------------------
 

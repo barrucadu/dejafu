@@ -164,7 +164,7 @@ instance IsOption HedgehogShrinkRetries where
 
 getReport :: Report a -> (TestCount, a)
 #if MIN_VERSION_hedgehog(1,0,0)
-getReport (Report testCount _ _ status) = (testCount, status)
+getReport r = (reportTests r, reportStatus r)
 #else
 getReport (Report testCount _ status) = (testCount, status)
 #endif
@@ -198,25 +198,24 @@ reportOutput :: Bool
              -> String
              -> Report Result
              -> IO String
-reportOutput _ showReplay name report = do
+reportOutput _ _ name report = do
   let (_, status) = getReport report
-  -- TODO add details for tests run / discarded / shrunk
   s <- renderResult' (Just (PropertyName name)) report
   pure $ case status of
-    Failed fr -> do
-      let
-        size = failureSize fr
-        seed = failureSeed fr
-        replayStr =
-          if showReplay
-          then "\nUse '--hedgehog-replay \"" ++ show size ++ " " ++ show seed ++ "\"' to reproduce."
-          else ""
-      s ++ replayStr
+    Failed _ -> s
     GaveUp -> "Gave up"
     OK -> "OK"
 
 propertyConfig' :: TestLimit -> DiscardLimit -> ShrinkLimit -> ShrinkRetries -> PropertyConfig
-#if MIN_VERSION_hedgehog(1,0,2)
+#if MIN_VERSION_hedgehog(1,2,0)
+propertyConfig' testLimit discardLimit shrinkLimit shrinkRetries = PropertyConfig
+  { propertyDiscardLimit        = discardLimit
+  , propertyShrinkLimit         = shrinkLimit
+  , propertyShrinkRetries       = shrinkRetries
+  , propertyTerminationCriteria = NoConfidenceTermination testLimit
+  , propertySkip                = Nothing
+  }
+#elif MIN_VERSION_hedgehog(1,0,2)
 propertyConfig' testLimit discardLimit shrinkLimit shrinkRetries = PropertyConfig
   { propertyDiscardLimit        = discardLimit
   , propertyShrinkLimit         = shrinkLimit

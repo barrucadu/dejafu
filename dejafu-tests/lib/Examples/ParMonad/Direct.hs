@@ -90,7 +90,10 @@ import           System.IO.Unsafe                              (unsafePerformIO)
 import qualified System.Random.MWC                             as Random
 
 import           Control.DeepSeq
-import           Control.Monad                                 (replicateM)
+import           Control.Monad                                 (join,
+                                                                replicateM,
+                                                                unless)
+import           Data.Foldable                                 (forM_)
 import qualified Data.Set                                      as S
 import           Data.Word                                     (Word64)
 
