@@ -7,6 +7,15 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`transformers` is <0.7.
+
+
 2.4.0.4 (2022-08-22)
 --------------------
 
