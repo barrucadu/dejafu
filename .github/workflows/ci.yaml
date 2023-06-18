@@ -45,10 +45,9 @@ jobs:
       fail-fast: false
       matrix:
         resolver:
-          - lts-9.0 # ghc-8.0
           - lts-10.0 # ghc-8.2
           - lts-12.0 # ghc-8.4
-          - lts-13.3 # ghc-8.6
+          - lts-14.0 # ghc-8.6
           - lts-15.0 # ghc-8.8
           - lts-17.0 # ghc-8.10
           - lts-19.0 # ghc-9.0
@@ -65,45 +64,16 @@ jobs:
           RESOLVER: ${{ matrix.resolver }}
         run: |
           set -ex
-          if [[ "$RESOLVER" == "lts-9.0" ]]; then
-            # need an old stack version to build happy
-            mkdir -p ~/.local/bin
-            export PATH=$HOME/.local/bin:$PATH
-            curl -L https://github.com/commercialhaskell/stack/releases/download/v1.6.1/stack-1.6.1-linux-x86_64.tar.gz | \
-              tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
-
-            # need hedgehog-0.5.2
-            cat <<EOF > stack.yaml
-            resolver: lts-9.0
-
-            packages:
-              - concurrency
-              - dejafu
-              - dejafu-tests
-              - hunit-dejafu
-              - tasty-dejafu
-
-            extra-deps:
-              - hedgehog-0.5.2
-          EOF
-          else
-            stack --no-terminal init --resolver="$RESOLVER" --force
-          fi
+          stack --no-terminal init --resolver="$RESOLVER" --force
           stack --no-terminal setup
       - name: Build
         env:
           RESOLVER: ${{ matrix.resolver }}
         run: |
-          if [[ "$RESOLVER" == "lts-9.0" ]]; then
-            export PATH=$HOME/.local/bin:$PATH
-          fi
           stack --no-terminal build --ghc-options="-Werror -Wno-unused-imports -Wno-incomplete-uni-patterns"
       - name: Test
         env:
           RESOLVER: ${{ matrix.resolver }}
         run: |
-          if [[ "$RESOLVER" == "lts-9.0" ]]; then
-            export PATH=$HOME/.local/bin:$PATH
-          fi
           cd dejafu-tests
           stack --no-terminal exec -- dejafu-tests +RTS -s
