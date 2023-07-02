@@ -8,7 +8,7 @@ currently supported versions are:
 .. csv-table::
    :header: "GHC", "Stackage", "base"
 
-   "9.4",  "Nightly 2023-01-01", "4.17.0.0"
+   "9.4",  "LTS 21.0", "4.17.0.0"
    "9.2",  "LTS 20.0", "4.16.0.0"
    "9.0",  "LTS 19.0", "4.15.0.0"
    "8.10", "LTS 17.0", "4.14.1.0"
