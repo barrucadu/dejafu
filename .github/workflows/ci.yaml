@@ -53,6 +53,7 @@ jobs:
           - lts-19.0 # ghc-9.0
           - lts-20.0 # ghc-9.2
           - lts-21.0 # ghc-9.4
+          - nightly-2023-07-01 # ghc-9.6
 
     steps:
       - uses: actions/checkout@v3
