@@ -6,7 +6,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: haskell/actions/setup@v2.4.4
         with:
           enable-stack: true
@@ -23,7 +23,7 @@ jobs:
   doctest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: haskell/actions/setup@v2.4.4
         with:
           enable-stack: true
@@ -56,7 +56,7 @@ jobs:
           - nightly-2023-07-01 # ghc-9.6
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: haskell/actions/setup@v2.4.4
         with:
           enable-stack: true
