@@ -15,7 +15,12 @@ main = C.defaultMain (T.foldTestTree mkBench mempty tests)
 
 -- | Turn a test tree into a list of benchmarks.
 mkBench :: T.TreeFold [C.Benchmark]
-#if MIN_VERSION_tasty(1,4,0)
+#if MIN_VERSION_tasty(1,5,0)
+mkBench = T.trivialFold
+  { T.foldSingle = \opts lbl t -> [C.bench lbl (benchTest opts t)]
+  , T.foldGroup = \_ lbl bs -> map (C.bgroup lbl) bs
+  }
+#elif MIN_VERSION_tasty(1,4,0)
 mkBench = T.trivialFold
   { T.foldSingle = \opts lbl t -> [C.bench lbl (benchTest opts t)]
   , T.foldGroup = \_ lbl bs -> [C.bgroup lbl bs]

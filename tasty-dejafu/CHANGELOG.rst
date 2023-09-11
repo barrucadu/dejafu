@@ -7,6 +7,18 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+2.1.0.1 (2023-09-11)
+--------------------
+
+* Git: :tag:`tasty-dejafu-2.1.0.1`
+* Hackage: :hackage:`tasty-dejafu-2.1.0.1`
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`tasty` is <1.6.
+
+
 2.1.0.0 (2022-08-31)
 --------------------
 
