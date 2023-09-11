@@ -7,6 +7,15 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`tasty` is <1.6.
+
+
 2.1.0.0 (2022-08-31)
 --------------------
 
