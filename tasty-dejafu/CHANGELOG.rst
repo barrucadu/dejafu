@@ -158,43 +158,47 @@ Added
 ~~~~~
 
 * Re-exports for the ``Program`` types and their constructors:
-    * ``Test.Tasty.DejaFu.Program``
-    * ``Test.Tasty.DejaFu.Basic``
-    * ``Test.Tasty.DejaFu.ConcT``
-    * ``Test.Tasty.DejaFu.ConcIO``
-    * ``Test.Tasty.DejaFu.WithSetup``
-    * ``Test.Tasty.DejaFu.WithSetupAndTeardown``
-    * ``Test.Tasty.DejaFu.withSetup``
-    * ``Test.Tasty.DejaFu.withTeardown``
-    * ``Test.Tasty.DejaFu.withSetupAndTeardown``
+
+  * ``Test.Tasty.DejaFu.Program``
+  * ``Test.Tasty.DejaFu.Basic``
+  * ``Test.Tasty.DejaFu.ConcT``
+  * ``Test.Tasty.DejaFu.ConcIO``
+  * ``Test.Tasty.DejaFu.WithSetup``
+  * ``Test.Tasty.DejaFu.WithSetupAndTeardown``
+  * ``Test.Tasty.DejaFu.withSetup``
+  * ``Test.Tasty.DejaFu.withTeardown``
+  * ``Test.Tasty.DejaFu.withSetupAndTeardown``
 
 * Re-exports for the ``Invariant`` type and its functions:
-    * ``Test.Tasty.DejaFu.Invariant``
-    * ``Test.Tasty.DejaFu.registerInvariant``
-    * ``Test.Tasty.DejaFu.inspectIORef``
-    * ``Test.Tasty.DejaFu.inspectMVar``
-    * ``Test.Tasty.DejaFu.inspectTVar``
+
+  * ``Test.Tasty.DejaFu.Invariant``
+  * ``Test.Tasty.DejaFu.registerInvariant``
+  * ``Test.Tasty.DejaFu.inspectIORef``
+  * ``Test.Tasty.DejaFu.inspectMVar``
+  * ``Test.Tasty.DejaFu.inspectTVar``
 
 Changed
 ~~~~~~~
 
 * Functions which took a ``ConcIO`` now take a ``Program pty IO``:
-    * ``Test.Tasty.DejaFu.testAuto``
-    * ``Test.Tasty.DejaFu.testAutoWay``
-    * ``Test.Tasty.DejaFu.testAutoWithSettings``
-    * ``Test.Tasty.DejaFu.testDejafu``
-    * ``Test.Tasty.DejaFu.testDejafuWay``
-    * ``Test.Tasty.DejaFu.testDejafuWithSettings``
-    * ``Test.Tasty.DejaFu.testDejafus``
-    * ``Test.Tasty.DejaFu.testDejafusWay``
-    * ``Test.Tasty.DejaFu.testDejafusWithSettings``
+
+  * ``Test.Tasty.DejaFu.testAuto``
+  * ``Test.Tasty.DejaFu.testAutoWay``
+  * ``Test.Tasty.DejaFu.testAutoWithSettings``
+  * ``Test.Tasty.DejaFu.testDejafu``
+  * ``Test.Tasty.DejaFu.testDejafuWay``
+  * ``Test.Tasty.DejaFu.testDejafuWithSettings``
+  * ``Test.Tasty.DejaFu.testDejafus``
+  * ``Test.Tasty.DejaFu.testDejafusWay``
+  * ``Test.Tasty.DejaFu.testDejafusWithSettings``
 
 Removed
 ~~~~~~~
 
 * The deprecated functions:
-    * ``Test.Tasty.DejaFu.testDejafuDiscard``
-    * ``Test.Tasty.DejaFu.testDejafusDiscard``
+
+  * ``Test.Tasty.DejaFu.testDejafuDiscard``
+  * ``Test.Tasty.DejaFu.testDejafusDiscard``
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -327,8 +331,8 @@ Miscellaneous
 
 * GHC 7.10 support is dropped.  Dependency lower bounds are:
 
-    * :hackage:`base`: 4.9
-    * :hackage:`dejafu`: 1.5
+  * :hackage:`base`: 4.9
+  * :hackage:`dejafu`: 1.5
 
 * The upper bound on :hackage:`dejafu` is 1.6.
 
@@ -368,9 +372,9 @@ Added
 
 * (:pull:`238`) Settings-based test functions:
 
-    * ``Test.Tasty.DejaFu.testAutoWithSettings``
-    * ``Test.Tasty.DejaFu.testDejafuWithSettings``
-    * ``Test.Tasty.DejaFu.testDejafusWithSettings``
+  * ``Test.Tasty.DejaFu.testAutoWithSettings``
+  * ``Test.Tasty.DejaFu.testDejafuWithSettings``
+  * ``Test.Tasty.DejaFu.testDejafusWithSettings``
 
 * (:pull:`238`) Re-export of ``Test.DejaFu.Settings``.
 
@@ -611,8 +615,8 @@ Added
 * Orphan ``IsOption`` instance for ``Test.DejaFu.SCT.Way``.
   Command-line parameters are:
 
-    * "systematically": systematic testing with the default bounds
-    * "randomly": 100 executions with a fixed random seed
+  * "systematically": systematic testing with the default bounds
+  * "randomly": 100 executions with a fixed random seed
 
 Changed
 ~~~~~~~
@@ -670,9 +674,9 @@ Added
 * Orphan ``IsOption`` instances for ``Test.DejaFu.SCT.Bounds`` and
   ``MemType``.  Command-line parameters are:
 
-    * "sc": sequential consistency
-    * "tso": total store order
-    * "pso": partial store order
+  * "sc": sequential consistency
+  * "tso": total store order
+  * "pso": partial store order
 
 * Re-export ``Test.DejaFu.SCT.Bounds``.
 
@@ -687,8 +691,8 @@ Miscellaneous
 
 * Git: :tag:`tasty-dejafu-0.1.1.0`
 
-**Note:** this was misnumbered (it should have been 0.2.1.0) *and* was
- never pushed to Hackage, whoops!
+**Note:** this was misnumbered (it should have been 0.2.1.0) *and* was never
+pushed to Hackage, whoops!
 
 Miscellaneous
 ~~~~~~~~~~~~~

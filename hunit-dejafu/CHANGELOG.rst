@@ -90,43 +90,47 @@ Added
 ~~~~~
 
 * Re-exports for the ``Program`` types and their constructors:
-    * ``Test.HUnit.DejaFu.Program``
-    * ``Test.HUnit.DejaFu.Basic``
-    * ``Test.HUnit.DejaFu.ConcT``
-    * ``Test.HUnit.DejaFu.ConcIO``
-    * ``Test.HUnit.DejaFu.WithSetup``
-    * ``Test.HUnit.DejaFu.WithSetupAndTeardown``
-    * ``Test.HUnit.DejaFu.withSetup``
-    * ``Test.HUnit.DejaFu.withTeardown``
-    * ``Test.HUnit.DejaFu.withSetupAndTeardown``
+
+  * ``Test.HUnit.DejaFu.Program``
+  * ``Test.HUnit.DejaFu.Basic``
+  * ``Test.HUnit.DejaFu.ConcT``
+  * ``Test.HUnit.DejaFu.ConcIO``
+  * ``Test.HUnit.DejaFu.WithSetup``
+  * ``Test.HUnit.DejaFu.WithSetupAndTeardown``
+  * ``Test.HUnit.DejaFu.withSetup``
+  * ``Test.HUnit.DejaFu.withTeardown``
+  * ``Test.HUnit.DejaFu.withSetupAndTeardown``
 
 * Re-exports for the ``Invariant`` type and its functions:
-    * ``Test.HUnit.DejaFu.Invariant``
-    * ``Test.HUnit.DejaFu.registerInvariant``
-    * ``Test.HUnit.DejaFu.inspectIORef``
-    * ``Test.HUnit.DejaFu.inspectMVar``
-    * ``Test.HUnit.DejaFu.inspectTVar``
+
+  * ``Test.HUnit.DejaFu.Invariant``
+  * ``Test.HUnit.DejaFu.registerInvariant``
+  * ``Test.HUnit.DejaFu.inspectIORef``
+  * ``Test.HUnit.DejaFu.inspectMVar``
+  * ``Test.HUnit.DejaFu.inspectTVar``
 
 Changed
 ~~~~~~~
 
 * Functions which took a ``ConcIO`` now take a ``Program pty IO``:
-    * ``Test.HUnit.DejaFu.testAuto``
-    * ``Test.HUnit.DejaFu.testAutoWay``
-    * ``Test.HUnit.DejaFu.testAutoWithSettings``
-    * ``Test.HUnit.DejaFu.testDejafu``
-    * ``Test.HUnit.DejaFu.testDejafuWay``
-    * ``Test.HUnit.DejaFu.testDejafuWithSettings``
-    * ``Test.HUnit.DejaFu.testDejafus``
-    * ``Test.HUnit.DejaFu.testDejafusWay``
-    * ``Test.HUnit.DejaFu.testDejafusWithSettings``
+
+  * ``Test.HUnit.DejaFu.testAuto``
+  * ``Test.HUnit.DejaFu.testAutoWay``
+  * ``Test.HUnit.DejaFu.testAutoWithSettings``
+  * ``Test.HUnit.DejaFu.testDejafu``
+  * ``Test.HUnit.DejaFu.testDejafuWay``
+  * ``Test.HUnit.DejaFu.testDejafuWithSettings``
+  * ``Test.HUnit.DejaFu.testDejafus``
+  * ``Test.HUnit.DejaFu.testDejafusWay``
+  * ``Test.HUnit.DejaFu.testDejafusWithSettings``
 
 Removed
 ~~~~~~~
 
 * The deprecated functions:
-    * ``Test.HUnit.DejaFu.testDejafuDiscard``
-    * ``Test.HUnit.DejaFu.testDejafusDiscard``
+
+  * ``Test.HUnit.DejaFu.testDejafuDiscard``
+  * ``Test.HUnit.DejaFu.testDejafusDiscard``
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -235,9 +239,9 @@ Miscellaneous
 
 * GHC 7.10 support is dropped.  Dependency lower bounds are:
 
-    * :hackage:`base`: 4.9
-    * :hackage:`dejafu`: 1.5
-    * :hackage:`HUnit`: 1.3.1
+  * :hackage:`base`: 4.9
+  * :hackage:`dejafu`: 1.5
+  * :hackage:`HUnit`: 1.3.1
 
 * The upper bound on :hackage:`dejafu` is 1.6.
 
@@ -289,9 +293,9 @@ Added
 
 * (:pull:`238`) Settings-based test functions:
 
-    * ``Test.HUnit.DejaFu.testAutoWithSettings``
-    * ``Test.HUnit.DejaFu.testDejafuWithSettings``
-    * ``Test.HUnit.DejaFu.testDejafusWithSettings``
+  * ``Test.HUnit.DejaFu.testAutoWithSettings``
+  * ``Test.HUnit.DejaFu.testDejafuWithSettings``
+  * ``Test.HUnit.DejaFu.testDejafusWithSettings``
 
 * (:pull:`238`) Re-export of ``Test.DejaFu.Settings``.
 

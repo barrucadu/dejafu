@@ -139,8 +139,9 @@ Added
 
 * Thread action constructors for the ``MonadConc`` ``getMaskingState``
   function:
-    * ``Test.DejaFu.Types.ThreadAction``, ``GetMaskingState``
-    * ``Test.DejaFu.Types.Lookahead``, ``WillGetMaskingState``
+
+  * ``Test.DejaFu.Types.ThreadAction``, ``GetMaskingState``
+  * ``Test.DejaFu.Types.Lookahead``, ``WillGetMaskingState``
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -194,50 +195,57 @@ Miscellaneous
 Added
 ~~~~~
 
-* The ``Test.DejaFu.Types.MonadDejaFu`` typeclass, containing the
-  primitives needed to run a concurrent program.  There are instances
-  for:
-    * ``IO``, which is probably the ``MonadConc`` instance people used
-      previously, so there is no breaking change there.
-    * ``CatchT (ST t)``, meaning that concurrent programs can be run
-      without ``IO`` once more.
+* The ``Test.DejaFu.Types.MonadDejaFu`` typeclass, containing the primitives
+  needed to run a concurrent program.  There are instances for:
 
-* Thread action constructors for ``MonadConc``
-  ``supportsBoundThreads`` function:
-    * ``Test.DejaFu.Types.ThreadAction``, ``SupportsBoundThreads``
-    * ``Test.DejaFu.Types.Lookahead``, ``WillSupportsBoundThreads``
+  * ``IO``, which is probably the ``MonadConc`` instance people used previously,
+    so there is no breaking change there.
+  * ``CatchT (ST t)``, meaning that concurrent programs can be run without
+    ``IO`` once more.
+
+* Thread action constructors for ``MonadConc`` ``supportsBoundThreads``
+  function:
+
+  * ``Test.DejaFu.Types.ThreadAction``, ``SupportsBoundThreads``
+  * ``Test.DejaFu.Types.Lookahead``, ``WillSupportsBoundThreads``
 
 Changed
 ~~~~~~~
 
-* Many functions which had a ``MonadConc`` constraint now have a
-  ``MonadDejaFu`` constraint:
-    * In ``Test.DejaFu``
-        * ``autocheck``
-        * ``autocheckWay``
-        * ``autocheckWithSettings``
-        * ``dejafu``
-        * ``dejafuWay``
-        * ``dejafuWithSettings``
-        * ``dejafus``
-        * ``dejafusWay``
-        * ``dejafusWithSettings``
-        * ``runTest``
-        * ``runTestWay``
-        * ``runTestWithSettings``
-    * In ``Test.DejaFu.Conc``
-        * ``runConcurrent``
-        * ``recordSnapshot``
-        * ``runSnapshot``
-    * In ``Test.DejaFu.SCT``
-        * ``runSCT``
-        * ``resultsSet``
-        * ``runSCT'``
-        * ``resultsSet'``
-        * ``runSCTWithSettings``
-        * ``resultsSetWithSettings``
-        * ``runSCTWithSettings'``
-        * ``resultsSetWithSettings'``
+* Many functions which had a ``MonadConc`` constraint now have a ``MonadDejaFu``
+  constraint:
+
+  * In ``Test.DejaFu``
+
+    * ``autocheck``
+    * ``autocheckWay``
+    * ``autocheckWithSettings``
+    * ``dejafu``
+    * ``dejafuWay``
+    * ``dejafuWithSettings``
+    * ``dejafus``
+    * ``dejafusWay``
+    * ``dejafusWithSettings``
+    * ``runTest``
+    * ``runTestWay``
+    * ``runTestWithSettings``
+
+  * In ``Test.DejaFu.Conc``
+
+    * ``runConcurrent``
+    * ``recordSnapshot``
+    * ``runSnapshot``
+
+  * In ``Test.DejaFu.SCT``
+
+    * ``runSCT``
+    * ``resultsSet``
+    * ``runSCT'``
+    * ``resultsSet'``
+    * ``runSCTWithSettings``
+    * ``resultsSetWithSettings``
+    * ``runSCTWithSettings'``
+    * ``resultsSetWithSettings'``
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -269,26 +277,29 @@ Added
 
 * The ``Program`` types and their constructors (re-exported from
   ``Test.DejaFu``):
-    * ``Test.DejaFu.Conc.Program``
-    * ``Test.DejaFu.Conc.Basic``
-    * ``Test.DejaFu.Conc.WithSetup``
-    * ``Test.DejaFu.Conc.WithSetupAndTeardown``
-    * ``Test.DejaFu.Conc.withSetup``
-    * ``Test.DejaFu.Conc.withTeardown``
-    * ``Test.DejaFu.Conc.withSetupAndTeardown``
+
+  * ``Test.DejaFu.Conc.Program``
+  * ``Test.DejaFu.Conc.Basic``
+  * ``Test.DejaFu.Conc.WithSetup``
+  * ``Test.DejaFu.Conc.WithSetupAndTeardown``
+  * ``Test.DejaFu.Conc.withSetup``
+  * ``Test.DejaFu.Conc.withTeardown``
+  * ``Test.DejaFu.Conc.withSetupAndTeardown``
 
 * The ``Invariant`` type and associated functions (re-exported from
   ``Test.DejaFu``):
-    * ``Test.DejaFu.Conc.Invariant``
-    * ``Test.DejaFu.Conc.registerInvariant``
-    * ``Test.DejaFu.Conc.inspectIORef``
-    * ``Test.DejaFu.Conc.inspectMVar``
-    * ``Test.DejaFu.Conc.inspectTVar``
+
+  * ``Test.DejaFu.Conc.Invariant``
+  * ``Test.DejaFu.Conc.registerInvariant``
+  * ``Test.DejaFu.Conc.inspectIORef``
+  * ``Test.DejaFu.Conc.inspectMVar``
+  * ``Test.DejaFu.Conc.inspectTVar``
 
 * New snapshotting functions:
-    * ``Test.DejaFu.Conc.Snapshot``
-    * ``Test.DejaFu.Conc.recordSnapshot``
-    * ``Test.DejaFu.Conc.runSnapshot``
+
+  * ``Test.DejaFu.Conc.Snapshot``
+  * ``Test.DejaFu.Conc.recordSnapshot``
+  * ``Test.DejaFu.Conc.runSnapshot``
 
 * ``Test.DejaFu.Settings.llengthBound``, which now applies to all ways
   of testing.
@@ -299,14 +310,15 @@ Added
 * ``Test.DejaFu.runTestWithSettings`` function.
 
 * A simplified form of the concurrency state:
-    * ``Test.DejaFu.Types.ConcurrencyState``
-    * ``Test.DejaFu.Types.isBuffered``
-    * ``Test.DejaFu.Types.numBuffered``
-    * ``Test.DejaFu.Types.isFull``
-    * ``Test.DejaFu.Types.canInterrupt``
-    * ``Test.DejaFu.Types.canInterruptL``
-    * ``Test.DejaFu.Types.isMaskedInterruptible``
-    * ``Test.DejaFu.Types.isMaskedUninterruptible``
+
+  * ``Test.DejaFu.Types.ConcurrencyState``
+  * ``Test.DejaFu.Types.isBuffered``
+  * ``Test.DejaFu.Types.numBuffered``
+  * ``Test.DejaFu.Types.isFull``
+  * ``Test.DejaFu.Types.canInterrupt``
+  * ``Test.DejaFu.Types.canInterruptL``
+  * ``Test.DejaFu.Types.isMaskedInterruptible``
+  * ``Test.DejaFu.Types.isMaskedUninterruptible``
 
 Changed
 ~~~~~~~
@@ -318,75 +330,83 @@ Changed
   return a representative trace for each unique condition.
 
 * Functions which took a ``ConcT`` now take a ``Program pty``:
-    * ``Test.DejaFu.autocheck``
-    * ``Test.DejaFu.autocheckWay``
-    * ``Test.DejaFu.autocheckWithSettings``
-    * ``Test.DejaFu.dejafu``
-    * ``Test.DejaFu.dejafuWay``
-    * ``Test.DejaFu.dejafuWithSettings``
-    * ``Test.DejaFu.dejafus``
-    * ``Test.DejaFu.dejafusWay``
-    * ``Test.DejaFu.dejafusWithSettings``
-    * ``Test.DejaFu.runTest``
-    * ``Test.DejaFu.runTestWay``
-    * ``Test.DejaFu.runTestWithSettings``
-    * ``Test.DejaFu.Conc.runConcurrent``
-    * ``Test.DejaFu.SCT.runSCT``
-    * ``Test.DejaFu.SCT.resultsSet``
-    * ``Test.DejaFu.SCT.runSCT'``
-    * ``Test.DejaFu.SCT.resultsSet'``
-    * ``Test.DejaFu.SCT.runSCTWithSettings``
-    * ``Test.DejaFu.SCT.resultsSetWithSettings``
-    * ``Test.DejaFu.SCT.runSCTWithSettings'``
-    * ``Test.DejaFu.SCT.resultsSetWithSettings'``
+
+  * ``Test.DejaFu.autocheck``
+  * ``Test.DejaFu.autocheckWay``
+  * ``Test.DejaFu.autocheckWithSettings``
+  * ``Test.DejaFu.dejafu``
+  * ``Test.DejaFu.dejafuWay``
+  * ``Test.DejaFu.dejafuWithSettings``
+  * ``Test.DejaFu.dejafus``
+  * ``Test.DejaFu.dejafusWay``
+  * ``Test.DejaFu.dejafusWithSettings``
+  * ``Test.DejaFu.runTest``
+  * ``Test.DejaFu.runTestWay``
+  * ``Test.DejaFu.runTestWithSettings``
+  * ``Test.DejaFu.Conc.runConcurrent``
+  * ``Test.DejaFu.SCT.runSCT``
+  * ``Test.DejaFu.SCT.resultsSet``
+  * ``Test.DejaFu.SCT.runSCT'``
+  * ``Test.DejaFu.SCT.resultsSet'``
+  * ``Test.DejaFu.SCT.runSCTWithSettings``
+  * ``Test.DejaFu.SCT.resultsSetWithSettings``
+  * ``Test.DejaFu.SCT.runSCTWithSettings'``
+  * ``Test.DejaFu.SCT.resultsSetWithSettings'``
 
 * ``Test.DejaFu.Conc.ConcT`` is an alias for ``Program Basic``.
 
 * ``Test.DejaFu.Types.Bounds``:
-    * Removed ``boundLength`` field.
+
+  * Removed ``boundLength`` field.
 
 * ``Test.DejaFu.Types.Condition``:
-    * Added ``InvariantFailure`` constructor
-    * Removed ``STMDeadlock`` constructor
+
+  * Added ``InvariantFailure`` constructor
+  * Removed ``STMDeadlock`` constructor
 
 * ``Test.DejaFu.Types.Error``:
-    * Removed ``NestedSubconcurrency``, ``MultithreadedSubconcurrency``,
-      and ``LateDontCheck`` constructors.
+
+  * Removed ``NestedSubconcurrency``, ``MultithreadedSubconcurrency``, and
+    ``LateDontCheck`` constructors.
 
 * ``Test.DejaFu.Types.Lookahead``:
-    * Added ``WillRegisterInvariant`` constructor
-    * Removed ``WillSubconcurrency``, ``WillStopSubconcurrency``, and
-      ``WillDontCheck`` constructors
+
+  * Added ``WillRegisterInvariant`` constructor
+  * Removed ``WillSubconcurrency``, ``WillStopSubconcurrency``, and
+    ``WillDontCheck`` constructors
 
 * ``Test.DejaFu.Types.ThreadAction``:
-    * Added ``RegisterInvariant`` constructor
-    * Removed ``Subconcurrency``, ``StopSubconcurrency``, and
-      ``DontCheck`` constructors
+
+  * Added ``RegisterInvariant`` constructor
+  * Removed ``Subconcurrency``, ``StopSubconcurrency``, and
+    ``DontCheck`` constructors
 
 Removed
 ~~~~~~~
 
 * The deprecated functions:
-    * ``Test.DejaFu.dejafuDiscard``
-    * ``Test.DejaFu.SCT.runSCTDiscard``
-    * ``Test.DejaFu.SCT.runSCTDiscard'``
-    * ``Test.DejaFu.SCT.resultsSetDiscard``
-    * ``Test.DejaFu.SCT.resultsSetDiscard'``
-    * ``Test.DejaFu.SCT.sctBound``
-    * ``Test.DejaFu.SCT.sctBoundDiscard``
-    * ``Test.DejaFu.SCT.sctUniformRandom``
-    * ``Test.DejaFu.SCT.sctUniformRandomDiscard``
-    * ``Test.DejaFu.SCT.sctWeightedRandom``
-    * ``Test.DejaFu.SCT.sctWeightedRandomDiscard``
+
+  * ``Test.DejaFu.dejafuDiscard``
+  * ``Test.DejaFu.SCT.runSCTDiscard``
+  * ``Test.DejaFu.SCT.runSCTDiscard'``
+  * ``Test.DejaFu.SCT.resultsSetDiscard``
+  * ``Test.DejaFu.SCT.resultsSetDiscard'``
+  * ``Test.DejaFu.SCT.sctBound``
+  * ``Test.DejaFu.SCT.sctBoundDiscard``
+  * ``Test.DejaFu.SCT.sctUniformRandom``
+  * ``Test.DejaFu.SCT.sctUniformRandomDiscard``
+  * ``Test.DejaFu.SCT.sctWeightedRandom``
+  * ``Test.DejaFu.SCT.sctWeightedRandomDiscard``
 
 * The deprecated type ``Test.DejaFu.Types.Failure``
 
 * Old snapshotting functions:
-    * ``Test.DejaFu.Conc.DCSnapshot``
-    * ``Test.DejaFu.Conc.runForDCSnapshot``
-    * ``Test.DejaFu.Conc.runWithDCSnapshot``
-    * ``Test.DejaFu.Conc.canDCSnapshot``
-    * ``Test.DejaFu.Conc.threadsFromDCSnapshot``
+
+  * ``Test.DejaFu.Conc.DCSnapshot``
+  * ``Test.DejaFu.Conc.runForDCSnapshot``
+  * ``Test.DejaFu.Conc.runWithDCSnapshot``
+  * ``Test.DejaFu.Conc.canDCSnapshot``
+  * ``Test.DejaFu.Conc.threadsFromDCSnapshot``
 
 * ``Test.DejaFu.Conc.dontCheck``
 
@@ -408,8 +428,9 @@ Added
 
 * ``Test.DejaFu.Types.Error`` for internal errors and misuses, with
   predicates:
-    * ``Test.DejaFu.Types.isSchedulerError``
-    * ``Test.DejaFu.Types.isIncorrectUsage``
+
+  * ``Test.DejaFu.Types.isSchedulerError``
+  * ``Test.DejaFu.Types.isIncorrectUsage``
 
 * Deprecated ``Test.DejaFu.Types.Failure`` type synonym for
   ``Condition``.
@@ -652,9 +673,9 @@ Miscellaneous
 
 * GHC 7.10 support is dropped.  Dependency lower bounds are:
 
-    * :hackage:`base`: 4.9
-    * :hackage:`concurrency`: 1.5
-    * :hackage:`transformers`: 0.5
+  * :hackage:`base`: 4.9
+  * :hackage:`concurrency`: 1.5
+  * :hackage:`transformers`: 0.5
 
 * The upper bound on :hackage:`concurrency` is 1.6.
 
@@ -699,8 +720,8 @@ Added
 
 * (:issue:`183`) SCT settings for trace simplification:
 
-    * ``Test.DejaFu.Settings.lequality``
-    * ``Test.DejaFu.Settings.lsimplify``
+  * ``Test.DejaFu.Settings.lequality``
+  * ``Test.DejaFu.Settings.lsimplify``
 
 * (:pull:`248`) ``Test.DejaFu.Utils.toTIdTrace`` to extract thread IDs
   from a trace.
@@ -726,23 +747,23 @@ Added
 
 * (:pull:`246`) ``Generic`` instances for:
 
-    * ``Test.DejaFu.Types.ThreadId``
-    * ``Test.DejaFu.Types.CRefId``
-    * ``Test.DejaFu.Types.MVarId``
-    * ``Test.DejaFu.Types.TVarId``
-    * ``Test.DejaFu.Types.Id``
-    * ``Test.DejaFu.Types.ThreadAction``
-    * ``Test.DejaFu.Types.Lookahead``
-    * ``Test.DejaFu.Types.TAction``
-    * ``Test.DejaFu.Types.Decision``
-    * ``Test.DejaFu.Types.Failure``
-    * ``Test.DejaFu.Types.Bounds``
-    * ``Test.DejaFu.Types.PreemptionBound``
-    * ``Test.DejaFu.Types.FairBound``
-    * ``Test.DejaFu.Types.LengthBound``
-    * ``Test.DejaFu.Types.Discard``
-    * ``Test.DejaFu.Types.MemType``
-    * ``Test.DejaFu.Types.MonadFailException``
+  * ``Test.DejaFu.Types.ThreadId``
+  * ``Test.DejaFu.Types.CRefId``
+  * ``Test.DejaFu.Types.MVarId``
+  * ``Test.DejaFu.Types.TVarId``
+  * ``Test.DejaFu.Types.Id``
+  * ``Test.DejaFu.Types.ThreadAction``
+  * ``Test.DejaFu.Types.Lookahead``
+  * ``Test.DejaFu.Types.TAction``
+  * ``Test.DejaFu.Types.Decision``
+  * ``Test.DejaFu.Types.Failure``
+  * ``Test.DejaFu.Types.Bounds``
+  * ``Test.DejaFu.Types.PreemptionBound``
+  * ``Test.DejaFu.Types.FairBound``
+  * ``Test.DejaFu.Types.LengthBound``
+  * ``Test.DejaFu.Types.Discard``
+  * ``Test.DejaFu.Types.MemType``
+  * ``Test.DejaFu.Types.MonadFailException``
 
 * (:pull:`246`) ``NFData`` instance for
   ``Test.DejaFu.Types.MonadFailException``
@@ -817,49 +838,55 @@ Added
 
 * (:pull:`238`) A record-based approach to SCT configuration:
 
-    * ``Test.DejaFu.Settings``
-      (re-exported from ``Test.Dejafu`` and ``Test.DejaFu.SCT``)
-    * ``Test.DejaFu.Settings.Settings``
-    * ``Test.DejaFu.Settings.defaultSettings``
-    * ``Test.DejaFu.Settings.fromWayAndMemType``
-    * Lenses:
-        * ``Test.DejaFu.Settings.lway``
-        * ``Test.DejaFu.Settings.lmemtype``
-        * ``Test.DejaFu.Settings.ldiscard``
-        * ``Test.DejaFu.Settings.learlyExit``
-        * ``Test.DejaFu.Settings.ldebugShow``
-        * ``Test.DejaFu.Settings.ldebugPrint``
-    * Lens helpers:
-        * ``Test.DejaFu.Settings.get``
-        * ``Test.DejaFu.Settings.set``
-    * Runners:
-        * ``Test.DejaFu.SCT.runSCTWithSettings``
-        * ``Test.DejaFu.SCT.runSCTWithSettings'``
-        * ``Test.DejaFu.SCT.resultsSetWithSettings``
-        * ``Test.DejaFu.SCT.resultsSetWithSettings'``
+  * ``Test.DejaFu.Settings`` (re-exported from ``Test.Dejafu`` and
+    ``Test.DejaFu.SCT``)
+  * ``Test.DejaFu.Settings.Settings``
+  * ``Test.DejaFu.Settings.defaultSettings``
+  * ``Test.DejaFu.Settings.fromWayAndMemType``
+
+  * Lenses:
+
+    * ``Test.DejaFu.Settings.lway``
+    * ``Test.DejaFu.Settings.lmemtype``
+    * ``Test.DejaFu.Settings.ldiscard``
+    * ``Test.DejaFu.Settings.learlyExit``
+    * ``Test.DejaFu.Settings.ldebugShow``
+    * ``Test.DejaFu.Settings.ldebugPrint``
+
+  * Lens helpers:
+
+    * ``Test.DejaFu.Settings.get``
+    * ``Test.DejaFu.Settings.set``
+
+  * Runners:
+
+    * ``Test.DejaFu.SCT.runSCTWithSettings``
+    * ``Test.DejaFu.SCT.runSCTWithSettings'``
+    * ``Test.DejaFu.SCT.resultsSetWithSettings``
+    * ``Test.DejaFu.SCT.resultsSetWithSettings'``
 
 * (:pull:`238`) Settings-based test functions:
 
-    * ``Test.DejaFu.autocheckWithSettings``
-    * ``Test.DejaFu.dejafuWithSettings``
-    * ``Test.DejaFu.dejafusWithSettings``
-    * ``Test.DejaFu.runTestWithSettings``
+  * ``Test.DejaFu.autocheckWithSettings``
+  * ``Test.DejaFu.dejafuWithSettings``
+  * ``Test.DejaFu.dejafusWithSettings``
+  * ``Test.DejaFu.runTestWithSettings``
 
 Deprecated
 ~~~~~~~~~~
 
 * (:pull:`238`) SCT function variants:
 
-    * ``Test.DejaFu.SCT.runSCTDiscard``
-    * ``Test.DejaFu.SCT.resultSetDiscard``
-    * ``Test.DejaFu.SCT.runSCTDiscard'``
-    * ``Test.DejaFu.SCT.resultSetDiscard'``
-    * ``Test.DejaFu.SCT.sctBound``
-    * ``Test.DejaFu.SCT.sctBoundDiscard``
-    * ``Test.DejaFu.SCT.sctUniformRandom``
-    * ``Test.DejaFu.SCT.sctUniformRandomDiscard``
-    * ``Test.DejaFu.SCT.sctWeightedRandom``
-    * ``Test.DejaFu.SCT.sctWeightedRandomDiscard``
+  * ``Test.DejaFu.SCT.runSCTDiscard``
+  * ``Test.DejaFu.SCT.resultSetDiscard``
+  * ``Test.DejaFu.SCT.runSCTDiscard'``
+  * ``Test.DejaFu.SCT.resultSetDiscard'``
+  * ``Test.DejaFu.SCT.sctBound``
+  * ``Test.DejaFu.SCT.sctBoundDiscard``
+  * ``Test.DejaFu.SCT.sctUniformRandom``
+  * ``Test.DejaFu.SCT.sctUniformRandomDiscard``
+  * ``Test.DejaFu.SCT.sctWeightedRandom``
+  * ``Test.DejaFu.SCT.sctWeightedRandomDiscard``
 
 * (:pull:`238`) The ``Test.DejaFu.Defaults`` module.  Import
   ``Test.DejaFu.Settings`` instead.
@@ -915,18 +942,18 @@ Added
 * (:pull:`219`) The testing-only ``Test.DejaFu.Conc.dontCheck``
   function, and associated definitions:
 
-    * ``Test.DejaFu.Types.DontCheck``
-    * ``Test.DejaFu.Types.WillDontCheck``
-    * ``Test.DejaFu.Types.IllegalDontCheck``
-    * ``Test.DejaFu.Types.isIllegalDontCheck``
+  * ``Test.DejaFu.Types.DontCheck``
+  * ``Test.DejaFu.Types.WillDontCheck``
+  * ``Test.DejaFu.Types.IllegalDontCheck``
+  * ``Test.DejaFu.Types.isIllegalDontCheck``
 
 * (:pull:`219`) A snapshotting approach based on
   ``Test.DejaFu.Conc.dontCheck``:
 
-    * ``Test.DejaFu.Conc.runForDCSnapshot``
-    * ``Test.DejaFu.Conc.runWithDCSnapshot``
-    * ``Test.DejaFu.Conc.canDCSnapshot``
-    * ``Test.DejaFu.Conc.threadsFromDCSnapshot``
+  * ``Test.DejaFu.Conc.runForDCSnapshot``
+  * ``Test.DejaFu.Conc.runWithDCSnapshot``
+  * ``Test.DejaFu.Conc.canDCSnapshot``
+  * ``Test.DejaFu.Conc.threadsFromDCSnapshot``
 
 Changed
 ~~~~~~~
@@ -1011,10 +1038,10 @@ Added
 
 * (:pull:`145`) Thread action and lookahead values for bound threads:
 
-    * ``Test.DejaFu.Types.ForkOS``
-    * ``Test.DejaFu.Types.IsCurrentThreadBound``
-    * ``Test.DejaFu.Types.WillForkOS``
-    * ``Test.DejaFu.Types.WillIsCurrentThreadBound``
+  * ``Test.DejaFu.Types.ForkOS``
+  * ``Test.DejaFu.Types.IsCurrentThreadBound``
+  * ``Test.DejaFu.Types.WillForkOS``
+  * ``Test.DejaFu.Types.WillIsCurrentThreadBound``
 
 * (:issue:`155`) ``Test.DejaFu.Types`` and ``Test.DejaFu.Utils``
   modules, each containing some of what was in ``Test.DejaFu.Common``.
@@ -1064,15 +1091,15 @@ Removed
 
 * The ``IO`` specific testing functions:
 
-    * ``Test.DejaFu.autocheckIO``
-    * ``Test.DejaFu.dejafuIO``
-    * ``Test.DejaFu.dejafusIO``
-    * ``Test.DejaFu.autocheckWayIO``
-    * ``Test.DejaFu.dejafuWayIO``
-    * ``Test.DejaFu.dejafusWayIO``
-    * ``Test.DejaFu.dejafuDiscardIO``
-    * ``Test.DejaFu.runTestM``
-    * ``Test.DejaFu.runTestWayM``
+  * ``Test.DejaFu.autocheckIO``
+  * ``Test.DejaFu.dejafuIO``
+  * ``Test.DejaFu.dejafusIO``
+  * ``Test.DejaFu.autocheckWayIO``
+  * ``Test.DejaFu.dejafuWayIO``
+  * ``Test.DejaFu.dejafusWayIO``
+  * ``Test.DejaFu.dejafuDiscardIO``
+  * ``Test.DejaFu.runTestM``
+  * ``Test.DejaFu.runTestWayM``
 
 * The ``Test.DejaFu.Conc.ConcST`` type alias.
 
@@ -1214,16 +1241,16 @@ Added
 
 * Failure predicates (also exported from ``Test.DejaFu``):
 
-    * ``Test.DejaFu.Common.isAbort``
-    * ``Test.DejaFu.Common.isDeadlock``
-    * ``Test.DejaFu.Common.isIllegalSubconcurrency``
-    * ``Test.DejaFu.Common.isInternalError``
-    * ``Test.DejaFu.Common.isUncaughtException``
+  * ``Test.DejaFu.Common.isAbort``
+  * ``Test.DejaFu.Common.isDeadlock``
+  * ``Test.DejaFu.Common.isIllegalSubconcurrency``
+  * ``Test.DejaFu.Common.isInternalError``
+  * ``Test.DejaFu.Common.isUncaughtException``
 
 * Thread action and lookahead values for ``threadDelay``:
 
-    * ``Test.DejaFu.Common.ThreadDelay``
-    * ``Test.DejaFu.Common.WillThreadDelay``
+  * ``Test.DejaFu.Common.ThreadDelay``
+  * ``Test.DejaFu.Common.WillThreadDelay``
 
 Changed
 ~~~~~~~
@@ -1350,8 +1377,8 @@ Performance
 * (:issue:`64`) Greatly reduce memory usage in systematic testing when
   discarding traces by using an alternative data structure.
 
-    * Old: ``O(max trace length * number of executions)``
-    * New: ``O(max trace length * number of traces kept)``
+  * Old: ``O(max trace length * number of executions)``
+  * New: ``O(max trace length * number of traces kept)``
 
 
 0.7.1.0 - The Discard Release (2017-08-10)
@@ -1365,15 +1392,15 @@ Added
 
 * (:issue:`90`) A way to selectively discard results or traces:
 
-    * Type: ``Test.DejaFu.SCT.Discard``
-    * Functions: ``Test.DejaFu.SCT.runSCTDiscard``,
-      ``resultsSetDiscard``, ``sctBoundDiscard``,
-      ``sctUniformRandomDiscard``, and ``sctWeightedRandomDiscard``.
+  * Type: ``Test.DejaFu.SCT.Discard``
+  * Functions: ``Test.DejaFu.SCT.runSCTDiscard``, ``resultsSetDiscard``,
+    ``sctBoundDiscard``, ``sctUniformRandomDiscard``, and
+    ``sctWeightedRandomDiscard``.
 
 * (:issue:`90`) Discarding variants of the testing functions:
 
-    * ``Test.DejaFu.dejafuDiscard``
-    * ``Test.DejaFu.dejafuDiscardIO``
+  * ``Test.DejaFu.dejafuDiscard``
+  * ``Test.DejaFu.dejafuDiscardIO``
 
 * (:issue:`90`) ``Test.DejaFu.Defaults.defaultDiscarder``.
 
@@ -1439,13 +1466,12 @@ Added
 * Smart constructors for ``Test.DejaFu.SCT.Way`` (also re-exported
   from ``Test.DejaFu``):
 
-    * ``Test.DejaFu.SCT.systematically``, like the old
-      ``Systematically``.
-    * ``Test.DejaFu.SCT.randomly``, like the old ``Randomly``.
-    * ``Test.DejaFu.SCT.uniformly``, a new uniform (as opposed to
-      weighted) random scheduler.
-    * ``Test.DejaFu.SCT.swarmy``, like the old ``Randomly`` but which
-      can use the same weights for multiple executions.
+  * ``Test.DejaFu.SCT.systematically``, like the old ``Systematically``.
+  * ``Test.DejaFu.SCT.randomly``, like the old ``Randomly``.
+  * ``Test.DejaFu.SCT.uniformly``, a new uniform (as opposed to weighted) random
+    scheduler.
+  * ``Test.DejaFu.SCT.swarmy``, like the old ``Randomly`` but which can use the
+    same weights for multiple executions.
 
 Changed
 ~~~~~~~
@@ -1463,8 +1489,8 @@ Removed
 * The ``Test.DejaFu.SCT.Way`` type is now abstract, so its
   constructors are no longer exported:
 
-    * ``Test.DejaFu.SCT.Systematically``
-    * ``Test.DejaFu.SCT.Randomly``
+  * ``Test.DejaFu.SCT.Systematically``
+  * ``Test.DejaFu.SCT.Randomly``
 
 * The ``Test.DejaFu.SCT.sctPreBound``, ``sctFairBound``, and
   ``sctLengthBound`` functions.
@@ -1571,25 +1597,25 @@ Added
 
 * ``NFData`` instances for:
 
-    * ``Test.DejaFu.Result``
-    * ``Test.DejaFu.Common.ThreadId``
-    * ``Test.DejaFu.Common.CRefId``
-    * ``Test.DejaFu.Common.MVarId``
-    * ``Test.DejaFu.Common.TVarId``
-    * ``Test.DejaFu.Common.IdSource``
-    * ``Test.DejaFu.Common.ThreadAction``
-    * ``Test.DejaFu.Common.Lookahead``
-    * ``Test.DejaFu.Common.ActionType``
-    * ``Test.DejaFu.Common.TAction``
-    * ``Test.DejaFu.Common.Decision``
-    * ``Test.DejaFu.Common.Failure``
-    * ``Test.DejaFu.Common.MemType``
-    * ``Test.DejaFu.SCT.Bounds``
-    * ``Test.DejaFu.SCT.PreemptionBound``
-    * ``Test.DejaFu.SCT.FairBound``
-    * ``Test.DejaFu.SCT.LengthBound``
-    * ``Test.DejaFu.SCT.Way``
-    * ``Test.DejaFu.STM.Result``
+  * ``Test.DejaFu.Result``
+  * ``Test.DejaFu.Common.ThreadId``
+  * ``Test.DejaFu.Common.CRefId``
+  * ``Test.DejaFu.Common.MVarId``
+  * ``Test.DejaFu.Common.TVarId``
+  * ``Test.DejaFu.Common.IdSource``
+  * ``Test.DejaFu.Common.ThreadAction``
+  * ``Test.DejaFu.Common.Lookahead``
+  * ``Test.DejaFu.Common.ActionType``
+  * ``Test.DejaFu.Common.TAction``
+  * ``Test.DejaFu.Common.Decision``
+  * ``Test.DejaFu.Common.Failure``
+  * ``Test.DejaFu.Common.MemType``
+  * ``Test.DejaFu.SCT.Bounds``
+  * ``Test.DejaFu.SCT.PreemptionBound``
+  * ``Test.DejaFu.SCT.FairBound``
+  * ``Test.DejaFu.SCT.LengthBound``
+  * ``Test.DejaFu.SCT.Way``
+  * ``Test.DejaFu.STM.Result``
 
 * ``Eq``, ``Ord``, and ``Show`` instances for
   ``Test.DejaFu.Common.IdSource``.
@@ -1661,8 +1687,8 @@ Added
 
 * Thread action and lookahead values for ``tryReadMVar``:
 
-    * ``Test.DejaFu.Common.TryReadMVar``
-    * ``Test.DejaFu.Common.WillTryReadMVar``
+  * ``Test.DejaFu.Common.TryReadMVar``
+  * ``Test.DejaFu.Common.WillTryReadMVar``
 
 * The testing-only ``Test.DejaFu.Conc.subconcurrency`` function.
 

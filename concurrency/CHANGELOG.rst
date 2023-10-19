@@ -46,7 +46,7 @@ Fixed
 
 
 1.11.0.0 (2020-05-14)
---------------------
+---------------------
 
 * Git: :tag:`concurrency-1.11.0.0`
 * Hackage: :hackage:`concurrency-1.11.0.0`
@@ -171,10 +171,10 @@ Added
 
 * (:issue:`286`) Copy across additions from the :hackage:`stm` package:
 
-    * ``Control.Concurrent.Classy.STM.TQueue.flushTQueue``
-    * ``Control.Concurrent.Classy.STM.TBQueue.flushTBQueue``
-    * ``Control.Concurrent.Classy.STM.TBQueue.lengthTBQueue``
-    * ``Control.Concurrent.Classy.STM.TVar.stateTVar``
+  * ``Control.Concurrent.Classy.STM.TQueue.flushTQueue``
+  * ``Control.Concurrent.Classy.STM.TBQueue.flushTBQueue``
+  * ``Control.Concurrent.Classy.STM.TBQueue.lengthTBQueue``
+  * ``Control.Concurrent.Classy.STM.TVar.stateTVar``
 
 * (:issue:`287`) The ``Control.Concurrent.Classy.STM.TSem`` module.
 
@@ -183,10 +183,8 @@ Changed
 
 * (:issue:`286`) Copy across changes from the :hackage:`stm` package:
 
-    * Make definition of ``readTQueue`` consistent with
-      ``readTBQueue``
-
-    * Performance improvements to ``peekTQueue`` and ``peekTBQueue``.
+  * Make definition of ``readTQueue`` consistent with ``readTBQueue``
+  * Performance improvements to ``peekTQueue`` and ``peekTBQueue``.
 
 Miscellaneous
 ~~~~~~~~~~~~~
@@ -235,9 +233,9 @@ Miscellaneous
 
 * GHC 7.10 support is dropped.  Dependency lower bounds are:
 
-    * :hackage:`base`: 4.9
-    * :hackage:`array`: 0.5.1
-    * :hackage:`transformers`: 0.5
+  * :hackage:`base`: 4.9
+  * :hackage:`array`: 0.5.1
+  * :hackage:`transformers`: 0.5
 
 
 1.4.0.2 (2018-03-11)
@@ -276,8 +274,8 @@ Changed
 * ``Control.Monad.Conc.Class.peekTicket'`` has a more concrete type,
   to make deriving newtype instances of ``MonadConc`` possible:
 
-    * Old: ``MonadConc m => proxy m -> Ticket m a -> a``
-    * New: ``MonadConc m => Proxy m -> Ticket m a -> a``
+  * Old: ``MonadConc m => proxy m -> Ticket m a -> a``
+  * New: ``MonadConc m => Proxy m -> Ticket m a -> a``
 
 
 1.3.0.0 - The Bound Thread Release (2017-12-23)
@@ -294,21 +292,21 @@ Added
 
 * (:pull:`145`) Bound thread variants of the ``withAsync`` functions:
 
-    * ``Control.Concurrent.Classy.Async.asyncBound``
-    * ``Control.Concurrent.Classy.Async.asyncBoundN``
-    * ``Control.Concurrent.Classy.Async.withAsyncBound``
-    * ``Control.Concurrent.Classy.Async.withAsyncBoundN``
+  * ``Control.Concurrent.Classy.Async.asyncBound``
+  * ``Control.Concurrent.Classy.Async.asyncBoundN``
+  * ``Control.Concurrent.Classy.Async.withAsyncBound``
+  * ``Control.Concurrent.Classy.Async.withAsyncBoundN``
 
 * (:pull:`145`) Bound thread functions in ``MonadConc``:
 
-    * ``Control.Monad.Conc.Class.forkOS``
-    * ``Control.Monad.Conc.Class.forkOSN``
-    * ``Control.Monad.Conc.Class.isCurrentThreadBound``
+  * ``Control.Monad.Conc.Class.forkOS``
+  * ``Control.Monad.Conc.Class.forkOSN``
+  * ``Control.Monad.Conc.Class.isCurrentThreadBound``
 
 * (:pull:`145`) Helper functions for bound threads:
 
-    * ``Control.Monad.Conc.Class.runInBoundThread``
-    * ``Control.Monad.Conc.Class.runInUnboundThread``
+  * ``Control.Monad.Conc.Class.runInBoundThread``
+  * ``Control.Monad.Conc.Class.runInUnboundThread``
 
 Changed
 ~~~~~~~
@@ -328,10 +326,10 @@ Added
 
 * (:issue:`148`) Named thread variants of the ``withAsync`` functions:
 
-    * ``Control.Concurrent.Classy.Async.withAsyncN``
-    * ``Control.Concurrent.Classy.Async.withAsyncOnN``
-    * ``Control.Concurrent.Classy.Async.withAsyncWithUnmaskN``
-    * ``Control.Concurrent.Classy.Async.withAsyncOnWithUnmaskN``
+  * ``Control.Concurrent.Classy.Async.withAsyncN``
+  * ``Control.Concurrent.Classy.Async.withAsyncOnN``
+  * ``Control.Concurrent.Classy.Async.withAsyncWithUnmaskN``
+  * ``Control.Concurrent.Classy.Async.withAsyncOnWithUnmaskN``
 
 
 1.2.2.0 (2017-11-05)
@@ -345,12 +343,12 @@ Added
 
 * (:issue:`144`) ``IsConc`` and ``IsSTM`` wrapper types:
 
-    * ``Control.Monad.Conc.Class.IsConc`` (constructor unexported)
-    * ``Control.Monad.Conc.Class.toIsConc``
-    * ``Control.Monad.Conc.Class.fromIsConc``
-    * ``Control.Monad.STM.Class.IsSTM`` (constructor unexported)
-    * ``Control.Monad.STM.Class.toIsSTM``
-    * ``Control.Monad.STM.Class.fromIsSTM``
+  * ``Control.Monad.Conc.Class.IsConc`` (constructor unexported)
+  * ``Control.Monad.Conc.Class.toIsConc``
+  * ``Control.Monad.Conc.Class.fromIsConc``
+  * ``Control.Monad.STM.Class.IsSTM`` (constructor unexported)
+  * ``Control.Monad.STM.Class.toIsSTM``
+  * ``Control.Monad.STM.Class.fromIsSTM``
 
 Changed
 ~~~~~~~
@@ -398,10 +396,10 @@ Added
 
 * (:pull:`125`) Named thread variants of the ``async`` functions:
 
-    * ``Control.Concurrent.Classy.Async.asyncN``
-    * ``Control.Concurrent.Classy.Async.asyncOnN``
-    * ``Control.Concurrent.Classy.Async.asyncWithUnmaskN``
-    * ``Control.Concurrent.Classy.Async.asyncOnWithUnmaskN``
+  * ``Control.Concurrent.Classy.Async.asyncN``
+  * ``Control.Concurrent.Classy.Async.asyncOnN``
+  * ``Control.Concurrent.Classy.Async.asyncWithUnmaskN``
+  * ``Control.Concurrent.Classy.Async.asyncOnWithUnmaskN``
 
 
 1.2.0.0 (2017-09-16)
@@ -446,12 +444,12 @@ Added
 
 * Missing functions copied from :hackage:`async`:
 
-    * ``Control.Concurrent.Classy.Async.uninterruptibleCancel``
-    * ``Control.Concurrent.Classy.Async.replicateConcurrently``
-    * ``Control.Concurrent.Classy.Async.concurrently_``
-    * ``Control.Concurrent.Classy.Async.mapConcurrently_``
-    * ``Control.Concurrent.Classy.Async.forConcurrently_``
-    * ``Control.Concurrent.Classy.Async.replicateConcurrently_``
+  * ``Control.Concurrent.Classy.Async.uninterruptibleCancel``
+  * ``Control.Concurrent.Classy.Async.replicateConcurrently``
+  * ``Control.Concurrent.Classy.Async.concurrently_``
+  * ``Control.Concurrent.Classy.Async.mapConcurrently_``
+  * ``Control.Concurrent.Classy.Async.forConcurrently_``
+  * ``Control.Concurrent.Classy.Async.replicateConcurrently_``
 
 * ``Control.Concurrent.Classy.Async.Concurrently`` has a ``Semigroup``
   instance when built with :hackage:`base` >= 4.9.
