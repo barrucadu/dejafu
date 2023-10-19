@@ -1,1 +1,0 @@
-../hunit-dejafu/CHANGELOG.rst
