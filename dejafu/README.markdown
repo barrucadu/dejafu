@@ -14,7 +14,7 @@ dejafu
 - [Release notes](#release-notes)
 - [Questions, feedback, discussion](#questions-feedback-discussion)
 - [Bibliography](#bibliography)
-- **[The website!](http://dejafu.readthedocs.io/)**
+- **[The website!](https://dejafu.docs.barrucadu.co.uk/)**
 
 Déjà Fu is a unit-testing library for concurrent Haskell programs.
 Tests are deterministic and expressive, making it easy and convenient

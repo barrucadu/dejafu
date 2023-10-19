@@ -13,7 +13,7 @@ are written using the <https://hackage.haskell.org/package/concurrency
 concurrency> package's 'MonadConc' typeclass.
 
 For more in-depth documentation, including migration guides from
-earlier versions of dejafu, see the <https://dejafu.readthedocs.io
+earlier versions of dejafu, see the <https://dejafu.docs.barrucadu.co.uk/
 website>.
 
 __A first test:__ This is a simple concurrent program which forks two

@@ -1,0 +1,17 @@
+[book]
+title = "Déjà Fu"
+authors = ["Michael Walker (barrucadu)"]
+description = "Systematic concurrency testing meets Haskell."
+language = "en"
+multilingual = false
+
+[build]
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/barrucadu/dejafu"
+cname = "dejafu.docs.barrucadu.co.uk"
+
+[preprocessor.admonish]
+on_failure = "bail"
+command = "mdbook-admonish"

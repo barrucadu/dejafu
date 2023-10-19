@@ -13,6 +13,7 @@ unreleased
 Miscellaneous
 ~~~~~~~~~~~~~
 
+* Update documentation link in ``Test.DejaFu``.
 * Fix GHC compatibility warning.
 
 
