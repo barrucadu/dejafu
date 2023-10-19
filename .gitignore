@@ -4,3 +4,4 @@ dist
 .stack-work
 *.tix
 *.prof
+_site

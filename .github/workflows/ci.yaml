@@ -3,6 +3,23 @@ name: Run tests
 on: pull_request
 
 jobs:
+  check-docs-site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check mdbook-admonish changes are not committed
+        run: |
+          if grep -q "do not edit: managed by \`mdbook-admonish install\`" docs/book.toml; then
+            echo "remove generated mdbook-admonish lines from docs/books.toml" >&2
+            exit 1
+          fi
+      - name: Install nix
+        uses: cachix/install-nix-action@v23
+        with:
+          nix_path: nixpkgs=channel:nixos-23.05
+      - name: Check documentation site builds
+        run: nix-shell ./.github/scripts/build-documentation.sh
+
   lint:
     runs-on: ubuntu-latest
     steps:

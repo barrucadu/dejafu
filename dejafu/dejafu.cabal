@@ -13,7 +13,7 @@ description:
   package by enabling you to deterministically test your concurrent
   programs.
   .
-  See the <https://dejafu.readthedocs.io website> or README for more.
+  See the <https://dejafu.docs.barrucadu.co.uk/ website> or README for more.
 
 homepage:            https://github.com/barrucadu/dejafu
 license:             MIT

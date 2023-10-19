@@ -14,12 +14,13 @@ dejafu
 - [Release notes](#release-notes)
 - [Questions, feedback, discussion](#questions-feedback-discussion)
 - [Bibliography](#bibliography)
-- **[The website!](http://dejafu.readthedocs.io/)**
+- **[The website!](https://dejafu.docs.barrucadu.co.uk/)**
 
 Déjà Fu is a unit-testing library for concurrent Haskell programs.
 Tests are deterministic and expressive, making it easy and convenient
-to test your threaded code.  Available on [GitHub][], [Hackage][], and
-[Stackage][].
+to test your threaded code.
+
+Available on [GitHub][], [Hackage][], and [Stackage][].
 
 [GitHub]:   https://github.com/barrucadu/dejafu
 [Hackage]:  https://hackage.haskell.org/package/dejafu
@@ -46,6 +47,8 @@ There are a few different packages under the Déjà Fu umbrella:
 | [dejafu][h:dejafu]       | 2.4.0.5  | Systematic testing for Haskell concurrency. |
 | [hunit-dejafu][h:hunit]  | 2.0.0.6  | Deja Fu support for the HUnit test framework. |
 | [tasty-dejafu][h:tasty]  | 2.1.0.1  | Deja Fu support for the Tasty test framework. |
+
+See [the latest package documentation](https://dejafu.docs.barrucadu.co.uk/packages/).
 
 Each package has its own README and CHANGELOG in its subdirectory.
 
@@ -162,7 +165,7 @@ the trace by eye.
 Contributing
 ------------
 
-See the "contributing" page on [the website](http://dejafu.readthedocs.io/en/latest/contributing.html).
+See the "contributing" page on [the website](https://dejafu.docs.barrucadu.co.uk/dev-docs/contributing.html).
 
 **If you'd like to get involved with Déjà Fu**, check out [the
 "good first issue" label on the issue tracker][beginners].
@@ -193,34 +196,33 @@ These libraries wouldn't be possible without prior research, which I
 mention in the documentation. Haddock comments get the full citation,
 whereas in-line comments just get the shortened name:
 
-- [BPOR] *Bounded partial-order reduction*, K. Coons, M. Musuvathi,
-  and K. McKinley (2013)
-  http://research.microsoft.com/pubs/202164/bpor-oopsla-2013.pdf
+- [BPOR] [Bounded partial-order reduction](http://research.microsoft.com/pubs/202164/bpor-oopsla-2013.pdf),
+  K. Coons, M. Musuvathi, and K. McKinley (2013)
 
-- [RDPOR] *Dynamic Partial Order Reduction for Relaxed Memory Models*,
+- [RDPOR] [Dynamic Partial Order Reduction for Relaxed Memory Models](http://www.faculty.ece.vt.edu/chaowang/pubDOC/ZhangKW15.pdf),
   N. Zhang, M. Kusano, and C. Wang (2015)
-  http://www.faculty.ece.vt.edu/chaowang/pubDOC/ZhangKW15.pdf
 
-- [Empirical] *Concurrency Testing Using Schedule Bounding: an
-  Empirical Study*, P. Thompson, A. Donaldson, and A. Betts (2014)
-  http://www.doc.ic.ac.uk/~afd/homepages/papers/pdfs/2014/PPoPP.pdf
+- [Empirical] [Concurrency Testing Using Schedule Bounding: an Empirical Study](http://www.doc.ic.ac.uk/~afd/homepages/papers/pdfs/2014/PPoPP.pdf),
+  P. Thompson, A. Donaldson, and A. Betts (2014)
 
-- [RMMVerification] *On the Verification of Programs on Relaxed Memory
-  Models*, A. Linden (2014)
-  https://orbi.ulg.ac.be/bitstream/2268/158670/1/thesis.pdf
+- [RMMVerification] [On the Verification of Programs on Relaxed Memory Models](https://orbi.ulg.ac.be/bitstream/2268/158670/1/thesis.pdf),
+  A. Linden (2014)
 
-There are also a couple of papers on dejafu itself:
+There are also a few papers on dejafu itself:
 
-- *Déjà Fu: A Concurrency Testing Library for Haskell*, M. Walker and
-  C. Runciman (2015)
-  https://www.barrucadu.co.uk/publications/dejafu-hs15.pdf
+- [Déjà Fu: A Concurrency Testing Library for Haskell](https://www.barrucadu.co.uk/publications/dejafu-hs15.pdf),
+  M. Walker and C. Runciman (2015)
 
   This details dejafu-0.1, and was presented at the 2015 Haskell
   Symposium.
 
-- *Déjà Fu: A Concurrency Testing Library for Haskell*, M. Walker and
-  C. Runciman (2016)
-  https://www.barrucadu.co.uk/publications/YCS-2016-503.pdf
+- [Déjà Fu: A Concurrency Testing Library for Haskell](https://www.barrucadu.co.uk/publications/YCS-2016-503.pdf),
+  M. Walker and C. Runciman (2016)
 
   This is a more in-depth technical report, written between the
   dejafu-0.2 and dejafu-0.3 releases.
+
+- [Revealing Behaviours of Concurrent Functional Programs by Systematic Testing](https://www.barrucadu.co.uk/publications/thesis.pdf),
+  M. Walker (2018)
+
+  This is my Ph.D thesis, which discusses dejafu and my other research projects.
