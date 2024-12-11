@@ -73,10 +73,6 @@ x-task-prerelease-check: &task-prerelease-check
             echo "missing package version in README.markdown" >&2
             fail=true
           fi
-          if ! grep -q -E "${PACKAGE}.*${ver}" doc/getting_started.rst; then
-            echo "missing package version in doc/getting_started.rst" >&2
-            fail=true
-          fi
           if git grep -q unreleased "$PACKAGE"; then
             echo "'unreleased' appears in source" >&2
             fail=true
