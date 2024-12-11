@@ -7,14 +7,20 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
-unreleased
-----------
+2.4.0.6 (2024-12-11)
+--------------------
+
+* Git: :tag:`dejafu-2.4.0.6`
+* Hackage: :hackage:`dejafu-2.4.0.6`
+
+**Contributors:** :u:`telser` (:pull:`417`).
 
 Miscellaneous
 ~~~~~~~~~~~~~
 
 * Update documentation link in ``Test.DejaFu``.
 * Fix GHC compatibility warning.
+* The upper bound on :hackage:`containers` is <0.8.
 
 
 2.4.0.5 (2023-06-17)
