@@ -24,7 +24,7 @@ import           Test.DejaFu.Types
 -- @since 1.3.2.0
 toTIdTrace :: Trace -> [(ThreadId, ThreadAction)]
 toTIdTrace =
-  tail . scanl (\(t, _) (d, _, a) -> (tidOf t d, a)) (initialThread, undefined)
+  drop 1 . scanl (\(t, _) (d, _, a) -> (tidOf t d, a)) (initialThread, undefined)
 
 -- | Pretty-print a trace, including a key of the thread IDs (not
 -- including thread 0). Each line of the key is indented by two
