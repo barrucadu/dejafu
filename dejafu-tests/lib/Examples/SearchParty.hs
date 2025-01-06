@@ -238,7 +238,7 @@ work shortcircuit workitems = do
     -- Process a work item and store the result if it is a success,
     -- otherwise continue.
     process remaining res = do
-      mitem <- atomicModifyIORef remaining $ \rs -> if null rs then ([], Nothing) else (tail rs, Just $ head rs)
+      mitem <- atomicModifyIORef remaining $ \rs -> case rs of (a:as) -> (as, Just a); [] -> ([], Nothing)
       case mitem of
         Just item -> do
           fwrap  <- item

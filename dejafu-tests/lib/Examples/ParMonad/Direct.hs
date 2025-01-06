@@ -271,7 +271,7 @@ runParIO userComp = do
      ------------------------------------------------------------
      Nothing -> do
        allscheds <- makeScheds main_cpu
-       sessions <- readHotVar$ sessions$ head allscheds
+       sessions <- readHotVar$ sessions$ (\(a:_) -> a) allscheds
        case sessions of
          [Session _ topSessFlag] -> do
             mfin <- newEmptyMVar
