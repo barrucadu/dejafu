@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE Rank2Types #-}
 
 {-
@@ -238,7 +239,7 @@ work shortcircuit workitems = do
     -- Process a work item and store the result if it is a success,
     -- otherwise continue.
     process remaining res = do
-      mitem <- atomicModifyIORef remaining $ \rs -> case rs of (a:as) -> (as, Just a); [] -> ([], Nothing)
+      mitem <- atomicModifyIORef remaining $ \case (a:as) -> (as, Just a); [] -> ([], Nothing)
       case mitem of
         Just item -> do
           fwrap  <- item
