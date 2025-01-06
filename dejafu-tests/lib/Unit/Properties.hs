@@ -293,7 +293,7 @@ makeIORef iorid = D.ModelIORef iorid <$> C.newIORef (M.empty, 0, 42)
 --  - the cache and number of writes inside the ref must be the same
 eqWB :: Mem.WriteBuffer IO -> Mem.WriteBuffer IO -> IO Bool
 eqWB (Mem.WriteBuffer wb1) (Mem.WriteBuffer wb2) = andM (pure (ks1 == ks2) :
-    [ (&&) (S.length ws1 == S.length ws2) <$> (and <$> zipWithM eqBW (F.toList ws1) (F.toList ws2))
+    [ (&&) (S.length ws1 == S.length ws2) . and <$> zipWithM eqBW (F.toList ws1) (F.toList ws2)
     | k <- ks1
     , let (Just ws1) = M.lookup k wb1
     , let (Just ws2) = M.lookup k wb2
