@@ -7,6 +7,15 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`random` is <1.4.
+
+
 2.4.0.6 (2024-12-11)
 --------------------
 
