@@ -3,10 +3,6 @@
 
 x-generic-task: &generic-task
   platform: linux
-  image_resource:
-    type: docker-image
-    source:
-      repository: haskell
   inputs:
     - name: source-git
 
@@ -115,6 +111,10 @@ resource_types:
       password: ((docker-registry-password))
 
 resources:
+  - name: haskell-image
+    type: registry-image
+    source:
+      repository: mirror.gcr.io/haskell
   - name: stackage-feed
     type: feed-resource
     source:
@@ -158,11 +158,13 @@ jobs:
 
   - name: test-snapshot
     plan:
+      - get: haskell-image
       - get: dejafu-git
         trigger: true
       - get: stackage-feed
         trigger: true
       - task: build-and-test
+        image: haskell-image
         input_mapping:
           source-git: dejafu-git
         config:
@@ -173,9 +175,11 @@ jobs:
 
   - name: test-concurrency
     plan:
+      - get: haskell-image
       - get: concurrency-cabal-git
         trigger: true
       - task: build-and-test
+        image: haskell-image
         input_mapping:
           source-git: concurrency-cabal-git
         config:
@@ -183,9 +187,11 @@ jobs:
 
   - name: test-dejafu
     plan:
+      - get: haskell-image
       - get: dejafu-cabal-git
         trigger: true
       - task: build-and-test
+        image: haskell-image
         input_mapping:
           source-git: dejafu-cabal-git
         config:
@@ -193,9 +199,11 @@ jobs:
 
   - name: test-hunit-dejafu
     plan:
+      - get: haskell-image
       - get: hunit-dejafu-cabal-git
         trigger: true
       - task: build-and-test
+        image: haskell-image
         input_mapping:
           source-git: hunit-dejafu-cabal-git
         config:
@@ -203,9 +211,11 @@ jobs:
 
   - name: test-tasty-dejafu
     plan:
+      - get: haskell-image
       - get: tasty-dejafu-cabal-git
         trigger: true
       - task: build-and-test
+        image: haskell-image
         input_mapping:
           source-git: tasty-dejafu-cabal-git
         config:
@@ -213,11 +223,13 @@ jobs:
 
   - name: release-concurrency
     plan:
+      - get: haskell-image
       - get: concurrency-cabal-git
         trigger: true
         passed:
           - test-concurrency
       - task: prerelease-check
+        image: haskell-image
         params:
           PACKAGE: concurrency
         input_mapping:
@@ -225,6 +237,7 @@ jobs:
         config:
           <<: *task-prerelease-check
       - task: release
+        image: haskell-image
         params:
           PACKAGE: concurrency
         input_mapping:
@@ -234,11 +247,13 @@ jobs:
 
   - name: release-dejafu
     plan:
+      - get: haskell-image
       - get: dejafu-cabal-git
         trigger: true
         passed:
           - test-dejafu
       - task: prerelease-check
+        image: haskell-image
         params:
           PACKAGE: dejafu
         input_mapping:
@@ -246,6 +261,7 @@ jobs:
         config:
           <<: *task-prerelease-check
       - task: release
+        image: haskell-image
         params:
           PACKAGE: dejafu
         input_mapping:
@@ -255,11 +271,13 @@ jobs:
 
   - name: release-hunit-dejafu
     plan:
+      - get: haskell-image
       - get: hunit-dejafu-cabal-git
         trigger: true
         passed:
           - test-hunit-dejafu
       - task: prerelease-check
+        image: haskell-image
         params:
           PACKAGE: hunit-dejafu
         input_mapping:
@@ -267,6 +285,7 @@ jobs:
         config:
           <<: *task-prerelease-check
       - task: release
+        image: haskell-image
         params:
           PACKAGE: hunit-dejafu
         input_mapping:
@@ -276,11 +295,13 @@ jobs:
 
   - name: release-tasty-dejafu
     plan:
+      - get: haskell-image
       - get: tasty-dejafu-cabal-git
         trigger: true
         passed:
           - test-tasty-dejafu
       - task: prerelease-check
+        image: haskell-image
         params:
           PACKAGE: tasty-dejafu
         input_mapping:
@@ -288,6 +309,7 @@ jobs:
         config:
           <<: *task-prerelease-check
       - task: release
+        image: haskell-image
         params:
           PACKAGE: tasty-dejafu
         input_mapping:
