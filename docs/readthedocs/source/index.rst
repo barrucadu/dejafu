@@ -7,4 +7,4 @@ The Déjà Fu documentation has moved!
 
     **Terry Pratchett, Thief of Time**
 
-`Visit the new documentation website <https://dejafu.docs.barrucadu.co.uk/>`.
+`Visit the new documentation website <https://dejafu.docs.barrucadu.dev/>`.

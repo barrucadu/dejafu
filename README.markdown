@@ -14,7 +14,7 @@ dejafu
 - [Release notes](#release-notes)
 - [Questions, feedback, discussion](#questions-feedback-discussion)
 - [Bibliography](#bibliography)
-- **[The website!](https://dejafu.docs.barrucadu.co.uk/)**
+- **[The website!](https://dejafu.docs.barrucadu.dev/)**
 
 Déjà Fu is a unit-testing library for concurrent Haskell programs.
 Tests are deterministic and expressive, making it easy and convenient
@@ -48,7 +48,7 @@ There are a few different packages under the Déjà Fu umbrella:
 | [hunit-dejafu][h:hunit]  | 2.0.0.6  | Deja Fu support for the HUnit test framework. |
 | [tasty-dejafu][h:tasty]  | 2.1.0.2  | Deja Fu support for the Tasty test framework. |
 
-See [the latest package documentation](https://dejafu.docs.barrucadu.co.uk/packages/).
+See [the latest package documentation](https://dejafu.docs.barrucadu.dev/packages/).
 
 Each package has its own README and CHANGELOG in its subdirectory.
 
@@ -165,7 +165,7 @@ the trace by eye.
 Contributing
 ------------
 
-See the "contributing" page on [the website](https://dejafu.docs.barrucadu.co.uk/dev-docs/contributing.html).
+See the "contributing" page on [the website](https://dejafu.docs.barrucadu.dev/dev-docs/contributing.html).
 
 **If you'd like to get involved with Déjà Fu**, check out [the
 "good first issue" label on the issue tracker][beginners].

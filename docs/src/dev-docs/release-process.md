@@ -1,9 +1,8 @@
 Release Process
 ===============
 
-```admonish warning
-If it's early in the year, make sure you put down the right year in the CHANGELOG!
-```
+> [!WARNING]
+> If it's early in the year, make sure you put down the right year in the CHANGELOG!
 
 1. Figure out what the next version number is.  See the PVP_ page if unsure.
 

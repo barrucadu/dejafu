@@ -51,11 +51,10 @@ just normal concurrent Haskell, simply written against a different interface.
 The modified package is included [in the test suite][], if you want to see the
 full code.
 
-```admonish note
-The predicates in dejafu-tests are a little confusing, as they're the opposite
-of what you would normally write!  These predicates are checking that the bug is
-found, not that the code is correct.
-```
+> [!NOTE]
+> The predicates in dejafu-tests are a little confusing, as they're the opposite
+> of what you would normally write!  These predicates are checking that the bug is
+> found, not that the code is correct.
 
 If the RTS supports bound threads (the `-threaded` flag was passed to GHC when
 linking), then the main thread of an action given to Déjà Fu will be bound, and
