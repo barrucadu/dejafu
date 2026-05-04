@@ -1,0 +1,51 @@
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+      - name: Create placeholder site
+        run: |
+          mkdir _site
+          cat <<EOF > _site/index.html
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <meta charset="utf-8">
+                <title>Redirecting to https://dejafu.docs.barrucadu.dev/</title>
+                <meta http-equiv="refresh" content="0; url=https://dejafu.docs.barrucadu.dev/">
+                <link rel="canonical" href="https://dejafu.docs.barrucadu.dev/">
+              </head>
+              <body>
+                <p>This website has moved to <a href="https://dejafu.docs.barrucadu.dev/">"https://dejafu.docs.barrucadu.dev/</a></p>
+              </body>
+            </html>
+          EOF
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+
+  # Deployment job
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

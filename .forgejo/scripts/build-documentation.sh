@@ -1,13 +1,8 @@
-#! /usr/bin/env nix-shell
-#! nix-shell -I nixpkgs=channel:nixos-23.05 -i bash --packages coreutils mdbook mdbook-admonish python3 virtualenv ghc stack
+#!/usr/bin/env bash
 
-set -ex
+set -x
 
 OUTPUT_DIR="_site"
-
-pushd docs
-mdbook-admonish install
-popd
 
 python3 <<'EOF' > docs/src/index.md
 import sys
@@ -86,7 +81,3 @@ mv docs/book "$OUTPUT_DIR"
 stack --no-install-ghc --no-nix --skip-ghc-check --system-ghc haddock concurrency dejafu hunit-dejafu tasty-dejafu
 rm -rf .stack-work/install/*/*/*/doc/all/
 mv .stack-work/install/*/*/*/doc/ "$OUTPUT_DIR/packages"
-
-chmod -c -R +rX "$OUTPUT_DIR" | while read -r line; do
-    echo "::warning title=Invalid file permissions automatically fixed::$line"
-done

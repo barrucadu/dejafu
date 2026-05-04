@@ -62,11 +62,10 @@ To test `IO`-using code, there are some rules you need to follow:
 3. You absolutely cannot block on the action of another thread inside `IO`, or
    the test execution will just deadlock.
 
-```admonish tip
-Deterministic `IO` is only essential if you're using the systematic testing (the
-default).  Nondeterministic `IO` won't break the random testing, it'll just make
-things more confusing.
-```
+> [!TIP]
+> Deterministic `IO` is only essential if you're using the systematic testing (the
+> default).  Nondeterministic `IO` won't break the random testing, it'll just make
+> things more confusing.
 
 
 Deriving your own instances
