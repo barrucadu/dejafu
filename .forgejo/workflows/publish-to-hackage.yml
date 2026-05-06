@@ -1,0 +1,88 @@
+on:
+  workflow_call:
+    inputs:
+      package:
+        required: true
+        type: string
+
+jobs:
+  release:
+    # TODO: should probably be 'runs-on: docker' with an appropriate label on
+    # the runner, or even add a haskell label for this image specifically
+    runs-on: nix
+    container:
+      image: mirror.gcr.io/haskell:latest
+    steps:
+      - name: Install tools
+        run: |
+          apt-get update && apt-get install -y nodejs git
+      - uses: https://code.forgejo.org/actions/checkout@v4
+      - name: Setup GHC
+        run: |
+          stack --no-terminal setup --install-ghc
+      - name: Prerelease Check
+        run: |
+          set -ex
+
+          CABAL_FILE="${{ inputs.package }}/${{ inputs.package }}.cabal"
+          ver=$(grep '^version:' "${CABAL_FILE}" | sed 's/^version: *//')
+
+          fail=false
+          if ! grep -q -E "tag: *${{ inputs.package }}-${ver}" "${{ inputs.package }}/${{ inputs.package }}.cabal"; then
+            echo "missing tag in ${{ inputs.package }}/${{ inputs.package }}.cabal" >&2
+            fail=true
+          fi
+          if ! grep -q "^${ver}" "${{ inputs.package }}/CHANGELOG.rst"; then
+            echo "missing header in ${{ inputs.package }}/CHANGELOG.rst" >&2
+            fail=true
+          fi
+          if ! grep -q -E "Git.*${{ inputs.package }}-${ver}" "${{ inputs.package }}/CHANGELOG.rst"; then
+            echo "missing tag in ${{ inputs.package }}/CHANGELOG.rst" >&2
+            fail=true
+          fi
+          if ! grep -q -E "Hackage.*${{ inputs.package }}-${ver}" "${{ inputs.package }}/CHANGELOG.rst"; then
+            echo "missing hackage link in ${{ inputs.package }}/CHANGELOG.rst" >&2
+            fail=true
+          fi
+          if ! grep -q -E "${{ inputs.package }}.*${ver}" README.markdown; then
+            echo "missing package version in README.markdown" >&2
+            fail=true
+          fi
+          if git grep -q unreleased "${{ inputs.package }}"; then
+            echo "'unreleased' appears in source" >&2
+            fail=true
+          fi
+          if $fail; then
+            exit 1
+          fi
+      - name: Build
+        run: |
+          # speed up compilation by skipping the dejafu-bench deps;
+          # stack's docs suggest this should work: `stack build
+          # dejafu-tests:dejafu-tests` but it doesn't, it still builds
+          # dejafu-bench too
+          sed -n '/executable dejafu-bench/q;p' dejafu-tests/dejafu-tests.cabal > dejafu-tests.cabal
+          mv dejafu-tests.cabal dejafu-tests/dejafu-tests.cabal
+
+          stack --no-terminal build
+      - name: Test
+        run: |
+          # use a utf-8 locale so hedgehog failure output doesn't cause an
+          # encoding error - this was the default in the haskell:8.8.1
+          # image but not after that.
+          export LANG=C.UTF-8
+          stack --no-terminal exec dejafu-tests
+      - name: Release
+        run: |
+          CABAL_FILE="${{ inputs.package }}/${{ inputs.package }}.cabal"
+          ver=$(grep '^version:' "${CABAL_FILE}" | sed 's/^version: *//')
+
+          if curl -fs "http://hackage.haskell.org/package/${{ inputs.package }}-${ver}" >/dev/null; then
+            echo "version already exists on hackage" >&2
+            exit 0
+          fi
+
+          echo n | stack --no-terminal upload ${{ inputs.package }}
+        env:
+          HACKAGE_USERNAME: barrucadu
+          HACKAGE_PASSWORD: ${{ secrets.HACKAGE_PASSWORD }}

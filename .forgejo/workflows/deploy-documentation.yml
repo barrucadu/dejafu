@@ -8,7 +8,9 @@ jobs:
     steps:
       - name: Install tools
         run: |
-          nix-env -iA nixpkgs.nodejs_24 nixpkgs.rsync nixpkgs.coreutils nixpkgs.mdbook nixpkgs.python3 nixpkgs.virtualenv nixpkgs.ghc nixpkgs.stack
+          nix-env -iA nixpkgs.nodejs_24 nixpkgs.coreutils nixpkgs.gnused \
+            nixpkgs.mdbook nixpkgs.python3 nixpkgs.virtualenv nixpkgs.ghc \
+            nixpkgs.stack nixpkgs.rsync
       - uses: https://code.forgejo.org/actions/checkout@v4
       - name: Build
         run: bash -e .forgejo/scripts/build-documentation.sh
