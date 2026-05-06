@@ -1,0 +1,10 @@
+on:
+  push:
+    tags: ["concurrency-*"]
+
+jobs:
+  release:
+    uses: ./.forgejo/workflows/publish-to-hackage.yml
+    with:
+      package: concurrency
+    secrets: inherit

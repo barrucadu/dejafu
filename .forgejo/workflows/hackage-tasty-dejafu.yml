@@ -1,0 +1,10 @@
+on:
+  push:
+    tags: ["tasty-dejafu-*"]
+
+jobs:
+  release:
+    uses: ./.forgejo/workflows/publish-to-hackage.yml
+    with:
+      package: tasty-dejafu
+    secrets: inherit

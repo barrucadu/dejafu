@@ -1,0 +1,10 @@
+on:
+  push:
+    tags: ["hunit-dejafu-*"]
+
+jobs:
+  release:
+    uses: ./.forgejo/workflows/publish-to-hackage.yml
+    with:
+      package: hunit-dejafu
+    secrets: inherit
