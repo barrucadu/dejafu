@@ -7,6 +7,15 @@ standard Haskell versioning scheme.
 .. _PVP: https://pvp.haskell.org/
 
 
+unreleased
+----------
+
+Miscellaneous
+~~~~~~~~~~~~~
+
+* The upper bound on :hackage:`tagged` is <0.10.
+
+
 2.1.0.2 (2025-01-06)
 --------------------
 
