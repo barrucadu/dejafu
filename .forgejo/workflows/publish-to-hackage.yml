@@ -16,6 +16,10 @@ jobs:
       - name: Install tools
         run: |
           apt-get update && apt-get install -y nodejs git
+      # https://github.com/nektos/act/issues/6092
+      - name: Fix symlink issue /run symlink issue
+        run: |
+          rm -f /var/run && mkdir -p /var/run
       - uses: https://code.forgejo.org/actions/checkout@v4
       - name: Setup GHC
         run: |
